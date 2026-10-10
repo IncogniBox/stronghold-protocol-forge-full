@@ -1,0 +1,26 @@
+# Repository-level ignores for this ready-to-run full package.
+# The game's own upstream rules live in app/.gitignore and still apply inside app/.
+
+# --- runtime state & logs -------------------------------------------------
+logs/
+*.log
+.cache/
+.npm-cache/
+
+# --- per-machine secrets --------------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+*.p12
+
+# --- python (optional local-client extraction) ----------------------------
+.venv*/
+venv/
+__pycache__/
+*.py[cod]
+
+# --- OS / editor clutter --------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

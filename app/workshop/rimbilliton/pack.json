@@ -1,0 +1,451 @@
+{
+ "id": "rimbilliton",
+ "name": "雷姆必拓",
+ "version": "1.1.0",
+ "author": "the Rim Billiton mod",
+ "license": "GPL-3.0-or-later",
+ "description": "雷姆必拓 mod：9 名卡池干员 / 核心盟约（开拓心）/ 特质 / 装备 / 开拓大地策略 / 沙地兽 token。数据与素材走创意工坊叠加层，官方 data/*.json 不被改动。",
+ "gameVersion": "0.2.2",
+ "content": [
+  "chess",
+  "bonds",
+  "garrisons",
+  "items",
+  "effects",
+  "tokens",
+  "bands"
+ ],
+ "overrides": [
+  "chess:chess_char_3_02_a",
+  "chess:chess_char_3_02_b",
+  "chess:chess_char_4_06_a",
+  "chess:chess_char_4_06_b",
+  "chess:chess_char_4_14_a",
+  "chess:chess_char_4_14_b",
+  "bonds:siracusaShip",
+  "bonds:preciShip",
+  "bonds:arcaneShip",
+  "bonds:steadShip",
+  "bonds:deputShip",
+  "bonds:visiShip",
+  "bonds:indomShip"
+ ],
+ "art": {
+  "chars": {
+   "char_1037_amiya3": {
+    "avatar": "char/avatar/char_1037_amiya3_2.png",
+    "avatarE2": "char/avatar/char_1037_amiya3_2.png",
+    "portrait": "char/portrait/char_1037_amiya3_2.png",
+    "portraitE2": "char/portrait/char_1037_amiya3_2.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_1037_amiya3/front/char_1037_amiya3.skel",
+      "atlas": "spine/op/char_1037_amiya3/front/char_1037_amiya3.atlas",
+      "textures": [
+       "spine/op/char_1037_amiya3/front/char_1037_amiya3.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": "Skill_1_Begin",
+        "loop": "Skill_1_Loop",
+        "end": "Skill_1_End",
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": "Skill_1_Begin",
+         "loop": "Skill_1_Loop",
+         "end": "Skill_1_End",
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "Skill_2_Begin",
+         "loop": "Skill_2_Loop",
+         "end": "Skill_2_End",
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_1037_amiya3/back/char_1037_amiya3.skel",
+      "atlas": "spine/op/char_1037_amiya3/back/char_1037_amiya3.atlas",
+      "textures": [
+       "spine/op/char_1037_amiya3/back/char_1037_amiya3.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": "Skill_1_Begin",
+        "loop": "Skill_1_Loop",
+        "end": "Skill_1_End",
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": null,
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": "Skill_1_Begin",
+         "loop": "Skill_1_Loop",
+         "end": "Skill_1_End",
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "Skill_2_Begin",
+         "loop": "Skill_2_Loop",
+         "end": "Skill_2_End",
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     }
+    }
+   },
+   "char_193_frostl": {
+    "avatar": "char/avatar/char_193_frostl.png",
+    "avatarE2": "char/avatar/char_193_frostl_2.png",
+    "portrait": "char/portrait/char_193_frostl_1.png",
+    "portraitE2": "char/portrait/char_193_frostl_2.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_193_frostl/front/char_193_frostl.skel",
+      "atlas": "spine/op/char_193_frostl/front/char_193_frostl.atlas",
+      "textures": [
+       "spine/op/char_193_frostl/front/char_193_frostl.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_193_frostl/back/char_193_frostl.skel",
+      "atlas": "spine/op/char_193_frostl/back/char_193_frostl.atlas",
+      "textures": [
+       "spine/op/char_193_frostl/back/char_193_frostl.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": null,
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     }
+    }
+   },
+   "char_230_savage": {
+    "avatar": "char/avatar/char_230_savage.png",
+    "avatarE2": "char/avatar/char_230_savage_2.png",
+    "portrait": "char/portrait/char_230_savage_1.png",
+    "portraitE2": "char/portrait/char_230_savage_2.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_230_savage/front/char_230_savage.skel",
+      "atlas": "spine/op/char_230_savage/front/char_230_savage.atlas",
+      "textures": [
+       "spine/op/char_230_savage/front/char_230_savage.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": null,
+         "loop": "Skill",
+         "end": null,
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_230_savage/back/char_230_savage.skel",
+      "atlas": "spine/op/char_230_savage/back/char_230_savage.atlas",
+      "textures": [
+       "spine/op/char_230_savage/back/char_230_savage.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": null,
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": null,
+         "loop": "Skill",
+         "end": null,
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     }
+    }
+   },
+   "char_449_glider": {
+    "avatar": "char/avatar/char_449_glider.png",
+    "avatarE2": "char/avatar/char_449_glider_2.png",
+    "portrait": "char/portrait/char_449_glider_1.png",
+    "portraitE2": "char/portrait/char_449_glider_2.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_449_glider/front/char_449_glider.skel",
+      "atlas": "spine/op/char_449_glider/front/char_449_glider.atlas",
+      "textures": [
+       "spine/op/char_449_glider/front/char_449_glider.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "skill_2_Begin",
+         "loop": "skill_2_Loop",
+         "end": "skill_2_End",
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_449_glider/back/char_449_glider.skel",
+      "atlas": "spine/op/char_449_glider/back/char_449_glider.atlas",
+      "textures": [
+       "spine/op/char_449_glider/back/char_449_glider.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": null,
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "skill_2_Begin",
+         "loop": "skill_2_Loop",
+         "end": "skill_2_End",
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "skills": {
+   "skchr_amiya3_1": "skill/skchr_amiya3_1.png",
+   "skchr_amiya3_2": "skill/skchr_amiya3_2.png",
+   "skchr_frostl_1": "skill/skchr_frostl_1.png",
+   "skchr_frostl_2": "skill/skchr_frostl_2.png",
+   "skchr_glider_1": "skill/skchr_glider_1.png",
+   "skchr_glider_2": "skill/skchr_glider_2.png",
+   "skchr_savage_2": "skill/skchr_savage_2.png"
+  },
+  "bonds": {
+   "rimBilliton": "bond/icon_rimBilliton.png"
+  },
+  "bands": {
+   "band_kaituo": "band/band_kaituo.png"
+  }
+ },
+ "bondIcons": {
+  "rimBilliton": "bond/rimBilliton.png"
+ },
+ "itemIcons": {
+  "trap_2001_mod_happy": "item/trap_2001_mod_happy.png",
+  "trap_2002_mod_greens": "item/trap_2002_mod_greens.png"
+ }
+}

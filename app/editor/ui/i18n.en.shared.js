@@ -1,0 +1,143 @@
+// editor/ui/i18n.en.shared.js — 共享词条：8 个页面共用的顶部导航、页面名与通用按钮。
+//
+// 各页自己的词条在 i18n.en.<页面>.js 里（见 i18n.en.js 的汇总）。同一个键只允许出现在一个分片里：
+// test/editorI18n.test.js 会检查分片之间没有重复键，免得两处译文不一致还以为改好了。
+
+export const EN_SHARED = Object.freeze({
+  // ---- 顶部导航（页面名，不带箭头） ----
+  '地图设计器': 'Stage designer',
+  '怪物编辑器': 'Enemy editor',
+  '出怪设计器': 'Spawn designer',
+  '装备编辑器': 'Equipment editor',
+  'kit 编辑器': 'Kit editor',
+  '语音编辑器': 'Voice editor',
+  '包管理': 'Pack manager',
+  '盟约编辑器': 'Bond editor',
+  '干员编辑器': 'Operator editor',
+
+  // ---- 各页 <title> ----
+  '卫戍协议 · 创意工坊编辑器': 'Stronghold Protocol · Workshop Editor',
+  '卫戍协议 · 工坊地图设计器': 'Stronghold Protocol · Workshop Stage Designer',
+  '卫戍协议 · 工坊怪物编辑器': 'Stronghold Protocol · Workshop Enemy Editor',
+  '卫戍协议 · 工坊出怪设计器': 'Stronghold Protocol · Workshop Spawn Designer',
+  '卫戍协议 · 工坊装备编辑器': 'Stronghold Protocol · Workshop Equipment Editor',
+  '卫戍协议 · 工坊 kit（行为层）编辑器': 'Stronghold Protocol · Workshop Kit (Behaviour) Editor',
+  '卫戍协议 · 工坊语音编辑器': 'Stronghold Protocol · Workshop Voice Editor',
+  '卫戍协议 · 工坊包管理': 'Stronghold Protocol · Workshop Pack Manager',
+
+  // ---- 各页 <h1> ----
+  '工坊地图设计器': 'Workshop stage designer',
+  '工坊怪物编辑器': 'Workshop enemy editor',
+  '工坊出怪设计器': 'Workshop spawn designer',
+  '工坊装备编辑器': 'Workshop equipment editor',
+  '工坊 kit（行为层）编辑器': 'Workshop kit (behaviour) editor',
+  '工坊语音编辑器': 'Workshop voice editor',
+  '工坊包管理': 'Workshop pack manager',
+
+  // ---- 通用按钮与词 ----
+  '重新载入': 'Reload',
+  '新建工坊包': 'New workshop pack',
+  '工坊包': 'Workshop packs',
+  '干员': 'Operators',
+  '名称': 'Name',
+  '（空）': '(empty)',
+  '（还没有工坊包）': '(no workshop pack yet)',
+  '正在载入…': 'Loading…',
+  '载入失败：{0}': 'Load failed: {0}',
+
+  // ---- 跨页共用 ----
+  // 规则：**两个以上页面都在用的词条放这里**。放在某一页的分片里会出事——那一页收尾时把它当死键删掉，
+  // 别的页面就悄悄退回中文（而且没有任何测试会当场发现）。test/editorI18n.test.js 的重复键检查逼着这里只能是唯一归属。
+  '保存': 'Save',
+  '删除': 'Delete',
+  '保存中…': 'Saving…',
+  '已保存 {0}，生成 {1}。': 'Saved {0}, generated {1}.',
+  '已保存 {0}，生成 {1}。重启游戏服务器后生效。': 'Saved {0}, generated {1}. Restart the game server to take effect.',
+  '已删除 {0}': 'Deleted {0}',
+  '可编辑': 'editable',
+  '非编辑器管理': 'not managed by the editor',
+  '（无）': '(none)',
+  '（记录）': '(record)',
+  '身份': 'Identity',
+  'id（slug）': 'id (slug)',
+  '校验': 'Validation',
+  '✔ 校验通过': '✔ Validation passed',
+  '（改动后自动校验）': '(validation runs automatically as you type)',
+  '（改动后自动推导）': '(derived automatically as you type)',
+  '派生量（只读，服务端算）': 'Derived values (read-only, computed by the server)',
+  '先填 id 才能保存。': 'Fill in an id before saving.',
+  '＋ 加一个键': '+ Add a key',
+  // 保存目标（七个页面共用同一个下拉与同一份校验，editor/ui/packPicker.js）
+  '保存到': 'Save to',
+  '＋ 新建一个包…': '+ New pack…',
+  '先在右边选一个工坊包（或点「＋ 新建一个包…」）。': 'Pick a workshop pack on the right (or click “+ New pack…”).',
+  // 「新工坊包 id」的内联输入框（packIdForm）：问一次 id。传了 create（就是 createPack）就顺手把包建出来，
+  // 不传则沿用旧行为（建包交给第一次保存）—— 见 packPicker.js 的文件头。
+  '确认': 'OK',
+  '取消': 'Cancel',
+  '创建': 'Create',
+  '创建中…': 'Creating…',
+  '包 id 不能为空。': 'The pack id cannot be empty.',
+  '包 id 只能是字母、数字、下划线、短横线，1–32 位，且以字母或数字开头。': 'A pack id may only contain letters, digits, underscores and hyphens, 1–32 characters, starting with a letter or digit.',
+  '已经有叫 {0} 的工坊包了：换一个 id，或者取消后在上面的下拉里直接选它。': 'A workshop pack called {0} already exists: pick another id, or cancel and select it in the dropdown above.',
+  // 「一键新建工坊包」：用自动 id（基名重了依次 -2、-3…）立刻建包，全程不碰正在填的内容
+  '＋ 一键新建工坊包': '+ Create a pack in one click',
+  '一键新建试了很多个名字都被占用了，请在上面手填一个 id。': 'One-click creation tried many names and all were taken — type an id in the box above.',
+  '一键新建试了很多个名字都被占用了，请在手输框里填一个 id。': 'One-click creation tried many names and all were taken — type an id in the box.',
+  '用自动生成的 id 建一个包，不动表单': 'Create a pack with an auto-generated id, without touching the form',
+  '已创建工坊包 {0}（目录 workshop/{1}/）：当前表单保持不变，保存时会写进它。': 'Created workshop pack {0} (folder workshop/{1}/). The current form is untouched and will be saved into it.',
+  '{0} 阶': 'tier {0}',
+  '{0} 条': '{0} entries',
+  '干员 id': 'operator id',
+  '还没有工坊包': 'no workshop pack yet',
+  '；⚠ {0}': '; ⚠ {0}',
+  '显示路线': 'Show routes',
+  '官方': 'official',
+
+  // ---- 数值尺子（editor/ui/statScale.js；干员页与怪物页共用） ----
+  '官方区间 {0}–{1}（中位 {2}）': 'Official {0}–{1} (median {2})',
+  '高于官方上限': 'above the official maximum',
+  '低于官方下限': 'below the official minimum',
+
+  // ---- 「以模板新建」选择器（干员页与怪物页共用同一套说法） ----
+  '返回': 'Back',
+  '以模板新建': 'New from a template',
+  '⧉ 以模板新建': '⧉ New from a template',
+  '第 {0} 回合': 'Round {0}',
+  '已按「{0}」生成模板：请填一个新的 id 与名字（改完会自动校验）。': 'Template built from “{0}”: give it a new id and name (validation runs as you type).',
+  '已复制「{0}」：填一个新的 id 再保存（改完会自动校验）。': 'Copied “{0}”: give it a new id before saving (validation runs as you type).',
+
+  // ---- 本包自带的外观素材（pack.json 的 art；干员页与怪物页共用同一块控件，见 editor/ui/app.js） ----
+  '本包自带的外观素材（可选）': 'Art shipped by this pack (optional)',
+  '本包已声明的外观': 'Art declared by this pack',
+  '这个包的 pack.json 里还没有 art 声明。': 'This pack’s pack.json declares no art yet.',
+  'art（不是一个对象）': 'art (not an object)',
+  '{0}（不是一个对象）': '{0} (not an object)',
+  '（没有引用任何文件）': '(references no file)',
+  '（不声明）': '(not declared)',
+  '（不声明这个角色）': '(do not declare this role)',
+  '{0}（本包没有这个文件）': '{0} (this file is not in the pack)',
+  '{0}（骨架里没有这个名字）': '{0} (the skeleton has no such animation)',
+  '保存这条外观': 'Save this art entry',
+  '删除这条声明': 'Delete this declaration',
+  '已保存 {0} 的外观': 'Saved the art entry for {0}',
+  '已删掉 {0} 的外观声明': 'Deleted the art declaration {0}',
+  '删除 {0} 这条外观声明？（只删 pack.json 里的这一条，素材文件不动）': 'Delete the art declaration {0}? (removes only that entry from pack.json — the asset files stay)',
+  '本包的 `assets/` 里还没有素材：把文件放进去，再回到这一页挑。': 'This pack’s assets/ holds no files yet: put them there, then come back and pick.',
+  '骨架 skel': 'Skeleton (skel)',
+  '（不用本包模型）': '(no model from this pack)',
+  '图谱 atlas（选完 skel 自动填同名，别手打）': 'Atlas (filled in with the same name once you pick a skel — do not type it)',
+  '（随 skel 自动填）': '(filled in from the skel)',
+  '按同名推出来的 {0} 不在本包的 assets/ 里：把这个文件放进去 —— 加载器只读同目录同名的那个 .atlas，找不到就画不出来，而且不报错。': 'The atlas derived from the skel name ({0}) is not under this pack’s assets/: put that file there — the loader reads only the .atlas that sits beside the skel under the same name, and without it the model never shows up (and nothing is logged).',
+  '贴图 textures（留空＝按 atlas 里的页名自动填）': 'Textures (empty = filled from the atlas page names)',
+  '默认按图谱页名自动填': 'filled from the atlas page names by default',
+  '预乘 alpha pma': 'Premultiplied alpha (pma)',
+  '图谱里写的是 pma: {0}，与这里不一致 —— 客户端信清单这一份，画出来就是错的。': 'The atlas declares pma: {0}, which disagrees with this — the client trusts the manifest, so it draws the wrong thing.',
+  '骨架没解析出来，可以手填动画名': 'The skeleton was not parsed — type the animation name by hand',
+  '这个骨架的动画名没解析出来（文件不在、太大或不是 3.8 骨架）：手填的名字保存时服务端仍会去骨架里核对。': 'This skeleton’s animation names were not parsed (missing file, too large, or not a 3.8 skeleton): a hand-typed name is still checked against the skeleton on save.',
+  '这个骨架的动画名还没解析出来：下面是手输框，填的名字保存时服务端会去骨架里核对。': 'This skeleton’s animation names are not parsed yet: the boxes below take free text, and a hand-typed name is still checked against the skeleton on save.',
+  '动画 anims（角色名就是客户端读的那几个）': 'Animation roles (anims — the role names the client reads)',
+  '进阶：起手 / 收尾（可选）': 'Advanced: begin / end clips (optional)',
+  '（不要起手）': '(no begin clip)',
+  '（不要收尾）': '(no end clip)',
+});

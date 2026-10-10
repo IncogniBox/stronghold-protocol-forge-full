@@ -1,0 +1,162 @@
+{
+ "id": "ave-mujica",
+ "name": "颂乐人偶",
+ "version": "1.0.0",
+ "author": "the Ave Mujica mod",
+ "license": "GPL-3.0-or-later",
+ "description": "颂乐人偶/Ave Mujica 核心盟约 mod：5 名成员干员（丰川祥子/三角初华/祐天寺若麦/八幡海铃/若叶睦）、成员特质（攻击/停顿/凋亡损伤/Fever 翻倍/25%效果共享）、5 层人数羁绊（刷新发放/休整期层数/资金/部署位/效果翻倍）。与雷姆必拓 mod 兼容：若叶睦为双盟约成员。",
+ "gameVersion": "0.2.2",
+ "content": [
+  "bands",
+  "bonds",
+  "chess",
+  "effects",
+  "garrisons"
+ ],
+ "overrides": [],
+ "art": {
+  "chars": {
+   "char_3004_oblivionis": {
+    "avatar": "char/avatar/char_3004_oblivionis.png",
+    "avatarE2": "char/avatar/char_3004_oblivionis.png",
+    "portrait": "char/portrait/char_3004_oblivionis.png",
+    "portraitE2": "char/portrait/char_3004_oblivionis.png"
+   },
+   "char_3001_doloris": {
+    "avatar": "char/avatar/char_3001_doloris.png",
+    "avatarE2": "char/avatar/char_3001_doloris.png",
+    "portrait": "char/portrait/char_3001_doloris.png",
+    "portraitE2": "char/portrait/char_3001_doloris.png"
+   },
+   "char_3003_timoris": {
+    "avatar": "char/avatar/char_3003_timoris.png",
+    "avatarE2": "char/avatar/char_3003_timoris.png",
+    "portrait": "char/portrait/char_3003_timoris.png",
+    "portraitE2": "char/portrait/char_3003_timoris.png"
+   },
+   "char_3002_amoris": {
+    "avatar": "char/avatar/char_3002_amoris.png",
+    "avatarE2": "char/avatar/char_3002_amoris.png",
+    "portrait": "char/portrait/char_3002_amoris.png",
+    "portraitE2": "char/portrait/char_3002_amoris.png"
+   },
+   "char_4183_mortis": {
+    "avatar": "char/avatar/char_4183_mortis.png",
+    "avatarE2": "char/avatar/char_4183_mortis_2.png",
+    "portrait": "char/portrait/char_4183_mortis_1.png",
+    "portraitE2": "char/portrait/char_4183_mortis_2.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_4183_mortis/front/char_4183_mortis.skel",
+      "atlas": "spine/op/char_4183_mortis/front/char_4183_mortis.atlas",
+      "textures": [
+       "spine/op/char_4183_mortis/front/char_4183_mortis.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": null,
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Skill_1",
+         "end": null,
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": null,
+         "loop": "Skill_2",
+         "end": null,
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_4183_mortis/back/char_4183_mortis.skel",
+      "atlas": "spine/op/char_4183_mortis/back/char_4183_mortis.atlas",
+      "textures": [
+       "spine/op/char_4183_mortis/back/char_4183_mortis.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "die": null,
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Skill_1",
+         "end": null,
+         "via": "attack",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": null,
+         "loop": "Skill_2",
+         "end": null,
+         "via": "attack",
+         "index": 1,
+         "idle": null
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "skills": {
+   "skchr_am_doloris_1": "skill/skchr_am_doloris_1.png",
+   "skchr_am_doloris_2": "skill/skchr_am_doloris_2.png",
+   "skchr_am_timoris_1": "skill/skchr_am_timoris_1.png",
+   "skchr_am_timoris_2": "skill/skchr_am_timoris_2.png",
+   "skchr_am_amoris_1": "skill/skchr_am_amoris_1.png",
+   "skchr_am_amoris_2": "skill/skchr_am_amoris_2.png",
+   "skchr_am_oblivionis_1": "skill/skchr_am_oblivionis_1.png",
+   "skchr_am_oblivionis_2": "skill/skchr_am_oblivionis_2.png",
+   "skchr_am_oblivionis_3": "skill/skchr_am_oblivionis_3.png",
+   "skchr_mortis_1": "skill/skchr_mortis_1.png",
+   "skchr_mortis_2": "skill/skchr_mortis_2.png"
+  },
+  "bonds": {
+   "aveMujica": "bond/icon_aveMujica.png"
+  },
+  "bands": {
+   "band_wuyouyoumeng": "band/band_wuyouyoumeng.png"
+  }
+ }
+}
