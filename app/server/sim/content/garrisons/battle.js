@@ -1,4 +1,4 @@
-// server/sim/content/garrisons/battle.js — IN_BATTLE 特质 (garrisons) of the operators on the field.
+﻿// server/sim/content/garrisons/battle.js — IN_BATTLE 特质 (garrisons) of the operators on the field.
 //
 // Each operator carries `unit.def.raw.garrisonIds` (elite chess carry the `_b` garrisons); the IN_BATTLE ones are
 // dispatched here by their effectKey (bbStr.key for battle runes, else effectType — docs/DATA.md §4):
@@ -354,6 +354,13 @@ const INSTALLERS = {
     const m = byUnit(list);
     battle.on('deploy', ({ unit }) => {
       const arr = m.get(unit);
+      if (arr) for (const it of arr) fireGain(battle, it);
+    });
+    // Player-confirmed: 远牙's granted trait also gains on each body / substitute switch (DESIGN §28.5).
+    // Restrict this extra trigger to that trait; use its existing amounts, active-bond checks and battle cap.
+    const farTooth = byUnit(list.filter((it) => it.gid === 'garrison_108_a' || it.gid === 'garrison_108_b'));
+    if (farTooth.size) battle.on('dollSwap', ({ unit }) => {
+      const arr = farTooth.get(unit);
       if (arr) for (const it of arr) fireGain(battle, it);
     });
   },

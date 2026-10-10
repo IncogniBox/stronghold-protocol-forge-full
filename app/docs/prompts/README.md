@@ -4,7 +4,7 @@
 本仓库能直接使用的工坊内容。这些文件是本项目的官方创作接口 —— 它们和编辑器、CLI、校验器共用同一批
 `shared/*Authoring.js` 规则，所以**AI 写出来的东西与人在编辑器里点出来的东西完全一样**。
 
-> **本版基线**：本仓库 **0.13.1** / 打包的上游游戏本体 **0.2.2**。下面写的字段、枚举与推导规则都是这一版的引擎
+> **本版基线**：本仓库 **0.14.0** / 打包的上游游戏本体 **0.2.2**。下面写的字段、枚举与推导规则都是这一版的引擎
 > 实际在跑的那一套；上游换了基线而这几份 prompt 没跟上，就会出现「文档对、引擎不接受」的情况。
 
 | Prompt | 用于 | 状态 |
@@ -250,7 +250,7 @@ node tools/workshop-validate.mjs <包目录> --json    # 机器可读：每条�
 
 **送达与回退**：默认语种的台词并进 `assets.audio.voice`，其它语种并进 `assets.audio.voiceLangs[<lang>]`
 （`shared/workshop.js:2488` 的 `appendVoiceLines`，两处调用在 `:2538` 与 `:2555`；是**追加**，不替换官方已有的台词，客户端仍在这些台词里随机）。播放侧按玩家选的配音语言取
-台词 —— `public/js/audio.js:327` 的 `voiceLinesFor(manifest, charId, slot, lang)`：先看
+台词 —— `public/js/audio.js:390` 的 `voiceLinesFor(manifest, charId, slot, lang)`：先看
 `audio.voiceLangs[lang][charId][slot]`，**该语种没有这个干员的这个槽位时回退到默认配音那一档**（`audio.voice`），
 两者都没有才算没台词。所以「给某个干员单独配一种语言」是正常用法：其它干员在那个语种下照旧播默认那一档。
 

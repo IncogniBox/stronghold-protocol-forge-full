@@ -1,4 +1,4 @@
-// server/match/fields.js — runs the battles of one combat phase (DESIGN §4, §11, §14).
+﻿// server/match/fields.js — runs the battles of one combat phase (DESIGN §4, §11, §14).
 //
 // Server-run combat (legacy streaming mode, SP_COMBAT=server; and the Final Assault when no field has a connected human):
 // FieldRunner steps every live field in lockstep:
@@ -568,7 +568,7 @@ const recJson = (rec) => { try { return rec ? JSON.stringify(rec) : ''; } catch 
 /**
  * Bonds an IN_BATTLE layer gain of this player can name: its bond snapshot (every bond its lineup counts), plus bonds
  * its band, its effects (机变 cards, 驻守 …), its units and their items mention (content grants layers to those —
- * e.g. 克莱门莎's <阿戈尔>, requireActive: false). Anything else is a forged gain.
+ * including referenced bonds outside the lineup snapshot). Anything else is a forged gain.
  */
 function layerBondsOf(p, gd) {
   const out = new Set(Object.keys(p.bonds && typeof p.bonds === 'object' ? p.bonds : {}));
