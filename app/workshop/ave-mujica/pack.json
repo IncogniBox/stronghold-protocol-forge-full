@@ -20,25 +20,441 @@
     "avatar": "char/avatar/char_3004_oblivionis.png",
     "avatarE2": "char/avatar/char_3004_oblivionis.png",
     "portrait": "char/portrait/char_3004_oblivionis.png",
-    "portraitE2": "char/portrait/char_3004_oblivionis.png"
+    "portraitE2": "char/portrait/char_3004_oblivionis.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_3004_oblivionis/front/char_4182_oblvns.skel",
+      "atlas": "spine/op/char_3004_oblivionis/front/char_4182_oblvns.atlas",
+      "textures": [
+       "spine/op/char_3004_oblivionis/front/char_4182_oblvns.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "deploy": "Start",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Skill_1",
+         "end": null,
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "Skill_2_Start",
+         "loop": "Skill_2_Idle_A",
+         "end": null,
+         "index": 1,
+         "idle": null
+        },
+        "2": {
+         "begin": "Skill_3_Begin",
+         "loop": "Skill_3_Loop",
+         "end": "Skill_3_End",
+         "index": 2,
+         "idle": "Skill_3_Idle"
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_3004_oblivionis/back/char_4182_oblvns.skel",
+      "atlas": "spine/op/char_3004_oblivionis/back/char_4182_oblvns.atlas",
+      "textures": [
+       "spine/op/char_3004_oblivionis/back/char_4182_oblvns.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "deploy": "Start",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Skill_1",
+         "end": null,
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "Skill_2_Start",
+         "loop": "Skill_2_Idle_A",
+         "end": null,
+         "index": 1,
+         "idle": null
+        },
+        "2": {
+         "begin": "Skill_3_Begin",
+         "loop": "Skill_3_Loop",
+         "end": "Skill_3_End",
+         "index": 2,
+         "idle": "Skill_3_Idle"
+        }
+       }
+      }
+     }
+    }
    },
    "char_3001_doloris": {
     "avatar": "char/avatar/char_3001_doloris.png",
     "avatarE2": "char/avatar/char_3001_doloris.png",
     "portrait": "char/portrait/char_3001_doloris.png",
-    "portraitE2": "char/portrait/char_3001_doloris.png"
+    "portraitE2": "char/portrait/char_3001_doloris.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_3001_doloris/front/char_4184_dolris.skel",
+      "atlas": "spine/op/char_3001_doloris/front/char_4184_dolris.atlas",
+      "textures": [
+       "spine/op/char_3001_doloris/front/char_4184_dolris.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "deploy": "Start",
+       "attack": {
+        "begin": null,
+        "loop": "Skill_1_Loop",
+        "end": null,
+        "via": "skill"
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": "Skill_1_Begin",
+        "loop": "Skill_1_Loop",
+        "end": "Skill_1_End",
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": "Skill_1_Begin",
+         "loop": "Skill_1_Loop",
+         "end": "Skill_1_End",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "Skill_2_Begin",
+         "loop": "Skill_2_Loop",
+         "end": "Skill_2_End",
+         "index": 1,
+         "idle": null
+        },
+        "2": {
+         "begin": null,
+         "loop": "Skill_1_Loop",
+         "end": null,
+         "via": "attack",
+         "index": 2,
+         "idle": null
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_3001_doloris/front/char_4184_dolris.skel",
+      "atlas": "spine/op/char_3001_doloris/front/char_4184_dolris.atlas",
+      "textures": [
+       "spine/op/char_3001_doloris/front/char_4184_dolris.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "deploy": "Start",
+       "attack": {
+        "begin": null,
+        "loop": "Skill_1_Loop",
+        "end": null,
+        "via": "skill"
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": "Skill_1_Begin",
+        "loop": "Skill_1_Loop",
+        "end": "Skill_1_End",
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": "Skill_1_Begin",
+         "loop": "Skill_1_Loop",
+         "end": "Skill_1_End",
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "Skill_2_Begin",
+         "loop": "Skill_2_Loop",
+         "end": "Skill_2_End",
+         "index": 1,
+         "idle": null
+        },
+        "2": {
+         "begin": null,
+         "loop": "Skill_1_Loop",
+         "end": null,
+         "via": "attack",
+         "index": 2,
+         "idle": null
+        }
+       }
+      }
+     }
+    }
    },
    "char_3003_timoris": {
     "avatar": "char/avatar/char_3003_timoris.png",
     "avatarE2": "char/avatar/char_3003_timoris.png",
     "portrait": "char/portrait/char_3003_timoris.png",
-    "portraitE2": "char/portrait/char_3003_timoris.png"
+    "portraitE2": "char/portrait/char_3003_timoris.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_3003_timoris/front/char_4186_tmoris.skel",
+      "atlas": "spine/op/char_3003_timoris/front/char_4186_tmoris.atlas",
+      "textures": [
+       "spine/op/char_3003_timoris/front/char_4186_tmoris.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "deploy": "Start",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Skill_1",
+         "end": null,
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "Skill_2_Begin",
+         "loop": "Skill_2_Loop",
+         "end": "Skill_2_End",
+         "index": 1,
+         "idle": null
+        },
+        "2": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 2,
+         "idle": null
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_3003_timoris/back/char_4186_tmoris.skel",
+      "atlas": "spine/op/char_3003_timoris/back/char_4186_tmoris.atlas",
+      "textures": [
+       "spine/op/char_3003_timoris/back/char_4186_tmoris.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "deploy": "Start",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "die": null,
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Skill_1",
+         "end": null,
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": "Skill_2_Begin",
+         "loop": "Skill_2_Loop",
+         "end": "Skill_2_End",
+         "index": 1,
+         "idle": null
+        },
+        "2": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 2,
+         "idle": null
+        }
+       }
+      }
+     }
+    }
    },
    "char_3002_amoris": {
     "avatar": "char/avatar/char_3002_amoris.png",
     "avatarE2": "char/avatar/char_3002_amoris.png",
     "portrait": "char/portrait/char_3002_amoris.png",
-    "portraitE2": "char/portrait/char_3002_amoris.png"
+    "portraitE2": "char/portrait/char_3002_amoris.png",
+    "spine": {
+     "front": {
+      "skel": "spine/op/char_3002_amoris/front/char_4185_amoris.skel",
+      "atlas": "spine/op/char_3002_amoris/front/char_4185_amoris.atlas",
+      "textures": [
+       "spine/op/char_3002_amoris/front/char_4185_amoris.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "deploy": "Start",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Skill_1",
+         "end": null,
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": null,
+         "loop": "Skill_2",
+         "end": null,
+         "index": 1,
+         "idle": null
+        },
+        "2": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 2,
+         "idle": null
+        }
+       }
+      }
+     },
+     "back": {
+      "skel": "spine/op/char_3002_amoris/back/char_4185_amoris.skel",
+      "atlas": "spine/op/char_3002_amoris/back/char_4185_amoris.atlas",
+      "textures": [
+       "spine/op/char_3002_amoris/back/char_4185_amoris.png"
+      ],
+      "anims": {
+       "idle": "Idle",
+       "deploy": "Start",
+       "attack": {
+        "begin": null,
+        "loop": "Attack",
+        "end": null
+       },
+       "attackDown": null,
+       "skill": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "die": "Die",
+       "move": null,
+       "stun": null,
+       "skills": {
+        "0": {
+         "begin": null,
+         "loop": "Skill_1",
+         "end": null,
+         "index": 0,
+         "idle": null
+        },
+        "1": {
+         "begin": null,
+         "loop": "Skill_2",
+         "end": null,
+         "index": 1,
+         "idle": null
+        },
+        "2": {
+         "begin": null,
+         "loop": "Attack",
+         "end": null,
+         "via": "attack",
+         "index": 2,
+         "idle": null
+        }
+       }
+      }
+     }
+    }
    },
    "char_4183_mortis": {
     "avatar": "char/avatar/char_4183_mortis.png",
@@ -157,6 +573,208 @@
   },
   "bands": {
    "band_wuyouyoumeng": "band/band_wuyouyoumeng.png"
+  }
+ },
+ "voices": {
+  "char_3001_doloris": {
+   "start": [
+    "voice/jp/char_3001_doloris/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_3001_doloris/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_3001_doloris/cn_021.mp3",
+    "voice/jp/char_3001_doloris/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_3001_doloris/cn_023.mp3",
+    "voice/jp/char_3001_doloris/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_3001_doloris/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_3001_doloris/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_3001_doloris/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_3001_doloris/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_3001_doloris/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_3001_doloris/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_3001_doloris/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_3001_doloris/cn_032.mp3"
+   ]
+  },
+  "char_3002_amoris": {
+   "start": [
+    "voice/jp/char_3002_amoris/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_3002_amoris/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_3002_amoris/cn_021.mp3",
+    "voice/jp/char_3002_amoris/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_3002_amoris/cn_023.mp3",
+    "voice/jp/char_3002_amoris/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_3002_amoris/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_3002_amoris/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_3002_amoris/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_3002_amoris/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_3002_amoris/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_3002_amoris/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_3002_amoris/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_3002_amoris/cn_032.mp3"
+   ]
+  },
+  "char_3003_timoris": {
+   "start": [
+    "voice/jp/char_3003_timoris/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_3003_timoris/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_3003_timoris/cn_021.mp3",
+    "voice/jp/char_3003_timoris/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_3003_timoris/cn_023.mp3",
+    "voice/jp/char_3003_timoris/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_3003_timoris/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_3003_timoris/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_3003_timoris/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_3003_timoris/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_3003_timoris/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_3003_timoris/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_3003_timoris/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_3003_timoris/cn_032.mp3"
+   ]
+  },
+  "char_3004_oblivionis": {
+   "start": [
+    "voice/jp/char_3004_oblivionis/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_3004_oblivionis/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_3004_oblivionis/cn_021.mp3",
+    "voice/jp/char_3004_oblivionis/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_3004_oblivionis/cn_023.mp3",
+    "voice/jp/char_3004_oblivionis/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_3004_oblivionis/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_3004_oblivionis/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_3004_oblivionis/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_3004_oblivionis/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_3004_oblivionis/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_3004_oblivionis/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_3004_oblivionis/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_3004_oblivionis/cn_032.mp3"
+   ]
+  },
+  "char_4183_mortis": {
+   "start": [
+    "voice/jp/char_4183_mortis/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_4183_mortis/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_4183_mortis/cn_021.mp3",
+    "voice/jp/char_4183_mortis/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_4183_mortis/cn_023.mp3",
+    "voice/jp/char_4183_mortis/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_4183_mortis/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_4183_mortis/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_4183_mortis/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_4183_mortis/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_4183_mortis/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_4183_mortis/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_4183_mortis/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_4183_mortis/cn_032.mp3"
+   ]
   }
  }
 }

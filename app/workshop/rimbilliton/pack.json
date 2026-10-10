@@ -447,5 +447,695 @@
  "itemIcons": {
   "trap_2001_mod_happy": "item/trap_2001_mod_happy.png",
   "trap_2002_mod_greens": "item/trap_2002_mod_greens.png"
+ },
+ "voices": {
+  "char_193_frostl": {
+   "start": [
+    "voice/jp/char_193_frostl/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_193_frostl/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_193_frostl/cn_021.mp3",
+    "voice/jp/char_193_frostl/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_193_frostl/cn_023.mp3",
+    "voice/jp/char_193_frostl/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_193_frostl/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_193_frostl/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_193_frostl/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_193_frostl/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_193_frostl/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_193_frostl/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_193_frostl/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_193_frostl/cn_032.mp3"
+   ]
+  },
+  "char_230_savage": {
+   "start": [
+    "voice/jp/char_230_savage/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_230_savage/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_230_savage/cn_021.mp3",
+    "voice/jp/char_230_savage/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_230_savage/cn_023.mp3",
+    "voice/jp/char_230_savage/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_230_savage/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_230_savage/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_230_savage/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_230_savage/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_230_savage/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_230_savage/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_230_savage/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_230_savage/cn_032.mp3"
+   ]
+  },
+  "char_449_glider": {
+   "start": [
+    "voice/jp/char_449_glider/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_449_glider/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_449_glider/cn_021.mp3",
+    "voice/jp/char_449_glider/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_449_glider/cn_023.mp3",
+    "voice/jp/char_449_glider/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_449_glider/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_449_glider/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_449_glider/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_449_glider/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_449_glider/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_449_glider/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_449_glider/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_449_glider/cn_032.mp3"
+   ]
+  },
+  "char_1037_amiya3": {
+   "start": [
+    "voice/jp/char_1037_amiya3/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_1037_amiya3/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_1037_amiya3/cn_021.mp3",
+    "voice/jp/char_1037_amiya3/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_1037_amiya3/cn_023.mp3",
+    "voice/jp/char_1037_amiya3/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_1037_amiya3/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_1037_amiya3/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_1037_amiya3/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_1037_amiya3/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_1037_amiya3/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_1037_amiya3/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_1037_amiya3/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_1037_amiya3/cn_032.mp3"
+   ]
+  },
+  "char_4183_mortis": {
+   "start": [
+    "voice/jp/char_4183_mortis/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_4183_mortis/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_4183_mortis/cn_021.mp3",
+    "voice/jp/char_4183_mortis/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_4183_mortis/cn_023.mp3",
+    "voice/jp/char_4183_mortis/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_4183_mortis/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_4183_mortis/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_4183_mortis/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_4183_mortis/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_4183_mortis/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_4183_mortis/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_4183_mortis/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_4183_mortis/cn_032.mp3"
+   ]
+  }
+ },
+ "voiceLangs": {
+  "cn": {
+   "char_193_frostl": {
+    "start": [
+     "voice/cn/char_193_frostl/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/cn/char_193_frostl/cn_020.mp3"
+    ],
+    "select": [
+     "voice/cn/char_193_frostl/cn_021.mp3",
+     "voice/cn/char_193_frostl/cn_022.mp3"
+    ],
+    "place": [
+     "voice/cn/char_193_frostl/cn_023.mp3",
+     "voice/cn/char_193_frostl/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/cn/char_193_frostl/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/cn/char_193_frostl/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/cn/char_193_frostl/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/cn/char_193_frostl/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/cn/char_193_frostl/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/cn/char_193_frostl/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/cn/char_193_frostl/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/cn/char_193_frostl/cn_032.mp3"
+    ]
+   },
+   "char_230_savage": {
+    "start": [
+     "voice/cn/char_230_savage/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/cn/char_230_savage/cn_020.mp3"
+    ],
+    "select": [
+     "voice/cn/char_230_savage/cn_021.mp3",
+     "voice/cn/char_230_savage/cn_022.mp3"
+    ],
+    "place": [
+     "voice/cn/char_230_savage/cn_023.mp3",
+     "voice/cn/char_230_savage/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/cn/char_230_savage/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/cn/char_230_savage/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/cn/char_230_savage/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/cn/char_230_savage/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/cn/char_230_savage/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/cn/char_230_savage/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/cn/char_230_savage/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/cn/char_230_savage/cn_032.mp3"
+    ]
+   },
+   "char_449_glider": {
+    "start": [
+     "voice/cn/char_449_glider/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/cn/char_449_glider/cn_020.mp3"
+    ],
+    "select": [
+     "voice/cn/char_449_glider/cn_021.mp3",
+     "voice/cn/char_449_glider/cn_022.mp3"
+    ],
+    "place": [
+     "voice/cn/char_449_glider/cn_023.mp3",
+     "voice/cn/char_449_glider/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/cn/char_449_glider/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/cn/char_449_glider/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/cn/char_449_glider/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/cn/char_449_glider/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/cn/char_449_glider/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/cn/char_449_glider/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/cn/char_449_glider/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/cn/char_449_glider/cn_032.mp3"
+    ]
+   },
+   "char_1037_amiya3": {
+    "start": [
+     "voice/cn/char_1037_amiya3/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/cn/char_1037_amiya3/cn_020.mp3"
+    ],
+    "select": [
+     "voice/cn/char_1037_amiya3/cn_021.mp3",
+     "voice/cn/char_1037_amiya3/cn_022.mp3"
+    ],
+    "place": [
+     "voice/cn/char_1037_amiya3/cn_023.mp3",
+     "voice/cn/char_1037_amiya3/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/cn/char_1037_amiya3/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/cn/char_1037_amiya3/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/cn/char_1037_amiya3/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/cn/char_1037_amiya3/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/cn/char_1037_amiya3/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/cn/char_1037_amiya3/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/cn/char_1037_amiya3/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/cn/char_1037_amiya3/cn_032.mp3"
+    ]
+   }
+  },
+  "en": {
+   "char_193_frostl": {
+    "start": [
+     "voice/en/char_193_frostl/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/en/char_193_frostl/cn_020.mp3"
+    ],
+    "select": [
+     "voice/en/char_193_frostl/cn_021.mp3",
+     "voice/en/char_193_frostl/cn_022.mp3"
+    ],
+    "place": [
+     "voice/en/char_193_frostl/cn_023.mp3",
+     "voice/en/char_193_frostl/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/en/char_193_frostl/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/en/char_193_frostl/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/en/char_193_frostl/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/en/char_193_frostl/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/en/char_193_frostl/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/en/char_193_frostl/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/en/char_193_frostl/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/en/char_193_frostl/cn_032.mp3"
+    ]
+   },
+   "char_230_savage": {
+    "start": [
+     "voice/en/char_230_savage/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/en/char_230_savage/cn_020.mp3"
+    ],
+    "select": [
+     "voice/en/char_230_savage/cn_021.mp3",
+     "voice/en/char_230_savage/cn_022.mp3"
+    ],
+    "place": [
+     "voice/en/char_230_savage/cn_023.mp3",
+     "voice/en/char_230_savage/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/en/char_230_savage/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/en/char_230_savage/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/en/char_230_savage/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/en/char_230_savage/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/en/char_230_savage/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/en/char_230_savage/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/en/char_230_savage/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/en/char_230_savage/cn_032.mp3"
+    ]
+   },
+   "char_449_glider": {
+    "start": [
+     "voice/en/char_449_glider/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/en/char_449_glider/cn_020.mp3"
+    ],
+    "select": [
+     "voice/en/char_449_glider/cn_021.mp3",
+     "voice/en/char_449_glider/cn_022.mp3"
+    ],
+    "place": [
+     "voice/en/char_449_glider/cn_023.mp3",
+     "voice/en/char_449_glider/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/en/char_449_glider/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/en/char_449_glider/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/en/char_449_glider/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/en/char_449_glider/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/en/char_449_glider/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/en/char_449_glider/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/en/char_449_glider/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/en/char_449_glider/cn_032.mp3"
+    ]
+   },
+   "char_1037_amiya3": {
+    "start": [
+     "voice/en/char_1037_amiya3/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/en/char_1037_amiya3/cn_020.mp3"
+    ],
+    "select": [
+     "voice/en/char_1037_amiya3/cn_021.mp3",
+     "voice/en/char_1037_amiya3/cn_022.mp3"
+    ],
+    "place": [
+     "voice/en/char_1037_amiya3/cn_023.mp3",
+     "voice/en/char_1037_amiya3/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/en/char_1037_amiya3/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/en/char_1037_amiya3/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/en/char_1037_amiya3/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/en/char_1037_amiya3/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/en/char_1037_amiya3/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/en/char_1037_amiya3/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/en/char_1037_amiya3/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/en/char_1037_amiya3/cn_032.mp3"
+    ]
+   }
+  },
+  "kr": {
+   "char_193_frostl": {
+    "start": [
+     "voice/kr/char_193_frostl/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/kr/char_193_frostl/cn_020.mp3"
+    ],
+    "select": [
+     "voice/kr/char_193_frostl/cn_021.mp3",
+     "voice/kr/char_193_frostl/cn_022.mp3"
+    ],
+    "place": [
+     "voice/kr/char_193_frostl/cn_023.mp3",
+     "voice/kr/char_193_frostl/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/kr/char_193_frostl/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/kr/char_193_frostl/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/kr/char_193_frostl/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/kr/char_193_frostl/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/kr/char_193_frostl/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/kr/char_193_frostl/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/kr/char_193_frostl/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/kr/char_193_frostl/cn_032.mp3"
+    ]
+   },
+   "char_230_savage": {
+    "start": [
+     "voice/kr/char_230_savage/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/kr/char_230_savage/cn_020.mp3"
+    ],
+    "select": [
+     "voice/kr/char_230_savage/cn_021.mp3",
+     "voice/kr/char_230_savage/cn_022.mp3"
+    ],
+    "place": [
+     "voice/kr/char_230_savage/cn_023.mp3",
+     "voice/kr/char_230_savage/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/kr/char_230_savage/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/kr/char_230_savage/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/kr/char_230_savage/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/kr/char_230_savage/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/kr/char_230_savage/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/kr/char_230_savage/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/kr/char_230_savage/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/kr/char_230_savage/cn_032.mp3"
+    ]
+   },
+   "char_449_glider": {
+    "start": [
+     "voice/kr/char_449_glider/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/kr/char_449_glider/cn_020.mp3"
+    ],
+    "select": [
+     "voice/kr/char_449_glider/cn_021.mp3",
+     "voice/kr/char_449_glider/cn_022.mp3"
+    ],
+    "place": [
+     "voice/kr/char_449_glider/cn_023.mp3",
+     "voice/kr/char_449_glider/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/kr/char_449_glider/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/kr/char_449_glider/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/kr/char_449_glider/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/kr/char_449_glider/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/kr/char_449_glider/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/kr/char_449_glider/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/kr/char_449_glider/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/kr/char_449_glider/cn_032.mp3"
+    ]
+   },
+   "char_1037_amiya3": {
+    "start": [
+     "voice/kr/char_1037_amiya3/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/kr/char_1037_amiya3/cn_020.mp3"
+    ],
+    "select": [
+     "voice/kr/char_1037_amiya3/cn_021.mp3",
+     "voice/kr/char_1037_amiya3/cn_022.mp3"
+    ],
+    "place": [
+     "voice/kr/char_1037_amiya3/cn_023.mp3",
+     "voice/kr/char_1037_amiya3/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/kr/char_1037_amiya3/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/kr/char_1037_amiya3/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/kr/char_1037_amiya3/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/kr/char_1037_amiya3/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/kr/char_1037_amiya3/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/kr/char_1037_amiya3/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/kr/char_1037_amiya3/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/kr/char_1037_amiya3/cn_032.mp3"
+    ]
+   }
+  }
  }
 }
