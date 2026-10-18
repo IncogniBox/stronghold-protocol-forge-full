@@ -13,7 +13,8 @@
 //     detailPanel.js 两端同源），普通 +2 / 进阶 +4。
 //   * <进入休整期时> 把携带者**其余装备**的数值汇总吸收到本装备上（可叠加），随后用 ctx.destroyPiece 就地销毁；
 //     吸收结果写在携带者棋子的 `piece.meta.data.columbia`（ctx.setPieceData），随战斗输入进 `u.pieceData`，
-//     由本文件里的 item behaviour 按「1 + 每层 2.5%/5% × 哥伦比亚层数」缩放后挂到携带者身上。
+//     由本文件里的 item behaviour 按「1 + inherit_ratio_per_layer × floor(哥伦比亚层数 / inherit_every)」缩放后挂到携带者
+//     身上 —— **阶梯**：普通每满 2 层加一次 2.5%，进阶每 1 层加一次 2.5%（`inherit_every` 缺省 1）。
 //   * 被销毁的装备若带 `giveBondId`（配合变形同构体才生效的那种），盟约记进 `columbia.bondSources`；携带者**当前**装备着
 //     变形同构体时才写进 `piece.meta.data.bondGrants`（引擎当成变形同构体授予，server/match/bondsMeta.js pieceBonds、
 //     support/index.js unitBonds）—— 先吸收、后补装变形同构体也能生效，换掉变形同构体则随之失效。
@@ -144,17 +145,25 @@ function scaledMods(raw, scale) {
 
 /**
  * 源石辅助仪的战斗侧：读取携带者 `u.pieceData.columbia.mods`（休整期吸收的数值），按「1 + inherit_ratio_per_layer ×
- * 【哥伦比亚】层数」缩放后挂在携带者身上；层数变化时重算（onLayers）。
+ * floor(【哥伦比亚】层数 / inherit_every)」缩放后挂在携带者身上；层数变化时重算（onLayers）。
+ *
+ * **阶梯语义**（业主字面口径：普通「每 2 层 2.5%」、进阶「每 1 层 2.5%」）：`inherit_every` = 「每**满**几层加一次」，
+ * `inherit_ratio_per_layer` = 那**一次**的增量。所以普通在 1 层时**不加**、2 层才 +2.5%，而不是每层线性累加
+ * （线性只在偶数层与阶梯等价，奇数层是错的）。`inherit_every` 缺省 1（= 每层一次），所以进阶与任何不写这个键的
+ * 旧道具的行为**逐字节不变**。
  *
  * 注册键是 **buff 键** `mod_col_pldevice`（items.json 的 `bbStr.key`），不是 item key —— 理由见上面 同行者 那段
- * 注释（`installItem` 的 `hasBattleEffect` 只看 buff 键）。回调签名 `(battle, u, p, scope)`，`p` 即装备参数。
+ * 注释（`installItem` 的 `hasBattleEffect` 只看 buff 键）。回调签名 `(battle, u, p, scope)`，`p` 即装备参数
+ * （`{ ...bb, ...bbStr }`，所以 `inherit_every` 写在 items.json 的 buff `bb` 里就能读到这里）。
  */
 registerItemBehaviour('mod_col_pldevice', (battle, u, p, scope) => {
   const raw = u.pieceData && u.pieceData.columbia ? u.pieceData.columbia.mods : null;
   if (!raw) return;
-  const perLayer = num(p && p.inherit_ratio_per_layer, 0);
+  const perStep = num(p && p.inherit_ratio_per_layer, 0);
+  const every = Math.max(1, num(p && p.inherit_every, 1)); // 缺省 1 ⇒ 每层一次，与旧行为一致
   const apply = () => {
-    const m = scaledMods(raw, 1 + perLayer * S.bondLayers(battle, u.ownerId, BOND));
+    const steps = Math.floor(S.bondLayers(battle, u.ownerId, BOND) / every);
+    const m = scaledMods(raw, 1 + perStep * steps);
     if (Object.keys(m).length) scope.stat('absorb', m);
     else battle.removeBuff(u, scope.key('absorb'));
   };

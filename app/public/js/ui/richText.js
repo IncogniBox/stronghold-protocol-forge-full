@@ -180,9 +180,9 @@ export function mergeItemDescs(recs) {
 /**
  * The description text of an ITEM with its runtime ratio filled in: an item declaring `params.inherit_ratio_per_layer`
  * and using the `{0}` token in its text (源石辅助仪's 「当前继承效果加成比例：{0}%」) shows
- * `params.inherit_ratio_per_layer` × the layers its own `params.ratio_bond` names (the same `1 + ratio × L` scale the
- * battle applies). Any other item (or a caller without `layers`) gets the text unchanged, so an item without the token
- * is never touched.
+ * `params.inherit_ratio_per_layer` × the **steps** its own `params.ratio_bond` names — `floor(L / params.inherit_every)`
+ * steps, with `inherit_every` defaulting to 1 (the same `1 + ratio × steps` scale the battle applies). Any other item
+ * (or a caller without `layers`) gets the text unchanged, so an item without the token is never touched.
  * @param {{ desc?: string, descRaw?: string, params?: any }|null} item
  * @param {number|null} [layers] the layers of the bond the item's `params.ratio_bond` names
  * @returns {string}
@@ -192,7 +192,11 @@ export function itemDescText(item, layers = null) {
   const ratio = item && item.params && typeof item.params.inherit_ratio_per_layer === 'number' ? item.params.inherit_ratio_per_layer : null;
   if (!src || ratio == null || !String(src).includes('{0}')) return src;
   const L = Number.isFinite(Number(layers)) ? Math.max(0, Number(layers)) : 0;
-  const pct = L * ratio * 100;
+  // An item that takes its ratio every N layers (源石辅助仪 普通形态: `inherit_every: 2`) counts **whole steps**:
+  // the card must print what the battle applies — `1 + ratio × floor(L / every)`. With the old `L × ratio` the card
+  // showed 2.5% at 1 layer while the battle gave +0%. `inherit_every` missing/1 ⇒ every other item is unchanged.
+  const every = Math.max(1, Math.floor(Number(item && item.params && item.params.inherit_every) || 1));
+  const pct = Math.floor(L / every) * ratio * 100;
   const shown = Number.isInteger(pct) ? String(pct) : String(Number(pct.toFixed(1)));
   return String(src).replace('{0}', shown);
 }

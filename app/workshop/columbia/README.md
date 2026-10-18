@@ -5,8 +5,9 @@
 玩起来是一套**围绕「携带装备数量」滚雪球**的阵营：源石辅助仪每回合把干员身上其余装备的数值与效果吸收进自己、随盟约层数放大，
 盟约再把这件装备的件数折算成攻击力，越到后期越强。
 
-`pack.json`：`version 1.2.0`、`gameVersion 0.2.6`、`author "the Columbia mod"`、`license "GPL-3.0-or-later"`、`combat: true`、
-`stripDiyOverlaps: true`。盟约记录 `bondType: "SEASON"`、`isCore: true` —— 它是**核心盟约**，**不依赖任何前置包**
+`pack.json`：`version 1.2.3`、`gameVersion 0.3.0`、`author "the Columbia mod"`、`license "GPL-3.0-or-later"`、`combat: true`、
+`stripDiyOverlaps: true`、`behaviour: [{ switch: "unequip", option: "allow" }]`（休整期可把已装备的装备从干员身上卸下，
+走引擎既有的 `g.unequip` 意图，见 §6.3）。盟约记录 `bondType: "SEASON"`、`isCore: true` —— 它是**核心盟约**，**不依赖任何前置包**
 （`workshop/side-story` 只服务 `bondType: "SIDE_STORY"` 的附加盟约；本包没有用到它）。数据与素材走创意工坊叠加层，
 官方 `data/*.json` 不被直接改动——对官方棋子的修改一律通过 `pack.json.overrides` 声明。
 
@@ -162,7 +163,11 @@
 这是一件**数据 + 包内处理器**的复杂装备，**不是纯数据**：`params` 只声明参数，逻辑分别落在 `meta/main.mjs` 与 `battle/main.mjs`。
 
 - **`params` / buff**（`env_gbuff_new_with_verify`，`bbStr.key: "mod_col_pldevice"`）：
-  `slot_cap 2 / 4`、`inherit_ratio_per_layer 0.025 / 0.05`、`ratio_bond "columbiaShip"`、`inherited_key "columbia"`。
+  `slot_cap 2 / 4`、`inherit_ratio_per_layer 0.025 / 0.025`（**每次阶梯的增量** = 2.5%）、`inherit_every 2 / 1`、
+  `ratio_bond "columbiaShip"`、`inherited_key "columbia"`。
+  1.2.3 起是**阶梯**语义：`inherit_every` = 每**满**几层加一次，`inherit_ratio_per_layer` = 那一次的增量
+  ⇒ 普通「**每 2 层 +2.5%**」（1 层不加）、进阶「**每层 +2.5%**」。1.2.2 及更早把它当线性
+  （普通写成 `0.0125`×层数），只在偶数层与阶梯等价 —— 奇数层是错的。
 - **装备格 +2 / +4**（谁读 `slot_cap`）：引擎的 `app/shared/equipSlots.js` —— `容量 = 官方 2 + Σ(该干员携带装备的 params.slot_cap)`。
   服务端 `app/server/match/gamedata.js`、客户端 `app/public/js/ui/gameLogic/placement.js` / `detailPanel.js`、渲染 `app/public/js/render/units.js` 两端同源调用它。
 - **「进入休整期时继承其余装备」**（`meta/main.mjs`，`registry.item('chess_item_6_13_e')` → `columbiaDevice()`）：
@@ -177,7 +182,8 @@
   - `onEquip`：装备换人 / 出售回整备区后再装上时，把装备自己那份记录镜像到新携带者（效果不丢）。
   - `onDestroy`：装备被第 3 件顶替 / 销毁时，清掉携带者的已继承数值与盟约授予（进阶合成走 `_mergeItem` 不派发 `onDestroy`，故进阶后保留继承）。
 - **战斗侧**（`battle/main.mjs`，`registerItemBehaviour('mod_col_pldevice', …)`）：读 `u.pieceData.columbia.mods`，按
-  `1 + inherit_ratio_per_layer × 哥伦比亚层数` 缩放后挂到携带者身上（层数变化 `onLayers` 重算）；**正面数值吃加成，负面数值原样继承**。
+  `1 + inherit_ratio_per_layer × floor(哥伦比亚层数 / inherit_every)` 缩放后挂到携带者身上（层数变化 `onLayers` 重算）；
+  `inherit_every` 从数据读、**缺省 1**（⇒ 进阶与其它任何道具行为不变）；**正面数值吃加成，负面数值原样继承**。
 - **变形同构体**（官方 id `chess_item_6_09_e`，本包不定义、只注册处理器 `morphItem()`）：装备状态一变就重算源石辅助仪继承来的盟约授予。
 - **客户端展示**：装备卡列出「已继承的装备」，靠 `item.params.inherited_key === "columbia"` 从棋子视图的 `piece.itemData.columbia.items` 读
   （见 §8 `app/server/match/player/views.js` + `app/public/js/ui/detailPanel.js`）。
@@ -208,7 +214,7 @@
 |---|---|---|---|
 | `bondeffect_columbia` | 哥伦比亚 | BOND | 盟约本体效果（额外携带装备 / 战斗开始攻击力 / 6 人发随机阶级进阶装备） |
 | `aceffect_band_columbia` | 混沌本质 | BAND_INITIAL | 策略本体：盟约每 50 层获沙盘·α + β |
-| `eff_mod_col_pldevice` / `eff_modg_col_pldevice` | 源石辅助仪 | EQUIP | 普通 +2 / 精锐 +4，继承比例 2.5% / 5% |
+| `eff_mod_col_pldevice` / `eff_modg_col_pldevice` | 源石辅助仪 | EQUIP | 普通 +2 / 精锐 +4，继承比例 每 2 层 2.5% / 每层 2.5% |
 | `eff_mod_col_sandboxA` / `eff_modg_col_sandboxA` | 沙盘·α | EQUIP | 装备时销毁，发 1 / 2 位哥伦比亚干员 |
 | `eff_mod_col_sandboxB` / `eff_modg_col_sandboxB` | 沙盘·β | EQUIP | 装备时销毁，发 2 / 4 件装备 |
 | `eff_mod_col_fellow` / `eff_modg_col_fellow` | 同行者 | EQUIP | 无视 10% / 20% 防御与法抗 |
@@ -274,7 +280,7 @@
 |---|---|---|
 | `registerBondInstaller(BOND, installColumbia)` | `columbiaShip` | <战斗开始时> 每名【哥伦比亚】干员获 `(实际装备数 + extra_carry) × (atk_per_item + atk_per_item_per·层)` 攻击力；`onLayers` 重算，`deploy` / `death` 时刷新 |
 | `registerItemBehaviour('mod_col_fellow', …)` | 同行者 | 把 `def_penetrate` / `magic_resist_penetrate` 映射为引擎的 `defIgnorePct` / `resIgnorePct` |
-| `registerItemBehaviour('mod_col_pldevice', …)` | 源石辅助仪 | 读 `u.pieceData.columbia.mods`，按 `1 + inherit_ratio_per_layer × 层` 缩放挂到携带者，`onLayers` 重算 |
+| `registerItemBehaviour('mod_col_pldevice', …)` | 源石辅助仪 | 读 `u.pieceData.columbia.mods`，按 `1 + inherit_ratio_per_layer × floor(层 / inherit_every)` 缩放挂到携带者，`onLayers` 重算 |
 | `registerGarrisonInstaller('COL_EQUIP_BASE_BY_BOND_LAYER', …)` | 谬因 | 战斗中每 N 层，携带装备基础数值 +0.1%；攻击速度 +`aspd_per_item`×件数（单位「点」） |
 | `registerGarrisonInstaller('COL_SHIELD_AND_SKILL_LAYER', …)` | 星极 | 战斗开始加护盾 + 开技能加层（`addShieldLayer`） |
 | `registerGarrisonInstaller('COL_SKILL_SELF_FRONT_LAYER', …)` | 锡兰 | 开技能时自身与身前一格加层 |
@@ -285,6 +291,18 @@
 `registerGarrisonInstaller` / `setBattleMark` / `num`（以及 `S.*`：`bondLayers` / `bondMembers` / `directMods` / `buffsOf` / `itemsOf` /
 `gainLayers` / `unitBonds` / `passiveBuff` / `alliesAround` / `frontTile` / `allyAt` / `onField` / `isOp` / `N8` 等）；`@sim/constants.js` 的 `FORCED_EXIT`。
 meta 侧经 `registry.api`（`num` / `buffsOf`）与 `registry.bond` / `registry.band` / `registry.item` / `registry.garrison` 接入。
+
+### 6.3 装备拆卸（`pack.json.behaviour`）
+
+本包声明 `behaviour: [{ switch: "unequip", option: "allow" }]`，把引擎**已经实现**的「装备拆卸」行为开关打开
+（`shared/behaviour.js` 的 `unequip` 格，`docs/WORKSHOP.md` §1.22 / §1.23）。**包只声明，动作由引擎构造**：
+
+- **服务端**：`server/match/player/items.js` 的 `unequipAllowed` 判为真 ⇒ 休整期接受**既有意图** `g.unequip { itemUid }`，把一件
+  **已装备**的装备从干员身上取下，退回手牌（右→左优先），手牌满则进（0.3.0 起**无界**的）临时整备区。缺省档（不声明这一格）下
+  `g.unequip` 与 `g.destroy` 对已装备品回同一句 `'equipped items are locked'`。
+- **客户端**：`public/js/roomMods.js` 从 `welcome.mods` 合成 `behaviour` 后调 `setUnequipAllowed(true)`，于是 `ui/detailPanel.js` 的装备卡画
+  「卸下」按钮，点击走 `ui/gameActions.js` 的 `unequip()` → `g.unequip`。**本包不含任何 `client.panels`** —— 该按钮是引擎侧界面，只是被本包的开关打开。
+- **不改引擎、不新增协议类型**；缺省档逐字节不变 ⇒ **不需要 `golden:update`**（仅加载本包的对局受影响）。
 
 ---
 

@@ -73,8 +73,8 @@
   "effectId": "eff_mod_col_pldevice",
   "effectType": "EQUIP",
   "name": "源石辅助仪",
-  "desc": "干员的装备格+2。\n<进入休整期时>干员其余装备的效果与数值继承到该装备上（可叠加），随后销毁（源石辅助仪同时继承销毁装备在搭配变形同构体时获得的盟约效果）。\n【哥伦比亚】盟约每层使该装备的已继承装备的效果提升2.5%。",
-  "descRaw": "干员的<@ba.vup>装备格+2</>。\n<进入休整期时>干员其余装备的<@ba.vup>效果与数值</>继承到该装备上<@autochess.gray>（可叠加）</>，随后<@ba.vup>销毁</>（源石辅助仪同时继承销毁装备在搭配<@ba.vup>变形同构体</>时获得的盟约效果）。\n【哥伦比亚】盟约每层使该装备的已继承装备的效果提升<@ba.vup>2.5%</>。",
+  "desc": "干员的装备格+2。\n<进入休整期时>干员其余装备的效果与数值继承到该装备上（可叠加），随后销毁（源石辅助仪同时继承销毁装备在搭配变形同构体时获得的盟约效果）。\n【哥伦比亚】盟约每满2层使该装备的已继承装备的效果提升2.5%。",
+  "descRaw": "干员的<@ba.vup>装备格+2</>。\n<进入休整期时>干员其余装备的<@ba.vup>效果与数值</>继承到该装备上<@autochess.gray>（可叠加）</>，随后<@ba.vup>销毁</>（源石辅助仪同时继承销毁装备在搭配<@ba.vup>变形同构体</>时获得的盟约效果）。\n【哥伦比亚】盟约每满2层使该装备的已继承装备的效果提升<@ba.vup>2.5%</>。",
   "counterType": "NONE",
   "continuedRound": -1,
   "decoIconId": null,
@@ -85,7 +85,8 @@
     "countType": "NONE",
     "bb": {
      "slot_cap": 2,
-     "inherit_ratio_per_layer": 0.025
+     "inherit_ratio_per_layer": 0.025,
+     "inherit_every": 2
     },
     "bbStr": {
      "key": "mod_col_pldevice"
@@ -95,6 +96,7 @@
   "params": {
    "slot_cap": 2,
    "inherit_ratio_per_layer": 0.025,
+   "inherit_every": 2,
    "key": "mod_col_pldevice"
   }
  },
@@ -102,8 +104,8 @@
   "effectId": "eff_modg_col_pldevice",
   "effectType": "EQUIP",
   "name": "源石辅助仪",
-  "desc": "干员的装备格+4。\n<进入休整期时>干员其余装备的数值与效果继承到该装备上（可叠加），随后销毁（源石辅助仪同时继承销毁装备在搭配变形同构体时获得的盟约效果）。\n【哥伦比亚】盟约每层使该装备的已继承装备的数值提升5%。",
-  "descRaw": "干员的<@ba.vup>装备格+4</>。\n<进入休整期时>干员其余装备的<@ba.vup>数值与效果</>继承到该装备上<@autochess.gray>（可叠加）</>，随后<@ba.vup>销毁</>（源石辅助仪同时继承销毁装备在搭配<@ba.vup>变形同构体</>时获得的盟约效果）。\n【哥伦比亚】盟约每层使该装备的已继承装备的数值提升<@ba.vup>5%</>。",
+  "desc": "干员的装备格+4。\n<进入休整期时>干员其余装备的数值与效果继承到该装备上（可叠加），随后销毁（源石辅助仪同时继承销毁装备在搭配变形同构体时获得的盟约效果）。\n【哥伦比亚】盟约每层使该装备的已继承装备的数值提升2.5%。",
+  "descRaw": "干员的<@ba.vup>装备格+4</>。\n<进入休整期时>干员其余装备的<@ba.vup>数值与效果</>继承到该装备上<@autochess.gray>（可叠加）</>，随后<@ba.vup>销毁</>（源石辅助仪同时继承销毁装备在搭配<@ba.vup>变形同构体</>时获得的盟约效果）。\n【哥伦比亚】盟约每层使该装备的已继承装备的数值提升<@ba.vup>2.5%</>。",
   "counterType": "NONE",
   "continuedRound": -1,
   "decoIconId": null,
@@ -114,7 +116,8 @@
     "countType": "NONE",
     "bb": {
      "slot_cap": 4,
-     "inherit_ratio_per_layer": 0.05
+     "inherit_ratio_per_layer": 0.025,
+     "inherit_every": 1
     },
     "bbStr": {
      "key": "mod_col_pldevice"
@@ -123,7 +126,8 @@
   ],
   "params": {
    "slot_cap": 4,
-   "inherit_ratio_per_layer": 0.05,
+   "inherit_ratio_per_layer": 0.025,
+   "inherit_every": 1,
    "key": "mod_col_pldevice"
   }
  },

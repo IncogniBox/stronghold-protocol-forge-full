@@ -9,6 +9,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadData } from '../../server/data.js';
 import { makeMatch, give, giveItem, legalTileFor } from './harness.js';
+import { makeBattle } from '../helpers/battleHarness.js';
 import { packLayer } from '../helpers/packLayer.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -263,4 +264,38 @@ test('源石辅助仪 + 博士投影：进入休整期，装置不吃博士投�
   assert.equal(data.columbia.count, 1, '博士投影没有被吸收');
   assert.deepEqual(data.columbia.items, [FELLOW]);
   h.invariants();
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 战斗侧：继承比例是**阶梯**，不是线性（业主字面口径：普通「每 2 层 2.5%」、进阶「每 1 层 2.5%」）。
+// 战场侧的缩放 = `1 + inherit_ratio_per_layer × floor(【哥伦比亚】层数 / inherit_every)`；`inherit_every` 缺省 1。
+// 这里把一件被吸收装备的定值（def_penetrate 0.1，同行者）放进携带者的 `pieceData.columbia.mods`，直接在真实
+// 战场（合并数据 + 包的 battle installer）上看 `u.s.defIgnorePct / 0.1` 这个倍率。
+
+/** 携带者挂一件被吸收装备的定值 `defIgnorePct 0.1` 时的实际缩放倍率（装置 `deviceId` 在 `layers` 层盟约下）。 */
+function inheritScale(deviceId, layers) {
+  const h = makeBattle({
+    data: MERGED, seed: 7, battleInstallers: LAYER.installers,
+    bonds: { columbiaShip: { count: 1, active: true, tier: 1, layers } },
+    units: [{ chessId: outsider, row: 10, col: 5, items: [deviceId], pieceData: { columbia: { count: 1, mods: { defIgnorePct: 0.1 } } } }],
+    enemies: [{ key: 'enemy_1000_gopro_2', time: 0, route: 0 }],
+  });
+  h.step(1);
+  const u = h.unit(outsider);
+  assert.ok(u, 'the carrier is on the field');
+  return u.s.defIgnorePct / 0.1;
+}
+const near = (got, want, msg) => assert.ok(Math.abs(got - want) < 1e-9, `${msg}: ${got} ≠ ${want}`);
+
+test('源石辅助仪：继承比例是阶梯（普通每满 2 层 +2.5%、进阶每层 +2.5%）——1 层不加、2 层才 +2.5%', () => {
+  // [层数, 普通（每 2 层一次）, 进阶（每层一次）]
+  const TABLE = [[0, 1, 1], [1, 1, 1.025], [2, 1.025, 1.05], [3, 1.025, 1.075], [4, 1.05, 1.1], [10, 1.125, 1.25]];
+  for (const [L, normal, golden] of TABLE) {
+    near(inheritScale(DEVICE, L), normal, `普通 ${L} 层`);
+    near(inheritScale(GOLD, L), golden, `进阶 ${L} 层`);
+  }
+  // 阶梯与线性的分歧点：奇数层。普通 1 层**不加**（线性近似会给出 1.0125）。
+  near(inheritScale(DEVICE, 1), 1, '普通 1 层：不满 2 层 ⇒ 不加');
+  near(inheritScale(DEVICE, 2), 1.025, '普通 2 层：满 2 层 ⇒ +2.5%');
+  near(inheritScale(DEVICE, 3), 1.025, '普通 3 层：仍只满一次');
 });
