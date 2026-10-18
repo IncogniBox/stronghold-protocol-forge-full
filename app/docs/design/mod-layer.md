@@ -535,7 +535,7 @@ server" shape `spec.workshopKits` has for kits (§28.13), and the reason the lis
   mounting there is **UI only**: the entry judgement is untouched — `enterSession` / `start` in `screens/title.js` and
   the store's `entryGateBlocked` (`public/js/store.js`) — so a pack can decorate the entry block but cannot reach,
   delay or bypass the gate. A page whose packs declare no `client` renders the DOM it did before, byte for byte
-  (`div.mod-host` is an empty `display: contents` element, the same line `screens/room.js:913` writes).
+  (`div.mod-host` is an empty `display: contents` element, the same line `public/js/screens/room.js:916` writes).
 - **`order`, then pack id, then panel id.** `order` (default 0) decides the mount sequence, ties break on the smaller
   pack id — DESIGN §28.3's rule, applied to a list, so the order never depends on the discovery order or the wire order.
 - **`gate` is a dotted path into the client store**, read-only (`session.preloadRequired`, `session.entered`). A panel
@@ -2450,7 +2450,7 @@ node --test test/modSurface.test.js
 业主点名的那一格是「让包在**客户端**自己算 DPS 与总伤」。查完的结论**分成两半**，两半都写在下面 ——
 因为把「总伤今天就能读」与「逐单位 / 逐场 DPS 今天读不到」混成一句，作者就会照着一个不存在的读数写代码。
 
-**一、今天就能做：总伤（零引擎改动）。** 面板本来就订阅得到引擎的 S2C（`public/js/ui/extensions.js:1175`
+**一、今天就能做：总伤（零引擎改动）。** 面板本来就订阅得到引擎的 S2C（`public/js/ui/extensions.js:1180`
 `S2C_TYPES.has(type) → net.on(type, fn)`，**原样透传**），而伤害数字在两条既有帧上：
 
 | 面板读得到的 | 既有 S2C 帧 | 帧里的哪一格 | 粒度 |
@@ -4388,8 +4388,12 @@ Node 宿主或极小宿主没有这一格，就是没有这一格；注入的那
 —— 引擎反过来比服务端更严，会让一枚合法头像在这一头被拒、界面上一个像素都没有。
 
 **落地**：写进去的**只有 `me.avatar` 一个 store 键**（`match` / `room` / 别的 `me` 键一个都不碰），**不给面板
-store 句柄** —— 与 `setName` 同形的一格。没有包写这一格时，页面与从前**逐字节相同**（两处读点都只是各多一个可选
-来源：`AvatarFrame` 的 `src` 与 `PlayerAvatar` 的 `avatar`）。
+store 句柄** —— 与 `setName` 同形的一格；**同时落盘**（`sp.pref.meAvatar`，与 `setName` 走 `identity.saveName`
+同一条纪律）：同一标签页**刷新**时 `entered` 已为真 ⇒ 直接进大厅，起名屏（推这一格的那块面板）根本不会渲染 ——
+那一刻没有任何面板能再推一次，所以这一格必须自己活过一次刷新，由 `main.js` 开机读回来。**`welcome` 那一帧也得
+跟着摊开现有的 `me`**（原来它是整片替换：`me.avatar` 是本机自己的读数、服务端这一帧里根本没有它，于是包刚推上去
+的头像在 welcome 到达时又被冲掉 —— 真机撞到的就是这一条）。没有包写这一格时，页面与
+从前**逐字节相同**（三处读点都只是各多一个可选来源）。
 
 **失败一律「点名 + `false`」，不抛、不静默**：
 
@@ -4398,13 +4402,15 @@ store 句柄** —— 与 `setName` 同形的一格。没有包写这一格时�
 | 值不是那份窄形状（含长度超限） | `CLIENT_SESSION_BAD_AVATAR` | 与 `CLIENT_SESSION_BAD_NAME` 同一条纪律：洗不出来的东西一律点名 |
 | 这一页的 store 没有 `set()`（极小宿主 / Node 用例） | `CLIENT_SESSION_AVATAR_UNAVAILABLE` | 「拿不到就是拿不到」：不静默失效、也不抛 |
 
-**两处读点**（都只多一个可选来源）：
+**三处读点**（都只多一个可选来源，都不认识「账号」二字）：
 
 * 大厅右上角那枚个人芯片：`ui/accounts.js` 的 `AccountMeChip` 把 `player.avatar` 交给 `AvatarFrame` 的 `src`
   （`player` 就是 store 的 `me`，见 `screens/lobby.js`）。
-* 局内左上角**自己那一席**：`ui/teamPanel.js` 现读 `store.me.avatar` 并**只传给 `self`**，
-  `ui/gameComponents.js` 的 `PlayerAvatar` 有它就压过策略图标。队友那几行照旧用策略图标 —— 这一页拿不到别人的
-  账号头像，也不该编一个出来。
+* **凡是画「你自己」的那个人像**：`ui/gameComponents.js` 的 `PlayerAvatar` **自己**在 `self` 为真时读
+  `store.me.avatar`（局内左上角自己那一行、策略轮选、结算页、机变选择都走这一个组件），有它就压过策略图标；
+  队友那几行照旧用策略图标 —— 这一页拿不到别人的账号头像，也不该编一个出来。
+* 房间那张席位卡上**自己那一席**：`screens/room.js` 的 `SeatCard` 在 `isMe` 为真时把 `store.me.avatar` 交给
+  `AvatarFrame` 的 `src`（那一格的「账号目录」`useAccount` 在本仓库是空壳恒 `null`，所以自己那一枚走这一格）。
 
 **判据**：`test/modClientCloud.test.mjs`（`setAvatar` 的收 / 清除 / 两条码 / 只写 `me.avatar`）、
 `test/modSurface.test.js` 的锚点（两个码）、以及既有那几条**有意逐键列全**的断言（`test/modClientPanels.test.js`

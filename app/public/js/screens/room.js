@@ -280,6 +280,9 @@ function SeatCapSetter({ room, isHost, onPick }) {
 
 function SeatCard({ seat, index, room, facts, myId, busy, onKick, onInvite, searching, portraits, onPickCard = null, onAddBot = null, onRemoveBot = null }) {
   const seatAccount = useAccount(seat && !seat.isBot ? seat.playerId : null);
+  // 自己那一席的头像：引擎的「账号目录」（`useAccount`）在本仓库是空壳（恒 `null`），所以**本机自己那一枚**走
+  // `me.avatar`（`ctx.session.setAvatar` 落的那一格，`ui/accounts.js` 的芯片同源）；没有它就退回首字。
+  const myAvatar = useStore((s) => s.me?.avatar || null);
   const [bad, setBad] = useState(null);
   const flash = useRise(!!seat && (seat.ready || seat.isBot || seat.playerId === room.hostId));
   if (!seat) {
@@ -331,7 +334,7 @@ function SeatCard({ seat, index, room, facts, myId, busy, onKick, onInvite, sear
     <div class=${`rseat__plate${seatAccount?.card ? ' has-nc' : ''}`}>
       <${NameCardLayer} card=${seatAccount?.card} />
       ${isMe ? html`<span class="rseat__me" title=${t('你')}><${Icon} name="info" /></span>` : null}
-      <${AvatarFrame} size="sm" name=${seat.name} src=${seatAccount?.avatar || undefined} seat=${index} bot=${seat.isBot} self=${isMe} />
+      <${AvatarFrame} size="sm" name=${seat.name} src=${seatAccount?.avatar || (isMe ? myAvatar : null) || undefined} seat=${index} bot=${seat.isBot} self=${isMe} />
       <span class="rseat__who">
         <${TrophyBadge} count=${seatAccount?.trophies} class="tbadge--inline" /><b class=${`rseat__name${owner ? ' sp-owner-name' : ''}`}>${seat.name || t('博士')}</b><${AccountTag} playerId=${seat.isBot ? null : seat.playerId} />
         ${owner ? html`<span class="sp-owner-badge">${t('服主')}</span>` : null}

@@ -929,7 +929,9 @@ export function createPanelRegistry(deps) {
        * 与 `setName` 同形的一格：写进去的**只有 `me.avatar` 一个键**（`match` / `room` / 别的 `me` 键一个都不碰），
        * **不给 store 句柄**；失败一律**点名 + `false`**（不抛、不静默）。值的形状是窄的：`data:image/…;base64,…`
        * 或根相对路径，长度 ≤ `AVATAR_MAX_LEN`；`null` / `''` 是**清除**（退回引擎原本的画法：策略图标 / 首字）。
-       * 没有包写这一格时页面与从前**逐字节相同** —— 两处读点都只是「有就压过原来那个源」。
+       * **落盘**（`sp.pref.meAvatar`，与 `setName` 走 `identity.saveName` 同一条纪律）：同标签页**刷新**时 `entered`
+       * 已为真 ⇒ 直接进大厅、起名屏（推头像的那一格面板）根本不会渲染，所以这一格必须活过一次刷新，
+       * 由 `main.js` 开机读回来。没有包写这一格时页面与从前**逐字节相同** —— 读点都只是「有就压过原来那个源」。
        * @param {any} rawSrc @returns {boolean} 是否写入
        */
       setAvatar(rawSrc) {
@@ -943,6 +945,9 @@ export function createPanelRegistry(deps) {
           return false;
         }
         store.set((state) => ({ me: { ...state.me, avatar: src } }));
+        // 落盘（`sp.pref.meAvatar`）：同一标签页**刷新**时起名屏不渲染（`main.js` 的 `entered` 已为真），
+        // 那一刻没有任何面板能再推一次 —— 所以这一格得自己活过一次刷新，由 `main.js` 开机读回来。
+        savePref('meAvatar', src);
         return true;
       },
       /**

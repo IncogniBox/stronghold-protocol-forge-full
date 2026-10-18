@@ -233,6 +233,21 @@ describe('§28.58.3 ctx.session.setAvatar：把「已审核的头像」交给引
     assert.equal(fakeStore.get().me.avatar, null, '一个字节都没写');
   });
 
+  test('落盘 sp.pref.meAvatar：同一标签页刷新时起手就画得出来（main.js 开机读回）', async () => {
+    const storage = memStorage();
+    const prev = globalThis.localStorage;
+    globalThis.localStorage = storage;
+    try {
+      const { ctx } = await ctxOf({ identity: fakeIdentity(), net: fakeNet() });
+      assert.equal(ctx.session.setAvatar(AVATAR), true);
+      assert.equal(JSON.parse(storage.getItem('sp.pref.meAvatar')), AVATAR, '那一枚落进了 sp.pref.meAvatar');
+      assert.equal(ctx.session.setAvatar(null), true);
+      assert.equal(JSON.parse(storage.getItem('sp.pref.meAvatar')), null, '清除也落盘 —— 刷新后不留旧图');
+    } finally {
+      if (prev === undefined) delete globalThis.localStorage; else globalThis.localStorage = prev;
+    }
+  });
+
   test('与其余几格并存：session 门面仍然冻结，setAvatar 在里面', async () => {
     const { ctx } = await ctxOf({ identity: fakeIdentity(), net: fakeNet() });
     assert.ok(Object.isFrozen(ctx.session));

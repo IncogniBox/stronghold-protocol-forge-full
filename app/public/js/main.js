@@ -350,13 +350,16 @@ function onWelcome(msg) {
   // （我自己的棋子带的就是这个 id），没有这张对照表它会被当成「别人」而查不到我的选择。`room.state` 那条路也设
   // 一次（`syncRoomAppearance`），但单机试玩 / 观战根本没有 `room.state` —— 那些路上只有这里能设。
   setMyPlayerId(msg.playerId ?? null);
-  store.set({
-    me: { playerId: msg.playerId ?? null, name, token: typeof msg.token === 'string' ? msg.token : null },
+  store.set((s) => ({
+    // 摊开现有的 `me`：这一帧只该**改**这三个键，不该把整格换掉 —— `me.avatar`（`ctx.session.setAvatar` 落的那
+    // 一格、账号头像）是**本机自己**的读数，服务端这一帧里根本没有它，整片替换会把它冲掉（真机撞到过：包推上来的
+    // 头像在 welcome 到达时又没了，表现为「哪里都没变」）。
+    me: { ...s.me, playerId: msg.playerId ?? null, name, token: typeof msg.token === 'string' ? msg.token : null },
     // the server's content identity (DESIGN §34): the diagnostics name it (diag.js contentLine)
     content: msg.content && typeof msg.content.vanilla === 'string' ? { vanilla: msg.content.vanilla } : null,
     // how many unofficial plugins it has (P1a — absent: none; content.js fetches the catalogue only when there are some)
     installedPlugins: pluginCount(msg.content),
-  });
+  }));
   welcomeAt = Date.now();
 
   if (prevId != null && prevId !== msg.playerId) {
@@ -688,9 +691,12 @@ async function boot() {
 
   const { pendingJoin, pendingPlaytest } = deepLinkSeeds(location.search);
   const savedName = sanitizeName(identity.loadName());
+  // 账号头像（`ctx.session.setAvatar` 写的那一格）也要活过一次刷新：同一标签页**刷新**时 `entered` 已为真 ⇒
+  // 直接进大厅，起名屏（推头像的那一格面板）根本不会渲染，所以这里自己把落盘的**那一枚**读回来。
+  const savedAvatar = loadPref('meAvatar', null);
   const entered = identity.wasEntered() && !!savedName;
   store.set((s) => ({
-    me: { ...s.me, name: savedName },
+    me: { ...s.me, name: savedName, avatar: savedAvatar },
     // 整片替换会冲掉闸门状态位（缺口 8）：先摊开现有的 session，再强制 `entered`。不堵这里，`identity.wasEntered()`
     // （public/js/net.js 读 localStorage / sessionStorage 的 sp.entered）每次开机都会把 `preloadRequired` 重置掉，
     // 而 `entered` 又因此为真 —— 闸门形同虚设，玩家在素材就绪前照样进大厅。

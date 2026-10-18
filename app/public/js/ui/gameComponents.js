@@ -4,6 +4,7 @@
 import { useState, useMemo } from '../../vendor/hooks.module.js';
 import { html, Icon, TierChip, Tooltip } from './components.js';
 import { data, useData, localAsset } from '../data.js';
+import { useStore } from '../store.js';
 import { parseRichText, rtClassName } from './richText.js';
 import { t as tr } from '../../../shared/i18n.js';
 import {
@@ -260,13 +261,14 @@ export function RichTip({ text, children, placement = 'top' }) {
 }
 
 /**
- * Seat-coloured player avatar: `avatar` (the local player's own, from `me.avatar` — see `ctx.session.setAvatar`),
- * else band icon when a band is picked, else glyph/robot.
- * @param {{ player: any, size?: 'sm'|'md', self?: boolean, avatar?: string|null, class?: string }} props
+ * Seat-coloured player avatar: **本机自己那一席**先看 `me.avatar`（账号头像，`ctx.session.setAvatar` 落的那一格），
+ * 再是策略图标（band icon），再是首字 / 机器人。
+ * @param {{ player: any, size?: 'sm'|'md', self?: boolean, class?: string }} props
  */
-export function PlayerAvatar({ player, size = 'md', self = false, avatar = null, class: cls }) {
-  // `avatar` 只由**本机自己那一席**传入（`me.avatar`）：有它就压过策略图标；不传时逐字节照旧。
-  const src = avatar || (player?.bandId ? bandIconUrl(data.get('assets'), player.bandId) : null);
+export function PlayerAvatar({ player, size = 'md', self = false, class: cls }) {
+  // 自己那一枚账号头像（**只有 `self` 才读**）：有它就压过策略图标；没有包写这一格时逐字节照旧。
+  const myAvatar = useStore((s) => (self ? s.me?.avatar || null : null));
+  const src = myAvatar || (player?.bandId ? bandIconUrl(data.get('assets'), player.bandId) : null);
   const glyph = [...(player?.name || '').trim()][0] || '?';
   const dead = player?.alive === false || player?.status === 'dead';
   const left = player?.status === 'left';

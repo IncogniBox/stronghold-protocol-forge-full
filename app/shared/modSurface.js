@@ -827,16 +827,21 @@ export const MOD_SURFACE = Object.freeze([
       '值的形状是**窄**的：`data:image/…;base64,…` 或根相对路径（`/…`），长度 ≤ 128 KiB。**不收**绝对外域 URL' +
         ' —— 页面 CSP 的 `img-src` 本来也不放行它，收了只会画成破图',
       '写进去的**只有 `me.avatar` 一个 store 键**（`match` / `room` / 别的 `me` 键一个都不碰），**不给 store ' +
-        '句柄**；`null` / `\'\'` 是清除（退回引擎原本的画法）',
+        '句柄**；`null` / `\'\'` 是清除（退回引擎原本的画法）。**同时落盘**（`sp.pref.meAvatar`，与 `setName` 走 ' +
+        '`identity.saveName` 同一条纪律）：同一标签页**刷新**时 `entered` 已为真 ⇒ 直接进大厅、起名屏不渲染，' +
+        '那一刻没有面板能再推一次 —— 开机由 `main.js` 读回来；**`welcome` 那一帧也跟着摊开现有 `me`**（它原来整片 ' +
+        '替换，会把刚推上来的头像冲掉）',
       '失败一律**点名 + `false`**（不抛、不静默）：坏形状 ⇒ `CLIENT_SESSION_BAD_AVATAR`；这一页的 store 没有 ' +
         '`set()`（极小宿主 / Node 用例）⇒ `CLIENT_SESSION_AVATAR_UNAVAILABLE`',
-      '两处读点都只是「有就压过原来那个源」：大厅右上角那枚个人芯片（`ui/accounts.js` 的 `AccountMeChip` → ' +
-        '`AvatarFrame.src`）与局内左上角自己那一席（`ui/teamPanel.js` → `PlayerAvatar.avatar`，**只传给 self**，' +
-        '队友那几行照旧用策略图标）；没有包写这一格时页面与从前逐字节相同',
+      '三处读点都只是「有就压过原来那个源」：大厅右上角那枚个人芯片（`ui/accounts.js` 的 `AccountMeChip` → ' +
+        '`AvatarFrame.src`）；**凡是画「你自己」的人像**（`ui/gameComponents.js` 的 `PlayerAvatar` 在 `self` 为真时' +
+        '自己读 store —— 局内自己那一行 / 策略轮选 / 结算页 / 机变选择都走这一个组件）；房间席位卡上自己那一席' +
+        '（`screens/room.js` 的 `SeatCard` 在 `isMe` 为真时读）。队友那几行照旧策略图标 —— 引擎这一页拿不到别人' +
+        '的账号头像；没有包写这一格时页面与从前逐字节相同',
       '不新增 DOM、不新增请求、不新增全局',
     ],
     files: ['public/js/ui/extensions.js', 'public/js/store.js', 'public/js/ui/accounts.js',
-      'public/js/ui/teamPanel.js', 'public/js/ui/gameComponents.js'],
+      'public/js/ui/gameComponents.js', 'public/js/screens/room.js', 'public/js/main.js'],
     tests: ['test/modClientCloud.test.mjs'],
     spec: '§28.58',
   },

@@ -107,7 +107,7 @@ name = `${房主名} 的同盟` + (模式 === 'solo' ? ' · 独立模拟' : ' ·
 | `public/css/screens/lobby.css` 的 `.hub-dialog-open .community-chat` | 大厅弹窗打开时让位（面板根类名必须叫 `community-chat`） |
 | `public/css/screens/game.css` 的 `.gm__corner` / `.gm__gear` | `battle-chat` 照「交流」那排按钮（`.gm__corner`：left/bottom .24rem、高 .56rem）把折叠芯片钉在它**上方**，芯片尺寸照 `.gm__gear` |
 | `ctx.session.setName(name)`（**引擎表面**） | 账号面板登录之后把游戏名落成账号名。引擎的 `net.setName` 不对包开放，所以这是唯一入口；宿主没装这一格时面板显式说明「未装」而不是静默失效 |
-| `ctx.session.setAvatar(src)`（**引擎表面**，2.4.4 起用） | 账号面板把**已审核**的那枚头像交给引擎（§28.58.3）：大厅右上角那枚个人芯片（`ui/accounts.js` 的 `AccountMeChip` → `AvatarFrame.src`）与局内左上角**自己那一行**（`ui/teamPanel.js` → `PlayerAvatar.avatar`）都照它画。**先探测再使用**；宿主没装这一格时**静默跳过**（头像只是外观，不该为它弹说明）。值只收 `data:image/…;base64,…` 或根相对路径，`null` 是清除 |
+| `ctx.session.setAvatar(src)`（**引擎表面**，2.4.4 起用） | 账号面板把**已审核**的那枚头像交给引擎（§28.58.3）：大厅右上角那枚个人芯片（`ui/accounts.js` 的 `AccountMeChip` → `AvatarFrame.src`）、**凡是画「你自己」的人像**（`ui/gameComponents.js` 的 `PlayerAvatar` 在 `self` 为真时自己读 store —— 局内自己那一行 / 策略轮选 / 结算页 / 机变选择）与房间席位卡上自己那一席（`screens/room.js` 的 `SeatCard`）都照它画。**先探测再使用**；宿主没装这一格时**静默跳过**（头像只是外观，不该为它弹说明）。值只收 `data:image/…;base64,…` 或根相对路径，`null` 是清除；**引擎还会把它落盘**（`sp.pref.meAvatar`），所以同一标签页刷新后不必再等面板推一次 |
 | `ctx.cloud.read()` / `ctx.cloud.apply(patch)`（**引擎表面**） | 云配置那七类（`settings` / `loadout` / `ownership` / `diy` / `conflict` / `appearance` / `lang`）。面板**没有 store 句柄**，所以「读本机偏好 / 把它写回本机」只能由引擎给的这一格来做（`apply` 落盘后会重载页面 —— 偏好是引擎开机时读的） |
 | `welcome.bindTicket`（**引擎签发的票据**） | 把「本机游戏的 `playerId`」可信地交给包：客户端 `ctx.net.welcome().bindTicket` 原样转发给本包 lane 的 `bind`。票据 120 秒、一票一用、**密钥永不外泄**（包只拿得到验证函数） |
 | `host.tickets.verify(ticket, { consume })`（**引擎表面**，`server.modules` 的 `uses` 里声明 `"tickets"`） | 包**验票**的唯一入口。包不能签票、也不持有密钥 —— 「同一份包字节 ⇒ 同一份行为」那条不变量因此成立 |
@@ -251,14 +251,17 @@ curl -s localhost:3000/healthz
 - **只推已审核的那一枚**：`account.avatar` 有值、且 `pending` / `rejected` 都不为真才算数（这两个标记在
   `me` / 登录 / 注册的应答里都带着，见 §7.1 的 `avatar` 一行）。审核通过之前、未登录、已退出 ⇒ 推 `null`，
   两处退回引擎原本的画法（策略图标 / 首字）。
-- 引擎那两处读点都只是「**有就压过原来那个源**」：`ui/accounts.js` 的 `AccountMeChip` 把 `player.avatar`（`player`
-  就是 store 的 `me`）交给 `AvatarFrame` 的 `src`；`ui/teamPanel.js` 现读 `store.me.avatar` 并**只传给 `self`**，
-  `ui/gameComponents.js` 的 `PlayerAvatar` 有它就压过策略图标。**队友那几行照旧用策略图标** —— 这一页拿不到别人的
-  账号头像，也不该编一个出来（要画别人的头像，得先把「按座位号查人」那条读路接到引擎的座位表上，见 §6 第 1 条）。
+- 引擎那三处读点都只是「**有就压过原来那个源**」：`ui/accounts.js` 的 `AccountMeChip` 把 `player.avatar`（`player`
+  就是 store 的 `me`）交给 `AvatarFrame` 的 `src`；`ui/gameComponents.js` 的 `PlayerAvatar` **自己**在 `self` 为真时
+  读 `store.me.avatar`（局内自己那一行 / 策略轮选 / 结算页 / 机变选择都走这一个组件）；`screens/room.js` 的
+  `SeatCard` 在 `isMe` 为真时读同一格。**队友那几行照旧用策略图标 / 首字** —— 引擎这一页拿不到别人的账号头像，
+  也不该编一个出来（要画别人的头像，得先把「按座位号查人」那条读路接到引擎的座位表上，见 §6 第 1 条）。
 
 **边界**：这一格写进去的**只有 `me.avatar` 一个 store 键**，面板拿不到 store 句柄；值的形状是窄的
 （`data:image/…;base64,…` 或根相对路径，长度 ≤ 128 KiB，**不收**绝对外域 URL —— 页面 CSP 的 `img-src` 本来也不
-放行它）；没有包写这一格时页面与从前**逐字节相同**。**「审核通过」这一下的可见时机**：面板在下一次拿到账号时
-推一次（打开账号视图、或刷新 / 重开页面时起名页那一格自动认人），所以**玩家自己**在管理台通过审核之后，回到
-大厅 / 开局前会看到新头像已经换上（同一次页面会话里改完立刻生效的是账号面板里的那张大图，引擎那两处要等下一次
-账号读到 —— 这是「面板只在挂载时认人」的形状决定的，不是漏了哪一步）。
+放行它）；没有包写这一格时页面与从前**逐字节相同**。**引擎另外把它落盘**（`sp.pref.meAvatar`），开机读回来 ——
+这一条不是装饰：同一标签页**刷新**时 `entered` 已经为真，路由**直接进大厅、起名屏（推这一格的起名页那一块面板）
+根本不会渲染**，那一刻没有任何面板能再推一次。**「审核通过」这一下的可见时机**：面板在下一次拿到账号时推一次
+（打开账号视图认人、或刷新 / 重开页面时起名页那一块自动认人；主动退出登录也会推一次 `null`），所以**玩家自己**
+在管理台通过审核之后，回到大厅 / 开局前会看到新头像已经换上（同一次页面会话里改完立刻生效的是账号面板里的那张
+大图，引擎那几处要等下一次账号读到 —— 这是「面板只在拿到账号时才推」的形状决定的，不是漏了哪一步）。
