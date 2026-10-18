@@ -783,18 +783,36 @@ export class AccountService {
   }
 
   /**
-   * 一条升级请求 → 一条 lane 连接。**同源性检查在这里**（`Origin` 的主机必须等于 `Host`）：
+   * 一条升级请求 → 一条 lane 连接。**同源性检查在这里**（`Origin` 的主机名必须等于目标主机名）：
    * 这条通道只有本页面的 JS 该用得上，跨站页面拿着浏览器里那份 cookie/本地存储来打它才是要挡的东西
    * （参考文档 §3 同一条：服务不向任意跨域请求开放）。
+   *
+   * 目标主机名优先取 `X-Forwarded-Host` 的**第一段**（逗号分隔、去空白、小写），没有它才退回 `Host`：反代
+   * （例如线上那台）转发时会把 `Host` 改写成它自己的回环地址（`127.0.0.1:3001`），拿它跟浏览器看到的
+   * `Origin` 比永不相等 ⇒ 线上账号面板必然 403。本机 `:3000` 直连时 `Origin` 与 `Host` 相同，所以本地
+   * E2E 撞不到这个坑（这坑只在反代后暴露）。
+   *
+   * 比较用**主机名**（`URL#hostname`）而不是 `URL#host`：威胁是「跨**站**」，端口差异不构成风险，反代又常会
+   * 带上 `:443` 之类；取主机名后两侧都不带端口。
+   *
+   * 这条放宽**不降低安全性**：浏览器**无法**给 `new WebSocket()` 的握手加自定义请求头，所以跨站页面**伪造不了**
+   * `X-Forwarded-Host` —— 只有反代（可信的同机一跳）能设它。没有 `Origin` 头（非浏览器客户端）照旧放行；
+   * `Origin` 解析不出来照旧拒。
    */
   onUpgrade(req, socket, head, ctx, peer) {
-    const origin = req && req.headers ? req.headers.origin : null;
-    const host = req && req.headers ? req.headers.host : null;
+    const headers = (req && req.headers) || {};
+    const origin = headers.origin;
     if (origin) {
-      let originHost = null;
-      try { originHost = new URL(origin).host; } catch { originHost = null; }
-      if (!originHost || !host || originHost !== host) {
-        ctx?.log?.warn?.(`refused a cross-origin upgrade (origin ${origin}, host ${host})`);
+      const xfh = headers['x-forwarded-host'];
+      const targetHost = typeof xfh === 'string' && xfh.trim()
+        ? xfh.split(',')[0].trim()
+        : String(headers.host || '');
+      let originName = null;
+      try { originName = new URL(origin).hostname.toLowerCase(); } catch { originName = null; }
+      let targetName = '';
+      try { targetName = new URL(`http://${targetHost}`).hostname.toLowerCase(); } catch { targetName = ''; }
+      if (!originName || !targetName || originName !== targetName) {
+        ctx?.log?.warn?.(`refused a cross-origin upgrade (origin ${origin}, host ${targetHost})`);
         if (typeof ctx?.reject === 'function') ctx.reject(403, 'cross-origin upgrade refused');
         else { try { socket.destroy(); } catch { /* already gone */ } }
         return;
