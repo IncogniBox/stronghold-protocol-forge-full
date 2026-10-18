@@ -260,11 +260,13 @@ export function RichTip({ text, children, placement = 'top' }) {
 }
 
 /**
- * Seat-coloured player avatar: band icon when a band is picked, else glyph/robot.
- * @param {{ player: any, size?: 'sm'|'md', self?: boolean, class?: string }} props
+ * Seat-coloured player avatar: `avatar` (the local player's own, from `me.avatar` — see `ctx.session.setAvatar`),
+ * else band icon when a band is picked, else glyph/robot.
+ * @param {{ player: any, size?: 'sm'|'md', self?: boolean, avatar?: string|null, class?: string }} props
  */
-export function PlayerAvatar({ player, size = 'md', self = false, class: cls }) {
-  const src = player?.bandId ? bandIconUrl(data.get('assets'), player.bandId) : null;
+export function PlayerAvatar({ player, size = 'md', self = false, avatar = null, class: cls }) {
+  // `avatar` 只由**本机自己那一席**传入（`me.avatar`）：有它就压过策略图标；不传时逐字节照旧。
+  const src = avatar || (player?.bandId ? bandIconUrl(data.get('assets'), player.bandId) : null);
   const glyph = [...(player?.name || '').trim()][0] || '?';
   const dead = player?.alive === false || player?.status === 'dead';
   const left = player?.status === 'left';

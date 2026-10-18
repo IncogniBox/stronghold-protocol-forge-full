@@ -21,6 +21,7 @@ import { NAME_MAX_LEN } from '../shared/constants.js';
 import {
   createPanelRegistry,
   CLIENT_SESSION_BAD_NAME, CLIENT_SESSION_NAME_UNAVAILABLE, CLIENT_CLOUD_UNAVAILABLE,
+  CLIENT_SESSION_BAD_AVATAR, CLIENT_SESSION_AVATAR_UNAVAILABLE,
 } from '../public/js/ui/extensions.js';
 import {
   CLOUD_PREF_KEYS, CLOUD_PATCH_MAX_BYTES, CLOUD_PATCH_MAX_DEPTH,
@@ -168,6 +169,74 @@ describe('§28.58.1 ctx.session.setName：把标题屏那条入口带给面板',
     assert.equal(typeof ctx.session.setPref, 'function');
     assert.equal(typeof ctx.session.getPref, 'function');
     assert.equal(typeof ctx.session.send, 'function');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+describe('§28.58.3 ctx.session.setAvatar：把「已审核的头像」交给引擎那两处「我是谁」', () => {
+  const AVATAR = 'data:image/png;base64,iVBORw0KGgo=';
+
+  test('收：data URL 与根相对路径都写进 me.avatar，只动那一格；null / 空串是清除', async () => {
+    const { ctx, store } = await ctxOf({ identity: fakeIdentity(), net: fakeNet() });
+
+    assert.equal(ctx.session.setAvatar(AVATAR), true);
+    assert.equal(store.get().me.avatar, AVATAR, 'store 的 me.avatar 跟着变（那两处读点读的就是它）');
+    assert.equal(store.get().me.name, '', '只动 avatar 那一格');
+    assert.equal(store.get().me.playerId, null);
+
+    // 根相对路径也收（包内素材 / 引擎站点素材那条路）
+    assert.equal(ctx.session.setAvatar('/workshop-assets/alpha/avatar.png'), true);
+    assert.equal(store.get().me.avatar, '/workshop-assets/alpha/avatar.png');
+
+    // null / 空串 / 全是空白 = 清除（退回引擎原本的画法：策略图标 / 首字）
+    assert.equal(ctx.session.setAvatar(null), true);
+    assert.equal(store.get().me.avatar, null);
+    assert.equal(ctx.session.setAvatar(AVATAR), true);
+    assert.equal(ctx.session.setAvatar('   '), true);
+    assert.equal(store.get().me.avatar, null);
+
+    assert.equal(ctx.store, undefined, '门面上仍然没有 store 句柄');
+    assert.equal(ctx.match, undefined);
+  });
+
+  test('坏形状 ⇒ CLIENT_SESSION_BAD_AVATAR + false，那枚头像一个字节都不动', async () => {
+    const { ctx, registry, store } = await ctxOf({ identity: fakeIdentity(), net: fakeNet() });
+    assert.equal(ctx.session.setAvatar(AVATAR), true);   // 先写一枚，证明拒绝时它**不动**
+    const bad = [
+      'https://evil.example/avatar.png',            // 绝对外域：CSP 本来也不放行它，收了只会画成破图
+      'javascript:alert(1)',
+      'data:text/html;base64,PHNjcmlwdD4=',
+      'data:image/svg+xml;base64,PHN2Zy8+',         // 不在 `<img>` 画得出来的那几种图片类型里
+      'avatar.png',                                  // 相对路径不是根相对路径
+      123, true, {}, [],                             // 非字符串
+      'a'.repeat(200 * 1024),                        // 超过长度上限（AVATAR_MAX_LEN）
+    ];
+    for (const raw of bad) {
+      const n = registry.refusals().length;
+      assert.equal(ctx.session.setAvatar(raw), false, `拒绝：${typeof raw === 'string' ? raw.slice(0, 32) : String(raw)}`);
+      const added = registry.refusals().slice(n);
+      assert.equal(added.length, 1, '点名一次');
+      assert.equal(added[0].code, CLIENT_SESSION_BAD_AVATAR);
+      assert.match(added[0].detail, /setAvatar/, '拒绝里点了这个调用');
+    }
+    assert.equal(store.get().me.avatar, AVATAR, '拒绝时那枚头像一个字节都没动');
+  });
+
+  test('这一页的 store 没有 set() ⇒ CLIENT_SESSION_AVATAR_UNAVAILABLE + false，**不抛**', async () => {
+    // 极小宿主：只有 get / subscribe（注册点真正用得到的那两个），没有 set。
+    const fakeStore = { get: () => initialState, subscribe: () => () => {} };
+    const { ctx, registry } = await ctxOf({ identity: fakeIdentity(), net: fakeNet(), extra: { store: fakeStore } });
+    const n = registry.refusals().length;
+    assert.equal(ctx.session.setAvatar(AVATAR), false);
+    assert.equal(registry.refusals()[n].code, CLIENT_SESSION_AVATAR_UNAVAILABLE);
+    assert.equal(n + 1, registry.refusals().length, '点名一次');
+    assert.equal(fakeStore.get().me.avatar, null, '一个字节都没写');
+  });
+
+  test('与其余几格并存：session 门面仍然冻结，setAvatar 在里面', async () => {
+    const { ctx } = await ctxOf({ identity: fakeIdentity(), net: fakeNet() });
+    assert.ok(Object.isFrozen(ctx.session));
+    assert.equal(typeof ctx.session.setAvatar, 'function');
   });
 });
 

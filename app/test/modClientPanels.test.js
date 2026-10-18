@@ -490,6 +490,7 @@ describe('C 层客户端：注册点', () => {
     assert.ok(Object.isFrozen(ctx.cloud), '云配置那一格也是冻结门面');
     assert.deepEqual(Object.keys(ctx.cloud).sort(), ['apply', 'read'], '那一格只有 read / apply 两个成员');
     assert.equal(typeof ctx.session.setName, 'function', '§28.58：面板改得了自己的游戏名（写的是 me.name + session.entered）');
+    assert.equal(typeof ctx.session.setAvatar, 'function', '§28.58.3：面板换得了自己的头像（写的是 me.avatar，仅那一格）');
     assert.equal(ctx.hostKey, null, '不可重复的宿主没有键');
     assert.ok(Object.isFrozen(ctx));
     assert.ok(Object.isFrozen(ctx.session));

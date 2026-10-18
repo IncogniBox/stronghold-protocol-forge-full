@@ -196,6 +196,40 @@ export const CLIENT_SESSION_NAME_UNAVAILABLE = 'CLIENT_SESSION_NAME_UNAVAILABLE'
 export const CLIENT_CLOUD_UNAVAILABLE = 'CLIENT_CLOUD_UNAVAILABLE';
 
 /**
+ * **头像那一格的两个拒绝码**（§28.58.3，`ctx.session.setAvatar`）—— 与上面同一条纪律：具名导出，
+ * 好让 `shared/modSurface.js` 把这条契约锚在真名字上。
+ *   * `CLIENT_SESSION_BAD_AVATAR`：值既不是 `data:image/…;base64,…`、也不是根相对路径（或超过长度上限）；
+ *   * `CLIENT_SESSION_AVATAR_UNAVAILABLE`：这一页的 store 没有 `set()`（极小宿主 / Node 用例）⇒ 拿不到就点名。
+ */
+export const CLIENT_SESSION_BAD_AVATAR = 'CLIENT_SESSION_BAD_AVATAR';
+export const CLIENT_SESSION_AVATAR_UNAVAILABLE = 'CLIENT_SESSION_AVATAR_UNAVAILABLE';
+
+/**
+ * 一枚头像值（`me.avatar`）的长度上限。比账号服务自己的 48 KiB **宽松**一档：引擎只管「这一页画不画得出来」，
+ * 服务端那一侧的上限属于服务端 —— 引擎反过来比服务端更严，会让一枚合法头像在这一头被拒、界面上一个像素都没有。
+ */
+const AVATAR_MAX_LEN = 128 * 1024;
+/** `data:image/…;base64,…`：只认 `<img>` 真画得出来的那几种图片类型。 */
+const AVATAR_DATA_RE = /^data:image\/(?:png|jpeg|jpg|webp|gif|avif);base64,[A-Za-z0-9+/]+=*$/;
+/** 根相对路径（`/…`）。**不收**绝对外域 URL：页面 CSP 的 `img-src` 本来也不放行它，收了只会画成破图。 */
+const AVATAR_PATH_RE = /^\/[A-Za-z0-9._~%/-]*$/;
+
+/**
+ * 头像值清洗：返回**字符串**=「就画这一枚」，`null`=「清除（退回引擎原本的画法）」，`''`=「坏值」。
+ * 与 `sanitizeModName` 同一族的写法（坏值用空串表达，调用方一律点名 + `false`），只是这里判的是**形状**：
+ * 要么 `data:image/…`，要么根相对路径，别的一概不收。
+ * @param {any} rawSrc @returns {string|null} `''` = 坏值
+ */
+const sanitizeModAvatar = (rawSrc) => {
+  if (rawSrc === null || rawSrc === undefined || rawSrc === '') return null;
+  if (typeof rawSrc !== 'string') return '';
+  const src = rawSrc.trim();
+  if (!src) return null;
+  if (src.length > AVATAR_MAX_LEN) return '';
+  return AVATAR_DATA_RE.test(src) || AVATAR_PATH_RE.test(src) ? src : '';
+};
+
+/**
  * 昵称清洗：**逐字**就是 `screenActions.enter` 那一段（§28.55）：剥掉 C0 控制码、DEL 与 C1 控制码，`trim()`，
  * 再 `slice(0, NAME_MAX_LEN)`。`#` 与零宽字符的合法性归服务端判（前端不是鉴权边界，见 docs/WORKSHOP.md）。
  *
@@ -885,6 +919,30 @@ export function createPanelRegistry(deps) {
           return false;
         }
         commitName(name);
+        return true;
+      },
+      /**
+       * **给自己换一枚头像**（账号面的第三格，§28.58.3）：面板登录之后把账号里**已审核**的那枚头像交给引擎，
+       * 引擎自己那两处「我是谁」的画法就照它画 —— 大厅右上角那枚个人芯片（`ui/accounts.js` 的 `AccountMeChip`
+       * → `AvatarFrame` 的 `src`），与局内左上角自己那一行（`ui/teamPanel.js` 的自己那一席 → `PlayerAvatar`）。
+       *
+       * 与 `setName` 同形的一格：写进去的**只有 `me.avatar` 一个键**（`match` / `room` / 别的 `me` 键一个都不碰），
+       * **不给 store 句柄**；失败一律**点名 + `false`**（不抛、不静默）。值的形状是窄的：`data:image/…;base64,…`
+       * 或根相对路径，长度 ≤ `AVATAR_MAX_LEN`；`null` / `''` 是**清除**（退回引擎原本的画法：策略图标 / 首字）。
+       * 没有包写这一格时页面与从前**逐字节相同** —— 两处读点都只是「有就压过原来那个源」。
+       * @param {any} rawSrc @returns {boolean} 是否写入
+       */
+      setAvatar(rawSrc) {
+        const src = sanitizeModAvatar(rawSrc);
+        if (src === '') {
+          refuse(CLIENT_SESSION_BAD_AVATAR, `panel "${rec.key}" setAvatar(...) — the value must be a data:image/…;base64,… URL or a root-relative path of at most ${AVATAR_MAX_LEN} characters (null or "" clears it)`);
+          return false;
+        }
+        if (!(store && typeof store.set === 'function')) {
+          refuse(CLIENT_SESSION_AVATAR_UNAVAILABLE, `panel "${rec.key}" setAvatar(...) — this page's store has no set(), so the write is refused by name instead of silently doing nothing`);
+          return false;
+        }
+        store.set((state) => ({ me: { ...state.me, avatar: src } }));
         return true;
       },
       /**

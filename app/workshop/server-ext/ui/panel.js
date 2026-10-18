@@ -56,6 +56,21 @@ function htmlOrHtm() {
 
 const trim = (v) => String(v == null ? '' : v).trim();
 
+/** 头像：**只认已审核的那一枚**。`account` 是服务端回的那份完整形状 —— `avatar` 有值、且不在 `pending` /
+ *  `rejected` 状态里才算「已审核」（`me` / 登录 / 注册的应答里都带着这两个标记，见 README §7.1 的 `avatar`）。
+ *  审核通过之前 / 未登录 / 已退出 ⇒ `null`（引擎那两处退回它原本的画法：策略图标 / 首字）。 */
+const approvedAvatar = (account) =>
+  (account && typeof account.avatar === 'string' && account.avatar && !account.pending && !account.rejected ? account.avatar : null);
+
+/** 把这枚头像交给引擎（`ctx.session.setAvatar`，引擎表面 §28.58.3）：大厅右上角那枚个人芯片与局内左上角自己那一行
+ *  都会照它画。**先探测再使用**（与本模块对 `setName` / `cloud` 同一条纪律）：宿主没装这一格时静默跳过 —— 头像
+ *  只是外观，不该因为它弹一句说明；引擎那边拒了（形状不对）也只当没发生。 */
+function pushAvatar(ctx, account) {
+  try {
+    if (ctx && ctx.session && typeof ctx.session.setAvatar === 'function') ctx.session.setAvatar(approvedAvatar(account));
+  } catch { /* 引擎那一格没装 / 拒绝了这次写入：外观照旧 */ }
+}
+
 /** 一个小输入框（受控）。 */
 function Field({ label, type = 'text', value, onInput, placeholder, maxLength, autoComplete }) {
   return html`<label class="acct-field">
@@ -102,6 +117,9 @@ function EntryForm({ ctx }) {
   const [form, setForm] = useState({ login: readLastLogin(), password: '', nickname: '', qq: '' });
   /** `ctx.session.setName` 那一格：登录成功后「把账号名落成游戏名并进大厅」的唯一入口。 */
   const canEnter = !!(ctx && ctx.session && typeof ctx.session.setName === 'function');
+  // 头像跟上账号：登录 / 注册 / 自动认人（「记住我」那条）之后，把这枚**已审核**的头像交给引擎 —— 大厅右上角那枚
+  // 个人芯片与局内左上角自己那一行都读它；退出登录 ⇒ `null`，那两处退回引擎原本的画法。
+  useEffect(() => { pushAvatar(ctx, account); }, [ctx, account]);
 
   const say = (kind, text) => setNotice({ kind, text });
   const run = async (fn) => {
@@ -228,6 +246,8 @@ function ProfileBlock({ ctx }) {
 
   /** 引擎两格表面的可用性（探测一次，写进界面说明里 —— 点了没反应是最坏的一种失败）。 */
   const canSetName = !!(ctx && ctx.session && typeof ctx.session.setName === 'function');
+  // 同上一条：账号视图里 `account` 一变（认人 / 上传头像 / 退出登录），就把这枚**已审核**的头像交给引擎。
+  useEffect(() => { pushAvatar(ctx, account); }, [ctx, account]);
   const cloud = ctx && ctx.cloud && typeof ctx.cloud.read === 'function' ? ctx.cloud : null;
 
   const say = (kind, text) => setNotice({ kind, text });

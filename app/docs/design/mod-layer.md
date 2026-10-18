@@ -2450,7 +2450,7 @@ node --test test/modSurface.test.js
 业主点名的那一格是「让包在**客户端**自己算 DPS 与总伤」。查完的结论**分成两半**，两半都写在下面 ——
 因为把「总伤今天就能读」与「逐单位 / 逐场 DPS 今天读不到」混成一句，作者就会照着一个不存在的读数写代码。
 
-**一、今天就能做：总伤（零引擎改动）。** 面板本来就订阅得到引擎的 S2C（`public/js/ui/extensions.js:884`
+**一、今天就能做：总伤（零引擎改动）。** 面板本来就订阅得到引擎的 S2C（`public/js/ui/extensions.js:1175`
 `S2C_TYPES.has(type) → net.on(type, fn)`，**原样透传**），而伤害数字在两条既有帧上：
 
 | 面板读得到的 | 既有 S2C 帧 | 帧里的哪一格 | 粒度 |
@@ -4285,11 +4285,12 @@ supervisor 拉起；**缺省路径的行为与字节零变化**，且任何异�
 
 ---
 
-### 28.58 账号面：`ctx.session.setName` 与 `ctx.cloud.read` / `ctx.cloud.apply`（两格只加不改）
+### 28.58 账号面：`ctx.session.setName` / `ctx.session.setAvatar` 与 `ctx.cloud.read` / `ctx.cloud.apply`（三格只加不改）
 
-一个**真实账号系统**要做的两件事，今天的面板都够不到：登录之后把**游戏名**落成账号名（引擎的 `net.setName`
-只对内），以及把**云端那一份偏好**落成本机的那一份（面板没有 localStorage、没有 store，见 §28.8）。这一节只开
-这两格，别的什么都没开 —— 两格都**不是 `pack.json` 里的声明**（和 `ctx.me` 一样，是引擎**总是**给的），所以
+一个**真实账号系统**要做的三件事，今天的面板都够不到：登录之后把**游戏名**落成账号名（引擎的 `net.setName`
+只对内），把**头像**落到引擎自己那两个「我是谁」的位置上（审核通过之前那两处画的还是引擎的兜底），以及把**云端
+那一份偏好**落成本机的那一份（面板没有 localStorage、没有 store，见 §28.8）。这一节只开
+这三格，别的什么都没开 —— 三格都**不是 `pack.json` 里的声明**（和 `ctx.me` 一样，是引擎**总是**给的），所以
 「只加不改」在这里的意思是：**没有包读它们时，页面、请求与全局与从前逐字节相同**（没有新 DOM、没有新帧、没有
 新全局），`MOD_API_VERSION` 不动（加一格不抬世代）。
 
@@ -4363,6 +4364,51 @@ Node 宿主或极小宿主没有这一格，就是没有这一格；注入的那
 `apply()` 的白名单 / 危险键 / 超限 / 部分写入 / 重载**只触发一次**；没有 `deps.cloud` 时面板照样挂且不抛）、
 `test/modSurface.test.js` 的锚点（`CLOUD_PREF_KEYS` 七个成员逐字、四个码）、以及既有那两条**有意逐键列全**的
 断言（`test/modClientPanels.test.js` 的 `Object.keys(ctx)` 多一个 `cloud`；严格度不变，这正是它们存在的意义）。
+
+#### 28.58.3 `ctx.session.setAvatar(src)`
+
+**缺口**：账号服务把头像存在**它自己**那一侧（参考实现里 `avatars` 是账号记录里的一个字段，而不是静态目录 ——
+`host.route` 只有 GET/HEAD 且收不到参数，做不出「按文件名取头像」那种端点，见 §28.56 里包自己写的那一段），而
+引擎自己那两个「我是谁」的位置（大厅右上角那枚个人芯片、局内左上角自己那一席）画的是**引擎的**兜底（首字 /
+策略图标）。于是「头像审核通过之后，界面上的自己还是那个兜底」成了账号系统在引擎里最后一个够不到的地方。本节
+只开**这一格写口**；读的那两处都只是「**有就压过原来那个源**」，不认识「账号」二字。
+
+**值**：一枚头像就是一个字符串，形状是**窄**的（`sanitizeModAvatar`，与 `sanitizeModName` 同一族的写法 —— 坏值
+用空串表达，调用方一律点名 + `false`）：
+
+| 形状 | 结果 |
+|---|---|
+| `data:image/(png\|jpeg\|jpg\|webp\|gif\|avif);base64,…` | 收（只认 `<img>` 真画得出来的那几种图片类型） |
+| 根相对路径 `/…`（只含 URL 里那几个安全字符） | 收 |
+| `null` / `undefined` / `''` | **清除**（写 `null`，两处退回引擎原本的画法：策略图标 / 首字） |
+| 绝对外域 URL（`https://…`） | **拒** —— 页面 CSP 的 `img-src` 本来也不放行它（§28.41），收了只会画成破图 |
+| 其它类型 / 别的字符串 / 长度 > 128 KiB（`AVATAR_MAX_LEN`） | **拒** |
+
+长度上限刻意比账号服务自己的 48 KiB **宽松**一档：引擎只管「这一页画不画得出来」，服务端那一侧的上限属于服务端
+—— 引擎反过来比服务端更严，会让一枚合法头像在这一头被拒、界面上一个像素都没有。
+
+**落地**：写进去的**只有 `me.avatar` 一个 store 键**（`match` / `room` / 别的 `me` 键一个都不碰），**不给面板
+store 句柄** —— 与 `setName` 同形的一格。没有包写这一格时，页面与从前**逐字节相同**（两处读点都只是各多一个可选
+来源：`AvatarFrame` 的 `src` 与 `PlayerAvatar` 的 `avatar`）。
+
+**失败一律「点名 + `false`」，不抛、不静默**：
+
+| 判据 | 码 | 说明 |
+|---|---|---|
+| 值不是那份窄形状（含长度超限） | `CLIENT_SESSION_BAD_AVATAR` | 与 `CLIENT_SESSION_BAD_NAME` 同一条纪律：洗不出来的东西一律点名 |
+| 这一页的 store 没有 `set()`（极小宿主 / Node 用例） | `CLIENT_SESSION_AVATAR_UNAVAILABLE` | 「拿不到就是拿不到」：不静默失效、也不抛 |
+
+**两处读点**（都只多一个可选来源）：
+
+* 大厅右上角那枚个人芯片：`ui/accounts.js` 的 `AccountMeChip` 把 `player.avatar` 交给 `AvatarFrame` 的 `src`
+  （`player` 就是 store 的 `me`，见 `screens/lobby.js`）。
+* 局内左上角**自己那一席**：`ui/teamPanel.js` 现读 `store.me.avatar` 并**只传给 `self`**，
+  `ui/gameComponents.js` 的 `PlayerAvatar` 有它就压过策略图标。队友那几行照旧用策略图标 —— 这一页拿不到别人的
+  账号头像，也不该编一个出来。
+
+**判据**：`test/modClientCloud.test.mjs`（`setAvatar` 的收 / 清除 / 两条码 / 只写 `me.avatar`）、
+`test/modSurface.test.js` 的锚点（两个码）、以及既有那几条**有意逐键列全**的断言（`test/modClientPanels.test.js`
+的 `Object.keys(ctx)` 与 `ctx.session` 成员的在场断言 —— 多一格就必须在那里显式加一条）。
 
 ### 28.59 绑定票据 `welcome.bindTicket` + `uses: ["tickets"]`：核心签、包只验
 

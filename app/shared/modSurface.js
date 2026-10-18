@@ -811,6 +811,36 @@ export const MOD_SURFACE = Object.freeze([
     spec: '§28.58',
   },
   {
+    id: 'client.panels.setAvatar',
+    layer: 'C',
+    // 与 `client.panels.setName` 同一条做法：这一格**不是** `pack.json` 里的一条声明，而是引擎**总是**给的一个写口
+    // （`ctx.session.setAvatar(src)`，§28.58.3），所以锚在**引擎自己那一端的真相**上 —— 那两个拒绝码是具名导出
+    // （`test/modSurface.test.js` 的锚点守卫 import 真模块再逐条查），改名/删掉就是打断这条契约。
+    // 与 `setName` 分开列一条而不是并进那一格：两者的**值形状**判据完全不同（一个是字符清洗、一个是 URL 形状），
+    // 而「一条声明只许有一种判据」正是这份清单能当契约用的原因。
+    decl: '（无声明：`ctx.session.setAvatar(src)` 是引擎**总是**给的那一格头像写口）',
+    anchors: [
+      { symbol: 'CLIENT_SESSION_BAD_AVATAR', module: 'extensions' },
+      { symbol: 'CLIENT_SESSION_AVATAR_UNAVAILABLE', module: 'extensions' },
+    ],
+    requires: [
+      '值的形状是**窄**的：`data:image/…;base64,…` 或根相对路径（`/…`），长度 ≤ 128 KiB。**不收**绝对外域 URL' +
+        ' —— 页面 CSP 的 `img-src` 本来也不放行它，收了只会画成破图',
+      '写进去的**只有 `me.avatar` 一个 store 键**（`match` / `room` / 别的 `me` 键一个都不碰），**不给 store ' +
+        '句柄**；`null` / `\'\'` 是清除（退回引擎原本的画法）',
+      '失败一律**点名 + `false`**（不抛、不静默）：坏形状 ⇒ `CLIENT_SESSION_BAD_AVATAR`；这一页的 store 没有 ' +
+        '`set()`（极小宿主 / Node 用例）⇒ `CLIENT_SESSION_AVATAR_UNAVAILABLE`',
+      '两处读点都只是「有就压过原来那个源」：大厅右上角那枚个人芯片（`ui/accounts.js` 的 `AccountMeChip` → ' +
+        '`AvatarFrame.src`）与局内左上角自己那一席（`ui/teamPanel.js` → `PlayerAvatar.avatar`，**只传给 self**，' +
+        '队友那几行照旧用策略图标）；没有包写这一格时页面与从前逐字节相同',
+      '不新增 DOM、不新增请求、不新增全局',
+    ],
+    files: ['public/js/ui/extensions.js', 'public/js/store.js', 'public/js/ui/accounts.js',
+      'public/js/ui/teamPanel.js', 'public/js/ui/gameComponents.js'],
+    tests: ['test/modClientCloud.test.mjs'],
+    spec: '§28.58',
+  },
+  {
     id: 'client.cloud',
     layer: 'C',
     // 设计稿里「面板拿不到 store」那条边界（§28.8）的**唯一开口**，所以它的形状必须落在纸上并被锚住：
