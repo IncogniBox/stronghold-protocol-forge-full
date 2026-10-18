@@ -33,10 +33,11 @@
 | `bondIcons` | 1 | `columbiaShip` |
 | `itemIcons` | 4 | 源石辅助仪 / 沙盘·α / 沙盘·β / 同行者 |
 | `skins` | 9 | 9 套时装 —— 本包新增的 6 名干员的**全部**官方时装（1.1.0 起） |
+| `voices` / `voiceLangs` | 220 | 4 名干员的战斗语音：默认语种 jp 55 条 + cn / en / kr 各 55 条（1.2.4 起） |
 | 服务端模块 | 2 | `server.battle` = `battle/main.mjs`；`server.meta` = `meta/main.mjs` |
 | 客户端面板 | 0 | 本包**不含**任何 `client.panels`（无客户端 UI 扩展） |
 | 包内 kit | 4 | `kits/chess_ws_col_{aphris,nasti,jesca,heyak}_a.js`（复用官方 `@ops/` kit） |
-| 文件总数 | 141 | 8 个数据文件 + 2 个服务端模块 + 4 个 kit + 126 个素材 |
+| 文件总数 | 361 | 8 个数据文件 + 1 份 README + 2 个服务端模块 + 4 个 kit + 346 个素材（含 220 个语音） |
 
 ---
 
@@ -318,7 +319,11 @@ meta 侧经 `registry.api`（`num` / `buffsOf`）与 `registry.bond` / `registry
 | `bondIcons`（1） | `columbiaShip` → `bond/icon_columbiaShip.png` |
 | `itemIcons`（4） | `trap_2100_mod_col_pldevice`（源石辅助仪）、`trap_2101_mod_col_sandboxA`（沙盘·α）、`trap_2102_mod_col_sandboxB`（沙盘·β）、`trap_2103_mod_col_fellow`（同行者） |
 | `skins`（9） | `epoque-astesi`「奇工妙想」（时代）、`epoque5-astesi`「寻耀」（时代）、`shining-astesi`「殿堂上的游禽」（闪耀阶梯）—— 星极 `char_274_astesi` 的全部 3 套；`cfa-jesca2`「《上任达维镇》」（中国电影资料馆）—— 涤火杰西卡 `char_1034_jesca2` 唯一一套；`snow-kafka`「纸板仙子」（冰原信使）—— 卡夫卡 `char_214_kafka` 唯一一套；`marthe-cutter`「拭刀」（玛尔特）—— 刻刀 `char_301_cutter` 唯一一套；`summer-ceylon`「悠然假日 HD49」（珊瑚海岸）—— 锡兰 `char_348_ceylon` 唯一一套；`ambienceSynesthesia-heyak`「历世流风」（音律联觉）、`epoque-heyak`「恒久祭礼」（时代）—— 谬因 `char_4027_heyak` 的全部 2 套 |
-| `voices` / `voiceLangs` | 无（本包未声明语音） |
+| `voices` / `voiceLangs`（220） | 4 名干员的战斗语音。默认语种 **jp** 55 条写进 `voices`；其余 3 个语种（cn / en / kr）各 55 条写进 `voiceLangs`。每个语种覆盖 `start` / `faceEnemy` / `select`(2) / `place`(2) / `skill1`–`skill4` / `resultFour` / `resultThree` / `resultTwo` / `resultLose`（星极 / 卡夫卡 / 刻刀 12 槽 14 条；锡兰无 `skill4`，11 槽 13 条） |
+
+> `art.chars` / `skins` / `voices` 的素材均为**解包的官方素材**（版权归鹰角网络 / Yostar），仅供**非商业**的学习与个人娱乐使用；
+> 包整体授权标注 **GPL-3.0-or-later**。语音按 4 个语种各占一个目录落盘，与 `art.chars` 的 4 名干员一一对应，
+> 引擎的「配音语言」设置会在这些语种间切换（缺省语种 jp 走 `voices`，其余走 `voiceLangs`）。
 
 > `art.chars` / `skins` 的 Spine 动作映射（`anims`）已由项目 Spine 管线（`tools/assets/skel.mjs` + `tools/assets/anim-roles.mjs`）
 > 对真实 `.skel` 重算：卡夫卡 / 刻刀 补上了按技能槽的 `anims.skills`（原来只写 `skill`，S2/S3 会复用 S1 片段）。
@@ -329,7 +334,9 @@ meta 侧经 `registry.api`（`num` / `buffsOf`）与 `registry.bond` / `registry
 技能图标 `art/skill/<skillId>.png`；策略图标 `band/<bandId>.png`；盟约图标 `bond/icon_<bondId>.png`；装备图标 `item/<trapId>.png`；
 时装 `skin/op/<charId>/{avatar.png,portrait.png,front/,back/}`（**一名干员一套**时的旧约定），
 一名干员**多套**时走 `skin/op/<charId>/<model>/{avatar.png,portrait.png,front/,back/}`（`<model>` = 官方 `portraitId`
-`<charId>_<皮肤组>#<序号>` 把 `@` / `#` 换成 `_`；1.1.0 起新加的 5 套用这一种）。
+`<charId>_<皮肤组>#<序号>` 把 `@` / `#` 换成 `_`；1.1.0 起新加的 5 套用这一种）；
+语音 `voice/<cn|en|jp|kr>/<charId>/<lang>_<n>.mp3`（`<lang>_<n>` = 官方 `voiceAsset`，与 `shared/constants.js` 的
+`audio.voice` / `audio.voiceLangs` 两表逐条对应）；语音图标沿用引擎侧，无需包内声明。
 
 ---
 
@@ -383,5 +390,6 @@ workshop/columbia/
     ├── band/band_columbia.png   # 策略图标
     ├── bond/icon_columbiaShip.png
     ├── item/…                   # 4 个装备图标
-    └── skin/op/<charId>/…       # 9 套时装（同一干员多套的走 <model>/ 子目录）
+    ├── skin/op/<charId>/…       # 9 套时装（同一干员多套的走 <model>/ 子目录）
+    └── voice/<lang>/<charId>/*.mp3  # 4 名干员的战斗语音（cn / en / jp / kr 各 55 条，共 220）
 ```

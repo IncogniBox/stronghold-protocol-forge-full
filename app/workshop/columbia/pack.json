@@ -1,7 +1,7 @@
 {
  "id": "columbia",
  "name": "哥伦比亚",
- "version": "1.2.3",
+ "version": "1.2.4",
  "author": "the Columbia mod",
  "license": "GPL-3.0-or-later",
  "description": "哥伦比亚 mod：新增核心盟约【哥伦比亚】（源石辅助仪 / 随机进阶装备 / 视为额外携带装备）、策略【混沌本质】（图标干员：谬因）、4 件新装备（源石辅助仪 / 沙盘·α / 沙盘·β / 同行者）与【哥伦比亚】盟约干员。数据与素材走创意工坊叠加层，官方 data/*.json 不被改动。",
@@ -750,6 +750,644 @@
   "trap_2101_mod_col_sandboxA": "item/trap_2101_mod_col_sandboxA.png",
   "trap_2102_mod_col_sandboxB": "item/trap_2102_mod_col_sandboxB.png",
   "trap_2103_mod_col_fellow": "item/trap_2103_mod_col_fellow.png"
+ },
+ "voices": {
+  "char_274_astesi": {
+   "start": [
+    "voice/jp/char_274_astesi/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_274_astesi/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_274_astesi/cn_021.mp3",
+    "voice/jp/char_274_astesi/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_274_astesi/cn_023.mp3",
+    "voice/jp/char_274_astesi/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_274_astesi/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_274_astesi/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_274_astesi/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_274_astesi/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_274_astesi/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_274_astesi/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_274_astesi/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_274_astesi/cn_032.mp3"
+   ]
+  },
+  "char_348_ceylon": {
+   "start": [
+    "voice/jp/char_348_ceylon/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_348_ceylon/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_348_ceylon/cn_021.mp3",
+    "voice/jp/char_348_ceylon/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_348_ceylon/cn_023.mp3",
+    "voice/jp/char_348_ceylon/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_348_ceylon/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_348_ceylon/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_348_ceylon/cn_027.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_348_ceylon/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_348_ceylon/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_348_ceylon/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_348_ceylon/cn_032.mp3"
+   ]
+  },
+  "char_214_kafka": {
+   "start": [
+    "voice/jp/char_214_kafka/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_214_kafka/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_214_kafka/cn_021.mp3",
+    "voice/jp/char_214_kafka/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_214_kafka/cn_023.mp3",
+    "voice/jp/char_214_kafka/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_214_kafka/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_214_kafka/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_214_kafka/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_214_kafka/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_214_kafka/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_214_kafka/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_214_kafka/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_214_kafka/cn_032.mp3"
+   ]
+  },
+  "char_301_cutter": {
+   "start": [
+    "voice/jp/char_301_cutter/cn_019.mp3"
+   ],
+   "faceEnemy": [
+    "voice/jp/char_301_cutter/cn_020.mp3"
+   ],
+   "select": [
+    "voice/jp/char_301_cutter/cn_021.mp3",
+    "voice/jp/char_301_cutter/cn_022.mp3"
+   ],
+   "place": [
+    "voice/jp/char_301_cutter/cn_023.mp3",
+    "voice/jp/char_301_cutter/cn_024.mp3"
+   ],
+   "skill1": [
+    "voice/jp/char_301_cutter/cn_025.mp3"
+   ],
+   "skill2": [
+    "voice/jp/char_301_cutter/cn_026.mp3"
+   ],
+   "skill3": [
+    "voice/jp/char_301_cutter/cn_027.mp3"
+   ],
+   "skill4": [
+    "voice/jp/char_301_cutter/cn_028.mp3"
+   ],
+   "resultFour": [
+    "voice/jp/char_301_cutter/cn_029.mp3"
+   ],
+   "resultThree": [
+    "voice/jp/char_301_cutter/cn_030.mp3"
+   ],
+   "resultTwo": [
+    "voice/jp/char_301_cutter/cn_031.mp3"
+   ],
+   "resultLose": [
+    "voice/jp/char_301_cutter/cn_032.mp3"
+   ]
+  }
+ },
+ "voiceLangs": {
+  "cn": {
+   "char_274_astesi": {
+    "start": [
+     "voice/cn/char_274_astesi/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/cn/char_274_astesi/cn_020.mp3"
+    ],
+    "select": [
+     "voice/cn/char_274_astesi/cn_021.mp3",
+     "voice/cn/char_274_astesi/cn_022.mp3"
+    ],
+    "place": [
+     "voice/cn/char_274_astesi/cn_023.mp3",
+     "voice/cn/char_274_astesi/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/cn/char_274_astesi/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/cn/char_274_astesi/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/cn/char_274_astesi/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/cn/char_274_astesi/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/cn/char_274_astesi/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/cn/char_274_astesi/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/cn/char_274_astesi/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/cn/char_274_astesi/cn_032.mp3"
+    ]
+   },
+   "char_348_ceylon": {
+    "start": [
+     "voice/cn/char_348_ceylon/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/cn/char_348_ceylon/cn_020.mp3"
+    ],
+    "select": [
+     "voice/cn/char_348_ceylon/cn_021.mp3",
+     "voice/cn/char_348_ceylon/cn_022.mp3"
+    ],
+    "place": [
+     "voice/cn/char_348_ceylon/cn_023.mp3",
+     "voice/cn/char_348_ceylon/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/cn/char_348_ceylon/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/cn/char_348_ceylon/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/cn/char_348_ceylon/cn_027.mp3"
+    ],
+    "resultFour": [
+     "voice/cn/char_348_ceylon/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/cn/char_348_ceylon/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/cn/char_348_ceylon/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/cn/char_348_ceylon/cn_032.mp3"
+    ]
+   },
+   "char_214_kafka": {
+    "start": [
+     "voice/cn/char_214_kafka/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/cn/char_214_kafka/cn_020.mp3"
+    ],
+    "select": [
+     "voice/cn/char_214_kafka/cn_021.mp3",
+     "voice/cn/char_214_kafka/cn_022.mp3"
+    ],
+    "place": [
+     "voice/cn/char_214_kafka/cn_023.mp3",
+     "voice/cn/char_214_kafka/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/cn/char_214_kafka/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/cn/char_214_kafka/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/cn/char_214_kafka/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/cn/char_214_kafka/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/cn/char_214_kafka/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/cn/char_214_kafka/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/cn/char_214_kafka/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/cn/char_214_kafka/cn_032.mp3"
+    ]
+   },
+   "char_301_cutter": {
+    "start": [
+     "voice/cn/char_301_cutter/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/cn/char_301_cutter/cn_020.mp3"
+    ],
+    "select": [
+     "voice/cn/char_301_cutter/cn_021.mp3",
+     "voice/cn/char_301_cutter/cn_022.mp3"
+    ],
+    "place": [
+     "voice/cn/char_301_cutter/cn_023.mp3",
+     "voice/cn/char_301_cutter/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/cn/char_301_cutter/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/cn/char_301_cutter/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/cn/char_301_cutter/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/cn/char_301_cutter/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/cn/char_301_cutter/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/cn/char_301_cutter/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/cn/char_301_cutter/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/cn/char_301_cutter/cn_032.mp3"
+    ]
+   }
+  },
+  "en": {
+   "char_274_astesi": {
+    "start": [
+     "voice/en/char_274_astesi/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/en/char_274_astesi/cn_020.mp3"
+    ],
+    "select": [
+     "voice/en/char_274_astesi/cn_021.mp3",
+     "voice/en/char_274_astesi/cn_022.mp3"
+    ],
+    "place": [
+     "voice/en/char_274_astesi/cn_023.mp3",
+     "voice/en/char_274_astesi/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/en/char_274_astesi/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/en/char_274_astesi/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/en/char_274_astesi/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/en/char_274_astesi/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/en/char_274_astesi/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/en/char_274_astesi/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/en/char_274_astesi/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/en/char_274_astesi/cn_032.mp3"
+    ]
+   },
+   "char_348_ceylon": {
+    "start": [
+     "voice/en/char_348_ceylon/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/en/char_348_ceylon/cn_020.mp3"
+    ],
+    "select": [
+     "voice/en/char_348_ceylon/cn_021.mp3",
+     "voice/en/char_348_ceylon/cn_022.mp3"
+    ],
+    "place": [
+     "voice/en/char_348_ceylon/cn_023.mp3",
+     "voice/en/char_348_ceylon/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/en/char_348_ceylon/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/en/char_348_ceylon/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/en/char_348_ceylon/cn_027.mp3"
+    ],
+    "resultFour": [
+     "voice/en/char_348_ceylon/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/en/char_348_ceylon/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/en/char_348_ceylon/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/en/char_348_ceylon/cn_032.mp3"
+    ]
+   },
+   "char_214_kafka": {
+    "start": [
+     "voice/en/char_214_kafka/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/en/char_214_kafka/cn_020.mp3"
+    ],
+    "select": [
+     "voice/en/char_214_kafka/cn_021.mp3",
+     "voice/en/char_214_kafka/cn_022.mp3"
+    ],
+    "place": [
+     "voice/en/char_214_kafka/cn_023.mp3",
+     "voice/en/char_214_kafka/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/en/char_214_kafka/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/en/char_214_kafka/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/en/char_214_kafka/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/en/char_214_kafka/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/en/char_214_kafka/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/en/char_214_kafka/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/en/char_214_kafka/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/en/char_214_kafka/cn_032.mp3"
+    ]
+   },
+   "char_301_cutter": {
+    "start": [
+     "voice/en/char_301_cutter/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/en/char_301_cutter/cn_020.mp3"
+    ],
+    "select": [
+     "voice/en/char_301_cutter/cn_021.mp3",
+     "voice/en/char_301_cutter/cn_022.mp3"
+    ],
+    "place": [
+     "voice/en/char_301_cutter/cn_023.mp3",
+     "voice/en/char_301_cutter/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/en/char_301_cutter/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/en/char_301_cutter/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/en/char_301_cutter/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/en/char_301_cutter/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/en/char_301_cutter/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/en/char_301_cutter/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/en/char_301_cutter/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/en/char_301_cutter/cn_032.mp3"
+    ]
+   }
+  },
+  "kr": {
+   "char_274_astesi": {
+    "start": [
+     "voice/kr/char_274_astesi/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/kr/char_274_astesi/cn_020.mp3"
+    ],
+    "select": [
+     "voice/kr/char_274_astesi/cn_021.mp3",
+     "voice/kr/char_274_astesi/cn_022.mp3"
+    ],
+    "place": [
+     "voice/kr/char_274_astesi/cn_023.mp3",
+     "voice/kr/char_274_astesi/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/kr/char_274_astesi/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/kr/char_274_astesi/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/kr/char_274_astesi/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/kr/char_274_astesi/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/kr/char_274_astesi/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/kr/char_274_astesi/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/kr/char_274_astesi/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/kr/char_274_astesi/cn_032.mp3"
+    ]
+   },
+   "char_348_ceylon": {
+    "start": [
+     "voice/kr/char_348_ceylon/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/kr/char_348_ceylon/cn_020.mp3"
+    ],
+    "select": [
+     "voice/kr/char_348_ceylon/cn_021.mp3",
+     "voice/kr/char_348_ceylon/cn_022.mp3"
+    ],
+    "place": [
+     "voice/kr/char_348_ceylon/cn_023.mp3",
+     "voice/kr/char_348_ceylon/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/kr/char_348_ceylon/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/kr/char_348_ceylon/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/kr/char_348_ceylon/cn_027.mp3"
+    ],
+    "resultFour": [
+     "voice/kr/char_348_ceylon/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/kr/char_348_ceylon/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/kr/char_348_ceylon/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/kr/char_348_ceylon/cn_032.mp3"
+    ]
+   },
+   "char_214_kafka": {
+    "start": [
+     "voice/kr/char_214_kafka/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/kr/char_214_kafka/cn_020.mp3"
+    ],
+    "select": [
+     "voice/kr/char_214_kafka/cn_021.mp3",
+     "voice/kr/char_214_kafka/cn_022.mp3"
+    ],
+    "place": [
+     "voice/kr/char_214_kafka/cn_023.mp3",
+     "voice/kr/char_214_kafka/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/kr/char_214_kafka/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/kr/char_214_kafka/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/kr/char_214_kafka/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/kr/char_214_kafka/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/kr/char_214_kafka/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/kr/char_214_kafka/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/kr/char_214_kafka/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/kr/char_214_kafka/cn_032.mp3"
+    ]
+   },
+   "char_301_cutter": {
+    "start": [
+     "voice/kr/char_301_cutter/cn_019.mp3"
+    ],
+    "faceEnemy": [
+     "voice/kr/char_301_cutter/cn_020.mp3"
+    ],
+    "select": [
+     "voice/kr/char_301_cutter/cn_021.mp3",
+     "voice/kr/char_301_cutter/cn_022.mp3"
+    ],
+    "place": [
+     "voice/kr/char_301_cutter/cn_023.mp3",
+     "voice/kr/char_301_cutter/cn_024.mp3"
+    ],
+    "skill1": [
+     "voice/kr/char_301_cutter/cn_025.mp3"
+    ],
+    "skill2": [
+     "voice/kr/char_301_cutter/cn_026.mp3"
+    ],
+    "skill3": [
+     "voice/kr/char_301_cutter/cn_027.mp3"
+    ],
+    "skill4": [
+     "voice/kr/char_301_cutter/cn_028.mp3"
+    ],
+    "resultFour": [
+     "voice/kr/char_301_cutter/cn_029.mp3"
+    ],
+    "resultThree": [
+     "voice/kr/char_301_cutter/cn_030.mp3"
+    ],
+    "resultTwo": [
+     "voice/kr/char_301_cutter/cn_031.mp3"
+    ],
+    "resultLose": [
+     "voice/kr/char_301_cutter/cn_032.mp3"
+    ]
+   }
+  }
  },
  "skins": [
   {
