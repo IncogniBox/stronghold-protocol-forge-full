@@ -1,7 +1,8 @@
 # 时装补充包（skin-supplement）— 内容与引擎扩展点清单
 
 本包 `workshop/skin-supplement/` 是一份**纯外观补充包**：给**官方干员**补齐官方时装 —— 立绘 / 头像 /
-对局模型一起给，共 **168 名干员 / 261 套**（1.1.0 起覆盖**对局名单**，1.2.0 起再覆盖**自选编队**那一屏，见 §1）。
+对局模型一起给，共 **168 名干员 / 264 套**（1.1.0 起覆盖**对局名单**，1.2.0 起再覆盖**自选编队**那一屏，
+1.3.0 起收录 2026 年「国家图书馆」联动 3 套，见 §1 与 §8）。
 它**不新增任何棋子、盟约、装备或行为**（`content: []`）：装进一局里唯一的可见变化是「干员调配」详情卡右上角与
 「自选编队」每一格的时装浮层里多出这些选项，选中即同时替换立绘、头像与对局模型。
 
@@ -19,11 +20,11 @@
 |---|---|
 | 数据面 `content` | `[]`（**不写任何数据文件**） |
 | `overrides` | 无 |
-| `skins` | **261** 套（**168** 名干员） |
-| 素材 `assets/` | 2070 个文件 / 约 320.6 MB |
+| `skins` | **264** 套（**168** 名干员） |
+| 素材 `assets/` | 2094 个文件 / 约 326 MB |
 | 服务端 / 客户端代码 | 无 |
 | 包公告 | 无 |
-| 文件数 | 2072（`pack.json` + `README.md` + `assets/**` 2070） |
+| 文件数 | 2096（`pack.json` + `README.md` + `assets/**` 2094） |
 
 ---
 
@@ -53,7 +54,7 @@
 
 ---
 
-## 2. 时装清单（`pack.json.skins`，261 套）
+## 2. 时装清单（`pack.json.skins`，264 套）
 
 `id` 是包内唯一键（`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`，即 ≤32 字符）；`name` = 官方 `displaySkin.skinName`；
 `series` = 官方 `displaySkin.skinGroupName` 里 `/` 之前那一段。
@@ -61,7 +62,7 @@
 - `id` 由 `<皮肤组>-<干员短名>` 生成（短名 = `charId` 去掉 `char_<数字>_` 前缀，如 `char_136_hsguma` → `hsguma`）。
 - **同一位干员在同一个组里有两套时装**时（本包有 **9 处**：远行前的野餐/后来的故事、诗人的假日/星橼林、青玉砚/染尘烟、皇家近卫/风笛声声、都会送报员/八音蛋匠人、月宵/私人书房、百面郎中/妙手玄心、传承/山川的酿造、濯缨/方遒卷），后来那套的 `id` 追加官方序号（如 `epoque-agoat2` 与 `epoque57-agoat2`）—— 否则 `SKIN_DUPLICATE_ID` 会整包拒绝。
 
-按系列分布（共 31 个系列）：
+按系列分布（共 32 个系列）：
 
 - **时代**：53 套（复现荣光、远行前的野餐、后来的故事、光耀之途、意志、博物、幽兰秘辛、诗人的假日、星橼林、花冕圆舞曲、幽静、闲适午后、主修领域、除魅、皇家近卫、风笛声声、都会送报员、八音蛋匠人、小憩初醒、读者、伪装、白沙、雪霁、月宵、私人书房、拥抱新生、灵巧侍者、失焦、拾翼、化花、远路、翻涌、礼遇、追悼、层流、注目深渊、甜美配方、清新布景、叙拉古的彼面、卡利斯卡群枪、远行的季节、舒心野趣、今昔须臾之梦、我即潮汐、正义缔造者、恍惚、杰作、识芳、传承、山川的酿造、栖息、记叙、寄自奥格尼斯科）
 - **珊瑚海岸**：30 套（夏卉 FA075、悠然假日 HD26、探寻者 SK97、悠然假日 HD08、悠然假日 HD31、探寻者 SKm01、夏卉 FA011、沙滩护卫 GT.001、驭浪 WR04、悠然假日 HD01、夏卉 FA017、静谧午夜 DN06、夏卉 FA661、悠然假日 HD71、悠然假日 HD61、缤纷奇境 CW03、悠然假日 HD91、悠然假日 HDm74、夏卉 FA083、灿阳朝露 SD08、悠然假日 HDm25、日晒 SS.SP、静谧午夜 DN02、夏卉 FA018、夏卉 FA394、夏卉 FA161、夏卉 FA317、温差 RT.RX07、夏卉 FA333、沙滩护卫 GT003）
@@ -79,6 +80,7 @@
 - **寒武纪**：6 套（寒冬信使、夜归人、霜息、暗流、模特之夜、耀目之蓝）
 - **玛尔特**：5 套（无际之帆、下一顿午茶、硬派速度、迎风之轮、烈阳街景）
 - **三丽鸥家族**：5 套（蒸汽寻踪者、雨霓行游客、绵绒小魔女、坊间凉茶铺、花房茶话会）
+- **国家图书馆**：3 套（源远流长、夜行烛火、盛世之象）— 1.3.0 新增，见 §8
 - **国家地理**：2 套（霜林醉、崖高梦远）
 - **肯德基**：2 套（城市骑手、儿童派对）
 - **雷神推进者**：2 套（超载、摧城）
@@ -129,11 +131,13 @@
 | `sale-excu2` | 众志归一 | 忒斯特收藏 | char_1032_excu2 `char_1032_excu2` |
 | `sanrio-excu2` | 蒸汽寻踪者 | 三丽鸥家族 | char_1032_excu2 `char_1032_excu2` |
 | `ambienceSynesthesia-swire2` | 律动方格 | 音律联觉 | char_1033_swire2 `char_1033_swire2` |
+| `nlc-swire2` | 盛世之象 | 国家图书馆 | 琳琅诗怀雅 `char_1033_swire2` |
 | `game-wisdel` | 绝对主角 | 成就之星 | 维什戴尔 `char_1035_wisdel` |
 | `sale-wisdel` | 超新星 | 忒斯特收藏 | 维什戴尔 `char_1035_wisdel` |
 | `sale-whitw2` | 无序的谦卑 | 忒斯特收藏 | char_1038_whitw2 `char_1038_whitw2` |
 | `marthe-thorn2` | 无际之帆 | 玛尔特 | char_1039_thorn2 `char_1039_thorn2` |
 | `winter-blaze2` | 夜归人 | 寒武纪 | char_1040_blaze2 `char_1040_blaze2` |
+| `nlc-blaze2` | 夜行烛火 | 国家图书馆 | 烛煌 `char_1040_blaze2` |
 | `iteration-angel2` | 寻翼之歌 | 命途迭代 | char_1041_angel2 `char_1041_angel2` |
 | `sightseer-phatm2` | 真我自扼 | 错位巡礼 | 酒神 `char_1042_phatm2` |
 | `game-leizi2` | 血翼蔷薇 | 成就之星 | 司霆惊蛰 `char_1043_leizi2` |
@@ -201,6 +205,7 @@
 | `cfa-chyue` | 全能演员 | 中国电影资料馆 | 重岳 `char_2024_chyue` |
 | `nian-chyue` | 何处栖 | 0011制造 | 重岳 `char_2024_chyue` |
 | `nian-shu` | 春日宴 | 0011制造 | 黍 `char_2025_shu` |
+| `nlc-shu` | 源远流长 | 国家图书馆 | 黍 `char_2025_shu` |
 | `nian-yu` | 愿清晓 | 0011制造 | char_2026_yu `char_2026_yu` |
 | `boc-gnosis` | 先驱 | 斗争血脉 | char_206_gnosis `char_206_gnosis` |
 | `ambienceSynesthesia-mostma` | 幻语乐痕 | 音律联觉 | char_213_mostma `char_213_mostma` |
@@ -432,7 +437,7 @@
 
 ```
 workshop/skin-supplement/
-├── pack.json                      # 包声明（content: [] / skins: 174 套 / license）
+├── pack.json                      # 包声明（content: [] / skins: 264 套 / license）
 ├── README.md
 └── assets/skin/op/<charId>/<model>/
     ├── portrait.png               # 180×360
@@ -441,7 +446,7 @@ workshop/skin-supplement/
     └── back/<model>.{skel,atlas,png}    # 只有一侧的那几套里，back 指向 front 的同一批文件
 ```
 
-共 **168** 个干员目录、**261** 个 `<model>` 子目录，2070 个文件。
+共 **168** 个干员目录、**264** 个 `<model>` 子目录，2094 个文件（2026-10-19 复测：2094 个文件 / 约 326 MB）。
 
 ---
 
@@ -468,3 +473,31 @@ cd <APP>            # app 目录
 node tools/workshop-validate.mjs workshop     # 必须 0 error
 node server/index.js                          # 重启（pack.json 的合并发生在启动期）
 ```
+
+---
+
+## 8. 1.3.0 新增：2026「国家图书馆」联动（3 套）
+
+来源：PRTS [时装回廊](https://prts.wiki/w/%E6%97%B6%E8%A3%85%E5%9B%9E%E5%BB%8A)「按发布顺序」里**页面最上面那一组
+`Y-7 18`** —— 该页按发布顺序**倒序**排列（`Y-7 18` → `Y-7 01` → `Y-6 35` → …），所以这一组就是最新一版；
+它恰好是 **3 套**，全部为 2026 年**国家图书馆（NLC）合作款**（官方 `displaySkin.skinGroupId = 2026#nlc`、
+`skinGroupName = 国家图书馆`、`displayTagId = 联动获得`、`getTime = 1792137600` ≈ 2026-10-15）。
+它们也是上次刷新（1.2.0）之后才出的三套。
+
+| `id` | 名字 | 干员 | `charId` | 官方 `skinId` / `portraitId` | `<model>` |
+|---|---|---|---|---|---|
+| `nlc-shu` | 源远流长 | 黍 | `char_2025_shu` | `char_2025_shu@nlc#1` / `char_2025_shu_nlc#1` | `char_2025_shu_nlc_1` |
+| `nlc-blaze2` | 夜行烛火 | 烛煌 | `char_1040_blaze2` | `char_1040_blaze2@nlc#1` / `char_1040_blaze2_nlc#1` | `char_1040_blaze2_nlc_1` |
+| `nlc-swire2` | 盛世之象 | 琳琅诗怀雅 | `char_1033_swire2` | `char_1033_swire2@nlc#1` / `char_1033_swire2_nlc#1` | `char_1033_swire2_nlc_1` |
+
+- 立绘 / 头像 **180×360 / 180×180**（`yuanyan3060/ArknightsGameResource` → `portrait/`、`avatar/`，文件名里的 `#`
+  已 `encodeURIComponent`）；模型走 `fexli/ArknightsResource` 的
+  `spine/<charId>/<model>/{Front,Back}/<model>.{skel,atlas,png}`（与 §7 的目录形态一致）。
+- 三套**都有 Back 侧**，不需要「`back` 指向 `front`」那套兜底。
+- `atlas` 经 `normalizeAtlas` 归一化补了 `size:` 行（`pma: false`）；`anims` 由 `parseSkel` + `resolveRoles`
+  从真 skel 实测（Front 15 / 16 / 11 条动画，Back 14 / 15 / 10 条），不是手抄。
+- `charId` 与官方 `skin_table.json` 一致：`char_1040_blaze2`（烛煌）、`char_1033_swire2`（琳琅诗怀雅）在
+  `data/chess.json` 里能对上（`chess_char_5_03` / `chess_char_3_04`）；`char_2025_shu`（黍）**不在** `chess.json`
+  （属 §1 的 ② 自选编队池，与既有 `nian-shu` 用同一个 `charId`）。
+- 追加方式：只往 `pack.json.skins[]` 末尾**追加 3 条**（`id` 家族 `nlc-…` 与本包/各玩法包都不重叠），
+  既有的 261 套一字未动；`version` 1.2.0 → **1.3.0**。

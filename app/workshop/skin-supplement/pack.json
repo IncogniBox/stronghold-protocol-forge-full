@@ -1,10 +1,10 @@
 {
  "id": "skin-supplement",
  "name": "时装补充包",
- "version": "1.2.0",
+ "version": "1.3.0",
  "author": "the skin-supplement mod",
  "license": "GPL-3.0-or-later",
- "description": "「时装补充包」：把**官方干员的官方时装**补齐 —— 立绘 / 头像 / 对局模型一起给，共 **168 名干员 / 261 套**。两个来源，一个不落：①（1.1.0 起）本机对局名单里的官方棋子，去掉各 mod **新增**的那几位（由各自包声明）与各 mod **覆盖**的那 7 位（它们本来就在本包里）；②（1.2.0 起）**自选编队**（干员调配 的第三栏）可选的干员 —— 自选池的官方 6★ 62 位与两阶原型 15 位（其中 53 位有官方时装）。本包**只带外观**（content: []）：不新增棋子、盟约、装备或任何行为，装上后这些干员在「干员调配」详情卡与「自选编队」每一格的时装浮层里会多出这些选项，选中即同时替换立绘、头像与对局模型（选择由引擎广播给同房）。切换界面由前置包 workshop/skin-picker 提供，两者零耦合 —— 引擎把 pack.json.skins 并进 assets.skins，skin-picker 只负责把那几套列出来。素材取自官方客户端资源镜像；《明日方舟》相关美术版权归鹰角网络，工坊素材的授权需自行确认。",
+ "description": "「时装补充包」：把**官方干员的官方时装**补齐 —— 立绘 / 头像 / 对局模型一起给，共 **168 名干员 / 264 套**（1.3.0 起收录「国家图书馆」联动 3 套）。两个来源，一个不落：①（1.1.0 起）本机对局名单里的官方棋子，去掉各 mod **新增**的那几位（由各自包声明）与各 mod **覆盖**的那 7 位（它们本来就在本包里）；②（1.2.0 起）**自选编队**（干员调配 的第三栏）可选的干员 —— 自选池的官方 6★ 62 位与两阶原型 15 位（其中 53 位有官方时装）。本包**只带外观**（content: []）：不新增棋子、盟约、装备或任何行为，装上后这些干员在「干员调配」详情卡与「自选编队」每一格的时装浮层里会多出这些选项，选中即同时替换立绘、头像与对局模型（选择由引擎广播给同房）。切换界面由前置包 workshop/skin-picker 提供，两者零耦合 —— 引擎把 pack.json.skins 并进 assets.skins，skin-picker 只负责把那几套列出来。素材取自官方客户端资源镜像；《明日方舟》相关美术版权归鹰角网络，工坊素材的授权需自行确认。",
  "gameVersion": "0.3.0",
  "content": [],
  "skins": [
@@ -30234,6 +30234,348 @@
      }
     }
    }
+  },
+ {
+  "id": "nlc-shu",
+  "charId": "char_2025_shu",
+  "name": "源远流长",
+  "series": "国家图书馆",
+  "art": {
+   "avatar": "skin/op/char_2025_shu/char_2025_shu_nlc_1/avatar.png",
+   "portrait": "skin/op/char_2025_shu/char_2025_shu_nlc_1/portrait.png",
+   "spine": {
+    "front": {
+     "skel": "skin/op/char_2025_shu/char_2025_shu_nlc_1/front/char_2025_shu_nlc_1.skel",
+     "atlas": "skin/op/char_2025_shu/char_2025_shu_nlc_1/front/char_2025_shu_nlc_1.atlas",
+     "textures": [
+      "skin/op/char_2025_shu/char_2025_shu_nlc_1/front/char_2025_shu_nlc_1.png"
+     ],
+     "anims": {
+      "idle": "Idle",
+      "deploy": "Start",
+      "attack": {
+       "begin": null,
+       "loop": "Attack_1",
+       "end": null,
+       "via": "attackAny"
+      },
+      "attackDown": null,
+      "skill": {
+       "begin": null,
+       "loop": "Attack_1",
+       "end": null,
+       "via": "attack",
+       "index": 0,
+       "idle": null
+      },
+      "die": "Die",
+      "move": null,
+      "stun": null,
+      "skills": {
+       "0": {
+        "begin": null,
+        "loop": "Attack_1",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "1": {
+        "begin": "Skill_2_Begin",
+        "loop": "Skill_2_Attack",
+        "end": "Skill_2_End",
+        "index": 1,
+        "idle": "Skill_2_Idle"
+       },
+       "2": {
+        "begin": "Skill_3_Begin",
+        "loop": "Skill_3_Attack_1",
+        "end": "Skill_3_End",
+        "index": 2,
+        "idle": "Skill_3_Idle"
+       }
+      }
+     }
+    },
+    "back": {
+     "skel": "skin/op/char_2025_shu/char_2025_shu_nlc_1/back/char_2025_shu_nlc_1.skel",
+     "atlas": "skin/op/char_2025_shu/char_2025_shu_nlc_1/back/char_2025_shu_nlc_1.atlas",
+     "textures": [
+      "skin/op/char_2025_shu/char_2025_shu_nlc_1/back/char_2025_shu_nlc_1.png"
+     ],
+     "anims": {
+      "idle": "Idle",
+      "deploy": "Start",
+      "attack": {
+       "begin": null,
+       "loop": "Attack_1",
+       "end": null,
+       "via": "attackAny"
+      },
+      "attackDown": null,
+      "skill": {
+       "begin": null,
+       "loop": "Attack_1",
+       "end": null,
+       "via": "attack",
+       "index": 0,
+       "idle": null
+      },
+      "die": null,
+      "move": null,
+      "stun": null,
+      "skills": {
+       "0": {
+        "begin": null,
+        "loop": "Attack_1",
+        "end": null,
+        "via": "attack",
+        "index": 0,
+        "idle": null
+       },
+       "1": {
+        "begin": "Skill_2_Begin",
+        "loop": "Skill_2_Attack",
+        "end": "Skill_2_End",
+        "index": 1,
+        "idle": "Skill_2_Idle"
+       },
+       "2": {
+        "begin": "Skill_3_Begin",
+        "loop": "Skill_3_Attack_1",
+        "end": "Skill_3_End",
+        "index": 2,
+        "idle": "Skill_3_Idle"
+       }
+      }
+     }
+    }
+   }
   }
+ },
+ {
+  "id": "nlc-blaze2",
+  "charId": "char_1040_blaze2",
+  "name": "夜行烛火",
+  "series": "国家图书馆",
+  "art": {
+   "avatar": "skin/op/char_1040_blaze2/char_1040_blaze2_nlc_1/avatar.png",
+   "portrait": "skin/op/char_1040_blaze2/char_1040_blaze2_nlc_1/portrait.png",
+   "spine": {
+    "front": {
+     "skel": "skin/op/char_1040_blaze2/char_1040_blaze2_nlc_1/front/char_1040_blaze2_nlc_1.skel",
+     "atlas": "skin/op/char_1040_blaze2/char_1040_blaze2_nlc_1/front/char_1040_blaze2_nlc_1.atlas",
+     "textures": [
+      "skin/op/char_1040_blaze2/char_1040_blaze2_nlc_1/front/char_1040_blaze2_nlc_1.png"
+     ],
+     "anims": {
+      "idle": "Idle",
+      "deploy": "Start",
+      "attack": {
+       "begin": null,
+       "loop": "Attack",
+       "end": null
+      },
+      "attackDown": null,
+      "skill": {
+       "begin": null,
+       "loop": "Skill_1",
+       "end": null,
+       "index": 0,
+       "idle": null
+      },
+      "die": "Die",
+      "move": null,
+      "stun": null,
+      "skills": {
+       "0": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "1": {
+        "begin": "Skill_2_Begin",
+        "loop": "Skill_2_Loop",
+        "end": "Skill_2_End",
+        "index": 1,
+        "idle": "Skill_2_Idle"
+       },
+       "2": {
+        "begin": "Skill_3_Begin",
+        "loop": "Skill_3_Loop",
+        "end": "Skill_3_End",
+        "index": 2,
+        "idle": null
+       }
+      }
+     }
+    },
+    "back": {
+     "skel": "skin/op/char_1040_blaze2/char_1040_blaze2_nlc_1/back/char_1040_blaze2_nlc_1.skel",
+     "atlas": "skin/op/char_1040_blaze2/char_1040_blaze2_nlc_1/back/char_1040_blaze2_nlc_1.atlas",
+     "textures": [
+      "skin/op/char_1040_blaze2/char_1040_blaze2_nlc_1/back/char_1040_blaze2_nlc_1.png"
+     ],
+     "anims": {
+      "idle": "Idle",
+      "deploy": "Start",
+      "attack": {
+       "begin": null,
+       "loop": "Attack",
+       "end": null
+      },
+      "attackDown": null,
+      "skill": {
+       "begin": null,
+       "loop": "Skill_1",
+       "end": null,
+       "index": 0,
+       "idle": null
+      },
+      "die": null,
+      "move": null,
+      "stun": null,
+      "skills": {
+       "0": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "1": {
+        "begin": "Skill_2_Begin",
+        "loop": "Skill_2_Loop",
+        "end": "Skill_2_End",
+        "index": 1,
+        "idle": "Skill_2_Idle"
+       },
+       "2": {
+        "begin": "Skill_3_Begin",
+        "loop": "Skill_3_Loop",
+        "end": "Skill_3_End",
+        "index": 2,
+        "idle": null
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "nlc-swire2",
+  "charId": "char_1033_swire2",
+  "name": "盛世之象",
+  "series": "国家图书馆",
+  "art": {
+   "avatar": "skin/op/char_1033_swire2/char_1033_swire2_nlc_1/avatar.png",
+   "portrait": "skin/op/char_1033_swire2/char_1033_swire2_nlc_1/portrait.png",
+   "spine": {
+    "front": {
+     "skel": "skin/op/char_1033_swire2/char_1033_swire2_nlc_1/front/char_1033_swire2_nlc_1.skel",
+     "atlas": "skin/op/char_1033_swire2/char_1033_swire2_nlc_1/front/char_1033_swire2_nlc_1.atlas",
+     "textures": [
+      "skin/op/char_1033_swire2/char_1033_swire2_nlc_1/front/char_1033_swire2_nlc_1.png"
+     ],
+     "anims": {
+      "idle": "Idle",
+      "deploy": "Start",
+      "attack": {
+       "begin": null,
+       "loop": "Attack",
+       "end": null
+      },
+      "attackDown": null,
+      "skill": {
+       "begin": null,
+       "loop": "Skill_1",
+       "end": null,
+       "index": 0,
+       "idle": null
+      },
+      "die": "Die",
+      "move": null,
+      "stun": null,
+      "skills": {
+       "0": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "1": {
+        "begin": null,
+        "loop": "Skill_2",
+        "end": null,
+        "index": 1,
+        "idle": null
+       },
+       "2": {
+        "begin": "Skill_3_Begin",
+        "loop": "Skill_3_Loop",
+        "end": "Skill_3_End",
+        "index": 2,
+        "idle": "Skill_3_Idle"
+       }
+      }
+     }
+    },
+    "back": {
+     "skel": "skin/op/char_1033_swire2/char_1033_swire2_nlc_1/back/char_1033_swire2_nlc_1.skel",
+     "atlas": "skin/op/char_1033_swire2/char_1033_swire2_nlc_1/back/char_1033_swire2_nlc_1.atlas",
+     "textures": [
+      "skin/op/char_1033_swire2/char_1033_swire2_nlc_1/back/char_1033_swire2_nlc_1.png"
+     ],
+     "anims": {
+      "idle": "Idle",
+      "deploy": "Start",
+      "attack": {
+       "begin": null,
+       "loop": "Attack",
+       "end": null
+      },
+      "attackDown": null,
+      "skill": {
+       "begin": null,
+       "loop": "Skill_1",
+       "end": null,
+       "index": 0,
+       "idle": null
+      },
+      "die": null,
+      "move": null,
+      "stun": null,
+      "skills": {
+       "0": {
+        "begin": null,
+        "loop": "Skill_1",
+        "end": null,
+        "index": 0,
+        "idle": null
+       },
+       "1": {
+        "begin": null,
+        "loop": "Skill_2",
+        "end": null,
+        "index": 1,
+        "idle": null
+       },
+       "2": {
+        "begin": "Skill_3_Begin",
+        "loop": "Skill_3_Loop",
+        "end": "Skill_3_End",
+        "index": 2,
+        "idle": "Skill_3_Idle"
+       }
+      }
+     }
+    }
+   }
+  }
+ }
  ]
 }
