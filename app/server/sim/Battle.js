@@ -53,7 +53,7 @@ import { ProjectileSystem } from './projectiles.js';
 import { remainingDistance } from './ai.js';
 import { toDataSource, normalizeRoute, normalizeStage } from './simdata.js';
 import { installContent } from './content/index.js';
-import { withGameData } from './content/support/index.js';
+import { withGameData, withMorphPairing } from './content/support/index.js';
 import { BattlePlayers } from './battle/players.js';
 import { BattleLifecycle } from './battle/lifecycle.js';
 import { BattleHooks } from './battle/hooks.js';
@@ -89,7 +89,8 @@ export class Battle {
   constructor(opts = {}) {
     // 对局自己的数据作用域（W-B, DESIGN §28.16）：构造期与每一步都是同步的，而 content/support 的记录读取走
     // `gameData()` —— 不套这一层，一个只声明了部分包的房间仍会读到进程级那份（装了全部包）的盟约 / 道具 / 策略。
-    withGameData(dataObjectOf(opts.data), () => this._init(opts));
+    // 行为开关 `morphPairing`（DESIGN §28.43.1）走**同一条作用域纪律**：`unitBonds` 读它，所以构造期与每一步都要压上。
+    withGameData(dataObjectOf(opts.data), () => withMorphPairing(opts.morphPairing, () => this._init(opts)));
   }
 
   _init(opts = {}) {
@@ -104,6 +105,12 @@ export class Battle {
     this.recordEvents = opts.recordEvents !== false;
     /** When false the battle only ends by time limit / boss pool / forceEnd (tests, sandboxes). */
     this.autoFinish = opts.autoFinish !== false;
+    /**
+     * 限伤 override (`shared/constants.js bossHitLimitFrom`): the deploy-time `SP_BOSS_HIT_LIMIT`, threaded through
+     * Match → battle opts / the battle spec → here. `undefined` = keep `BOSS_HIT_LIMIT`, so a battle built without the
+     * option is byte-for-byte the old battle (server/sim/damage.js leaderHitCancelled reads this field).
+     */
+    this.bossHitLimit = opts.bossHitLimit;
     this.data = toDataSource(opts.data);
     let stage = opts.stage ?? (opts.stageId ? this.data.getStage(opts.stageId) : null);
     if (stage && !stage._norm) stage = normalizeStage(stage.id ?? opts.stageId, stage);
@@ -170,14 +177,24 @@ export class Battle {
     this._frameName = new Array(MAX_HOOK_DEPTH).fill(null);   // open hook/callback frames (diagnostics, _chain)
     this._frameOwner = new Array(MAX_HOOK_DEPTH).fill(null);
     this._frameCtx = new Array(MAX_HOOK_DEPTH).fill(null);
+    // 每局每插件的调用预算（DESIGN §28.52）：一本账 = 一个声明了 `pack.json.callBudget` 的包。没声明的包不在
+    // `_packBudget` 里 ⇒ 记账那一步立刻放行，module 档一行都不多跑（这是「按档启用」的落点）。
+    // `_packScope` = 当前正在装机 / 正在跑的那个包；`on` / `after` / `every` / `addBuff` 据此给新东西盖 `pack` 标记。
+    this._packBudget = new Map();
+    this._packUsed = new Map();
+    this._packRolled = new Set();
+    this._packScope = null;
     this._toRelease = [];   // permanently removed units whose hooks / periodic timers are dropped at step end
     this._sched = [];
     this._evq = [];
     this.projectiles = new ProjectileSystem(this);
     this._occ = new Array(ROWS * COLS).fill(null);
-    this._eb = new Array(ROWS * COLS);
+    this._eb = new Array(ROWS * COLS);   // range buckets (colliders: queries.js _buildEnemyIndex)
     for (let i = 0; i < this._eb.length; i++) this._eb[i] = [];
     this._ebUsed = [];
+    this._et = new Array(ROWS * COLS);   // tile buckets (格子判定: the position's tile, a huge enemy's rectangle tiles)
+    for (let i = 0; i < this._et.length; i++) this._et[i] = [];
+    this._etUsed = [];
     this._idSeq = 0;
     this._attackSeq = 0;   // DamageInfo.attackId of normal attacks (one id per attack, all its damage instances)
     this._deploySeq = 0;
@@ -210,9 +227,25 @@ export class Battle {
 
     // ---- content
     this.contentMode = opts.content ?? 'full';
-    this._safe(() => installContent(this, { mode: this.contentMode, extra: opts.extraContent, installers: opts.battleInstallers }), 'installContent');
-    for (const u of this.allyUnits) if (!u.kit) this._setupUnit(u);
-    if (typeof opts.setup === 'function') this._safe(() => opts.setup(this), 'opts.setup');
+    // D17：结构取 upstream（contentFault ⇒ 不 forceEnd、直接给强制结果）；**我们的 `installers`（mod 层装载器）保留**
+    try {
+      installContent(this, { mode: this.contentMode, extra: opts.extraContent, installers: opts.battleInstallers });
+    } catch (e) {
+      if (!this.contentFault) this._handlerError('installContent', null, e);
+    }
+    if (this.contentFault) {
+      // [ASSUMED] A DSL kit that still throws after the set was built means the content set is corrupt.
+      // Do not call forceEnd: that would start() and deploy. The player sees the ordinary forced result;
+      // battle.errors carries content:dsl and the code (DESIGN **§34**，上游原文 `§32`). Host and page share this constructor.
+      this.finished = true;
+      this.started = true;
+      this.reason = 'forced';
+      try { this._result = this._buildResult(); }
+      catch { this._result = { time: this.time, reason: 'forced', perPlayer: {}, killed: this.killed, total: this.total, resolved: this.resolved, errors: this.errorCount }; }
+    } else {
+      for (const u of this.allyUnits) if (!u.kit) this._setupUnit(u);
+      if (typeof opts.setup === 'function') this._safe(() => opts.setup(this), 'opts.setup');
+    }
   }
 
   /**
@@ -249,7 +282,9 @@ for (const name of ['start', 'step', 'runToEnd', 'forceEnd', 'result']) {
   const inner = desc.value;
   Object.defineProperty(Battle.prototype, name, {
     ...desc,
-    value: function scopedEntry(...args) { return withGameData(dataObjectOf(this.data), () => inner.apply(this, args)); },
+    value: function scopedEntry(...args) {
+      return withGameData(dataObjectOf(this.data), () => withMorphPairing(this.opts?.morphPairing, () => inner.apply(this, args)));
+    },
   });
 }
 

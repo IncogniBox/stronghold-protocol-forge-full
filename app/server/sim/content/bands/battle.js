@@ -14,7 +14,8 @@
 //                                               5 / 不屈 (in place until 0.2.0, community report 「…砾和瑕光这种死亡和部
 //                                               署的叠层效果，如果有艾芒加德的3次复活似乎是无法触发」)
 //   act1autochess_band13_buff 克莱门莎 崇高牺牲 a <bond_id> operator knocked down ⇒ +its tier (等阶) <bond_id> layers
-//                                               (bond_add_type by_charlevel; no "已激活" in the text ⇒ requireActive false)
+//                                               (bond_add_type by_charlevel; requireActive TRUE — roster-008,
+//                                               docs/design/engine.md: 阿戈尔 must be active before a knock-out grants)
 //   act1autochess_band16_buff 大帝 加急调派     "每次部署后再部署时间减少50%": every deployment of an operator stacks one
 //                                               redeploy ×(1 + respawn_time) for the rest of the battle, with no cap (PRTS
 //                                               卫戍协议：盟约 下半 / PRTS盟约记录 备注 "※该策略效果可无限叠加"; a 20-stack cap
@@ -31,11 +32,12 @@
 //                                               elite or not) stand on the field get ATK +atk
 //   act2autochess_band3_buff  伊奥莱塔 统御号令 at combat start n = elite operators on the field ⇒ every elite operator
 //                                               ATK +atk_per_cnt × n, HP +max_hp_per_cnt × n (all 直接乘算)
-//   auto_chess_change_map     Touch 外勤医疗    "所有玩家场地上出现一名<预备干员-医疗>": while any alive player of the match
-//                                               holds band_amedic, every player's field gets the map character of the
+//   auto_chess_change_map     Touch 外勤医疗    "所有玩家场地上出现一名<预备干员-医疗>": once selected in this match, its
+//                                               retained team grant gives every player's field the map character of the
 //                                               variant whose common_condition holds for that player's elites on the field
 //                                               (condition_golden_chess_le cnt → 预备干员-医疗, _ge cnt → Touch), spawned at
-//                                               combat start on its stage slot (tokens.spawnMapChar)
+//                                               combat start on its stage slot (tokens.spawnMapChar). [ASSUMED] that slot's
+//                                               aggroSeq precedes ordinary initial operators; deploySeq stays the runtime spawn
 // Prep-only bands (economy / shop / grants / layers at prep end or round start) live in bands/meta.js.
 
 import {
@@ -212,9 +214,9 @@ const BY_KEY = {
 // Touch 外勤医疗 (auto_chess_change_map, every player's field)
 
 /** Map-character variants of band_amedic: [{ cond, cnt, chars: [tokenId…] }]. */
-export function amedicVariants() {
+export function amedicVariants(bandId = AMEDIC_BAND) {
   const out = [];
-  for (const b of buffsOf(bandRecord(AMEDIC_BAND))) {
+  for (const b of buffsOf(bandRecord(bandId))) {
     if (b.key !== 'auto_chess_change_map') continue;
     const chars = new Set();
     for (const [k, v] of Object.entries(b.p)) if (k.includes('#') && num(v) > 0) chars.add(k.split('#')[0]);
@@ -238,12 +240,17 @@ function installMapChars(battle) {
   const holders = battle.players.filter((ps) => matchBands(battle, ps.playerId).includes(AMEDIC_BAND));
   if (!holders.length) return;
   battle.on('battleStart', () => {
+    const chars = [];
     for (const ps of holders) {
       const elites = deployedOps(battle, ps.playerId).filter(isElite).length;
-      for (const id of amedicCharsFor(elites, variants)) {
-        const u = spawnMapChar(battle, ps.playerId, id);
-        if (u) fxOn(battle, 'summon', u, keyOf(AMEDIC_BAND), AMEDIC_BAND);
-      }
+      for (const id of amedicCharsFor(elites, bandRecord(ps.bandId)?.effectRef === AMEDIC_BAND ? amedicVariants(ps.bandId) : variants)) chars.push({ playerId: ps.playerId, id });
+    }
+    for (const [i, { playerId, id }] of chars.entries()) {
+      // The reserve medic occupies this stage slot in preparation; Touch replaces it at battle start. [ASSUMED]
+      // Replacement preserves the slot's priority before ordinary deployments. Shared-field ordering between
+      // prepared characters follows player order, as for other initial placements (lifecycle.js).
+      const u = spawnMapChar(battle, playerId, id, { preBattleAggroSeq: i - chars.length });
+      if (u) fxOn(battle, 'summon', u, keyOf(AMEDIC_BAND), AMEDIC_BAND);
     }
   });
 }

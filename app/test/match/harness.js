@@ -3,12 +3,15 @@
 //   const h = makeMatch({ mode: 'coop', difficulty: 'NORMAL', humans: 1, bots: 1, seed: 7, fake: true });
 //   h.start(); h.runToPhase('PREP'); const ps = h.ps('p_0'); …; h.invariants();
 //
-// Options: mode, difficulty, humans (count) | seats (explicit), bots, spectators (spectator seat ids, opts.spectators),
+// Options: mode, difficulty, humans (count) | seats (explicit), seatCap (the room's capacity when it differs from the
+// seat list — a 20-seat room with 4 players in it), bots, spectators (spectator seat ids, opts.spectators),
 // seed, matchNo (the room's match number: part of the battleId prefix), data (default: real data/*.json),
 // fake (true → test/match/fakeBattle.js as BattleClass), script (FakeBattle.script), registry, instant (virtual
 // scheduler runs battles synchronously; default true), timerScale, battleContent, botRehearsal (default 0),
 // botSliceMs (bot rehearsal slice budget; default: unbounded in virtual time), aiPicksLast (the room option
-// AI 队友最后选择: the drafts order every human seat before every AI seat).
+// AI 队友最后选择: the drafts order every human seat before every AI seat), hostId / botRehearsalDelegate /
+// botRehearsalDelegateMs (the delegated bot rehearsal, DESIGN §14: test/match/rehearsal-delegate.test.js),
+// cs / vs / requireCs (a gameplay-plugin room: host rehearsal stays off).
 // Combat mode: clientCombat (default false here: the legacy server-run mode most suites were written for; production
 // defaults to client-side combat, DESIGN §14). With clientCombat: true every human gets a scripted browser
 // (test/match/simClient.js SimClient: h.clients) unless clients: false; pace 'instant' | 'paced', perPlayer
@@ -23,9 +26,10 @@ import { VirtualScheduler } from '../../server/match/scheduler.js';
 import { getData } from '../../server/data.js';
 import { FIELD, canPlace, placeClass, positionClass, tileKey } from '../../server/match/board.js';
 import { FakeBattle } from './fakeBattle.js';
-import { GEO } from '../../shared/constants.js';
+import { GEO, MAX_SEATS } from '../../shared/constants.js';
 import { collectViolations } from '../../server/match/invariants.js';
 import { attachSimClients } from './simClient.js';
+import { applyPublic } from '../../public/js/matchDelta.js';
 
 export const DATA = getData({ log: { warn() {}, error() {}, info() {} } });
 
@@ -57,6 +61,12 @@ export function makeMatch(o = {}) {
   }
   h.m = new Match({
     roomCode: 'TEST', mode, difficulty, seats, spectators: o.spectators, seed: o.seed ?? 1, matchNo: o.matchNo, data: o.data ?? DATA, log,
+    // 开发者模式（「全量模拟」）：把 `dev` 透传给 Match（缺省 ⇒ 不出现这个键，与从前逐字节相同）
+    ...(o.dev ? { dev: true } : {}),
+    // The room's CAPACITY, when the caller wants it to differ from the seat list (a 20-seat room with 4 players in it:
+    // the variant gate reads the PARTICIPANTS, so capacity stays a separate fact). Absent ⇒ Match derives it from
+    // `seats.length`, exactly as before.
+    ...(Number.isFinite(o.seatCap) ? { seatCap: o.seatCap } : {}),
     send: (id, msg) => {
       for (const fn of h.onSend) fn(id, msg);
       if (msg.t === 'b.snap' || msg.t === 'b.ev') { h.frames++; if (!captureFrames) return true; }
@@ -75,13 +85,27 @@ export function makeMatch(o = {}) {
     // simulation work of full-match suites; test/match/bot.test.js covers it
     botRehearsal: o.botRehearsal ?? 0,
     botSliceMs: o.botSliceMs,
-    // 工坊行为层 (test/workshopKits.test.js): a pack's kit map / module list, passed through to the battles
+    // 工坊行为层 (test/workshopKits.test.js): a pack's kit map / module list, passed through to the battles. Both kit
+    // key spaces travel the same way: `workshopKits` (operators) and `workshopTokenKits` (summons, §4.7).
     workshopKits: o.workshopKits,
     workshopKitModules: o.workshopKitModules,
+    workshopTokenKits: o.workshopTokenKits,
     clientCombat: o.clientCombat ?? false,
     verify: o.verify ?? 'off',
     headlessSliceMs: o.headlessSliceMs,
     aiPicksLast: o.aiPicksLast,
+    // a bot prep's layout rehearsal delegated to the room's host (DESIGN §14; test/match/rehearsal-delegate.test.js):
+    // `hostId` is the executor a task is sent to, `botRehearsalDelegateMs` its answer window
+    hostId: o.hostId,
+    botRehearsalDelegate: o.botRehearsalDelegate,
+    botRehearsalDelegateMs: o.botRehearsalDelegateMs,
+    // a gameplay-plugin room (DESIGN §32.6): host rehearsal stays off there (match/rehearsal.js requireCs)
+    cs: o.cs,
+    vs: o.vs,
+    requireCs: o.requireCs,
+    // The room's mod set (DESIGN §28.2 / §28.39): `{ digest, packs }`, the same object the lobby hands a real Match.
+    // Absent ⇒ no key at all, byte-for-byte the old construction (the 口径 layer's default path).
+    ...(o.mods ? { mods: o.mods } : {}),
   });
   const m = h.m;
   if (m.clientCombat && o.clients !== false) {
@@ -99,7 +123,47 @@ export function makeMatch(o = {}) {
   h.runToEnd = (opts = {}) => { h.run(() => h.ended != null, opts); assert.ok(h.ended, `match did not end (phase ${m.phase} R${m.round})`); return h.ended; };
   /** last message of a type sent to a player (unicast) */
   h.lastTo = (id, type) => { for (let i = h.sent.length - 1; i >= 0; i--) if (h.sent[i][0] === id && h.sent[i][1].t === type) return h.sent[i][1]; return null; };
-  h.lastBc = (type) => { for (let i = h.bc.length - 1; i >= 0; i--) if (h.bc[i].t === type) return h.bc[i]; return null; };
+  /**
+   * The last MATERIALIZED `m.public` broadcast (full-then-delta frames merged the way the browser merges them, DESIGN
+   * §8.2.1) — a complete view, never a patch. `h.bc` still holds the raw wire frames for tests that judge the encoding.
+   * Cached per broadcast count, so repeated calls in a test cost one pass.
+   */
+  h.publicState = () => {
+    if (h._pubStateAt === h.bc.length && h._pubState !== undefined) return h._pubState;
+    let state = null;
+    for (const x of h.bc) {
+      if (x.t !== 'm.public') continue;
+      const res = applyPublic(state, x);
+      if (!res.ok) { state = undefined; break; }
+      state = res.state;
+    }
+    h._pubStateAt = h.bc.length;
+    h._pubState = state === undefined ? null : state;
+    return h._pubState;
+  };
+  /**
+   * The `m.public` frames seen so far, MATERIALIZED in order (full-then-delta merged the way the browser merges them,
+   * DESIGN §8.2.1): one complete state per published frame, `[]` when none was sent. A raw DELTA frame carries only the
+   * keys that changed (server/viewsDelta.js `publicDelta`), so a test that asks what the clients were TOLD at each step
+   * — a countdown, a phase — must read this series and never `h.bc` (a raw frame may carry no `deadline` key at all).
+   * @returns {Array<object>}
+   */
+  h.publicSeries = () => {
+    const out = [];
+    let state = null;
+    for (const x of h.bc) {
+      if (x.t !== 'm.public') continue;
+      const res = applyPublic(state, x);
+      if (!res.ok) { state = null; continue; }
+      state = res.state;
+      out.push(state);
+    }
+    return out;
+  };
+  /** The last broadcast of a type (`m.public` materialized: see h.publicState). */
+  h.lastBc = (type) => (type === 'm.public'
+    ? h.publicState()
+    : (() => { for (let i = h.bc.length - 1; i >= 0; i--) if (h.bc[i].t === type) return h.bc[i]; return null; })());
   h.allTo = (id, type) => h.sent.filter(([pid, msg]) => pid === id && msg.t === type).map(([, msg]) => msg);
   h.flushAll = () => { sched.advance(200); m.flush(true); };
   /** give the human every draft decision automatically (humans otherwise wait for timers) */
@@ -158,6 +222,13 @@ function legacyInvariants(m) {
   const pool = m.pool;
   const held = new Map();
   const uids = new Set();
+  // 100-seat variant (design-level A, docs/PS100-MIGRATION.md §10-A / §11): above MAX_SEATS every player has a pool of
+  // its own, so `collectViolations` checks the SAME equation PER PLAYER — and this duplicate has to agree with it, or
+  // every >= MAX_SEATS+1 room (the fuzz suite builds rooms of up to 3 humans + 2 bots) fails on a check that is no
+  // longer the rule. BOTH readings are kept: `≤ MAX_SEATS` runs the room-wide equation below, statement for statement.
+  const independent = Number.isFinite(m.seatCap) && m.seatCap > MAX_SEATS;
+  /** @type {Map<string, Map<string, number>>} playerId → baseId → the copies its pieces hold (自选 stock excluded) */
+  const heldOf = new Map();
   const note = (p) => {
     assert.ok(Number.isInteger(p.uid) && p.uid > 0, `bad uid ${p.uid}`);
     assert.ok(!uids.has(p.uid), `duplicate uid ${p.uid}`);
@@ -167,7 +238,7 @@ function legacyInvariants(m) {
     assert.ok(Number.isInteger(ps.funds) && ps.funds >= 0, `${ps.playerId} funds ${ps.funds}`);
     assert.ok(Number.isInteger(ps.pendingFunds) && ps.pendingFunds >= 0, `${ps.playerId} pending ${ps.pendingFunds}`);
     assert.equal(ps.hand.length, GEO.HAND_SIZE);
-    assert.equal(ps.temp.length, GEO.TEMP_SIZE);
+    assert.ok(ps.temp.length >= GEO.TEMP_SIZE, 'temp retains five visible slots and may have queued overflow');
     assert.ok(ps.shop.level >= 1 && ps.shop.level <= m.gd.maxShopLevel);
     assert.ok(ps.shop.upgradePrice >= 0);
     assert.ok(ps.shop.freeRefreshes >= 0);
@@ -206,6 +277,11 @@ function legacyInvariants(m) {
         // a 自选 piece's copies are its player's own stock (0.2.0, server/match/player/diy.js)
         const tally = ps.diyStock && ps.diyStock.has(base) ? diyHeld : held;
         tally.set(base, (tally.get(base) || 0) + p.poolCopies);
+        if (!(ps.diyStock && ps.diyStock.has(base))) {
+          let mine = heldOf.get(ps.playerId);
+          if (!mine) { mine = new Map(); heldOf.set(ps.playerId, mine); }
+          mine.set(base, (mine.get(base) || 0) + p.poolCopies);
+        }
       } else if (p.kind === 'item') {
         assert.ok(m.gd.item(p.id), `unknown item ${p.id}`);
       } else if (p.kind === 'token') {
@@ -224,20 +300,50 @@ function legacyInvariants(m) {
       assert.equal(e.left + (diyHeld.get(base) || 0), e.cap, `${ps.playerId} 自选 stock ${base}: left ${e.left} + held ${diyHeld.get(base) || 0} != cap ${e.cap}`);
     }
   }
-  for (const [base, e] of pool.entries) {
-    assert.ok(e.left >= 0 && e.left <= e.cap, `pool ${base} left ${e.left} cap ${e.cap}`);
-    assert.equal(e.left + (held.get(base) || 0), e.cap, `pool accounting ${base}: left ${e.left} + held ${held.get(base) || 0} != cap ${e.cap}`);
+  if (!independent) {
+    // the room-wide reading: every piece of every player shares ONE pool (the pre-existing check, unchanged)
+    for (const [base, e] of pool.entries) {
+      assert.ok(Number.isInteger(e.left) && e.left <= e.cap, `pool ${base} balance ${e.left} cap ${e.cap}`);
+      assert.equal(pool.left(base), Math.max(0, e.left), 'overdrawn ownership never becomes a negative shop supply');
+      assert.equal(e.left + (held.get(base) || 0), e.cap, `pool accounting ${base}: left ${e.left} + held ${held.get(base) || 0} != cap ${e.cap}`);
+    }
+    for (const [base, n] of held) if (!pool.has(base)) assert.equal(n, 0, `non-pool chess ${base} holds copies`);
+  } else {
+    // the variant: the same two checks, per player against that player's own pool; the shared pool stays the canonical
+    // (read-only) id set and copy ceiling, so only its balance bound is asserted here.
+    for (const [base, e] of pool.entries) {
+      assert.ok(Number.isInteger(e.left) && e.left <= e.cap, `pool ${base} balance ${e.left} cap ${e.cap}`);
+      assert.equal(pool.left(base), Math.max(0, e.left), 'overdrawn ownership never becomes a negative shop supply');
+    }
+    for (const ps of m.players.values()) {
+      const own = ps._ownPool;
+      if (!own) continue;
+      const mine = heldOf.get(ps.playerId) || null;
+      for (const [base, e] of own.entries) {
+        assert.ok(Number.isInteger(e.left) && e.left <= e.cap, `${ps.playerId} pool ${base} balance ${e.left} cap ${e.cap}`);
+        assert.equal(own.left(base), Math.max(0, e.left), 'overdrawn ownership never becomes a negative shop supply');
+        assert.equal(e.left + (mine ? mine.get(base) || 0 : 0), e.cap, `${ps.playerId} pool accounting ${base}: left ${e.left} + held ${mine ? mine.get(base) || 0 : 0} != cap ${e.cap}`);
+      }
+      if (mine) for (const [base, n] of mine) if (!own.has(base)) assert.equal(n, 0, `${ps.playerId}: non-pool chess ${base} holds copies`);
+    }
   }
-  for (const [base, n] of held) if (!pool.has(base)) assert.equal(n, 0, `non-pool chess ${base} holds copies`);
   return true;
 }
 
-/** Put a chess piece straight into a player's hand/board for scenario setup (takes pool copies like a buy). */
+/**
+ * Put a chess piece straight into a player's hand/board for scenario setup (takes pool copies like a buy).
+ *
+ * The copies come from the pool the match actually ROUTES them to — `PlayerState.poolOf`, the unique dispatch point
+ * (design-level A, docs/PS100-MIGRATION.md §10-A): a slotted 自选 slot's own stock, the player's own pool above
+ * `MAX_SEATS`, and the shared pool today. At ≤ MAX_SEATS `poolOf` IS `m.pool`, so this is the same call on the same
+ * object; above it, taking from the shared catalog would charge copies to a pool that never holds them (and the
+ * fuzz-sized rooms would fail `checkInvariants`).
+ */
 export function give(m, ps, chessId, where = 'hand', at = null) {
   const rec = m.gd.chess(chessId);
   assert.ok(rec, `unknown chess ${chessId}`);
   const base = m.gd.baseIdOf(chessId);
-  const taken = m.pool.take(base, rec.isGolden ? m.gd.goldenCopies : 1);
+  const taken = ps.poolOf(base).take(base, rec.isGolden ? m.gd.goldenCopies : 1);
   const piece = ps.newPiece('chess', chessId, { poolCopies: taken });
   if (where === 'board') {
     ps.board.set(tileKey(at[0], at[1]), piece);

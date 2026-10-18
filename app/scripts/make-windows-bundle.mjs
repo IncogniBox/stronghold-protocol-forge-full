@@ -22,6 +22,10 @@
 //   3. node.exe **每次都从校验过的官方 zip 重新解压**：下载的 zip 缓存进仓库的 .cache\，解压目录是
 //      新建的临时目录、用完即删。旧实现「临时目录里那个 node.exe 还在就直接用」，和校验过的 zip 没有
 //      对应关系 —— 上次解压中断留下的残缺文件会被打进包，共享的 /tmp 也不安全。
+//   4. **工作区必须干净**：文件名清单来自 `git ls-files`（**已提交**的那份树），文件内容却从**工作区磁盘**
+//      `copyFile` 读（见 `copyFiles`）。两者说的不是同一件事：一旦有未提交改动，包里装的就是「tag 指向的树
+//      里没有的那份内容」—— 发出去的包与 tag 对不上，而且**没有任何守卫会拦**（这是发布时真踩到的坑）。
+//      所以出包前先 `git status --porcelain`，非空就拒绝；确实要拿脏工作区出包，显式给 `--allow-dirty`。
 
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -31,7 +35,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { APP_VERSION } from '../shared/constants.js';
+import { APP_VERSION, UPSTREAM_VERSION } from '../shared/constants.js';
 // 更新包机制：MANIFEST / UPDATE 的读写、程序文件的判定与摘要，全部复用服务端自己那一份实现
 // （server/update.js 启动时按同一份规则校验，写与读不可能漂移），文本格式由 tools/package-update.mjs 生成。
 import { MANIFEST_FILE, digestFile, inManifest } from '../server/update.js';
@@ -83,6 +87,8 @@ const LEGAL_FILES = ['LICENSE', 'NOTICE.md', 'THIRD-PARTY-NOTICES.md'];
  * 可用 —— 只带贴图不带清单，玩家拿到的是 68 MB 用不上的文件。它存在时就一起收。
  */
 const LOCAL_ASSET_MANIFEST = path.join('data', 'local-assets.json');
+/** The official battle-fx manifest (tools/setup.mjs --local extracts it; the files live under public/assets/local/fx). */
+const LOCAL_FX_MANIFEST = path.join('data', 'local-fx.json');
 
 /** The 配音 folders present on this machine (`public/assets/audio/voice/<lang>`), sorted. */
 function listVoiceDubs(root = ROOT) {
@@ -101,7 +107,7 @@ function readDefaultDub(root = ROOT) {
 }
 
 function parseArgs(argv) {
-  const o = { out: '', node: true, force: false, nodeSpec: '', sha256: '', allDubs: false };
+  const o = { out: '', node: true, force: false, nodeSpec: '', sha256: '', allDubs: false, release: '', allowDirty: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const [k, v] = a.split('=');
@@ -109,26 +115,59 @@ function parseArgs(argv) {
     if (k === '--out') o.out = String(val() || '');
     else if (k === '--node-version') o.nodeSpec = String(val() || '');
     else if (k === '--sha256') o.sha256 = String(val() || '').toLowerCase();
+    else if (k === '--release') o.release = String(val() || '');
     else if (a === '--no-node') o.node = false;
     else if (a === '--force') o.force = true;
     else if (a === '--all-dubs') o.allDubs = true;
+    else if (a === '--allow-dirty') o.allowDirty = true;
     else if (a === '-h' || a === '--help') o.help = true;
   }
   return o;
 }
 
+/** A release tag's two halves: `v<APP_VERSION>-<UPSTREAM_VERSION>`, e.g. `0.14.0-0.2.4`. */
+export const RELEASE_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+/**
+ * The release identity written into `app/package.json` as `release` (`--release`, else
+ * `<APP_VERSION>-<UPSTREAM_VERSION>` from shared/constants.js).
+ *
+ * It has to travel inside the bundle: `app/package.json`'s plain `version` is only the Forge half, so two releases
+ * that differ upstream alone (0.14.0-0.2.3 vs 0.14.0-0.2.4) look identical through it — which is exactly the pair
+ * `scripts/make-update-package.mjs` must tell apart. An explicitly passed `--release` must name this build's
+ * `APP_VERSION`, so a mislabelled tag cannot be stamped in.
+ * @param {string} [spec] the `--release` value ('' = derive it)
+ * @returns {string}
+ */
+export function releaseIdentity(spec = '') {
+  const release = String(spec || '').trim() || `${APP_VERSION}-${UPSTREAM_VERSION}`;
+  if (!RELEASE_RE.test(release)) {
+    throw new Error(`--release 要写成 <本仓库版本>-<上游版本>（例如 ${APP_VERSION}-${UPSTREAM_VERSION}）；收到的是 ${JSON.stringify(release)}`);
+  }
+  if (!release.startsWith(`${APP_VERSION}-`)) {
+    throw new Error(`--release 的前半段必须是本仓库的版本 ${APP_VERSION}（shared/constants.js APP_VERSION），收到的是 ${release}`);
+  }
+  return release;
+}
+
 const HELP = `node scripts/make-windows-bundle.mjs — 生成 Windows 开箱即用便携包
 
   --out <dir>        产物目录（默认 <仓库上一级>/Stronghold-Protocol-Windows）
+  --release <标识>   发行标识 <本仓库版本>-<上游版本>（默认 ${APP_VERSION}-${UPSTREAM_VERSION}），写进 app/package.json；
+                     更新包靠它区分「下一版」与「我正在打的这一版」（只抬上游时两者 APP_VERSION 相同）
   --no-node          不下载便携版 Node（目标机器需自备 Node 22+）
   --all-dubs         把 public/assets/audio/voice/ 下的**全部**配音都打进包（默认只带清单里的默认配音，
                      其余走 release 的语音包，见 scripts/make-voice-pack.mjs）
   --force            目录已存在时先删掉（只肯删空目录，或上一次打的便携包；其余情况拒绝）
+  --allow-dirty      **危险**：工作区有未提交改动也照旧出包。默认拒绝 —— 文件名清单来自「git ls-files」
+                     （已提交的树），内容却从工作区磁盘读，所以脏工作区打出的包**与它的 tag 对不上**。
+                     只在本机验证时用；要发出去就先 commit 或 stash。
   --node-version X   换一个 Node 版本（默认 ${NODE_PIN.version}）；换版本必须同时给 --sha256
   --sha256 <hash>    该版本 win-x64.zip 的 sha256（取自官方 SHASUMS256.txt）
 
   app\\ 里只放 git 跟踪的文件 + 生产依赖（npm ci --omit=dev）+ public/{assets,fonts,vendor}；
   因此 .env / .venv / .claude / scripts/service.env.cmd 这些本机文件不会被打进去。
+  出包前要求**工作区干净**（git status --porcelain 为空），否则拒绝 —— 见 --allow-dirty。
   data/local-assets.json 存在时（本机提取过 3D 棋盘贴图）会一起收，否则贴图进了包也用不上。
 
   不压缩、不改 index.html、不装开始界面：包里的 启动游戏.bat 就是
@@ -204,6 +243,56 @@ export function forceDeleteVerdict(dir) {
   const looksLikeBundle = BUNDLE_MARKERS.every((n) => entries.some((e) => e.name === n))
     && !!app && (app.isDirectory() || app.isSymbolicLink());
   return looksLikeBundle ? 'bundle' : 'refuse';
+}
+
+/**
+ * `git status --porcelain` 的原始输出（工作区 + 索引相对 HEAD 的差异）。
+ *
+ * 这是「工作区必须干净」那条守卫的判据本体。用 NUL 分隔读（`-z`），中文 / 空格 / 带引号的文件名不会被
+ * git 转义成看不懂的样子。**只读**，不改工作区、不动索引。
+ * @param {string} [root]
+ * @returns {{clean: boolean, entries: string[], lines: string[]}}
+ */
+export function worktreeStatus(root = ROOT) {
+  const r = spawnSync('git', ['-C', root, 'status', '--porcelain', '-z'], { maxBuffer: 64 * 1024 * 1024 });
+  if (r.error || r.status !== 0) {
+    throw new Error('git status 失败：出包前要确认工作区干净，请在完整的 git 仓库里运行');
+  }
+  // porcelain -z：每条记录以 NUL 分隔，**重命名 / 复制**那条后面还跟着一个 NUL 分隔的原路径，
+  // 所以先按 NUL 切开再丢掉空段即可（原路径那一段也是一条，但它同样是「有改动」的证据，留着无害）。
+  const entries = r.stdout.toString('utf8').split('\0').filter(Boolean);
+  return { clean: entries.length === 0, entries, lines: entries };
+}
+
+/**
+ * 出包前的工作区守卫：**有未提交改动就拒绝产包**（`--allow-dirty` 可显式放行）。
+ *
+ * 为什么必须有这一条：`app\` 的文件**清单**来自 `git ls-files`（已提交的树），**内容**却从工作区磁盘
+ * `copyFile` 读。有未提交改动时，包里装的是「tag 指向的树里没有的那份内容」—— 包与 tag 对不上，
+ * 而旧实现没有任何地方会发现这件事（发布时真踩到过）。
+ * @param {{allowDirty?: boolean, root?: string}} [opts]
+ * @returns {{ok: true, clean: true}}
+ * @throws {Error} 工作区不干净（且没有放行）时抛出，消息里写明怎么处理与放行的风险
+ */
+export function assertCleanWorktree({ allowDirty = false, root = ROOT } = {}) {
+  const st = worktreeStatus(root);
+  if (st.clean) return { ok: true, clean: true };
+  const shown = st.entries.slice(0, 20).map((l) => `      ${l}`);
+  const more = st.entries.length > shown.length ? `\n      …还有 ${st.entries.length - shown.length} 条` : '';
+  const detail = `${shown.join('\n')}${more}`;
+  if (allowDirty) {
+    console.warn(`  ! --allow-dirty：工作区有 ${st.entries.length} 处未提交改动，照旧出包：\n${detail}`);
+    console.warn('    ⚠️ 风险：包里的内容来自**工作区**，而文件名清单来自 `git ls-files`（已提交的树）。'
+      + '\n       于是这份包与它对应的 tag **对不上** —— 别人按 tag 复现不出你发出去的字节。只在本机验证时用它。');
+    return { ok: true, clean: false };
+  }
+  throw new Error(
+    `工作区有 ${st.entries.length} 处未提交改动，拒绝出包：\n${detail}\n`
+    + '  为什么：包的文件**清单**来自「git ls-files」（已提交的树），**内容**却从工作区磁盘读 —— 有未提交改动时，\n'
+    + '  打出来的就是「tag 指向的树里没有的那份内容」，包与它的 tag 对不上。\n'
+    + '  怎么办：先把改动 **commit** 或「git stash」，再重新出包。\n'
+    + '  确实要拿脏工作区出包（**只在本机验证时**）：加 --allow-dirty，它会打印风险提示后继续。',
+  );
 }
 
 /**
@@ -353,6 +442,43 @@ function extractZip(zipPath, dir) {
     last = `${cmd}: ${r.error ? r.error.message : `退出码 ${r.status}`}`;
   }
   throw new Error(`解压 ${path.basename(zipPath)} 失败（需要 tar / unzip，Windows 上也可以是 Expand-Archive）：${last}`);
+}
+
+/**
+ * Write the release identity into the bundle's `app/package.json` (the `release` field).
+ *
+ * `app/package.json` is the file every release artifact already carries (the full zip, the update zip and the
+ * boot-time check all read it), so the identity rides along with no new file and no new reader. `version` is left
+ * exactly as the repository has it — the game and `test/version.test.js` require a plain three-part semver there.
+ * @param {string} appDir the bundle's app/ directory
+ * @param {string} release e.g. `0.14.0-0.2.4`
+ * @returns {string} the release written
+ */
+export function stampRelease(appDir, release) {
+  const file = path.join(appDir, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (pkg.version !== APP_VERSION) {
+    throw new Error(`app/package.json 的 version 是 ${pkg.version}，不是 ${APP_VERSION}：包里的代码与本仓库不一致，不能盖章发行标识`);
+  }
+  // keep the repository's key order and put the new key right after `version` — a stable neighbourhood makes the
+  // update package's diff of this file readable
+  const out = {};
+  for (const [k, v] of Object.entries(pkg)) {
+    out[k] = v;
+    if (k === 'version') out.release = release;
+  }
+  if (!('release' in out)) out.release = release;
+  fs.writeFileSync(file, `${JSON.stringify(out, null, 2)}\n`, 'utf8');
+  return release;
+}
+
+/**
+ * The release identity a bundle carries (`app/package.json`'s `release`), or undefined for a bundle built before
+ * that field existed.
+ * @param {string} appDir
+ */
+export function readRelease(appDir) {
+  try { return JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')).release; } catch { return undefined; }
 }
 
 /**
@@ -523,6 +649,7 @@ ${voiceNote}
 \`\`\`
 本机当服务器   双击 启动游戏.bat：在这台电脑开服，浏览器自动打开；
                控制台会打印「发给朋友」的局域网地址（形如 http://192.168.1.23:3000）
+用脚本插件     双击 启动游戏-插件沙箱.bat：同上，脚本插件在沙箱里运行（房主在房间里选中才生效）
 连别人的服务器 不需要这个包，直接用浏览器打开对方的网址就行
 \`\`\`
 
@@ -541,6 +668,30 @@ ${voiceNote}
 - **不用开游戏服务器也能用编辑器**，它不需要素材也不需要联网。
 - 编辑器不在 \`public\\\` 下，游戏服务器结构上无法把它发给网页端 —— 它纯粹是你本机的工具。
 
+## 做自己的工坊包（创意工坊说明在这里）
+
+**包里带了一份入门说明，第一次做包的人从这里开始：**
+
+| 想知道什么 | 看哪个文件 |
+|---|---|
+| **四步做一个包**（复制模板 → 改三处 → 导出 → 上传） | \`app\\docs\\START-HERE.md\` |
+| 报的错码是什么意思 | \`app\\docs\\errors.md\` |
+| 只想换一张立绘 | \`app\\docs\\task-01-换个立绘.md\` |
+| 想加一名新干员 | \`app\\docs\\task-02-加个干员.md\` |
+| 可复制的模板包本体 | \`app\\docs\\my-first-pack\\\` |
+| 字段的完整定义、所有能改的位置 | \`app\\docs\\WORKSHOP.md\` |
+
+三条路，随便挑一条：
+
+1. **编辑器（推荐）**：双击 \`启动编辑器.bat\` → **包管理** 页 → 里面有「校验这个包」按钮，直接告诉你装不装得上。
+2. **复制模板**：把 \`app\\docs\\my-first-pack\\\` 整个文件夹复制到 \`app\\workshop\\\`，
+   改名成你要的包 id，照 \`START-HERE.md\` 改三处。
+3. **一行命令校验**：在包根目录敲 \`node app\\tools\\workshop-validate.mjs app\\workshop\`
+   （看到 \`0 error(s), 0 warning(s)\` 与 \`VALID\` 就是装得上；这条命令不写任何文件）。
+
+> \`app\\docs\\START-HERE.md\` 与源码仓库的 \`BEGINNER.md\` 是同源的两份，**改一边要改另一边**。
+> 包里的这份按**整合包根**叙述（\`app\\docs\\…\`、\`app\\workshop\\…\`），照着它做不会走错。
+
 ## 目录结构
 
 \`\`\`
@@ -551,12 +702,37 @@ ${tree}
 `;
 }
 
+/**
+ * 工作区守卫的 CLI 落点：脏就打印 `✖` 并返回 1，干净就打印一行、返回 0。
+ *
+ * **只有命令行入口调它**（`if (isMain())` 那一段），不放进 `main()`：`main()` 也被测试与别的工具
+ * import 着当函数跑（`test/release-identity.test.js` 直接调它来验身份判断，用的还是**临时目录**里假
+ * bundle），把守卫塞进 `main()` 会让那些调用在**开发者自己的脏工作区**上莫名失败 —— 那测的不是它们。
+ * 出包的**命令行**这条路一定经过这里，所以「有未提交改动 ⇒ 拒绝出包」这条纪律不会漏。
+ * @param {{allowDirty?: boolean}} opts
+ * @returns {number} 进程退出码（0 = 放行，1 = 拒绝）
+ */
+export function worktreeGuardExit({ allowDirty = false } = {}) {
+  try {
+    const st = assertCleanWorktree({ allowDirty });
+    if (st.clean) console.log('  · 工作区干净（git status --porcelain 为空）');
+    return 0;
+  } catch (e) {
+    console.error(`✖ ${e.message}`);
+    return 1;
+  }
+}
+
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   if (o.help) { console.log(HELP); return 0; }
   const out = path.resolve(o.out || path.join(path.dirname(ROOT), 'Stronghold-Protocol-Windows'));
   const appDir = path.join(out, 'app');
   const nodeDir = path.join(out, 'node');
+
+  // 发行标识：写进 app/package.json 的 release。它必须是 `<APP_VERSION>-<上游>`，否则拒绝出包（见 releaseIdentity）。
+  let release;
+  try { release = releaseIdentity(o.release); } catch (e) { console.error(`✖ ${e.message}`); return 1; }
 
   // 版本与哈希：默认用仓库里钉死的那一份；换版本必须同时给 --sha256，否则拒绝。
   let nodeVersion = NODE_PIN.version;
@@ -605,6 +781,9 @@ async function main() {
   console.log(`  · 复制游戏本体（git 跟踪的 ${wanted.length} 个文件，略过 ${all.length - wanted.length} 个 test/ 文件）…`);
   const copied = await copyFiles(wanted, appDir);
   console.log(`    完成：${copied.files} 个文件 / ${MB(copied.bytes)}`);
+  // 发行标识必须在 MANIFEST.json 之前盖章：manifest 会把它的大小与 sha256 一起记下来（两个 zip 与启动校验都读它）
+  stampRelease(appDir, release);
+  console.log(`  · 盖上发行标识 app/package.json release="${release}"（本仓库 ${APP_VERSION} + 上游 ${UPSTREAM_VERSION}）`);
 
   // 2) 素材与前端库（不进版本库，必须存在）
   for (const d of ASSET_DIRS) {
@@ -653,6 +832,12 @@ async function main() {
   } else if (fs.existsSync(localTextures)) {
     console.log(`    ! 有 public/assets/local 但没有 ${LOCAL_ASSET_MANIFEST}：贴图进了包也用不上，`
       + '先跑 node tools/setup.mjs --local 生成清单（或删掉该目录）');
+  }
+  // 2c) 官方战斗特效的清单（本机提取过才有）：特效文件随 public/assets/local/fx 进包，靠这份 JSON 才会被采用。
+  const fxManifest = path.join(ROOT, LOCAL_FX_MANIFEST);
+  if (fs.existsSync(fxManifest)) {
+    await fsp.copyFile(fxManifest, path.join(appDir, LOCAL_FX_MANIFEST));
+    console.log(`    带上 ${LOCAL_FX_MANIFEST}（官方战斗特效的清单，文件本体在 public/assets/local/fx）`);
   }
 
   // 3) 生产依赖
@@ -723,4 +908,13 @@ function isMain() {
   } catch { return false; }
 }
 
-if (isMain()) main().then((code) => { process.exitCode = code ?? 0; }, (e) => { console.error(e?.stack || e); process.exitCode = 1; });
+// **工作区守卫是第一件事**，而且只在命令行这条路上（见 `worktreeGuardExit` 的注释）：脏工作区必须
+// 在动任何东西之前就被拦下。
+if (isMain()) {
+  const argv = process.argv.slice(2);
+  const guardCode = argv.includes('--help') || argv.includes('-h')
+    ? 0                                        // --help 只是打印用法，不碰文件
+    : worktreeGuardExit({ allowDirty: argv.includes('--allow-dirty') });
+  if (guardCode !== 0) process.exitCode = guardCode;
+  else main().then((code) => { process.exitCode = code ?? 0; }, (e) => { console.error(e?.stack || e); process.exitCode = 1; });
+}

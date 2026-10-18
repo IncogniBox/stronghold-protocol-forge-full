@@ -1,0 +1,204 @@
+{
+ "garrison_dos_holungday_a": {
+  "garrisonId": "garrison_dos_holungday_a",
+  "desc": "自身攻击范围扩大至全场的特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+2",
+  "descRaw": "自身攻击范围扩大至全场的特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+2",
+  "eventType": "IN_BATTLE",
+  "eventTypeDesc": "作战能力",
+  "eventTypeIcon": "icon_battle",
+  "effectType": "DOS_CHEN2_AMMO_FULLRANGE",
+  "effectKey": "DOS_CHEN2_AMMO_FULLRANGE",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "bond_1": "dossolesShip",
+   "bond_2": "preciShip",
+   "consume_count": 4,
+   "layer": 2
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_holungday_a"
+  ]
+ },
+ "garrison_dos_holungday_b": {
+  "garrisonId": "garrison_dos_holungday_b",
+  "desc": "自身攻击范围扩大至全场的特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+4",
+  "descRaw": "自身攻击范围扩大至全场的特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+4",
+  "eventType": "IN_BATTLE",
+  "eventTypeDesc": "作战能力",
+  "eventTypeIcon": "icon_battle",
+  "effectType": "DOS_CHEN2_AMMO_FULLRANGE",
+  "effectKey": "DOS_CHEN2_AMMO_FULLRANGE",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "bond_1": "dossolesShip",
+   "bond_2": "preciShip",
+   "consume_count": 4,
+   "layer": 4
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_holungday_b"
+  ]
+ },
+ "garrison_dos_lin_a": {
+  "garrisonId": "garrison_dos_lin_a",
+  "desc": "<战斗中>攻击范围内有干员受到攻击时，其已激活盟约的层数+1（同一名干员最多6次）",
+  "descRaw": "<战斗中>攻击范围内有干员受到攻击时，其已激活盟约的层数+1（同一名干员最多6次）",
+  "eventType": "IN_BATTLE",
+  "eventTypeDesc": "作战能力",
+  "eventTypeIcon": "icon_battle",
+  "effectType": "DOS_LIN_ALLY_HIT",
+  "effectKey": "DOS_LIN_ALLY_HIT",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "layer": 1,
+   "max": 6
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_lin_a"
+  ]
+ },
+ "garrison_dos_lin_b": {
+  "garrisonId": "garrison_dos_lin_b",
+  "desc": "<战斗中>攻击范围内有干员受到攻击时，其已激活盟约的层数+2（同一名干员最多12次）",
+  "descRaw": "<战斗中>攻击范围内有干员受到攻击时，其已激活盟约的层数+2（同一名干员最多12次）",
+  "eventType": "IN_BATTLE",
+  "eventTypeDesc": "作战能力",
+  "eventTypeIcon": "icon_battle",
+  "effectType": "DOS_LIN_ALLY_HIT",
+  "effectKey": "DOS_LIN_ALLY_HIT",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "layer": 2,
+   "max": 12
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_lin_b"
+  ]
+ },
+ "garrison_dos_lin_prep_a": {
+  "garrisonId": "garrison_dos_lin_prep_a",
+  "desc": "<进入休整期时>若没有触发<战斗中>特质，则使自身已激活层数+6",
+  "descRaw": "<进入休整期时>若没有触发<战斗中>特质，则使自身已激活层数+6",
+  "eventType": "SERVER_PREP_START",
+  "eventTypeDesc": "整备能力",
+  "eventTypeIcon": "icon_gold",
+  "effectType": "DOS_LIN_PREP_FALLBACK",
+  "effectKey": "DOS_LIN_PREP_FALLBACK",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "layer": 6
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_lin_a"
+  ]
+ },
+ "garrison_dos_lin_prep_b": {
+  "garrisonId": "garrison_dos_lin_prep_b",
+  "desc": "<进入休整期时>若没有触发<战斗中>特质，则使自身已激活层数+12",
+  "descRaw": "<进入休整期时>若没有触发<战斗中>特质，则使自身已激活层数+12",
+  "eventType": "SERVER_PREP_START",
+  "eventTypeDesc": "整备能力",
+  "eventTypeIcon": "icon_gold",
+  "effectType": "DOS_LIN_PREP_FALLBACK",
+  "effectKey": "DOS_LIN_PREP_FALLBACK",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "layer": 12
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_lin_b"
+  ]
+ },
+ "garrison_dos_crow_a": {
+  "garrisonId": "garrison_dos_crow_a",
+  "desc": "<战斗中>击倒敌人时，使已激活的【多索雷斯】【不屈】层数+1",
+  "descRaw": "<战斗中>击倒敌人时，使已激活的【多索雷斯】【不屈】层数+1",
+  "eventType": "IN_BATTLE",
+  "eventTypeDesc": "作战能力",
+  "eventTypeIcon": "icon_battle",
+  "effectType": "DOS_CROW_KILL",
+  "effectKey": "DOS_CROW_KILL",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "bond_1": "dossolesShip",
+   "bond_2": "indomShip",
+   "layer": 1
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_crow_a"
+  ]
+ },
+ "garrison_dos_crow_b": {
+  "garrisonId": "garrison_dos_crow_b",
+  "desc": "<战斗中>击倒敌人时，使已激活的【多索雷斯】【不屈】层数+2",
+  "descRaw": "<战斗中>击倒敌人时，使已激活的【多索雷斯】【不屈】层数+2",
+  "eventType": "IN_BATTLE",
+  "eventTypeDesc": "作战能力",
+  "eventTypeIcon": "icon_battle",
+  "effectType": "DOS_CROW_KILL",
+  "effectKey": "DOS_CROW_KILL",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "bond_1": "dossolesShip",
+   "bond_2": "indomShip",
+   "layer": 2
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_crow_b"
+  ]
+ },
+ "garrison_dos_takila_a": {
+  "garrisonId": "garrison_dos_takila_a",
+  "desc": "<进入休整期时>获得1件阶级不超过调度中心的随机知名商品标志物",
+  "descRaw": "<进入休整期时>获得1件阶级不超过调度中心的随机知名商品标志物",
+  "eventType": "SERVER_PREP_START",
+  "eventTypeDesc": "整备能力",
+  "eventTypeIcon": "icon_gold",
+  "effectType": "DOS_TAKILA_GIFT_ITEM",
+  "effectKey": "DOS_TAKILA_GIFT_ITEM",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "count": 1
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_takila_a"
+  ]
+ },
+ "garrison_dos_takila_b": {
+  "garrisonId": "garrison_dos_takila_b",
+  "desc": "<进入休整期时>获得2件阶级不超过调度中心的随机知名商品标志物",
+  "descRaw": "<进入休整期时>获得2件阶级不超过调度中心的随机知名商品标志物",
+  "eventType": "SERVER_PREP_START",
+  "eventTypeDesc": "整备能力",
+  "eventTypeIcon": "icon_gold",
+  "effectType": "DOS_TAKILA_GIFT_ITEM",
+  "effectKey": "DOS_TAKILA_GIFT_ITEM",
+  "battleRuneKey": null,
+  "charLevel": 0,
+  "bb": {
+   "count": 2
+  },
+  "bbStr": {},
+  "owners": [
+   "chess_ws_dos_takila_b"
+  ]
+ }
+}

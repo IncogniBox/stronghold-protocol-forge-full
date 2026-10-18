@@ -3,15 +3,18 @@
 // S1 新月的苏醒 (charges ×2): 对范围内一名敌人依次演奏8个音符，造成依次递减的法术伤害。
 // S2 满月的舞会 (toggle): 攻击力+atkMul、攻击速度+aspd，攻击变为造成法术伤害的二连击。
 // S3 残月的余响 (duration): 攻击范围扩大，攻击变为造成 atk_scale 法伤的4连击。
-// T1 颂乐音符: 「每存在一个音符，成员无视敌人 3% 防御 / 2% 法抗（最多 10 层）」需持续音符计数与成员判定，未实现。
-// T2 毋畏遗忘: 「造成伤害时 Fever+3」由引擎侧盟约安装器（mod/ave-mujica）负责，本 kit 不重复。
+// T1 颂乐音符: 「每存在一个音符，成员无视敌人 def_pen 防御 / res_pen 法抗（最多 max_stack 层）」由本包盟约安装器
+//   （battle/main.mjs 的 installAveMujica）实现：祥子每造成一次敌人伤害记一个音符（寿命 3 s [ASSUMED]），按在场音符数给成员穿透。
+// T2 毋畏遗忘: 「造成伤害时 Fever+3」由本包盟约安装器（battle/main.mjs）负责，本 kit 不重复。
 // 模组 LOR-Y「无言的约定」: 「攻击范围内存在 2 名及以上敌人时攻击速度+12」由引擎 traitMods.js 读取
 //   trait.moduleDesc + trait.bb.attack_speed 生效，无需 kit。
 import { num, skillBbOf } from '@kit/tier1.js';
 
-const S1 = 'skchr_am_oblivionis_1';
-const S2 = 'skchr_am_oblivionis_3'; // 满月的舞会 (图标 am_oblivionis_3)
-const S3 = 'skchr_am_oblivionis_2'; // 残月的余响 (图标 am_oblivionis_2)
+// 技能 id 用**官方 id**（与包内 fx 索引 `assets/fx/index.json` 的 `skchr_oblvns_*` 一致）：
+// 引擎的官方技能特效（VFX 计划）只认官方 id，写 mod 自造的 `skchr_am_*` 会让技能 prefab 一次都不播。
+const S1 = 'skchr_oblvns_1';
+const S2 = 'skchr_oblvns_2'; // 满月的舞会 (toggle；图标 art.skills 仍按 mod 名 am_oblivionis_3)
+const S3 = 'skchr_oblvns_3'; // 残月的余响 (duration；图标 art.skills 仍按 mod 名 am_oblivionis_2)
 
 export default (bb, chess) => {
   const b1 = skillBbOf(chess, S1);

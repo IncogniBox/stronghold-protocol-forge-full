@@ -37,7 +37,7 @@ import { sortBonds, bondMembers, nextThreshold, bondTier, harmonyMembers, HARMON
 import { formatBondEffect } from './richText.js';
 import { bondIconUrl } from './assetUrls.js';
 import { data } from '../data.js';
-import { t, tc, tParts, tName } from '../../../shared/i18n.js';
+import { t, tc, tParts, tName, N_ } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
@@ -107,6 +107,20 @@ export const BondStrip = modComponent('game.bondStrip', function BondStrip({ bon
  *   note, no 在场 count and no 当前效果 block (its numbers would promise an effect the mode never gives; the bond text stays).
  *   `entry.harmony` (the server's bond views: the +1 调和 added to `count`): 在场 n（含调和 +1） and the 调和 row
  */
+/**
+ * 盟约详情标题上那一行小标签的取词：`bondType` → i18n 键。
+ *
+ * 引擎只按 `isCore` 分「核心盟约 / 附加盟约」两类，但**数据里**还写着 `bondType` —— 它原本只是给编辑器用的
+ * 标签（`SEASON` / `REGULAR`，`shared/bondAuthoring.js` 的 `BOND_TYPES`），**工坊管线不校验它**，所以
+ * `SIDE_STORY`（故事集）这类数据层面的分类可以在这里补一层显示名。表里没有的 `bondType` 一律回落
+ * 「附加盟约」——官方数据与不写这张表的包，行为逐字不变。
+ */
+const BOND_KIND_CORE = N_('CORE BOND // 核心盟约');
+const BOND_KIND_ADDON = N_('ADD-ON BOND // 附加盟约');
+const BOND_KIND_LABELS = Object.freeze({ SIDE_STORY: N_('SIDE STORY BOND // 故事集盟约') });
+/** 取这条盟约该显示哪一个标签（**msgid**；显示处再交给 `t()`，所以这里用 `N_` 标记，见 `shared/i18n.js`）。 */
+const bondKindLabel = (b) => (b.isCore ? BOND_KIND_CORE : (BOND_KIND_LABELS[b.bondType] || BOND_KIND_ADDON));
+
 export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember, place = null, over = false, beside = null, owner = null, off = false }) {
   const b = data.lookup('bonds', bondId);
   if (!b) return null;
@@ -119,7 +133,8 @@ export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember,
   const dd = { chess: data.get('chess'), backups: data.get('backups') };
   const getChess = diyGetter((id) => data.lookup('chess', id), priv, dd);
   const pieceRecord = (p) => (p && p.diy && typeof p.diy === 'object' ? diyRecordFor(data.lookup('chess', p.id), p.diy, dd) : null) || getChess(p.id);
-  const members = bondMembers(b, priv, banned, getChess, (id) => data.lookup('items', id), pieceRecord);
+  // 最后一格 `hasBond`：盟约弹窗的成员行也要按「这台机器上真有这条盟约」过滤（`pieceBondIds` 那一处同一条）
+  const members = bondMembers(b, priv, banned, getChess, (id) => data.lookup('items', id), pieceRecord, (id) => !!data.lookup('bonds', id));
   // 补位: the stand-in a row shows (a 自选 row is its operator already)
   const rawChess = (id) => data.lookup('chess', id);
   const siOf = (mb) => (mb.diy ? null : memberStandIn(priv, rawChess(mb.id), data.get('backups'), rawChess));
@@ -142,7 +157,7 @@ export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember,
     <header class="bpop__head">
       <div class=${cx('bpop__disc', active && 'is-active')}><${BondGlyph} bondId=${bondId} /></div>
       <div class="bpop__titles">
-        <${MicroLabel} tone="mint">${b.isCore ? t('CORE BOND // 核心盟约') : t('ADD-ON BOND // 附加盟约')}</${MicroLabel}>
+        <${MicroLabel} tone="mint">${t(bondKindLabel(b))}</${MicroLabel}>
         ${owner ? html`<span class="bpop__owner"><${GIcon} name="eye" />${tParts('{owner} 的盟约', { owner: html`<b>${owner}</b>` })}</span>` : null}
         <h3 class="bpop__name">${b.name}</h3>
         <div class="bpop__facts">

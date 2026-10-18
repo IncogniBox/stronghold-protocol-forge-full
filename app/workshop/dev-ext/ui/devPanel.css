@@ -1,0 +1,44 @@
+/* workshop/dev-ext/ui/devPanel.css — 诊断浮层的样式（由面板声明的 styles 注入，排在引擎样式之后）。
+   左下角一块小窗，标题行右边是「收起 / 展开」按钮；收起后只剩标题行。 */
+.devext-panel {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  z-index: 30;
+  min-width: 190px;
+  padding: 6px 9px 7px;
+  border: 1px solid rgba(120, 220, 170, 0.45);
+  border-radius: 6px;
+  background: rgba(8, 20, 16, 0.78);
+  color: #cfe;
+  font: 11px/1.45 "Segoe UI", system-ui, sans-serif;
+}
+.devext-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.devext-panel__title {
+  color: #7fe0b0;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.devext-panel__toggle {
+  flex: none;
+  padding: 0 6px;
+  line-height: 1.5;
+  border: 1px solid rgba(120, 220, 170, 0.5);
+  border-radius: 3px;
+  background: rgba(120, 220, 170, 0.12);
+  color: #9ff0c8;
+  font: inherit;
+  cursor: pointer;
+}
+.devext-panel__toggle:hover { background: rgba(120, 220, 170, 0.24); }
+.devext-panel__body {
+  margin: 5px 0 0;
+  white-space: pre;
+}
+.devext-panel.is-collapsed { min-width: 0; }
+.devext-panel.is-collapsed .devext-panel__body { display: none; }

@@ -1,5 +1,5 @@
 // server/match/player/acquire.js — PlayerState methods: gains and merges — copy counts, acquireChess (hand, overflow
-// temp, the no-room rule) and the chess merge (3 copies → the elite, on a consumed deployed copy's tile or in the hand;
+// temp queue) and the chess merge (3 copies → the elite, on a consumed deployed copy's tile or in the hand;
 // the reward offer), promotion, transformation (突变细胞: a destroy, then a gain), item upgrades, reward / item offers,
 // acquireItem and the item merges (2 identical → the golden item; deferred merges at the next prep start).
 // Installed on PlayerState.prototype by server/match/PlayerState.js (a method container: never instantiated; `this` is
@@ -43,7 +43,7 @@ export class PlayerAcquire {
     const base = this.gd.baseIdOf(chessId);
     const need = rec.isGolden ? this.gd.goldenCopies : 1;
     // the shared pool, or this player's stock of a slotted 自选 piece (player/diy.js poolOf)
-    const taken = fromPool ? this.poolOf(base).take(base, need) : 0;
+    const taken = fromPool ? this.poolOf(base).take(base, need, { overdraw: true }) : 0;
     const piece = this.newPiece('chess', chessId, { poolCopies: taken });
     this.round.gainedChess++;
     let owned = piece;
@@ -51,12 +51,7 @@ export class PlayerAcquire {
       owned = this._mergeChess(base, piece);
       if (!owned) return null;
     } else {
-      const where = this.stow(piece, { allowTemp: true, toTemp });
-      if (!where) {
-        this.returnCopies(piece);
-        this.m.toast(this, 'warn', '整备区已满，获得的干员已返还');
-        return null;
-      }
+      this.stow(piece, { allowTemp: true, toTemp });
     }
     this.recompute();
     if (!silent) this.m.dispatch(this, 'onGain', { piece: owned, kind: 'chess', source });
@@ -73,11 +68,10 @@ export class PlayerAcquire {
    * destroyed its carrier before the gain: that tile is no copy's). It replaces a deployed copy, so the deploy count
    * never grows. Otherwise the elite goes to the hand, overflow temp — outside PREP too (a SETTLE merge's elite waits in
    * temp through the next prep, tempDue). The copies' equipment returns to the hand ("干员晋级后已配发装备会回收至整备区";
-   * overflow temp; with both full it stays on the elite, up to its equipPerChess (2) slots — any further item is
-   * destroyed with a log warning, as before the official rule) and an identical normal pair among it merges like any gain
+   * overflowing into the expandable temp queue) and an identical normal pair among it merges like any gain
    * (checkItemMerges); their summons are removed, and an elite on the board
-   * gets its own summon stack (grantTokensFor: its loadout, like any deployment). Returns the elite piece (or null if
-   * the elite could not be stored).
+   * gets its own summon stack (grantTokensFor: its loadout, like any deployment). Returns the elite piece,
+   * or null when the recipe is invalid or there are too few normal copies.
    * @param {string} baseId
    * @param {any} incoming the acquired, not yet stowed copy (null: only owned copies)
    */
@@ -102,31 +96,26 @@ export class PlayerAcquire {
     // a new piece: this round's per-piece counters start at 0, none is carried over from the copies — a newly merged
     // elite 拉普兰德 is a new 拉普兰德 and fires +8 on its own first manual refresh this round (GitHub #169; the owner's
     // decision of 2026-10-06; pieceRoundCount)
+    copies += this.poolOf(baseId).take(baseId, Math.max(0, this.gd.goldenCopies - copies), { overdraw: true });
     const elite = this.newPiece('chess', goldenId, { poolCopies: copies });
+    // D13（裁定：取上游 0.3.0 的写法）：精英与返还装备都只走 `stow(..., { allowTemp: true })`。
+    // 我们 0.2.x 那两条兜底（「塞不下就挂到精锐身上」/「手牌+临时都满则退池 + toast」）**已核为不可达的死代码**：
+    // `pieces.js:84` 只在 `allowTemp: false` 时返回 null，而临时队列是**无界**的（`:86-90` 逐字写着 "Five visible
+    // slots are a window, not a capacity limit"），`_putTemp` 只做 `temp[i] = piece`（空位或追加，永不覆盖）
+    // ⇒ 每件返还装备必然落在 手牌 或 临时队列，**不会丢件**。`matchSlotPolicy`（第 7 段）的能力仍在 bot.js 那条线上。
+    for (const l of consumed) if (l.area !== 'new') l.piece.mergedInto = elite.uid;
     const deployed = consumed.filter((l) => l.key && !this.board.has(l.key)).map((l) => ({ key: l.key, dir: pieceDir(l.piece) }));
     const toTile = (t) => { elite.dir = parseDir(t.dir) || 'RIGHT'; this.board.set(t.key, elite); return 'board'; };
     const tile = mergeTile(deployed, (r, c) => this._legal(elite, r, c));
-    let where = tile ? toTile(tile) : this.stow(elite, { allowTemp: true });
-    // hand and temp full and no deployed tile legal for it (a terrain change not re-checked yet): it stays on the first
-    // deployed copy's tile rather than being lost, like a piece _evictIllegal finds no room for
-    if (!where && deployed.length) where = toTile(mergeTile(deployed));
-    for (const it of items) {
-      if (this.stow(it, { allowTemp: true })) continue;
-      if (where && elite.items.length < this.gd.equipPerChess) { elite.items.push(it); continue; }
-      this.m.log.warn?.(`[match ${this.m.roomCode}] ${this.playerId}: returned item ${it.id} destroyed (no space)`);
-    }
+    // ⚠️ 0.3.0 起 `allowTemp: true` 的 `stow` 不返回 null（临时区无界）⇒ 没有格子时 `where` 恒为 'temp'，
+    // 'hand' 只来自真的有空位那一次（见 pieces.js stow）。
+    const where = tile ? toTile(tile) : this.stow(elite, { allowTemp: true });
+    for (const it of items) this.stow(it, { allowTemp: true });
     // the returned equipment follows the auto-merge rule like any other gain ("已拥有2件同一初始装备时…自动合并")
     this.checkItemMerges();
     // deployed like any operator placed by hand: its manually deployable summons join the hand (after the returned
     // equipment, which would be lost in temp — a summon stack removed there comes back at the next round start)
     if (where === 'board') this.grantTokensFor(elite);
-    if (!where) {
-      this.poolOf(baseId).give(baseId, copies);
-      this.m.toast(this, 'warn', '整备区已满，晋升的精锐干员无法放入');
-      this.m.log.warn?.(`[match ${this.m.roomCode}] ${this.playerId}: merge result dropped (hand+temp full)`);
-      this.recompute();
-      return null;
-    }
     this.stats.merges++;
     this.pushRewardOffer('merge');
     // (named as everyone sees the elite: a chess this player fields as its stand-in by the stand-in's name — 0.2.0 补位,
@@ -146,7 +135,7 @@ export class PlayerAcquire {
     if (!goldenId) return false;
     const base = this.gd.baseIdOf(piece.id);
     const extra = Math.max(0, this.gd.goldenCopies - (piece.poolCopies || 0));
-    piece.poolCopies = (piece.poolCopies || 0) + this.poolOf(base).take(base, extra);
+    piece.poolCopies = (piece.poolCopies || 0) + this.poolOf(base).take(base, extra, { overdraw: true });
     piece.id = goldenId;
     this.recompute();
     // an elite on the board tops its summon stacks up to the elite's deploy limit, like an elite merged onto a tile
@@ -161,12 +150,10 @@ export class PlayerAcquire {
    * stands — a board tile is freed (the deploy count drops), its summons are removed, its pool copies return. Its
    * equipment, the cell included, comes off first (PRTS 卫戍协议/帮助 "在失去该干员（干员出售、销毁、合并等）…时自动卸除"): to
    * the hand, overflowing into temp, auto-merging like any gain. Then `newId` is gained like any other gained operator
-   * (acquireChess, onGain source 'transform'): the hand, overflow temp ("被发送至手牌区的物资优先从右到左填充空位"), and with
-   * both full it goes back to the pool ("整备区已满，获得的干员已返还"); it gets no summon card in the hand (only a deployment
+   * (acquireChess, onGain source 'transform'): the hand, then the expandable temp queue; it gets no summon card in the hand (only a deployment
    * brings one), and a merge it completes follows the ordinary rule (_mergeChess: the elite on a consumed deployed copy's
-   * tile, else the hand — the carrier's freed tile is no copy's). An item that found no slot takes one the gain freed (a
-   * merge consumes copies), else stays on the gained operator up to its equipPerChess slots, else it is destroyed with a
-   * log warning (as in a merge). Official footage (bilibili BV1vzyVBuEN9, BV1Qkw1zMEoR; pointed out in PR #2): at the
+   * tile, else the hand — the carrier's freed tile is no copy's). Returned equipment waits in the same queue.
+   * Official footage (bilibili BV1vzyVBuEN9, BV1Qkw1zMEoR; pointed out in PR #2): at the
    * next prep the carrier's tile is empty, one more deployment is left and the new operator waits in the 整备区.
    * @param {any} piece the carrier (an owned chess piece)
    * @param {string} newId chess id gained in its place
@@ -181,27 +168,24 @@ export class PlayerAcquire {
     const items = piece.items || [];
     piece.items = [];
     this.returnCopies(piece);
-    // its equipment comes off first (the returned pair auto-merges, which may free a slot for the gain)
-    const left = items.filter((it) => !this.stow(it, { allowTemp: true }));
+    // its equipment comes off first (the returned pair auto-merges, which may free a slot for the gain).
+    // D13：同 merge 那条 —— 只 `stow(..., { allowTemp: true })`，每条装备的归宿是 手牌 或 无界临时队列，不丢件。
+    for (const it of items) this.stow(it, { allowTemp: true });
     this.checkItemMerges();
     // 获得一名…干员: gained like any other gained operator
     const np = this.acquireChess(newId, { source: 'transform' });
-    for (const it of left) {
-      if (this.stow(it, { allowTemp: true })) continue;
-      if (np && this.find(np.uid) && np.items.length < this.gd.equipPerChess) { np.items.push(it); continue; }
-      this.m.log.warn?.(`[match ${this.m.roomCode}] ${this.playerId}: returned item ${it.id} destroyed (no space)`);
-    }
-    if (left.length) this.checkItemMerges();
     this.recompute();
     return np;
   }
 
-  /** Normal item → golden version in place (整备). */
+  /** Normal item → golden version in place (整备). A golden occupies two shared copies and this piece
+   * already occupies one, so the upgrade waits when no second copy is free. The caller keeps its charge. */
   upgradeItem(piece) {
     const rec = this.gd.item(piece.id);
     if (!rec || rec.isGolden) return false;
     const gid = rec.upgradeChessId || rec.goldenId;
     if (!gid || !this.gd.item(gid)) return false;
+    if (this.m.itemPool.left(piece.id) < 1) return false;
     piece.id = gid;
     this.recompute();
     return true;
@@ -212,8 +196,11 @@ export class PlayerAcquire {
    * copy-weighted roll from the shared pool excluding the ones already drawn; a tier left without another chess tops
    * up from the tier below (user playtest #6 item 19: the official promotion reward never offers one operator twice —
    * the user's first-hand report; the normal shop's slots may repeat). The offer reserves no copies (the pick takes one).
-   * The player's slotted 自选 pieces join the draw like in its shop (player/diy.js diyRollEntries: once the 调度中心 is at
-   * the slot's level) — the reward is a temporary refresh of the shop ("临时刷新3名…干员") [ASSUMED].
+   * The player's slotted 自选 pieces of the reward tier join the draw (player/diy.js diyStockEntries: copies left, then
+   * the roll's tier — not the ordinary shop's shopLevel gate). 卫戍协议/帮助 干员晋升 names one temporary refresh one tier
+   * above the 调度中心 and no separate pool; the owner decided on 2026-10-12 that the refresh includes 自选 of the newly
+   * reached tier. 0.2.0 had [ASSUMED] the shop-level gate on this refresh too (DESIGN §25); §32.23 reverses that.
+   * An offer built from explicit `ids` does not roll.
    */
   pushRewardOffer(source = 'merge', { tier = null, ids = null, label = null } = {}) {
     const ro = this.gd.rewardOffer();
@@ -223,9 +210,9 @@ export class PlayerAcquire {
     if (!list) {
       list = [];
       const fresh = (id) => !list.includes(id);
-      for (let i = 0; i < ro.count; i++) {
+      for (let i = 0; i < ro.count; i++) { // loop-cap: rewardOffer().count ≤ MAX_OFFER_SLOTS
         let id = null;
-        for (let tt = t; tt >= 1 && !id; tt--) id = this.m.pool.roll(this.m.rngShop, { tier: tt, filter: fresh, extra: this.diyRollEntries() });
+        for (let tt = t; tt >= 1 && !id; tt--) id = this.mainPool().roll(this.m.rngShop, { tier: tt, filter: fresh, extra: this.diyStockEntries() });
         if (id) list.push(id);
       }
     }
@@ -241,7 +228,7 @@ export class PlayerAcquire {
    * 'item' under its `label` (the effect's name; player report #6 after 0.1.0).
    */
   pushItemOffer(ids, { source = 'effect', tier = null, label = null } = {}) {
-    const list = [...new Set(Array.isArray(ids) ? ids : [])].filter((id) => this.gd.item(id)).slice(0, MAX_OFFER_SLOTS);
+    const list = [...new Set(Array.isArray(ids) ? ids : [])].filter((id) => this.gd.item(id) && this.m.itemPool.canGain(id)).slice(0, MAX_OFFER_SLOTS);
     if (!list.length) return null;
     const offer = { tier: Number.isInteger(tier) ? tier : null, source, label: typeof label === 'string' && label ? label : null, slots: list.map((id) => ({ kind: 'item', id, price: 0, sold: false })) };
     this.offers.push(offer);
@@ -279,12 +266,25 @@ export class PlayerAcquire {
    * golden item (to the hand). Returns the owned piece or null.
    * `deferMerge` (effectsMeta, while onPrepEnd is on the stack): stow it — hand, else temp — and do not merge in this
    * call, even when an identical normal copy is already owned. The next prep's start runs checkItemMerges. Nothing
-   * already equipped is taken off for the fight about to start. Hand and temp both full keeps the 「整备区已满，获得的装备已销毁」
-   * outcome. [ASSUMED] every item granted at 休整期结束, not only 维多利亚's 战栗维式重锤 (owner's decision 2026-10-04).
+   * already equipped is taken off for the fight about to start. Overflow waits in the expandable temp queue.
+   * [ASSUMED] every prep-end item grant, not only Victoria's hammer (owner's decision 2026-10-04).
+   * `displayed` (a shop slot or a reward offer already on screen, #624): skip the stock refusal and, once the piece
+   * is actually kept, record the copies that did not fit (`need` minus `left` before the gain). A failed stow or
+   * merge records nothing. Fixed gift families stay unlimited without a debt entry. Every other grant still refuses.
    */
-  acquireItem(itemId, { source = 'grant', toTemp = false, silent = false, deferMerge = false } = {}) {
+  acquireItem(itemId, { source = 'grant', toTemp = false, silent = false, deferMerge = false, requirePool = true, displayed = false } = {}) {
     const rec = this.gd.item(itemId);
     if (!rec) return null;
+    // Only the fixed operator-gift families can overdraw. Several unrelated strategy grants also pass
+    // requirePool:false; they must retain their stock limit (for example commercial packaging).
+    const unlimitedGift = !requirePool && this.gd.isUnlimitedGiftItem(itemId);
+    const pool = this.m.itemPool;
+    const leftBefore = pool.left(itemId);
+    const need = pool.need(itemId);
+    if (!unlimitedGift && !displayed && !pool.canGain(itemId)) {
+      this.m.toast(this, 'warn', '装备库存不足，未获得该装备');
+      return null;
+    }
     let piece = this.newPiece('item', itemId);
     // A prep-end grant may sit beside an identical copy until the next prep. The invariant counts only copies
     // without this mark, so the fight that is about to start is not reported as a missed merge.
@@ -292,12 +292,20 @@ export class PlayerAcquire {
     if (!deferMerge && this.completesItemMerge(itemId)) {
       piece = this._mergeItem(itemId, piece);
       if (!piece) return null;
-    } else if (!this.stow(piece, { allowTemp: true, toTemp })) {
-      this.m.toast(this, 'warn', '整备区已满，获得的装备已销毁');
-      return null;
+    } else {
+      this.stow(piece, { allowTemp: true, toTemp });
+    }
+    if (displayed && !unlimitedGift) {
+      const shortfall = leftBefore === Infinity ? 0 : Math.max(0, need - leftBefore);
+      if (shortfall > 0) pool.owe(itemId, shortfall);
     }
     this.recompute();
-    if (!silent) this.m.dispatch(this, 'onGain', { piece, kind: 'item', source });
+    if (!silent) {
+      this.m.dispatch(this, 'onGain', { piece, kind: 'item', source });
+      // SERVER_GAIN_ITEM / onGainItem (本仓库扩展)：获得**装备**时的独立钩子 —— onGain 只喂给「获得的那个棋子」的
+      // 特质，装备本身不是棋子，携带者的「获得装备时」特质收不到；这一钩子按休整期钩子的方式遍历场上 / 整备区。
+      this.m.dispatch(this, 'onGainItem', { piece, kind: 'item', source });
+    }
     return piece;
   }
 
@@ -308,18 +316,9 @@ export class PlayerAcquire {
     const consumed = incoming ? [{ piece: incoming, area: 'new' }] : [];
     for (const l of locs) { if (consumed.length >= need) break; consumed.push(l); }
     if (consumed.length < need) return null;
-    // remember where equipped twins sat: with a full hand AND a full temp the golden item takes the first one's slot
-    const slotOf = consumed.filter((l) => l.area === 'equipped').map((l) => ({ holder: l.holder, idx: l.holder.items.indexOf(l.piece) }));
     for (const l of consumed) if (l.area !== 'new') this._detach(l);
     const golden = this.newPiece('item', rec.upgradeChessId || rec.goldenId);
-    if (!this.stow(golden, { allowTemp: true })) {
-      const at = slotOf[0];
-      if (!at || !this.find(at.holder.uid)) {
-        this.m.toast(this, 'warn', '整备区已满，合成的装备已销毁');
-        return null;
-      }
-      at.holder.items.splice(Math.max(0, Math.min(at.idx, at.holder.items.length)), 0, golden);
-    }
+    this.stow(golden, { allowTemp: true });
     this.stats.itemMerges++;
     this.m.dispatch(this, 'onMerge', { kind: 'item', piece: golden, itemId, consumed: consumed.map((l) => l.piece.uid) });
     return golden;
@@ -327,7 +326,10 @@ export class PlayerAcquire {
 
   /** Merge every identical normal item pair currently owned (after equips / returns). */
   checkItemMerges() {
-    for (let guard = 0; guard < 20; guard++) {
+    // Bound the work by the actual inventory, including hidden overflow and equipped items.
+    // A fixed twenty-merge limit left large batches of deferred prep-end rewards unmerged.
+    const limit = this.hand.length + this.temp.length + this.allChess().reduce((n, p) => n + (p.items || []).length, 0);
+    for (let guard = 0; guard < limit; guard++) {
       const counts = new Map();
       const scan = (p) => { if (p && p.kind === 'item' && this._itemMergeable(p.id)) counts.set(p.id, (counts.get(p.id) || 0) + 1); };
       for (const p of this.hand) scan(p);

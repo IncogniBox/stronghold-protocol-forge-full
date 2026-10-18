@@ -1980,7 +1980,8 @@
   "nationId": "columbia",
   "bonds": [
    "rimBilliton",
-   "visiShip"
+   "visiShip",
+   "columbiaShip"
   ],
   "garrisonIds": [
    "garrison_166_a"
@@ -2315,7 +2316,8 @@
   "nationId": "columbia",
   "bonds": [
    "rimBilliton",
-   "visiShip"
+   "visiShip",
+   "columbiaShip"
   ],
   "garrisonIds": [
    "garrison_166_b"

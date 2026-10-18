@@ -14,7 +14,7 @@ import { html, TierChip, Icon } from '../ui/components.js';
 import { Img } from '../ui/gameComponents.js';
 import { avatarUrlOf, currentAppearanceLookup } from '../ui/portraitChain.js';
 import { data } from '../data.js';
-import { PROF_NAME } from '../ui/loadoutModel.js';
+import { profName } from '../ui/loadoutModel.js';
 import { ownershipRoster, rosterByTier, isOwned, standInSummary } from '../ui/ownershipModel.js';
 import { t, tParts } from '../../../shared/i18n.js';
 
@@ -39,7 +39,7 @@ export function OwnCard({ m, chess, backups, owned, onToggle }) {
       <span class="own-card__ava"><${Img} src=${avatarUrlOf(m, chess, { lookup: currentAppearanceLookup() })} fallback=${html`<b>${[...(chess.name || '?')][0]}</b>`} /></span>
       <span class="own-card__txt">
         <b class="own-card__name">${chess.name}</b>
-        <small>${t(PROF_NAME[chess.profession] || '')}${chess.subProfessionName ? ` · ${chess.subProfessionName}` : ''}</small>
+        <small>${profName(chess.profession, chess)}${chess.subProfessionName ? ` · ${chess.subProfessionName}` : ''}</small>
       </span>
     </span>
     <span class="own-card__arrow" aria-hidden="true"><${Icon} name="chevronRight" /></span>
@@ -47,7 +47,7 @@ export function OwnCard({ m, chess, backups, owned, onToggle }) {
       <span class="own-card__ava own-card__ava--sub">${si ? html`<${Img} src=${avatarUrlOf(m, si.record, { lookup: currentAppearanceLookup() })} fallback=${html`<b>${[...(si.name || '?')][0]}</b>`} />` : null}</span>
       <span class="own-card__txt">
         <b class="own-card__name">${si ? si.name : '—'}</b>
-        <small>${si ? `${t(PROF_NAME[si.profession] || '')}${slot ? ` · ${slot} ${skill.name || ''}` : ''}` : t('无替补数据')}</small>
+        <small>${si ? `${profName(si.profession, si.record)}${slot ? ` · ${slot} ${skill.name || ''}` : ''}` : t('无替补数据')}</small>
       </span>
     </span>
     <span class="own-card__state"><i class="own-switch" aria-hidden="true"><i></i></i>${owned ? t('持有') : t('未持有')}</span>

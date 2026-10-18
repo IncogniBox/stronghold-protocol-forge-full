@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 
 import { freePort, playtestUrl, createPlaytest, PLAYTEST_HOST } from '../editor/playtest.mjs';
 import { createEditorServer } from '../editor/server.mjs';
-import { APP_VERSION } from '../shared/constants.js';
+import { UPSTREAM_VERSION } from '../shared/constants.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const quiet = { info() {}, warn() {}, error() {}, debug() {} };
@@ -94,10 +94,10 @@ describe('playtest: 编辑器路由与子进程', () => {
     assert.equal(started.reused, false);
     assert.match(started.url, /^http:\/\/127\.0\.0\.1:\d+\/\?playtest=1&difficulty=HARD$/);
 
-    // /healthz：服务器真的在跑，而且是这一个仓库的版本
+    // /healthz：服务器真的在跑，对外显示的版本是打包的上游游戏那一版（`UPSTREAM_VERSION`）
     const health = await fetch(`http://${PLAYTEST_HOST}:${started.port}/healthz`).then((r) => r.json());
     assert.equal(health.ok, true);
-    assert.equal(health.app, APP_VERSION);
+    assert.equal(health.app, UPSTREAM_VERSION);
 
     // 关键一条：子进程读到的 chess.json 里有**这个工坊根**里的干员 —— SP_WORKSHOP 起了作用
     const chess = await fetch(`http://${PLAYTEST_HOST}:${started.port}/data/chess.json`).then((r) => r.json());

@@ -89,22 +89,30 @@ test('sim and match rules on a fixture tree', () => {
   }
 });
 
-test('this repo: only the Node data loader crosses the sim boundary', () => {
+test('this repo: only the Node data loader crosses the sim boundary — and it is a note', () => {
   const { violations, notes } = scan(ROOT);
-  assert.deepEqual(violations.map((v) => `${v.file}:${v.line}: ${v.spec} [${v.code}]`), [
-    'server/sim/nodeData.js:11: node:fs [sim-node]',
-    'server/sim/nodeData.js:12: node:path [sim-node]',
-    'server/sim/nodeData.js:13: node:url [sim-node]',
+  // 契约多了一条点名豁免：`server/sim/nodeData.js` 自己的 `node:*` 也算 note（它就是「把 Node API 关在这一个文件里」
+  // 的那一个，浏览器从不加载它；理由写在 tools/check-imports.mjs 的那一处注释）⇒ 真实树的 violation 列表是空的。
+  assert.deepEqual(violations.map((v) => `${v.file}:${v.line}: ${v.spec} [${v.code}]`), []);
+  assert.deepEqual(notes.map((n) => `${n.file}:${n.line}: ${n.spec}`), [
+    'server/sim/content/support/index.js:20: ../../../data.js',
+    'server/sim/nodeData.js:11: node:fs',
+    'server/sim/nodeData.js:12: node:path',
+    'server/sim/nodeData.js:13: node:url',
+    'server/sim/nodeData.js:23: ../data.js',
+    'server/sim/nodeData.js:33: ../data.js',
   ]);
-  assert.ok(notes.some((n) => n.file === 'server/sim/nodeData.js' && n.resolved === 'server/data.js'));
-  assert.ok(notes.every((n) => n.resolved === 'server/data.js'));
+  // 豁免**只**给这一个文件：其余 note 仍然只能是 `server/data.js`（那个 Node 加载器的数据源）
+  assert.ok(notes.every((n) => n.file === 'server/sim/nodeData.js' || n.resolved === 'server/data.js'));
 });
 
 test('the CLI lists hits and fails only with --strict', () => {
   const loose = spawnSync(process.execPath, ['tools/check-imports.mjs'], { cwd: ROOT, encoding: 'utf8' });
   assert.equal(loose.status, 0);
-  assert.match(loose.stdout, /server\/sim\/nodeData\.js:11: node:fs \[sim-node\]/);
+  assert.match(loose.stdout, /no import-boundary violations/);
+  assert.match(loose.stdout, /note server\/sim\/nodeData\.js:11: node:fs -> node:fs/);
+  // 点名豁免之后这条路上只剩 note 了：--strict 也不再退出 1（真正的 violation 由上面的 fixture 用例钉着）
   const strict = spawnSync(process.execPath, ['tools/check-imports.mjs', '--strict'], { cwd: ROOT, encoding: 'utf8' });
-  assert.equal(strict.status, 1);
-  assert.match(strict.stdout, /node:fs/);
+  assert.equal(strict.status, 0);
+  assert.match(strict.stdout, /6 allowed note\(s\)/);
 });

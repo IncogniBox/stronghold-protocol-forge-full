@@ -82,7 +82,7 @@ export class MatchSetupVote {
       const rng = createRng(deriveSeed(this.seed, `reroll-setup:${this.setupRevision + 1}`));
       const setup = setupMatchWaves(this.gd, rng);
       const stage = setup.stageId ? this.gd.stage(setup.stageId) : null;
-      const bans = drawDisabledBonds(this.gd, rng);
+      const bans = drawDisabledBonds(this.gd, rng, this.battleBondPolicies);
       const pool = new SharedPool(this.gd, { banned: bans.banned });
       if (!pool.entries.size) throw new Error('rerolled chess pool is empty');
       const off = new Set([...bans.drawn, ...bans.staticOff]);
@@ -103,6 +103,10 @@ export class MatchSetupVote {
     this.disabledBonds = bans.drawn;
     this.staticInactiveBonds = bans.staticOff;
     this.bannedChess = bans.banned;
+    // 重抽之后摘除表也要跟着换（与 Match 构造里的那一段同一条口径）
+    this.removedBonds = bans.removed;
+    this.removedBondsSet = new Set(bans.removed);
+    for (const ps of this.order) ps.removedBonds = this.removedBondsSet;
     this.pool = pool;
     this._botPath = null;
     for (const [i, ps] of this.order.entries()) {

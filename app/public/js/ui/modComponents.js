@@ -1,6 +1,6 @@
 // public/js/ui/modComponents.js — 引擎组件注册表（DESIGN §28.19, docs/WORKSHOP.md §1.9.7）。
 //
-// 一个包的面板今天只能**插进一个槽位**（`[data-mod-slot]`，九个宿主）。槽位表达不了「这个界面现在长得不一样了」，
+// 一个包的面板今天只能**插进一个槽位**（`[data-mod-slot]`，十个宿主）。槽位表达不了「这个界面现在长得不一样了」，
 // 而真实社区的插件包是整屏重画的 —— 所以这里补上另一半：面板可以**包裹**（`wrap`）或**替换**（`replace`）引擎的
 // 一个**具名组件**。一个组件 id 就是一个 `modComponent(id, impl)` 出来的实现：`impl` **就是**今天那份实现，
 // 引擎的渲染树里多出来的只是一次集合查找。
@@ -39,6 +39,24 @@ import { h } from '../../vendor/preact.module.js';
  */
 export const MOD_COMPONENT_IDS = Object.freeze([
   'game.bondStrip', 'game.hud.topBar', 'game.shopCard', 'loadout.detail',
+  // 简报（`screens/briefing.js` 的「1/2 确认本局信息」，同一份还出现在策略起草的「本局信息」弹窗里，`ui/matchInfo.js`）：
+  // `briefing.bonds` 是**核心盟约 + 附加盟约两块盟约行本身**，`briefing.banned` 是**本局禁用干员那块**。两个都是
+  // `MatchInfo` 里的纯视图块，props 只有 `{ model }`（matchInfoModel 的结果 —— 盟约表、禁用集、禁用干员、自选禁用）。
+  // 存在的理由：一个包想把简报里**某一类盟约**（或某一类被禁的干员）单独分一栏出来，就只能改写这两块 —— 简报本身
+  // 不在其它任何可改写组件 / 槽位里（DESIGN §28.19）。
+  // 大厅（screens/lobby.js）：`lobby.modPicker` 是创建框里那张「本房间使用的模组」列表本身；`lobby.modManager`
+  // 是顶栏「干员调配」左边那块**默认什么都不画**的位置 —— 后者存在的唯一理由是给包一个「画在顶栏」的落点：
+  // 「哪些模组可选 / 哪些被勾上」这份状态留在引擎手里（roomMods.js），包只拿到 props 里的 available / selected / onSet。
+  // 房间（screens/room.js）：`room.modManager` 同一种落点，摆在顶栏「玩法说明」右边。**它只读** —— 集合在
+  // `room.create` 那一刻定下（协议里没有局内改集合的消息），所以那一边只给「本房真正跑的集合」，不给写入口。
+  'lobby.modPicker', 'lobby.modManager', 'room.modManager',
+  'briefing.bonds', 'briefing.banned',
+  // S.W.E.E.P.报告（`screens/sweep.js`）的「盟约报告」标签页：`sweep.bonds` 是右侧**那两块盟约分区本身**
+  // （核心盟约 / 附加盟约），props 只有 `{ bonds, sel, onSel }`（`bonds` 是引擎按 identifier 排好序的合并后盟约记录，
+  // `sel` 是当前选中的 bondId，`onSel(bondId)` 换选中）。存在的理由与 `briefing.bonds` 同一条：一个包想把**某一类
+  // 盟约**从「附加盟约」里分出来、单独成一栏，就只能改写这一块 —— 盟约报告的分区在引擎里是写死的，不在其它任何
+  // 可改写组件 / 槽位里（DESIGN §28.19）。
+  'sweep.bonds',
 ]);
 
 /** 改写方式：`wrap` 包一层（内层结果作为 `orig` 交给它）；`replace` 整段换掉（`orig` 是 `null`）。 */

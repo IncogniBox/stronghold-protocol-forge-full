@@ -9,7 +9,7 @@
 //
 // 三条载重承诺，全部在这里钉住：
 //   * `data/*.json` 一个字节都不改（叠加发生在 `deepFreeze` 之前，`docs/WORKSHOP.md` §1.3）—— 所以生成器契约
-//     （`test/backups.test.js` 对**文件**的断言，`ownedPool.length === 71`）完全不受影响；
+//     （`test/backups.test.js` 对**文件**的断言，`ownedPool.length === 72`）完全不受影响；
 //   * 每一条拒绝都**点名**并**失败关闭**（没有干员记录 / 不是 6★ / 盟约 id 不存在 / 形态不齐 / 两个包抢同一个 id）；
 //   * 落盘位置是**真实数据布局**：`data/` 里没有顶层 `units.json`，记录住在 `data.backups.units[charId]`。
 //
@@ -26,7 +26,8 @@ import {
   normalizePackManifest, normalizeContentFile, applyWorkshop, workshopSummary, WORKSHOP_CONTENT_FILES,
   UNIT_REQUIRED_FIELDS, ART_TABLES, unknownOverrideKeys,
 } from '../shared/workshop.js';
-import { requiredUnitForms } from '../shared/diy.js';
+import { requiredUnitForms, diySlot } from '../shared/diy.js';
+import { statusKey } from '../shared/standIn.js';
 import { loadWorkshop, workshopTouchedFiles } from '../server/workshop.js';
 import { loadData } from '../server/data.js';
 import { buildWorkshopDataFiles, startServer } from '../server/index.js';
@@ -43,7 +44,7 @@ const makeFixtureRoot = () => {
   fs.cpSync(FIXTURE_PACK, join(dir, 'clementia'), { recursive: true });
   return dir;
 };
-const HER = 'char_4231_clemnt';
+const HER = 'char_ws_clemnt';
 const quiet = { info() {}, warn() {}, error() {}, debug() {} };
 
 const load = (f) => JSON.parse(fs.readFileSync(join(DATA_DIR, `${f}.json`), 'utf8'));
@@ -51,7 +52,7 @@ const OFFICIAL_UNITS = load('backups').units;
 /** 官方两份数据只读一次：形态档位（`requiredUnitForms`）与盟约合法性都从它们派生。 */
 const OFFICIAL_BACKUPS = load('backups');
 const OFFICIAL_CHESS = load('chess');
-/** `data/backups.json` 的官方自选池长度（生成物契约里的那个 71 —— 这里读它、不改它）。 */
+/** `data/backups.json` 的官方自选池长度（生成物契约里的那个 72 —— 这里读它、不改它）。 */
 const OFFICIAL_POOL = OFFICIAL_BACKUPS.diy.ownedPool.length;
 /** 一条官方干员记录，作为「包自带一条干员记录」的模板（字段照抄，只换身份）。 */
 const TEMPLATE = OFFICIAL_UNITS[Object.keys(OFFICIAL_UNITS)[0]];
@@ -320,6 +321,35 @@ describe('干员包: pack.json.operators（自选池声明）', () => {
     assert.deepEqual(ok.report.errors, []);
   });
 
+  test('「普通」与「精锐」各要一条档位：判定来自 `diy.slots` 的两条记录，不来自声明的次序或名字', () => {
+    // 口径（docs/WORKSHOP.md §1.4 的 `OPERATOR_FORM_MISSING` 一行）：一个自选槽是**一对** chess 记录 ——
+    // 槽位自己的 id（`_a`，`chess[id].isGolden === false`）是**普通**，`diy.slots[id].goldenId`（`_b`，
+    // `isGolden === true`）是**精锐**；两条记录的 `status` 各变成一个 `forms` 档位键（`shared/standIn.js statusKey`），
+    // 而 `requiredUnitForms` 取的是这一对（以及每个槽位那一对）的**并集**。
+    // 这条判据钉的是「缺哪一条就点名哪一条」——**两个方向都钉**：既有那条用例只摘掉最后一档（精锐），
+    // 这里把普通那一档也摘一次。写反、或者「只要求一条就够」的改动会在这里红。
+    const data = { chess: load('chess'), backups: load('backups') };
+    const slot = diySlot('chess_char_6_diy1_a', data);
+    assert.ok(slot && slot.normal && slot.golden, '6★ 自选槽那一对记录必须在（否则这条判据没有牙）');
+    const normalKey = statusKey(slot.normal.status);
+    const eliteKey = statusKey(slot.golden.status);
+    assert.notEqual(normalKey, eliteKey, '普通与精锐是两个不同的档位');
+    assert.deepEqual([normalKey, eliteKey], ['2/1/4/0', '2/60/7/3'],
+      `实测（data/chess.json）：6★ 槽位的 _a 是 2/1/4/0（E2 Lv1 / 技能4 / 模组0）、_b 是 2/60/7/3；实际 ${normalKey} / ${eliteKey}`);
+    assert.equal(slot.normal.isGolden, false, '普通那一半不是 golden');
+    assert.equal(slot.golden.isGolden, true, '精锐那一半由 `isGolden` 标记（不是靠 id 后缀认）');
+    for (const missingKey of [normalKey, eliteKey]) {
+      const forms = Object.fromEntries(Object.entries(ALL_FORMS).filter(([k]) => k !== missingKey));
+      const { data: out, report } = applyWorkshop(baseData(), [
+        pack('p1', { units: { char_ws_new: unitRec('char_ws_new', { forms }) } }, { operators: { char_ws_new: {} } }),
+      ]);
+      assert.equal(out.backups.diy.ownedPool.length, OFFICIAL_POOL, `缺 ${missingKey} 就是不进池`);
+      const errs = errorsOf(report, 'OPERATOR_FORM_MISSING');
+      assert.equal(errs.length, 1, `缺 ${missingKey} 应当恰好报一条，实际 ${JSON.stringify(report.errors)}`);
+      assert.match(errs[0].reason, new RegExp(missingKey.replace(/[/\\]/g, '\\$&')), `点名的必须是缺的那一条 ${missingKey}`);
+    }
+  });
+
   test('两个包声明同一个干员：最小包 id 赢，池子只多一个 id，两条面都点名', () => {
     const rec = () => ({ units: { char_ws_tie: unitRec('char_ws_tie') } });
     const decl = (bond) => ({ operators: { char_ws_tie: { bonds: [bond] } } });
@@ -423,7 +453,10 @@ describe('干员包: 两张扁平图标表（art.skills / art.profSub）', () =>
     assert.deepEqual(Object.keys(data.assets.prof).sort(), ['sub'], 'prof 的其它键不被碰');
     assert.equal(base.assets.skills.skchr_ws_1, undefined, 'the input is never mutated');
     assert.deepEqual(report.flatArt, { p1: ['profSub.primguard', 'skills.skchr_ws_1'] });
-    assert.match(workshopSummary(report), /2 icons/);
+    // 启动日志按**表名**分列（`skills +N (…)` / `profSub +N (…)`）—— 四张扁平表各占一句，不再糊成一句 "N icons"：
+    // 盟约图集（art.bonds）不是图标，混在一起会让读日志的人去 assets.skills 里找一个盟约 id
+    assert.match(workshopSummary(report), /skills \+1 \(skills\.skchr_ws_1\)/);
+    assert.match(workshopSummary(report), /profSub \+1 \(profSub\.primguard\)/);
   });
 
   test('官方已有这个 id 时是替换（给官方技能/分支换图标），不是拒绝', () => {
@@ -484,7 +517,7 @@ describe('干员包: 磁盘未被改写（生成器仍是唯一来源）', () =>
       assert.equal(after[i], before[i], `data/${f}.json 被改写了 —— 生成物不该被动`);
     }
     // 生成器契约（对**文件**的断言）因此完全不受影响
-    assert.equal(load('backups').diy.ownedPool.length, 71, '磁盘上的 ownedPool 仍是 71（test/backups.test.js 钉着它）');
+    assert.equal(load('backups').diy.ownedPool.length, 72, '磁盘上的 ownedPool 仍是 72（test/backups.test.js 钉着它）');
     assert.equal(load('backups').units[HER], undefined, '磁盘上没有她');
   });
 
@@ -495,7 +528,7 @@ describe('干员包: 磁盘未被改写（生成器仍是唯一来源）', () =>
     assert.deepEqual([...files.keys()].sort(), ['assets', 'backups'], '夹具触及 backups（干员记录 + 自选池）与 assets（图标 + 语音 + 外观）');
     const served = JSON.parse(files.get('backups').toString('utf8'));
     assert.ok(served.units[HER], '发出去的那份里有她');
-    assert.equal(served.diy.ownedPool.length, 72);
+    assert.equal(served.diy.ownedPool.length, 73);
   });
 });
 
@@ -531,20 +564,20 @@ describe('干员包: 端到端（社区 mod「克莱门莎」当夹具）', () =
     assert.deepEqual(Object.keys(rec.forms), requiredUnitForms({ chess: load('chess'), backups: load('backups') }), '夹具的形态集合与自选槽要求的一致');
   });
 
-  test('applyWorkshop 之后：干员记录 / 自选池 71→72 / 图标 / 双语语音全部就位', () => {
+  test('applyWorkshop 之后：干员记录 / 自选池 72→73 / 图标 / 双语语音全部就位', () => {
     const loaded = loadWorkshop(ws, { log: quiet });
     const base = loadData(DATA_DIR, { log: quiet, workshopDir: null });
     const { data, report } = applyWorkshop(base, loaded.packs);
     assert.deepEqual(report.errors, [], '夹具必须一条错都没有');
 
     // ① 干员记录
-    assert.ok(data.backups.units[HER], 'data.backups.units[char_4231_clemnt] 在');
+    assert.ok(data.backups.units[HER], 'data.backups.units[char_ws_clemnt] 在');
     assert.equal(data.backups.units[HER].name, '克莱门莎');
     assert.equal(data.backups.units[HER].rarity, 6);
-    // ② 自选池 71 → 72
-    assert.equal(base.backups.diy.ownedPool.length, 71);
-    assert.equal(data.backups.diy.ownedPool.length, 72, 'ownedPool 71 → 72');
-    assert.equal(data.backups.diy.ownedPool[71], HER, '追加在末尾（入池顺序只由包 id 排序决定）');
+    // ② 自选池 72 → 73
+    assert.equal(base.backups.diy.ownedPool.length, 72);
+    assert.equal(data.backups.diy.ownedPool.length, 73, 'ownedPool 72 → 73');
+    assert.equal(data.backups.diy.ownedPool[72], HER, '追加在末尾（入池顺序只由包 id 排序决定）');
     // ③ diy.operators
     assert.deepEqual(data.backups.diy.operators[HER], {
       name: '克莱门莎', rarity: 6, profession: 'WARRIOR', subProfessionId: 'primguard',
@@ -558,10 +591,10 @@ describe('干员包: 端到端（社区 mod「克莱门莎」当夹具）', () =
     }
     // ⑥ 双语语音：默认档 = 日语（清单的 voiceLang），cn 在 voiceLangs
     const jp = data.assets.audio.voice[HER];
-    assert.ok(jp, 'data.assets.audio.voice[char_4231_clemnt] 在（默认档 = 日语）');
+    assert.ok(jp, 'data.assets.audio.voice[char_ws_clemnt] 在（默认档 = 日语）');
     assert.equal(data.assets.audio.voiceLang, 'jp', '默认档就是日语（所以她的日语台词写在 voices 里）');
     const cn = data.assets.audio.voiceLangs.cn[HER];
-    assert.ok(cn, 'data.assets.audio.voiceLangs.cn[char_4231_clemnt] 在');
+    assert.ok(cn, 'data.assets.audio.voiceLangs.cn[char_ws_clemnt] 在');
     for (const slot of Object.keys(jp)) {
       for (const url of jp[slot]) assert.match(url, /^\/workshop-assets\/clementia\/audio\/voice\/jp\//);
     }
@@ -570,24 +603,26 @@ describe('干员包: 端到端（社区 mod「克莱门莎」当夹具）', () =
     }
     assert.ok(Object.keys(jp).length >= 4 && Object.keys(cn).length >= 4, '两种语种都真的带上了台词');
     // ⑦ 外观（头像 / 立绘 / spine）
-    assert.equal(data.assets.chars[HER].avatar, '/workshop-assets/clementia/char/avatar/char_4231_clemnt.png');
-    assert.equal(data.assets.chars[HER].spine.front.skel, '/workshop-assets/clementia/spine/op/char_4231_clemnt/front/char_4231_clemnt.skel');
+    assert.equal(data.assets.chars[HER].avatar, '/workshop-assets/clementia/char/avatar/char_ws_clemnt.png');
+    assert.equal(data.assets.chars[HER].spine.front.skel, '/workshop-assets/clementia/spine/op/char_ws_clemnt/front/char_ws_clemnt.skel');
     // ⑧ 一句汇总，读日志的人能认出这个包做了什么
     const summary = workshopSummary(report);
     assert.match(summary, /units \+1/);
     assert.match(summary, /自选池 \+1/);
-    assert.match(summary, /4 icons/);
+    // 每一张扁平表各一句（以前是一句 "4 icons"）；表名就是作者在 pack.json 里写的那个键
+    assert.match(summary, /skills \+3 \(skills\.skchr_clemnt_1, skills\.skchr_clemnt_2, skills\.skchr_clemnt_3\)/);
+    assert.match(summary, /profSub \+1 \(profSub\.primguard\)/);
     assert.match(summary, /voice lines/);
   });
 
   test('浏览器拿到的那份 /data/backups.json 是合并后的（磁盘上那份没变）', async () => {
     const remote = await fetch(`${srv.url}/data/backups.json`).then((r) => r.json());
     assert.ok(remote.units[HER], '合并后的 backups.json 里有她');
-    assert.equal(remote.diy.ownedPool.length, 72);
+    assert.equal(remote.diy.ownedPool.length, 73);
     assert.equal(remote.diy.operators[HER].bonds[0], 'egirShip');
     const onDisk = JSON.parse(fs.readFileSync(join(DATA_DIR, 'backups.json'), 'utf8'));
     assert.equal(onDisk.units[HER], undefined, 'data/backups.json 本身永不被改写');
-    assert.equal(onDisk.diy.ownedPool.length, 71);
+    assert.equal(onDisk.diy.ownedPool.length, 72);
     // 图标与语音走的是同一份合并后的 assets.json
     const assets = await fetch(`${srv.url}/data/assets.json`).then((r) => r.json());
     assert.equal(assets.prof.sub.primguard, '/workshop-assets/clementia/prof/sub/primguard.png');
@@ -626,16 +661,16 @@ describe('干员包: 临时工坊根的端到端（自造包，不依赖例子�
     assert.deepEqual(report.errors, []);
     assert.equal(data.backups.units.char_ws_tmp.name, '临时干员');
     assert.equal(data.backups.diy.operators.char_ws_tmp.name, '临时干员');
-    assert.equal(data.backups.diy.ownedPool.length, 72);
+    assert.equal(data.backups.diy.ownedPool.length, 73);
   });
 });
 
 // ── G-16 `stripPackOperators`：包把一名官方干员变成棋子时，他与自选池的关系必须被**记录** ────────────────
 //
-// 本刀只做「记录 + 拒绝重复」这一半：真的把人摘出 `diy.ownedPool` 会改变自选槽能挑到的干员（= 改对局结果），
-// 而本刀的验收要求 `test/golden/*.json` 一个字节不动、六份语料数字不变 —— 两件事不可能同时成立，
-// 所以摘除那一半是**维护者的决定**（理由与实测数字写在 `shared/workshop.js stripPackOperators` 的注释里）。
-describe('干员包: stripPackOperators（G-16，记录 + 拒绝重复）', () => {
+// 摘除是**逐个包显式声明**的开关（`pack.json.stripDiyOverlaps: true`）：默认只记录、不摘除（真的摘会改变自选槽
+// 能挑到的干员 = 改对局结果，按 DESIGN §28.10.1「池子属于安装方」，来源不明的包不能替别人决定），声明之后
+// 只摘**本包做成棋子**的那几个干员。理由与实测数字写在 `shared/workshop.js stripPackOperators` 的注释里。
+describe('干员包: stripPackOperators（G-16，记录 + 可选摘除）', () => {
   const pool = OFFICIAL_BACKUPS.diy.ownedPool;
 
   test('一个把池里已有干员变成棋子的包被逐条点名，而池子一个字节不改', () => {
@@ -652,7 +687,7 @@ describe('干员包: stripPackOperators（G-16，记录 + 拒绝重复）', () =
     assert.match(report.overlaps[0].note, /self-selected|自选|ownedPool|two ways in|fielded twice|bypasses/i);
     // 记录不是判罚：`errors` 一条不加（否则「装一个包」会让整个包看起来是坏的）
     assert.deepEqual(report.errors, []);
-    // 池子不变（71），那一位仍然在
+    // 池子不变（72），那一位仍然在
     assert.equal(data.backups.diy.ownedPool.length, OFFICIAL_POOL);
     assert.ok(data.backups.diy.ownedPool.includes(charId));
   });
@@ -673,7 +708,7 @@ describe('干员包: stripPackOperators（G-16，记录 + 拒绝重复）', () =
     assert.equal(report.overlaps[0].poolEntry, true, '他是这个包声明进池的 —— 报告要说清这一点');
   });
 
-  test('真实的 fanpack（本机有那份数据时）：13 名干员里 8 名在池里，池子仍是 71', () => {
+  test('真实的 fanpack（本机有那份数据时）：13 名干员里 8 名在池里，池子仍是 72', () => {
     const fan = 'E:\\destop\\harness_1\\_up\\fanpack-pack\\pack\\fanpack-kazdel-rhodes\\chess.json';
     if (!fs.existsSync(fan)) {
       assert.ok(true, '本机没有那份 fanpack 数据，跳过这一条（它不在仓库里）');
@@ -687,6 +722,53 @@ describe('干员包: stripPackOperators（G-16，记录 + 拒绝重复）', () =
       assert.equal(o.inPoolBefore, true);
       assert.ok(pool.includes(o.charId));
     }
-    assert.equal(data.backups.diy.ownedPool.length, OFFICIAL_POOL, '记录不等于摘除：池子仍是 71');
+    assert.equal(data.backups.diy.ownedPool.length, OFFICIAL_POOL, '记录不等于摘除：池子仍是 72');
+  });
+
+  // ── 摘除那一半：**每个包自己显式声明**（`pack.json.stripDiyOverlaps: true`） ─────────────────────────
+  //
+  // 业主口径（2026-10-10 / 2026-10-12）：它改玩法 —— 池子变小、语料里那一位的精锐场景消失 —— 所以不是加载器
+  // 有权自己决定的事：**默认只记录、一个字节都不改**；一个包要「只保留棋子这一条路」就把开关写出来，声明之后
+  // 摘的是**本包做成棋子**的那几位，且摘了谁必须被点名。
+  test('没声明开关的包一个字节都不改（既有「只记录」口径），overlaps 照旧逐条点名', () => {
+    const charId = pool[0];
+    const packs = [{ id: 'shadow', files: { chess: { chess_ws_x_a: { chessId: 'chess_ws_x_a', charId, name: '影子', tier: 3 } } } }];
+    const base = loadData(DATA_DIR, { log: quiet, workshopDir: null });
+    const { data, report } = applyWorkshop(base, packs);
+    assert.equal(report.poolStripped, false);
+    assert.deepEqual(report.strippedPool, [charId], 'strippedPool 仍是「如果按维护者开关摘会是哪些」的候选名单');
+    assert.equal(report.overlaps.length, 1, '但这件事照旧被逐条记录');
+    assert.equal(report.overlaps[0].optedIn, false);
+    assert.equal(data.backups.diy.ownedPool.length, OFFICIAL_POOL);
+  });
+
+  test('声明了开关的包：apply: true 真的把那一位摘出 ownedPool，并逐条点名摘了谁', async () => {
+    const charId = pool[0];
+    const packs = [{ id: 'shadow', stripDiyOverlaps: true, files: { chess: { chess_ws_x_a: { chessId: 'chess_ws_x_a', charId, name: '影子', tier: 3 } } } }];
+    const base = loadData(DATA_DIR, { log: quiet, workshopDir: null });
+    // 直接调那个函数（`applyWorkshop` 走的是同一个开关；这里测的是它本身）
+    const { stripPackOperators } = await import('../shared/workshop.js');
+    const data = structuredClone(base);
+    const report = stripPackOperators(packs, data, { apply: true });
+    assert.equal(report.applied, true);
+    assert.equal(report.overlaps[0].optedIn, true);
+    assert.deepEqual(report.stripped, [charId]);
+    assert.equal(data.backups.diy.ownedPool.length, OFFICIAL_POOL - 1, '摘掉一位：池子少一个');
+    assert.equal(data.backups.diy.ownedPool.includes(charId), false, '那一位真的不在池里了');
+    // `diy.operators` 那条记录**留着**：它在池外也仍被界面按 id 读，删记录会让别的引用找不到它
+    assert.ok(data.backups.diy.operators[charId], 'operators 记录不受影响（摘的是名单，不是记录）');
+    // 摘了谁必须能被点名（findings 里的 note 要说摘除这件事）
+    assert.match(report.overlaps[0].note, /Stripped from the pool|opt-in/);
+  });
+
+  test('apply: true 但没有重叠时什么都不做（applied=false，池子不变）', async () => {
+    const packs = [{ id: 'clean', files: { chess: { chess_ws_new_a: { chessId: 'chess_ws_new_a', charId: 'char_ws_brand_new', name: '新人', tier: 3 } } } }];
+    const base = loadData(DATA_DIR, { log: quiet, workshopDir: null });
+    const { stripPackOperators } = await import('../shared/workshop.js');
+    const data = structuredClone(base);
+    const report = stripPackOperators(packs, data, { apply: true });
+    assert.equal(report.applied, false);
+    assert.deepEqual(report.stripped, []);
+    assert.equal(data.backups.diy.ownedPool.length, OFFICIAL_POOL);
   });
 });

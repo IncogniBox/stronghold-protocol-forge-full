@@ -1,0 +1,12 @@
+{
+ "id": "operator-conflict",
+ "name": "干员冲突兼容",
+ "version": "1.0.0",
+ "author": "the operator-conflict mod",
+ "license": "GPL-3.0-or-later",
+ "description": "「同一个 id 被两个包各贡献一份」的兼容层（前置 mod）。合并层按包 id 字典序只留赢家、输家整个丢掉（shared/workshop.js 的 PACK_ID_COLLISION）—— 一份合并结果是对的，但玩家从此不知道还有另一份：A 包加了一个阿米娅、B 包也加了一个，界面上永远只有字典序小的那个包的，且没有任何一处会告诉他。本包让引擎把丢掉的那几份留在 data.workshopConflicts 里、经只读路由 /workshop-conflicts.json 送到客户端，并在干员调配的干员详情里显示一排「数据来源」按钮：这个干员本局用哪个包的那一份记录。选择走 C2S room.conflict { picks }（局外设置，下一局生效）；服务端按玩家在自己的 GameData 视图里换记录（server/match/player/conflict.js），因此同一个干员在不同玩家的棋盘上可以是不同的一份数据。本包不携带任何素材与代码 —— 界面、协议与合并层的改动都由引擎提供（见 README.md：为什么必须如此），本包只做声明与说明。",
+ "gameVersion": "0.3.0",
+ "notices": {
+  "announcement": "notice/announcement.json"
+ }
+}

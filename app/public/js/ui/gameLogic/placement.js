@@ -3,12 +3,17 @@
 import { GEO } from '../../../../shared/constants.js';
 import { attackRangeGrid } from '../../../../shared/loadoutRecord.js';
 import { meleeOnHighGround } from '../../../../shared/highGround.js';
+import { equipCapacity, DEFAULT_EQUIP_PER_CHESS } from '../../../../shared/equipSlots.js';
+import { summonPlacementGrid } from '../../../../shared/summonPlacement.js';
 import { pieceDir, rangeTiles } from '../facing.js';
 import { isObj, tileKey } from './shared.js';
 import { boardTileOf, fieldTile } from './camera.js';
 import { layoutOf } from '../../render/layout.js';
 import { deployedRecord, fieldsStandIn, standInOf } from './standIn.js';
 import { t } from '../../../../shared/i18n.js';
+// 装备位语义（第 7 段）：`equipReplaces` 的「两格满了」那半读这一页的策略（`ui/gameLogic/bonds.js` 的 `slotPolicy`，
+// 由 `roomMods.js` 从 `welcome.mods` 写一次）。缺省档 ⇒ 引擎今天那条算术。
+import { slotPolicy } from './bonds.js';
 
 
 // ---- placement (canPlace mirror) ------------------------------------------------------------------------
@@ -255,15 +260,18 @@ export function tileAllows(ctx, piece, row, col) {
 /**
  * Board tiles ('r,c') where a summon whose text reads "只能部署在召唤者攻击范围内" may stand (tokens.json `ownerRange`:
  * 伺夜's 狼群, 缪尔赛思's 流形 — the tactical point; player report #9 after 0.1.0): its owner's attack range (the
- * loadout's grid, shared/loadoutRecord.js attackRangeGrid, rotated by the owner's facing around its tile). Null when
+ * loadout's grid, shared/loadoutRecord.js attackRangeGrid, rotated by the owner's facing around its tile).
+ * Jessica's shield uses the four-adjacent-tile grid instead, independent of facing/skill/module. Null when
  * the piece is not range-bound or its owner is not on the board. `owner` ({ row, col, piece }) replaces the owner's
  * current position (a summon swapped with its own owner). Mirror of server/match/PlayerState.js summonRange.
  * @param {ReturnType<typeof placementContext>} ctx
  * @returns {Set<string> | null}
  */
 export function summonRange(ctx, piece, owner = null) {
-  if (!isObj(piece) || piece.kind !== 'token' || ctx?.getToken?.(piece.id)?.ownerRange !== true) return null;
-  return ownerRangeOf(ctx, piece, owner);
+  if (!isObj(piece) || piece.kind !== 'token') return null;
+  const grid = summonPlacementGrid(piece.id);
+  if (!grid && ctx?.getToken?.(piece.id)?.ownerRange !== true) return null;
+  return ownerRangeOf(ctx, piece, owner, grid);
 }
 
 /**
@@ -278,14 +286,14 @@ export function summonExcluded(ctx, piece, owner = null) {
   return ownerRangeOf(ctx, piece, owner);
 }
 
-/** The attack-range tiles of a summon piece's owner on the board (summonRange / summonExcluded), or null. */
-function ownerRangeOf(ctx, piece, owner = null) {
+/** The attack or fixed placement range of a summon piece's owner on the board, or null. */
+function ownerRangeOf(ctx, piece, owner = null, placementGrid = null) {
   let at = owner;
   if (!at) for (const e of ctx.boardAt.values()) if (e.piece.uid === piece.ownerUid && e.piece.kind === 'chess') { at = e; break; }
   const rec = at && ctx.getChess(at.piece.id);
   if (!rec) return null;
   let grid = null;
-  try { grid = attackRangeGrid(deployedRecord(rec, ctx.priv, ctx.getChess, ctx.backups) || rec); } catch { /* the data grid */ }
+  try { grid = placementGrid || attackRangeGrid(deployedRecord(rec, ctx.priv, ctx.getChess, ctx.backups) || rec); } catch { /* the data grid */ }
   return new Set(rangeTiles(grid || rec.rangeGrid, at.row, at.col, pieceDir(at.piece)).map(([r, c]) => tileKey(r, c)));
 }
 
@@ -372,7 +380,7 @@ export function canPlace(ctx, uid, target) {
     // dropped onto its own owner (the two swap); an outside-bound one (战术锚点) outside it
     const ownerSwap = src.area === 'board' && occ && occ.piece.uid === piece.ownerUid ? { row: src.row, col: src.col, piece: occ.piece } : null;
     const range = summonRange(ctx, piece, ownerSwap);
-    if (range && !range.has(tileKey(row, col))) return no('BAD_TILE', t('只能部署在召唤者攻击范围内'));
+    if (range && !range.has(tileKey(row, col))) return no('BAD_TILE', summonPlacementGrid(piece.id) ? t('只能部署在召唤者相邻四格') : t('只能部署在召唤者攻击范围内'));
     const out = summonExcluded(ctx, piece, ownerSwap);
     if (out && out.has(tileKey(row, col))) return no('BAD_TILE', t('只能部署在召唤者攻击范围外'));
     if (src.area === 'board') {
@@ -407,18 +415,30 @@ const consumedOnEquip = (item) => typeof item?.kind === 'string' && item.kind.st
 const PROMOTE_KEYS = new Set(['use_equip_upgrade_char', 'equip_round_start_upgrade_char']);
 
 /**
- * Whether dropping item `uid` on the chess `targetPiece` opens the replace dialog: its two slots are used and the server
+ * Whether dropping item `uid` on the chess `targetPiece` opens the replace dialog: its slots are full and the server
  * would replace one of them — every item, a consume-on-equip one too (PRTS 卫戍协议/帮助 "达到上限强行佩戴会改为替换装备";
  * GitHub #263: the pick is destroyed, then the item resolves and the slot stays free). Not when nothing is replaced: an
  * attaching item that completes an item merge (the server merges it instead of equipping, `equipMerges`) or a
  * 博士投影 on an elite (refused by the server).
+ *
+ * 「占了几格」走这一页的装备位策略（`slotPolicy()`，`shared/morph.js`：`plus` 档下变形同构体不占位、且它**永远不是**
+ * 被顶掉的那一件 —— 它自己从不打开替换对话框）；「一共几格」是本页的**容量**（`shared/equipSlots.js`）：官方 2 加上
+ * 携带者身上每一件的 `params.slot_cap`（哥伦比亚 mod 的源石辅助仪 +2/+4）。要装进来的那一件也算进自己的容量 ——
+ * 一件 2/2 满格的携带者仍然装得下它（它自己的 `slot_cap` 在落下的同时把上限抬高），这正是「满格也能装它」。
  * @param {ReturnType<typeof placementContext>} ctx
  * @param {number} uid
  * @param {any} targetPiece
  */
 export function equipReplaces(ctx, uid, targetPiece) {
-  if (!Array.isArray(targetPiece?.items) || targetPiece.items.length < 2) return false;
+  if (!Array.isArray(targetPiece?.items)) return false;
+  const items = targetPiece.items;
   const rec = ctx.getItem(ctx.pieces.get(uid)?.piece?.id);
+  const slot = slotPolicy();
+  // 不占格的那一件永远不是被顶掉的那一件（它自己从不打开替换对话框）
+  if (slot.isSlotless(rec)) return false;
+  // 「还装得下吗」：占了几格（策略；`plus` 档下变形同构体不计数）< 容量（官方 2 + 携带者的 slot_cap，含正落下的这件）
+  const cap = equipCapacity(DEFAULT_EQUIP_PER_CHESS, [...items, rec], (id) => ctx.getItem?.(id));
+  if (slot.slotsUsed(items, ctx.getItem) < cap) return false;
   if (!consumedOnEquip(rec)) return !equipMerges(ctx, uid);
   const promotes = Array.isArray(rec.buffs) && rec.buffs.some((b) => PROMOTE_KEYS.has(b?.key));
   return !(promotes && targetPiece.golden);

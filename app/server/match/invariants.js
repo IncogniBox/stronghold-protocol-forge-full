@@ -3,7 +3,11 @@
 // (test/match/harness.js checkInvariants asserts the list is empty) and by tools/matchrun.mjs --check sweeps.
 //
 // collectViolations(m) → string[] (empty when every invariant holds):
-//   pool     0 ≤ left ≤ cap and left + Σ copies held by pieces == cap per base chess; non-pool chess hold 0 copies;
+//   pool     raw balance ≤ cap and raw balance + Σ copies held by pieces == cap (public availability is clamped at zero) per base chess; non-pool chess hold 0 copies;
+//            above MAX_SEATS PARTICIPANTS (the 100-seat variant, docs/PS100-MIGRATION.md §10-A) the same equation holds PER PLAYER
+//            against that player's own pool (PlayerState.poolOf), while the shared `m.pool` is checked as the read-only
+//            canonical catalog; ≤ MAX_SEATS participants keeps the room-wide reading (a 20-seat room with 4 players in it included)
+//            every capped shop item is held by at most its cap (normal occupies 1, upgraded 2; effect-only items have no cap)
 //            a player's 自选 stock (0.2.0, player/diy.js) the same against its own pieces of each slotted slot — a DIY
 //            piece is always a slotted slot of its owner's, and a DIY shop / reward card one of its stocked slots
 //   economy  funds / pendingFunds non-negative integers, LP finite, shop level in range, prices ≥ 0
@@ -27,6 +31,8 @@
 import { PHASE, BOND_LAYER_CAP } from '../../shared/constants.js';
 import { FIELD, canPlace, placeClass, positionClass, parseKey } from './board.js';
 import { computeBonds } from './bondsMeta.js';
+// 装备位语义（第 7 段）：不变量里「占几格 / 最多几件 / 最多一件变形同构体」读这一局的策略（缺省档 = 官方那条算术）。
+import { matchSlotPolicy } from '../../shared/morph.js';
 
 const PHASES = new Set(Object.values(PHASE));
 
@@ -42,6 +48,14 @@ export function collectViolations(m, { limit = 25 } = {}) {
   const held = new Map();
   const uids = new Set();
   const banned = new Set(m.bannedChess || []);
+  // 100-seat variant (design-level A, docs/PS100-MIGRATION.md §10-A): above MAX_SEATS PARTICIPANTS every player has a
+  // pool of its own, so the SAME conservation equation holds PER PLAYER instead of room-wide. Both readings are checked
+  // below — this is a gate, not a replacement: ≤ MAX_SEATS participants still runs the room-wide equation, statement
+  // for statement. It reads the Match's ONE computed gate (`m.variant`, 「在场参与者数」不是「房间容量」) rather than
+  // re-deriving it from `seatCap`, so the checker can never disagree with the code it checks.
+  const independent = m.variant === true;
+  /** @type {Map<string, Map<string, number>>} playerId → baseId → the copies its pieces hold (自选 stock excluded) */
+  const heldOf = new Map();
   const note = (ps, p) => {
     if (!Number.isInteger(p.uid) || p.uid <= 0) fail(`${ps.playerId}: bad uid ${p.uid}`);
     else if (uids.has(p.uid)) fail(`${ps.playerId}: duplicate uid ${p.uid}`);
@@ -62,7 +76,8 @@ export function collectViolations(m, { limit = 25 } = {}) {
     if (!Number.isFinite(ps.lp)) fail(`${id}: lp ${ps.lp}`);
     if (ps.alive && m.phase !== PHASE.SETTLE && ps.lp <= 0 && m.teamLp == null && m.round > 0 && ps.bandId) fail(`${id}: alive with lp ${ps.lp}`);
     if (ps.hand.length !== gd.benchSize) fail(`${id}: hand has ${ps.hand.length} slots`);
-    if (ps.temp.length !== gd.tempSize) fail(`${id}: temp has ${ps.temp.length} slots`);
+    if (ps.temp.length < gd.tempSize) fail(`${id}: temp has fewer than ${gd.tempSize} visible slots`);
+    if (ps.temp.length > gd.tempSize && ps.temp.some((x) => x == null)) fail(`${id}: overflow queue has an unfilled slot`);
     // 临时整备区 = overflow only (PRTS 卫戍协议/帮助 §手牌区 "常规手牌区出现空位时自动移入", GitHub #82)
     if (ps.temp.some(Boolean) && ps.hand.some((x) => x == null)) fail(`${id}: a temp piece waits while a hand slot is free`);
     if (!(ps.shop.level >= 1 && ps.shop.level <= gd.maxShopLevel)) fail(`${id}: shop level ${ps.shop.level}`);
@@ -100,7 +115,19 @@ export function collectViolations(m, { limit = 25 } = {}) {
         const rec = pgd.chess(p.id);
         if (!rec) { fail(`${id}: unknown chess ${p.id}`); continue; }
         if (rec.isDiy && !rec.diyFor) fail(`${id}: owns ${p.id}, a 自选 slot it has not filled`);
-        if (!Array.isArray(p.items) || p.items.length > gd.equipPerChess) fail(`${id}: ${p.id} carries ${p.items && p.items.length} items`);
+        if (!Array.isArray(p.items)) fail(`${id}: ${p.id} carries no item array`);
+        else {
+          // 装备位不变量：**占几格**与**最多几件** —— 占几格走这一局的装备位策略（`shared/morph.js`；缺省档就是
+          // `items.length`，`plus` 档下变形同构体不占位、而它自己**每名干员最多一件**），一共几格是**本引擎的容量**
+          // （官方 2 + 携带者的 `params.slot_cap`，源石辅助仪 +2/+4）。缺省档下逐字就是从前那条
+          // `p.items.length > gd.equipPerChess`。
+          const policy = matchSlotPolicy(m);
+          const cap = gd.equipCapacity(p.items);
+          const slots = policy.slotsUsed(p.items, (id) => gd.item(id));
+          if (slots > cap) fail(`${id}: ${p.id} uses ${slots} equipment slots`);
+          if (p.items.length > policy.maxItems(cap)) fail(`${id}: ${p.id} carries ${p.items.length} items`);
+          if (p.items.filter((x) => policy.isSlotless(gd.item(x && x.id))).length > 1) fail(`${id}: ${p.id} carries more than one slotless item`);
+        }
         for (const it of p.items || []) {
           note(ps, it);
           if (it.kind !== 'item' || !gd.item(it.id)) fail(`${id}: ${p.id} carries a bad item ${it.kind}:${it.id}`);
@@ -112,6 +139,12 @@ export function collectViolations(m, { limit = 25 } = {}) {
         const base = gd.baseIdOf(p.id);
         const tally = rec.isDiy ? diyHeld : held;
         tally.set(base, (tally.get(base) || 0) + (p.poolCopies || 0));
+        if (!rec.isDiy) {
+          // the same tally, kept per player: the variant's pools are per player (see `independent` above)
+          let mine = heldOf.get(id);
+          if (!mine) { mine = new Map(); heldOf.set(id, mine); }
+          mine.set(base, (mine.get(base) || 0) + (p.poolCopies || 0));
+        }
       } else if (p.kind === 'item') {
         if (!gd.item(p.id)) fail(`${id}: unknown item ${p.id}`);
         countItem(p);
@@ -192,7 +225,7 @@ export function collectViolations(m, { limit = 25 } = {}) {
     }
     // 自选 stock accounting (player/diy.js): left + held == cap per slotted slot; a slot without stock holds nothing
     for (const [base, e] of ps.diyStock ? ps.diyStock.entries : []) {
-      if (!(e.left >= 0 && e.left <= e.cap)) fail(`${id}: 自选 stock ${base}: left ${e.left} cap ${e.cap}`);
+      if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`${id}: 自选 stock ${base}: balance ${e.left} cap ${e.cap}`);
       const h = diyHeld.get(base) || 0;
       if (e.left + h !== e.cap) fail(`${id}: 自选 stock ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
     }
@@ -200,12 +233,51 @@ export function collectViolations(m, { limit = 25 } = {}) {
   }
 
   // shared pool accounting
-  for (const [base, e] of m.pool.entries) {
-    if (!(e.left >= 0 && e.left <= e.cap)) fail(`pool ${base}: left ${e.left} cap ${e.cap}`);
-    const h = held.get(base) || 0;
-    if (e.left + h !== e.cap) fail(`pool ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
+  if (!independent) {
+    for (const [base, e] of m.pool.entries) {
+      if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`pool ${base}: balance ${e.left} cap ${e.cap}`);
+      const h = held.get(base) || 0;
+      if (e.left + h !== e.cap) fail(`pool ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
+    }
+    for (const [base, n] of held) if (!m.pool.has(base) && n !== 0) fail(`non-pool chess ${base} holds ${n} copies`);
+  } else {
+    // 100-seat variant: the shared pool is the canonical CATALOG — its `entries` are the authoritative id set and its
+    // caps the copy ceilings (audit.js, platform.js, the shop), but no copies are taken from it, so only its balance
+    // bound is checked here. Every piece's copies are conserved against ITS OWNER's pool (PlayerState.poolOf is the one
+    // dispatch point), which is the same equation the branch above applies room-wide.
+    for (const [base, e] of m.pool.entries) {
+      if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`pool ${base}: balance ${e.left} cap ${e.cap}`);
+    }
+    for (const ps of m.players.values()) {
+      const mine = heldOf.get(ps.playerId) || null;
+      const own = ps._ownPool || null;
+      if (!own) {
+        if (mine) for (const [base, n] of mine) if (n !== 0) fail(`${ps.playerId}: holds ${n} copies of ${base} with no pool of its own`);
+        continue;
+      }
+      for (const [base, e] of own.entries) {
+        if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`${ps.playerId} pool ${base}: balance ${e.left} cap ${e.cap}`);
+        const h = mine ? mine.get(base) || 0 : 0;
+        if (e.left + h !== e.cap) fail(`${ps.playerId} pool ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
+      }
+      if (mine) for (const [base, n] of mine) if (n !== 0 && !own.has(base)) fail(`${ps.playerId}: non-pool chess ${base} holds ${n} copies`);
+    }
   }
-  for (const [base, n] of held) if (!m.pool.has(base) && n !== 0) fail(`non-pool chess ${base} holds ${n} copies`);
+
+  // Fixed operator gifts may overdraw equipment stock; ownership still counts and keeps shop availability at zero.
+  // Other item families retain their cap. The chess pool above also permits explicit overdraw (Mimic).
+  if (m.itemPool && gd.raw.items) {
+    for (const [id, rec] of Object.entries(gd.raw.items)) {
+      if (!rec || rec.isGolden) continue;
+      const cap = m.itemPool.cap(id);
+      if (!Number.isInteger(cap)) continue;
+      const h = m.itemPool.held(id);
+      const over = Math.max(0, h - cap);
+      const debt = m.itemPool.debtOf(id);
+      if (debt > over) fail(`item ${id}: debt ${debt} > overage ${over} (held ${h}, cap ${cap})`);
+      if (!gd.isUnlimitedGiftItem(id) && over > debt) fail(`item ${id}: held ${h} > cap ${cap} without debt ${debt}`);
+    }
+  }
 
   // combat fields
   if (m.phase === PHASE.COMBAT) {

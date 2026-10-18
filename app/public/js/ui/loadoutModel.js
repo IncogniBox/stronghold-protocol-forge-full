@@ -25,6 +25,25 @@ export const LOADOUT_VERSION = 1;
 
 export const PROF_ORDER = ['PIONEER', 'WARRIOR', 'TANK', 'SNIPER', 'CASTER', 'MEDIC', 'SUPPORT', 'SPECIAL'];
 export const PROF_NAME = Object.freeze({ PIONEER: N_('先锋'), WARRIOR: N_('近卫'), TANK: N_('重装'), SNIPER: N_('狙击'), CASTER: N_('术师'), MEDIC: N_('医疗'), SUPPORT: N_('辅助'), SPECIAL: N_('特种') });
+
+/**
+ * 一个职业的显示名：**官方那张闭表 → 这条记录自己带的 `professionName` → 裸 id**。
+ *
+ * 与「分支」同一条路子：分支名（`subProfessionName`）**一直是记录自带的**，官方闭表里根本没有分支名这回事 ——
+ * 所以工坊包要加官方与 Wiki 上都没有的**新职业**，只需要在自己的记录里写 `professionName`（译名由包自己的
+ * `pack.json.i18n` 给，见 `workshop/profession-expansion/`），引擎不必认识那个 id。
+ *
+ * 最后**退回裸 id 而不是空串**：那两处渲染（`diy` 卡的职业行、调配页详情卡）在空串下会少一截且看不出哪里错，
+ * 而裸 id 至少指得出是哪一个职业。
+ * @param {string} profession 记录里的 `profession`（官方是大写 id，如 `SNIPER`）
+ * @param {object|null} rec 承载它的那条记录（`chess.json` / `units.json` 的一条），自带名字就用它
+ */
+export const profName = (profession, rec = null) => {
+  const id = profession ? String(profession) : '';
+  const official = PROF_NAME[id.toUpperCase()] ? t(PROF_NAME[id.toUpperCase()]) : '';
+  const own = rec && typeof rec.professionName === 'string' ? rec.professionName : '';
+  return official || (own ? t(own) : '') || id;
+};
 export const SP_TYPE = Object.freeze({ INCREASE_WITH_TIME: N_('自动回复'), INCREASE_WHEN_ATTACK: N_('攻击回复'), INCREASE_WHEN_TAKEN_DAMAGE: N_('受击回复'), ON_DEPLOY: N_('被动'), 8: N_('被动') });
 /** Module attribute keys (ModuleRecord.attr / battle_equip attributeBlackboard) → label + unit. */
 export const ATTR_LABEL = Object.freeze({
@@ -130,17 +149,21 @@ export function resetOps(ops, charId) {
  * of the 干员调配 roster or the 自选 owned pool, `isOperator` — shared/protocol.js cultivationCharIds), the rest dropped one
  * by one; defaults dropped.
  * @param {Record<string, any>} ops @param {(charId: string) => boolean} isOperator
+ * @param {(charId: string) => boolean} [changesWithPotential] shared/protocol.js charPotentialChanges. A non-default
+ * potential that does not change the operator is omitted; a non-default 练度 on that same entry is kept. The server
+ * still rejects a raw message that contains the illegal potential.
  * @returns {Record<string, { potential?: number, cultivate?: number }>}
  */
-export function sanitizeOps(ops, isOperator) {
+export function sanitizeOps(ops, isOperator, changesWithPotential = null) {
   const out = {};
   for (const [id, e] of Object.entries(ops || {})) {
     if (Object.keys(out).length >= LOADOUT_LIMITS.ops) break;
     const one = {};
     if (isPotential(e?.potential)) one.potential = e.potential;
     if (isCultivate(e?.cultivate)) one.cultivate = e.cultivate;
+    if (one.potential != null && one.potential !== POTENTIAL_DEFAULT && typeof changesWithPotential === 'function' && changesWithPotential(id) === false) delete one.potential;
     if (!Object.keys(one).length) continue;
-    const res = checkLoadoutOps({ [id]: one }, isOperator);
+    const res = checkLoadoutOps({ [id]: one }, isOperator, changesWithPotential);
     if (res.ok && res.ops[id]) {
       const x = {};
       if (res.ops[id].potential !== POTENTIAL_DEFAULT) x.potential = res.ops[id].potential;
@@ -373,6 +396,14 @@ export function rosterOf(list) {
     .sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0) || (a.shopSortId ?? 0) - (b.shopSortId ?? 0) || String(a.chessId).localeCompare(String(b.chessId)));
 }
 
+/** A stored potential that the screen does not edit is not a visible change. Omitted `potentialCounts` keeps the old rule. */
+function opsVisibleChange(ops, charId, potentialCounts) {
+  const cur = opsOf(ops, charId);
+  if (cur.cultivate !== CULTIVATE_DEFAULT) return true;
+  if (typeof potentialCounts === 'function' && potentialCounts(charId) === false) return false;
+  return cur.potential !== POTENTIAL_DEFAULT;
+}
+
 /**
  * Apply the screen's filters.
  * @param {any[]} roster rosterOf(...)
@@ -381,8 +412,10 @@ export function rosterOf(list) {
  * @param {(id: string) => any} getChess
  * @param {(id: string) => any} [getBond] bond lookup (the search also matches bond names)
  * @param {Record<string, any>|null} [ops] the per-operator 潜能 / 练度 (changedOnly counts them too)
+ * @param {(charId: string) => boolean} [potentialCounts] false hides a potential-only change (no curve)
  */
-export function filterRoster(roster, f = {}, entries = {}, getChess = () => null, getBond = () => null, ops = null) {
+
+export function filterRoster(roster, f = {}, entries = {}, getChess = () => null, getBond = () => null, ops = null, potentialCounts = null) {
   const q = String(f.query || '').trim().toLowerCase();
   return roster.filter((c) => {
     if (f.tier && c.tier !== f.tier) return false;
@@ -390,10 +423,10 @@ export function filterRoster(roster, f = {}, entries = {}, getChess = () => null
     if (f.bond && !(Array.isArray(c.bonds) && c.bonds.includes(f.bond))) return false;
     if (f.changedOnly) {
       const golden = c.goldenId ? getChess(c.goldenId) : null;
-      if (!effectiveChoice(entries, c, golden).changed && !opsOf(ops, c.charId).changed) return false;
+      if (!effectiveChoice(entries, c, golden).changed && !opsVisibleChange(ops, c.charId, potentialCounts)) return false;
     }
     if (q) {
-      const hay = [c.name, c.appellation, c.subProfessionName, t(PROF_NAME[c.profession]), ...(c.bonds || []).map((b) => getBond(b)?.name)]
+      const hay = [c.name, c.appellation, c.subProfessionName, profName(c.profession, c), ...(c.bonds || []).map((b) => getBond(b)?.name)]
         .filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
@@ -403,13 +436,13 @@ export function filterRoster(roster, f = {}, entries = {}, getChess = () => null
 
 /** Number of chess whose choice differs from the defaults (only loadout slots of the loaded data count: an entry of a
  *  retired / hidden chess is never sent nor applied) — with `ops` (0.2.2), also those whose operator's 潜能 / 练度 differ. */
-export function changedCount(entries, getChess, ops = null, roster = null) {
+export function changedCount(entries, getChess, ops = null, roster = null, potentialCounts = null) {
   const ids = new Set(Object.keys(entries || {}));
-  if (ops && Object.keys(ops).length && Array.isArray(roster)) for (const c of roster) if (opsOf(ops, c.charId).changed) ids.add(c.chessId);
+  if (ops && Object.keys(ops).length && Array.isArray(roster)) for (const c of roster) if (opsVisibleChange(ops, c.charId, potentialCounts)) ids.add(c.chessId);
   let n = 0;
   for (const id of ids) {
     const { base, golden } = recordsOf(id, getChess);
-    if (isLoadoutSlot(base) && base.chessId === id && (effectiveChoice(entries, base, golden).changed || opsOf(ops, base.charId).changed)) n++;
+    if (isLoadoutSlot(base) && base.chessId === id && (effectiveChoice(entries, base, golden).changed || opsVisibleChange(ops, base.charId, potentialCounts))) n++;
   }
   return n;
 }
@@ -501,4 +534,19 @@ export function quickSkillTags(rec) {
   const duration = rec.durationType === 'AMMO' ? t('弹药') : seconds > 0 ? `${seconds}s`
     : tags.passive ? t('常驻') : Number(rec.duration) < 0 ? '∞' : t('瞬发');
   return { ...tags, sp: deployment ? t('部署触发') : tags.sp, recovery, duration };
+}
+
+/**
+ * (stronghold-ui-hub package) 干员调配 import: the imported skin choices over the current ones (chessId → skinId; an
+ * empty value clears that operator's choice).
+ * @param {Record<string, string>|undefined} currentSkins @param {unknown} importedSkins @returns {Record<string, string>}
+ */
+export function mergeSkins(currentSkins, importedSkins) {
+  if (!importedSkins || typeof importedSkins !== 'object' || Array.isArray(importedSkins)) return currentSkins || {};
+  const next = { ...(currentSkins || {}) };
+  for (const [id, skinId] of Object.entries(importedSkins)) {
+    if (skinId) next[id] = skinId;
+    else delete next[id];
+  }
+  return next;
 }

@@ -567,19 +567,50 @@ describe('a push / pull slide (推拉: the official impulse under friction)', ()
     assert.equal(v.x, 7.7, 'and it still lands');
   });
 
-  test('a pushed enemy faces the way it is pushed, not the route it resumes', async () => {
-    // The official turns a displaced unit towards the force (_dontChangeFaceByDirection is an opt-in flag); our facing
-    // comes from the snapshot's vx, which after a displacement points back down the route the enemy walks again —
-    // i.e. against the push (player report: 被推开敌人的方向反过来了).
+  test('an unmarked raw displacement still faces its travel direction', async () => {
     const v = await view(10);
     v.sync({ x: 5, y: 12, hp: 100, maxHp: 100, sp: 0, spMax: 0, flags: 0, anim: 0, vx: -1.2 });
-    assert.equal(v.visFacing, -1, 'walking left before the push');
-    v.slideTo(7.7, 12);                       // pushed to the right
-    assert.equal(v.visFacing, 1, 'faces the push at once');
+    assert.equal(v.visFacing, -1, 'walking left before the pull');
+    v.slideTo(7.7, 12);                       // unmarked raw move to the right
+    assert.equal(v.visFacing, 1, 'faces the movement at once');
     for (let i = 0; i < 20; i++) v.update(v.slide.dur / 40, cam(), 0);
-    assert.equal(v.visFacing, 1, 'still facing the push in flight');
-    v.slideTo(5.2, 12);                       // now pulled back to the left
-    assert.equal(v.visFacing, -1, 'and the other way for a pull');
+    assert.equal(v.visFacing, 1, 'still facing the movement in flight');
+    v.slideTo(5.2, 12);                       // another unmarked raw move to the left
+    assert.equal(v.visFacing, -1, 'and the other way for a raw move');
+  });
+
+  test('a flagged push or pull keeps the enemy facing left while sliding right, then resumes snapshot facing', async () => {
+    const v = await view(14);
+    v.sync({ x: 5, y: 12, hp: 100, maxHp: 100, sp: 0, spMax: 0, flags: 0, anim: 1, vx: -1 });
+    assert.equal(v.visFacing, -1, 'facing left before the push');
+    v.slideTo(6.7, 12, { at: 3, dur: 0.8, keepFacing: true });
+    assert.equal(v.visFacing, -1, 'unchanged when the push begins');
+    v.sync({ x: 6.7, y: 12, hp: 100, maxHp: 100, sp: 0, spMax: 0, flags: 0, anim: 1, vx: 20 }, 2.95);
+    v.update(1 / 60, cam(), 0);
+    assert.equal(v.visFacing, -1, 'a positive interpolated velocity cannot flip it before the destination snapshot');
+    v.sync({ x: 6.7, y: 12, hp: 100, maxHp: 100, sp: 0, spMax: 0, flags: 0, anim: 1, vx: -1 }, 3);
+    const dur = v.slide.dur;
+    step(v, dur / 2);
+    assert.ok(v.x > 5 && v.x < 6.7, `still slides right (${v.x})`);
+    assert.equal(v.visFacing, -1, 'unchanged in flight');
+    step(v, dur / 2);
+    assert.equal(v.slide, null, 'slide ends normally');
+    assert.equal(v.x, 6.7);
+    v.sync({ x: 6.6, y: 12, hp: 100, maxHp: 100, sp: 0, spMax: 0, flags: 0, anim: 1, vx: 1 });
+    assert.equal(v.visFacing, 1, 'normal snapshot facing resumes after the slide');
+  });
+
+  test('a buffered earlier attack sets the facing retained by a prestarted slide in either field direction', async () => {
+    for (const sign of [-1, 1]) {
+      const v = await view(30 + sign);
+      v.sync({ x: 5, y: 12, hp: 100, maxHp: 100, sp: 0, spMax: 0, flags: 0, anim: 1, vx: -sign });
+      v.slideTo(5 - sign, 12, { at: 3, dur: 0.8, keepFacing: true });
+      v.onAttack({ x: 5 + sign, y: 12 }, 2.9, 'melee');
+      assert.equal(v.visFacing, sign, 'the earlier attack supplies the real pre-push facing');
+      v.sync({ x: 5 - sign, y: 12, hp: 100, maxHp: 100, sp: 0, spMax: 0, flags: 0, anim: 1, vx: -sign * 20 }, 3);
+      step(v, v.slide.dur / 2);
+      assert.equal(v.visFacing, sign, 'the slide and sampled velocity retain that facing');
+    }
   });
 
   test('a snapshot in flight does not teleport it (the slide owns the position until it lands)', async () => {
@@ -829,5 +860,33 @@ describe('death timing (PR #380): a dying flyer drops inside the fade, a long Di
     assert.ok(Math.abs(v.dying - (longest + 0.55)) < 1e-6, `the whole clip, then the fade (${v.dying.toFixed(3)} s)`);
     for (let i = 0; i < 300; i++) v.update(1 / 60, cam(), 0);
     assert.ok(!v.remove && v.alpha > 0.5, 'still on screen 5 s in');
+  });
+});
+
+describe('GitHub #648: the Hidden Core 假想敌：管 (enemy_9021_acduml_2)', () => {
+  const boss = (defId) => view({ side: 'enemy', kind: 'enemy', defId, boss: true, x: 9, y: 3, maxHp: 600000 });
+
+  test('faces right as authored whatever turn it is given — so do the other 管 and both 胄; other leaders still turn', () => {
+    for (const key of ['enemy_9021_acduml_2', 'enemy_9021_acduml', 'enemy_9013_acstmk', 'enemy_9013_acstmk_2']) {
+      const h = boss(key);
+      assert.equal(h.visFacing, 1, `${key}: right from the start`);
+      h.visFacing = -1; // an attack, a walk or the prep leader's faceLeader
+      assert.equal(h.visFacing, 1, `${key}: still right`);
+    }
+    const b = boss('enemy_1521_dslily'); // 盐风主教昆图斯: a huge leader with the regular FaceSwitcher 3
+    assert.equal(b.visFacing, -1, 'an enemy starts facing left');
+    b.visFacing = 1;
+    assert.equal(b.visFacing, 1, 'and turns');
+  });
+
+  test('its boss HUD sits 1.4 tiles right of the model (the prefab _bossHudOffset); the model stays on its tile', () => {
+    const h = boss('enemy_9021_acduml_2');
+    const b = boss('enemy_9021_acduml');
+    for (const v of [h, b]) v.update(1 / 60, cam(), 0);
+    assert.equal(h.screen.x, b.screen.x, 'the model is drawn at the unit position');
+    const c = cam();
+    const dx = c.project(10.4, 3, 0).x - c.project(9, 3, 0).x;
+    assert.ok(dx > 0);
+    assert.ok(Math.abs((h.hpFill.position.x - b.hpFill.position.x) - dx) < 1, `HP bar moved by ${h.hpFill.position.x - b.hpFill.position.x} px (1.4 tiles ≈ ${dx})`);
   });
 });

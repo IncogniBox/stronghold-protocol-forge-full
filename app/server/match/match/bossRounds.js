@@ -6,7 +6,8 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE, GEO } from '../../../shared/constants.js';
-import { deriveSeed } from '../../sim/rng.js';
+import { createRng, deriveSeed } from '../../sim/rng.js';
+import { creditedKillsOf } from '../../sim/spec.js';
 import { buildBossWave, bountySpawns } from '../waves.js';
 import { pairPlayers, bossPoolHp, SharedBossPool, CreditPool, hiddenEligible, BOSS_HIT_STEPS } from '../finalAssault.js';
 import { FieldRunner, HeadlessPacer, syntheticResult, BOSS_SILENCE_MS, CATCHUP_TICKS_PER_INTERVAL } from '../fields.js';
@@ -36,6 +37,35 @@ const BOSS_LP_BURST = 10;
 const BOSS_LP_PER_GS = 1;
 
 export class MatchBoss {
+  /**
+   * 开发者面板（「全量模拟」）给这只首领填的数值覆盖（`g.dev` action `'boss'` 的 `overrides`），没有则 null。
+   * 普通对局 `this.dev` 为假 ⇒ 恒 null（帧与行为逐字节不变）。
+   */
+  _devBossOverride(bossId) {
+    if (!this.dev) return null;
+    const o = this.devBossOverrides && this.devBossOverrides[bossId];
+    const st = o && o.stats && typeof o.stats === 'object' ? o.stats : null;
+    return st ? { stats: st } : null;
+  }
+
+  /**
+   * 首领的**共享血量池**上限：面板给了 `stats.maxHp` 就用它，否则官方 `bossPoolHp`（bloodPoint × 份额）。
+   * 领袖单位的生命上限在战斗里被池同步覆盖（sim/battle/spawns.js `_syncBossHp`），所以这里是首领血量的口径。
+   */
+  _bossPoolHp(bossId, aliveCount) {
+    const ov = this._devBossOverride(bossId);
+    const n = ov ? ov.stats.maxHp : NaN;
+    return Number.isFinite(n) && n > 0 ? Math.max(1, Math.round(n)) : bossPoolHp(this.gd, bossId, aliveCount);
+  }
+
+  /** 这一场首领战的 `enemyOverrides`：波次模板自带的 + 面板给这只首领填的（键 = 该首领的 `enemyKey`）。 */
+  _bossEnemyOverrides(base, bossId) {
+    const ov = this._devBossOverride(bossId);
+    if (!ov) return base;
+    const enemyKey = (this.gd.boss(bossId) || {}).enemyKey || bossId;
+    return { ...base, [enemyKey]: { ...(base ? base[enemyKey] : null), ...ov } };
+  }
+
   startFinalAssault(hidden) {
     const alive = this.alivePlayers();
     if (!alive.length) { this.finish({ victory: false, reason: 'eliminated' }); return; }
@@ -50,7 +80,7 @@ export class MatchBoss {
     // the pool's own per-player tally, one pool per boss round. stats.bossDamage (the result's 领袖伤害) adds up both
     // rounds, so it would credit the Final Assault's damage to the hidden leader ("隐藏boss还没打就出了50%播报").
     const hitSteps = new Map();
-    const pool = new SharedBossPool(bossPoolHp(this.gd, bossId, alive.length), {
+    const pool = new SharedBossPool(this._bossPoolHp(bossId, alive.length), {
       onHit: (pid, dmg) => {
         const ps = this.players.get(pid);
         if (!ps) return;
@@ -66,7 +96,8 @@ export class MatchBoss {
       },
     });
     this.bossPool = pool;
-    const groups = pairPlayers(alive);
+    const groups = pairPlayers(alive, createRng(deriveSeed(this.seed, 'boss-pairs')), this.bossPairs);
+    this.bossPairs = groups.map(g => g.map(p => p.playerId));
     const reuse = this.bossWaves && this.bossWaves.length === groups.length && this.bossWaves.every((w, i) => w.players.join() === groups[i].map((p) => p.playerId).join());
     this.fields = groups.map((g, i) => {
       const solo = this.isSolo || g.length === 1;
@@ -102,7 +133,7 @@ export class MatchBoss {
         // the round's enemy effects for the leaders' mid-fight summons (server/sim/content/bosses.js summonMods)
         flags: { layerGainsEnabled: false, ...this.gd.dp, enemyScale: this.gd.enemyScale(this.round) },
         fieldId,
-        enemyOverrides: wave.overrides,
+        enemyOverrides: this._bossEnemyOverrides(wave.overrides, bossId),
         waveId: wave.templateId,
         bossId,
       };
@@ -120,8 +151,13 @@ export class MatchBoss {
     // overtime drain starts (150 real s), both on the field clock
     const onClock = (realS) => this.sched.now() + Math.round(((realS * this.gd.combatTimeScale) / this.gameSpeed) * 1000);
     const levelTime = this.gd.bossLevelTime(this.round);
+    // Maintainer 2026-10-10: only teams with an AI teammate keep the extra grace after the visible countdown.
+    // Freeze this choice for the fight; a disconnect / host transfer cannot change its LP clock midway.
+    const team = this.order.filter((p) => !p.left);
+    this.bossOvertimeStartReal = team.length > 1 && team.some((p) => p.isBot)
+      ? this.gd.bossOvertimeAfterReal : (levelTime || this.gd.bossOvertimeAfterReal);
     this.deadline = this.sched.instant || !levelTime ? 0 : onClock(levelTime);
-    this.overtimeAt = this.sched.instant ? 0 : onClock(this.gd.bossOvertimeAfterReal);
+    this.overtimeAt = this.sched.instant ? 0 : onClock(this.bossOvertimeStartReal);
     if (this.clientCombat) { this._startFinalClient(hidden); return; }
     this._defaultWatch();
     this.markPublic();
@@ -480,7 +516,7 @@ export class MatchBoss {
    * (bossTurnHpReduceTime, gamedata.js bossOvertimeDue).
    */
   _applyOvertime(gt) {
-    const due = this.gd.bossOvertimeDue(gt);
+    const due = this.gd.bossOvertimeDue(gt, this.bossOvertimeStartReal);
     if (due > this.overtimeApplied) {
       const loss = due - this.overtimeApplied;
       this.overtimeApplied = due;
@@ -518,6 +554,7 @@ export class MatchBoss {
         if (pp && ps) {
           ps.stats.dmgDealt += Number(pp.damageDealt) || 0;
           ps.stats.kills += Number(pp.killed) || 0;
+          ps.creditedKills += creditedKillsOf(pp);
           ps.dirty(); // m.private.stats
           this._charDamageTickers(ps, pp);
         }
@@ -537,6 +574,12 @@ export class MatchBoss {
     this.overtimeAt = 0;
     this.markPublic();
     this.runner = null;
+    // 开发者模式（「全量模拟」）：首领战打完（无论胜败、也不管是最终攻势还是隐秘核心）**都不结算**，清掉首领态
+    // 直接进下一回合 —— 回合数无限（业主 2026-10-15）。官方流程（下面的 if）一点没动。
+    if (this.dev) {
+      this.later(this.scaled(DELAYS.SETTLE), () => this.devNextRoundAfterBoss());
+      return;
+    }
     if (!hidden) {
       const eligible = victory && !!this.hiddenBossId && hiddenEligible(this.gd, { layerSum: this.hiddenLayerSum, teamLp: this.teamLp });
       this.later(this.scaled(DELAYS.SETTLE), () => {
@@ -552,5 +595,20 @@ export class MatchBoss {
     } else {
       this.later(this.scaled(DELAYS.SETTLE), () => this.finish({ victory: true, hiddenCleared: victory, reason: 'victory' }));
     }
+  }
+
+  /**
+   * 「全量模拟」：一场首领战结束后**回到休整期接着打**（回合数无限）。清掉本场的首领态 —— 共享血量池、
+   * 「已结束」标记、这一场排好的首领波次与配对、Team LP 快照 —— 再开下一回合；下一个首领回合会重新建池、
+   * 重新配对（同一个种子 ⇒ 同样的配对）。
+   */
+  devNextRoundAfterBoss() {
+    this.bossPool = null;
+    this._finalEnding = null;
+    this.bossWaves = null;
+    this.bossPairs = null;
+    this.teamLp = null;
+    this.hiddenReached = false;
+    this.startRound(this.round + 1);
   }
 }

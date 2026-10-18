@@ -4,9 +4,32 @@
 // Installed on PlayerState.prototype by server/match/PlayerState.js (a method container: never instantiated; `this` is
 // the player state).
 
-import { ERR, layerGainRoom } from '../../../shared/constants.js';
+import { ERR, PHASE, layerGainRoom } from '../../../shared/constants.js';
+import { behaviourIsDefault } from '../../../shared/behaviour.js';
 import { freeSlot } from '../board.js';
+import { bondBiasPreference } from '../pool.js';
 import { OK, fail } from './common.js';
+
+/**
+ * **行为开关 `shopBias` 的读取点**（DESIGN §28.43.1）：这一局的声明要不要偏向，要偏就给出「偏向哪些盟约」。
+ *
+ * 返回 `null` = **引擎今天的行为**，也就是两条路：没声明这一格 / 声明成 `official`（缺省档），或声明了
+ * `bondBias` 但此刻一个盟约都没激活（空集合 ⇒ 抽出来的商店会变成空的装备槽，那不是「偏向」，是「停发」）。
+ * 返回非空 `Set` = 只在「`giveBondId` 落在这个集合里」的装备里抽，**只偏置、不授予**。
+ *
+ * `behaviourIsDefault` 是这一格唯一的判据来源（`shared/behaviour.js`）：与 `variants` 的 `variantIsDefault`
+ * 同一个分工 —— `behaviourActions` 里那条 `{ kind: 'shop.biasActiveBonds', value: true }` 是这一格的**声明**，
+ * 读取点问的是「哪一档」。写成模块层的**纯**函数，是为了让它能被单测（`test/shopBias.test.js`）也为了它是
+ * `shared/modSurface.js` 里 `behaviour` 那一格可锚的一个导出名（改名 / 挪走 = 打断所有声明这一格的包）。
+ *
+ * @param {{ m: { behaviour: any }, _activeBondIds: () => Set<string> }} ps
+ * @returns {Set<string>|null}
+ */
+export function bondBiasBonds(ps) {
+  if (behaviourIsDefault(ps.m.behaviour, 'shopBias')) return null;
+  const active = ps._activeBondIds();
+  return active.size ? active : null;
+}
 
 export class PlayerEconomy {
   addFunds(n, { reason = '' } = {}) {
@@ -47,6 +70,10 @@ export class PlayerEconomy {
     if (add <= 0) return 0;
     this.layers[bondId] = before + add;
     this.recompute();
+    // A live prep gain, not a view delta: reconnects and combat-result backfill must not replay the cue.
+    if ([PHASE.ROUND_START, PHASE.SP_DRAFT, PHASE.PREP].includes(this.m.phase)) {
+      this.m.sendTo(this.playerId, { t: 'm.layer', playerId: this.playerId, bondId, add });
+    }
     this.m.dispatch(this, 'onLayers', { bondId, from: before, to: before + add, reason });
     return add;
   }
@@ -61,8 +88,10 @@ export class PlayerEconomy {
   }
 
   _rollChessSlot() {
-    // the slotted 自选 pieces join the draw once the 调度中心 reaches their slot's level (player/diy.js diyRollEntries)
-    const id = this.m.pool.roll(this.m.rngShop, { maxTier: this.shop.level, extra: this.diyRollEntries() });
+    // the slotted 自选 pieces join the draw once the 调度中心 reaches their slot's level (player/diy.js diyRollEntries);
+    // the DRAW SOURCE is the player's own pool in the 100-seat variant and the shared one today (player/rules.js
+    // mainPool — the same object either way when the switch is off, docs/PS100-MIGRATION.md §10-A)
+    const id = this.mainPool().roll(this.m.rngShop, { maxTier: this.shop.level, extra: this.diyRollEntries() });
     if (!id) return null;
     // 助战：自己带上场的干员在商店里按 `data/support.json` 的 prices 标价（没配就是它的阶级价），
     // 卖掉仍按普通棋子的 sellPrice —— 它就是普通棋子，只是「我的商店池里一定有它」（连本局禁用也盖过去）。
@@ -72,8 +101,38 @@ export class PlayerEconomy {
     return { kind: 'chess', id, basePrice: price, frozen: false, sold: false, ...(support ? { support: true } : {}) };
   }
 
+  /**
+   * 这个玩家**已激活**盟约的 id 集合（`recompute` 算出来的 `this.bonds`）—— `shopBias: "bondBias"` 的唯一输入。
+   * 缓存按 `this.bonds` 的**对象身份**失效：每一次 `recompute()` 都换一个新对象（`player/round.js`），于是同一个
+   * prep 里的多次刷新只付一次遍历，而变化之后一定重算。
+   * @returns {Set<string>}
+   */
+  _activeBondIds() {
+    if (this._biasBondsAt === this.bonds && this._biasBonds) return this._biasBonds;
+    const out = new Set();
+    for (const [id, state] of Object.entries(this.bonds || {})) if (state && state.active) out.add(id);
+    this._biasBondsAt = this.bonds;
+    this._biasBonds = out;
+    return out;
+  }
+
+  /**
+   * **执行点（`shopBias`）**：这一局的声明要不要偏向，要偏就给出「偏向哪些盟约」。
+   *
+   * 判据本体是模块层的 `bondBiasBonds`（纯函数，`shared/modSurface.js` 的 `behaviour` 那一格锚着它）；这里只把
+   * 这一格的读取点挂到玩家状态上，`_rollItemSlot` 与本文件以外的调用方都走这一个名字。
+   * @returns {Set<string>|null}
+   */
+  shopBiasBonds() {
+    return bondBiasBonds(this);
+  }
+
   _rollItemSlot() {
-    const id = this.m.pool.rollItem(this.m.rngShop, this.shop.level);
+    // 行为开关 `shopBias`（DESIGN §28.43.1）：只有这一局的声明把那一格选成 `bondBias` 时，装备槽才拿这条
+    // 偏向谓词去缩候选集。`shopBiasBonds()` 在缺省档返回 null ⇒ 这一行与从前**同一份结果**、同一条代码路径。
+    const bonds = this.shopBiasBonds();
+    const restrict = bonds ? bondBiasPreference(this.gd, bonds) : null;
+    const id = this.m.pool.rollItem(this.m.rngShop, this.shop.level, this.m.itemPool, restrict);
     return id ? { kind: 'item', id, basePrice: this.gd.itemPrice(id), frozen: false, sold: false } : null;
   }
 
@@ -121,7 +180,7 @@ export class PlayerEconomy {
     if (nChess <= layout.chess && nItem <= layout.item) return;
     const chess = old.slice(0, layout.chess);
     const items = old.slice(layout.chess);
-    while (chess.length < nChess) chess.push(null);   // empty: the next roll draws into it
+    while (chess.length < nChess) chess.push(null); // loop-cap: shopSlots chess max 8   // empty: the next roll draws into it
     while (items.length < nItem) items.push(null);
     this.shop.slots = [...chess, ...items];
     this.shop.layout = { chess: chess.length, item: items.length };
@@ -153,20 +212,21 @@ export class PlayerEconomy {
       const rec = this.gd.chess(slot.id);
       // a DIY slot sells only as this player's own 自选 piece (a slotted slot's record carries `diyFor`)
       if (!rec || (rec.isDiy && !rec.diyFor)) return fail(ERR.BAD_TARGET);
-      const base = this.gd.baseIdOf(slot.id);
-      const need = rec.isGolden ? this.gd.goldenCopies : 1;
-      const pool = this.poolOf(base);
-      if (pool.has(base) && pool.left(base) < need) return fail(ERR.SOLD_OUT);
+      // Already displayed operators stay purchasable after stock runs out (#498; 路标月报#2,
+      // BV1eLXXBqEgF 2:50–2:57: nine owned + four shop offers => thirteen owned).
+      // acquireChess records every copy, including the deficit; future rolls still exclude empty stock.
       if (handFull) return fail(ERR.HAND_FULL);
       this.spend(price);
       slot.sold = true;
       piece = this.acquireChess(slot.id, { source: 'buy' });
     } else {
       if (!this.gd.item(slot.id)) return fail(ERR.BAD_TARGET);
+      // Already displayed equipment stays purchasable after stock runs out (#624, maintainer 2026-10-14).
+      // acquireItem records the debt. Future rolls still exclude empty stock. SOLD_OUT is only this slot, already sold.
       if (handFull) return fail(ERR.HAND_FULL);
       this.spend(price);
       slot.sold = true;
-      piece = this.acquireItem(slot.id, { source: 'buy' });
+      piece = this.acquireItem(slot.id, { source: 'buy', displayed: true });
     }
     this.stats.buys++;
     this.round.buys++;
@@ -183,6 +243,9 @@ export class PlayerEconomy {
     if (!free && this.funds < price) return fail(ERR.NO_FUNDS);
     if (free) this.shop.freeRefreshes--;
     else this.spend(price);
+    // A manual refresh cancels the freeze: the new cards are not frozen (official, the owner's play of 2026-10-14;
+    // GitHub #584, DESIGN §34.14.7). A refresh that fails (funds, phase) returns above and leaves the freeze on.
+    this.shop.frozen = false;
     this.rollShop({ keepFrozen: false });
     this.stats.refreshes++;
     this.round.refreshes++;
@@ -222,16 +285,10 @@ export class PlayerEconomy {
     if (!loc) return fail(ERR.BAD_TARGET);
     if (loc.piece.kind !== 'chess') return fail(ERR.BAD_TARGET, loc.piece.kind === 'item' ? 'items cannot be sold' : 'tokens cannot be sold');
     const piece = loc.piece;
-    // its equipment returns to the hand (overflow temp): refuse rather than destroy it when there is no room
-    // Removing the owner's summon stacks frees one slot per stack, regardless of its summon count.
-    const freed = (x) => x == null || (x.kind === 'token' && x.ownerUid === piece.uid);
-    const room = this.hand.filter(freed).length + this.temp.filter(freed).length + (loc.area === 'hand' || loc.area === 'temp' ? 1 : 0);
-    if ((piece.items || []).length > room) return fail(ERR.HAND_FULL, 'no room for the equipment');
+    // Returned equipment can always wait in the overflow queue, even when all fifteen visible slots are occupied.
     this._detach(loc);
     this.removeTokensOf(piece.uid);
-    for (const it of piece.items || []) {
-      if (!this.stow(it, { allowTemp: true })) this.m.log.warn?.(`[match ${this.m.roomCode}] ${this.playerId}: item ${it.id} lost on sell (no space)`);
-    }
+    for (const it of piece.items || []) this.stow(it, { allowTemp: true });
     piece.items = [];
     this.returnCopies(piece);
     const ev = { piece, gain: this.gd.sellPrice(piece.id) };

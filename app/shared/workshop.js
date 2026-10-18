@@ -23,10 +23,38 @@
 // The behaviour layer (a pack's `kits/*.js`, wired to the battle.on(...) hook bus) is deliberately NOT part of this
 // module: it is code, it is loaded by the server only, and it is documented in docs/WORKSHOP.md.
 
+// 变体 / 口径层（DESIGN §28.39）：轴的闭枚举与解析只有一份，`shared/variants.js`。这一层**不**在这里重新判一遍
+// —— 一个轴表有两份实现，就是一个「哪个才算数」的问题。
+// 口径**数据**通道（DESIGN §28.51）把同一张轴表当**闭枚举**用：`variants` 内容文件的表名必须是这里的一个轴，
+// 生效与否由 `variantValue` / `mergeVariantDecls`（同一份「包 id 字典序小的赢」）裁决 —— 依然只有一份实现。
+import { parseVariantsDecl, isVariantAxis, VARIANT_AXIS_NAMES, variantValue, mergeVariantDecls } from './variants.js';
+// 行为开关层（DESIGN §28.43）：与口径**同一形状、不同一张表**，判据只有一份在 `shared/behaviour.js`。同样不在这里
+// 重判一遍闭枚举 —— 这里只调它的解析器（`parseBehaviourDecl`）与**具名读取器**（`behaviourValue`）。那张表今天有
+// 5 格（`shopBias` / `prepLoadout` / `morphPairing` / `unequip` / `diyPoolOverlap`）。
+import { parseBehaviourDecl, behaviourValue } from './behaviour.js';
+// 启用声明（DESIGN §28.50）：装好 ≠ 生效。判据只有一份在 `shared/enabled.js`（`parseEnabledDecl`）。
+import { parseEnabledDecl } from './enabled.js';
+// 调用预算（DESIGN §28.52，沙箱档的运行时保护）：每局每插件的次数上限。判据与常量只有一份在
+// `shared/callBudget.js` —— 形状层（这里）、运行层（`server/sim/battle/hooks.js`，两端同一段字节）与装载层
+// （`server/battlePack.js`）读的是同一个 `parseCallBudgetDecl` / `PACK_CALL_BUDGET_DEFAULT`。
+import { parseCallBudgetDecl } from './callBudget.js';
+// 特质授予的盟约（`trait.grantsBonds`，DESIGN §28.49）：装载期那一条点名走**同一份判据**（`traitGrantIssues`），
+// 作者侧的点名在 `shared/chessAuthoring.js` 的 `validateChessRecord` 里读同一个函数。
+import { traitGrantIssues } from './morph.js';
+
 /** Data files a pack may contribute to. Deliberately a conservative subset of data/: `config` is excluded because a
- * pack that rewrote the economy or the round schedule would change the rules rather than the content. */
+ * pack that rewrote the economy or the round schedule would change the rules rather than the content.
+ *
+ * `variants`（DESIGN §28.51）**在这张表里，但它不是一张数据表** —— 它是**口径数据通道**：文件里没有一条新记录，
+ * 只有「给**已经存在**的记录写一份**字段级补丁**」的表，归属到 `pack.json.variants` 声明的那条口径轴上。
+ * 三条守卫让它不是「包可以覆盖任意数值」那条通道（`docs/WORKSHOP.md` §1.1 对 `official` / `config` 的判断）：
+ *   1. **不能发明记录**：目标 `<文件>:<id>` 必须已经在合并后的数据里（官方或别的包贡献的）⇒ 否则点名拒；
+ *   2. **不能发明字段**：补丁只能写目标记录**已经有**的键（`unknownOverrideKeys` 的闭合世界）⇒ 否则点名拒；
+ *   3. **不能发明轴**：表名必须是 `shared/variants.js` 的 `VARIANT_AXES` 里的轴，而且该包必须**声明**了它。
+ * `config` 仍然**没有**通道（它改的是规则，不是内容）；`variants` 有通道是因为它改的是**内容的值**，不是规则。
+ * 解析与合并都在本文件（`normalizeVariantDataFile` / `applyVariantDataPatches`）—— 只用**一份** `mergeRecord`。「能不能当 `overrides` 目标」的判据也只有一份：`isOverridableContentFile`（在**本文件末尾**，那里写了为什么不在这一行旁边）。 */
 export const WORKSHOP_CONTENT_FILES = Object.freeze([
-  'chess', 'units', 'items', 'enemies', 'stages', 'waves', 'tokens', 'bosses', 'factions', 'garrisons', 'bands', 'bonds', 'effects', 'choices',
+  'chess', 'units', 'items', 'enemies', 'stages', 'waves', 'tokens', 'bosses', 'factions', 'garrisons', 'bands', 'bonds', 'effects', 'choices', 'variants',
 ]);
 
 /** Files whose records are keyed by an id field that must equal the map key (catches copy-paste mistakes in a pack). */
@@ -115,13 +143,70 @@ export const PACK_FIELDS = Object.freeze([
   'content', 'overrides',
   // 素材与声明（贡献项，见 EMPTY_PACK 那一处）
   'voices', 'voiceLangs', 'bondIcons', 'itemIcons', 'art', 'skins', 'support', 'operators', 'i18n',
+  // 形态（clip set）通道与静态相位通道（DESIGN §28.29）：第一方 `FORMS` / `SILENT_PHASES` 冻结不动，包只做增量。
+  // 两者都是**行为**声明而不是素材：`forms` 说的是「这个 spine id 还有哪些形态、每个形态用哪几条 clip」，
+  // `fx.silentPhases` 说的是「这几个 'phase' 种类模型自己会表示，不要再撒一层通用特效」。
+  'forms', 'fx',
   // 纯文本声明（公告 / 鸣谢，DESIGN §28.15）：一段**结构化文本**，既不是游戏数据也不是素材
   'notices',
   // 行为开关（**不是**贡献项）
-  'playtest',
+  'playtest', 'stripDiyOverlaps',
+  // 启用声明（DESIGN §28.50）：装好 ≠ 生效。`false` = 装载期跳过（见 `shared/enabled.js`）。**不是**贡献项。
+  'enabled',
+  // 调用预算（DESIGN §28.52，沙箱档的运行时保护）：每局每插件的调用次数上限，与 `combat` **同一级**（都是顶层
+  // 声明、都进身份哈希）。**不是**贡献项；不要求 `combat: true`（它只收紧、不授权，见下面那一处的注释）。
+  'callBudget',
+  // 变体 / 口径声明（DESIGN §28.39）：这个包要哪一套口径（练度 / 部署位）。**不是**贡献项，也**不是**一条
+  // 数值覆盖通道 —— 它只能声明轴的闭枚举里有的选项名，值由引擎自己给（`shared/variants.js`）。
+  'variants',
+  // 行为开关声明（DESIGN §28.43）：这个包要哪一格开关、哪一档。**不是**贡献项，也**不是**一条数值 / 文件覆盖
+  // 通道 —— 它只能声明开关的闭枚举里有的选项名，**动作由引擎构造**（`shared/behaviour.js`）。那张表今天有 5 格
+  // （`shopBias` / `prepLoadout` / `morphPairing` / `unequip` / `diyPoolOverlap`，每格与实现点同刀落地），
+  // 声明表里没有的仍被点名拒。
+  'behaviour',
   // 中间层四组能力声明（DESIGN §28.13）
   'assets', 'client', 'server', 'routes',
+  // 对局种类声明（DESIGN §28.54，第二种对局的**声明面**）：这个包的 `matchClass` 包装器**在什么条件下**把一局
+  // 换成另一种玩法。它是声明与协商面，不是分派表 —— 管理器**不认玩法名**，判定住在包自己的模块里
+  // （`server/modModules.js` 的 `host.matchKinds()`）。
+  //
+  // ⚠️ 它与本表里别的格子不是一种加法：它既**不是**「往某个既有闭枚举里多一个成员」，也不是纯数据文件 ——
+  // 它是「顶层键闭集多一个合法键」**加上**一个新引入的、只属于它自己的字段闭枚举（`MATCH_KIND_FIELDS`）。
+  // 对**在册老包**零影响：不写这个键 ⇒ 既不触碰那个新枚举、也不进归一化清单（见下面 `matchKindsParsed` 那段）。
+  'matchKinds',
+  // 目标引擎（DESIGN §28.46）：`forge`（缺省，本引擎自己装）或 `stardust`（给 Stardust 宿主的**声明型包** ——
+  // 本引擎不装载它，但认识它、不拒绝它、也不把它算进数据叠加层；同一份 pack.json 两端各自读得懂）。
+  // `target: "stardust"` 的包额外允许 Stardust profile 的几格（见 `STARDUST_TARGET_FIELDS`）。
+  'target',
+  // 管理器合同（DESIGN §28.48）：对**其它工坊包**的依赖与互斥声明，形状是 `[{ id, range? }]` —— `id` 是另一个
+  // 工坊包的 id（同一套字符集），`range` 是那个包 `version` 的区间（`shared/packs.js` 的同一套语法，缺省 = 任意
+  // 版本）。这里只管**形状**；**语义在装载期裁决**（`adjudicatePackGraph`：缺失依赖 / 版本不合 / 互斥 / 级联 /
+  // 循环，全部具名拒绝）。与 `target` 同一条纪律：**只在写出来时**才进归一化结果 —— 没声明的包哈希逐字节不变。
+  'dependencies', 'conflicts',
 ]);
+
+/** `pack.json.target` 的闭枚举：`forge`（缺省）本引擎装载；`stardust` 是给 Stardust 宿主的声明型包（本引擎只认识、不装载）。 */
+export const PACK_TARGETS = Object.freeze(['forge', 'stardust']);
+/** `target: "stardust"` 的包额外允许的 Stardust profile 字段（本引擎自己的闭集里没有的那些拼法）：
+ *  `type`（必须是 `mod`）与 `capabilities` 是必须的两格；`englishName` / `authors` / `app` 是**同一个东西的
+ *  Stardust 拼法**（本引擎叫 `name` / `author` / `gameVersion`）—— 放行它们只为一件事：「同一份 pack.json
+ *  两端各自读得懂」不该逼作者在两种拼法里二选一。`target: "forge"`（含缺省）一个都不放行。 */
+export const STARDUST_TARGET_FIELDS = Object.freeze(['type', 'capabilities', 'englishName', 'authors', 'app']);
+/**
+ * **能力认领的字段**（`target: "stardust"`）：Stardust 宿主的 profile 里，一个能力可以额外收下它自己的字段
+ * （例如 `announcements` 能力收 `announcements` 列表）。本引擎不装载这些包、也不解释那些字段 —— 但**必须认识它们**，
+ * 否则「同一份 pack.json 两端各自读得懂」在这张闭集前就断了：作者会看到本引擎报 `PACK_UNKNOWN_FIELD`。
+ * （注意名字：Stardust 用的字段叫 `announcements` **不是** `notices` —— 本引擎自己已经有一个 `notices`（DESIGN
+ * §28.15 的纯文本声明，形状是一个对象），同一个键不能对两个宿主说两种形状。）
+ *
+ * 这张表是**手抄的镜像**（与 Stardust 的 `shared/modPacks.js MOD_CAPABILITY_FIELDS` 对应），故意的：
+ * 一份远端仓库的表没法在这里被 import；漂移的代价是「本引擎拒装一份它其实该放行的包」——两端对照由作者侧的
+ * `chain-test.mjs`（同一份 pack.json 两个宿主各自读）盯着，改一边就要改另一边。字段本身**不做语义校验**：
+ * 它是 Stardust 的 profile 要判的东西，本引擎只看形状（必须是那份能力认领的名字）。
+ */
+export const STARDUST_CAPABILITY_FIELDS = Object.freeze({
+  announcements: Object.freeze(['announcements']),
+});
 
 /** 未知顶层键的拒绝码（见 `PACK_FIELDS`）。 */
 export const PACK_UNKNOWN_FIELD_CODE = 'PACK_UNKNOWN_FIELD';
@@ -141,6 +226,42 @@ export const OVERRIDE_ENTRY_RE = /^([a-z]+):([A-Za-z0-9_\-.:]{1,64})$/;
  * writes into the data must be exactly the ones that route answers.
  */
 export const WORKSHOP_MEDIA_PREFIX = '/workshop-assets/';
+
+/**
+ * 包自带素材的 URL：`<prefix><包 id>/<包内相对路径>`（相对路径是 `assets/` 之下的那一段）。
+ *
+ * **只此一处**：外观素材的覆盖层（`mergeWorkshopSkins` 的 `toUrl`）、特效清单（`welcome.modFx`，
+ * `server/http/workshop.js` 的 `workshopModFxFrom`）拼的都是它。两处各拼一次就是一个会漂移的真相 ——
+ * 客户端请求的那个键与服务端登记/送出的那一条对不上，而那种错**两边都不会报**。
+ * @param {string} packId the pack id (already validated by `PACK_ID_RE`)
+ * @param {string} rel the path inside the pack's `assets/` folder (already validated by `isSafeAssetPath`)
+ * @param {string} [prefix] the media prefix (`workshopArtIndex` hands in its own for tests / a themed deployment)
+ */
+export function workshopAssetUrl(packId, rel, prefix = WORKSHOP_MEDIA_PREFIX) {
+  return `${prefix}${encodeURIComponent(packId)}/${String(rel).split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/**
+ * **作者自备 CDN 的语音素材**（DESIGN §28.33）：一条 voice 表里的条目可以是
+ * `{ url, sha256, file }` 而不是一个包内相对路径。三件一体，缺一条都不收：
+ *   * `url` —— 作者自己的 `https://` 地址。**引擎只从这条地址取**，绝不内置任何语音素材地址，也绝不新增下载路由：
+ *     素材仍然由 `/workshop-assets/<包>/<file>` 这一条**既有**路由送出（引擎在装载期把它取到本地缓存，见
+ *     `server/voiceCdn.js`），所以客户端那边一个字节都没变；
+ *   * `sha256` —— 作者声明的**内容摘要**。取回来必须对上，对不上就当作没取到（绝不落盘、绝不上线）；
+ *   * `file` —— 素材在包里的**逻辑位置**（`assets/` 下的相对路径）。它是客户端看到的 URL、也是引擎缓存的键之外的
+ *     身份部分，所以必须是一个安全的相对路径 + 音频扩展名。
+ *
+ * 三条红线（业主口径：**分发官方语音不行，但作者自备 CDN 可以**）：
+ *   1. **协议只认 `https:`**（`http:` / `data:` / `file:` / 协议相对一律拒）—— 明文取素材等于允许中间人换掉音频；
+ *   2. **绝不内置任何官方语音地址**，也没有任何「已知素材站」白名单：白名单要把官方域名写进引擎，那正是红线本身；
+ *   3. **不放宽 `VOICE_LANG_*`**，也不新增任何「便于拿官方语音」的通道：语种闭枚举、槽位闭枚举、以及「默认语种不能
+ *      写进 `voiceLangs`」三条一个字都没动。
+ */
+export const VOICE_CDN_FIELDS = Object.freeze(['url', 'sha256', 'file']);
+/** CDN 素材的摘要形状：64 位小写十六进制 sha256。**小写**是刻意的 —— 大小写混写会让同一个摘要有两个字节形态。 */
+export const VOICE_CDN_SHA256_RE = /^[0-9a-f]{64}$/;
+/** CDN 素材允许的扩展名。与 `/workshop-assets` 那条路由的音频白名单**同一批**（否则引擎取回来了也送不出去）。 */
+export const VOICE_CDN_AUDIO_EXTS = Object.freeze(['.mp3', '.ogg', '.wav', '.m4a']);
 
 /**
  * The URL prefix a pack's **C-layer panel module** is served under: `<prefix><packId>/<module path inside the pack>`
@@ -170,6 +291,8 @@ import { isSupportTier } from './support.js';
 import { isVersionRange, appVersionMatches } from './packs.js';
 import { MOD_LAYERS } from './modIdentity.js';
 import { requiredUnitForms } from './diy.js';
+import { FORM_TABLES, FORM_KIND_RE, FORM_SPEC_KEYS, checkFormRoles } from './packForms.js';
+import { firstPartyFormNames } from './formNames.js';
 // `intercepts` 是「分发前的准入钩子拦哪几个消息类型」，所以它的**唯一真相**必须是 `C2S` 本身（DESIGN §28.13）：
 // 一个写在 `intercepts` 里而协议不认识的类型，只会让作者以为钩子拦住了什么。同一条依赖方向已有先例 ——
 // `shared/modIdentity.js` 的线格式就被 `shared/protocol.js` 反过来 re-export（那两个模块之间的唯一箭头）。
@@ -177,7 +300,15 @@ import { C2S } from './protocol.js';
 
 const isPlainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const fail = (error, detail) => ({ ok: false, error, detail });
-/** 一个可选的字符串字段：非空字符串就裁剪，其它一律 null（缺省与写错都读成「没声明」）。 */
+/**
+ * 一个可选的字符串字段：非空字符串就裁剪，其它一律 null（缺省与写错都读成「没声明」）。
+ *
+ * **这个「非字符串读成没声明」在这里是好事，但只在没人给它兜底的时候**：对调用方自己就是终点的字段（今天是
+ * `api` / `game` / `gameVersion`），把 `api: 1` 读成 null 会让包「当没声明一样」通过 —— 作者写了等于没写，
+ * 而包本身是合法的，失败方向是静默的。所以这三个字段在调用它**之前**先各自过一遍 `declaredString`（见下面
+ * `normalizePackManifest` 的版本声明那一段），类型不对就当场 `BAD_API_TYPE` / `BAD_GAME_TYPE` 拒绝。
+ * 本函数的行为**没有改**：它只负责「怎么读一个字符串」，不负责「类型错了要不要报」。
+ */
 const strField = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 
 /** 包内素材路径：相对、在包自己的 `assets/` 下、无穿越。语音、各类图标、外观素材共用这一条规则。 */
@@ -216,10 +347,39 @@ export const ASSETS_SERVER_POLICIES = Object.freeze(['serve', 'cache-only']);
 /** `assets.verify`：整包摘要的算法（旁挂 `<container>.sha256`）。今天只有 sha256 一种，枚举写出来是为了让
  *  第二个算法出现时**必须**改这里，而不是让校验器悄悄按 sha256 比对一份 md5。 */
 export const ASSETS_VERIFY_ALGORITHMS = Object.freeze(['sha256']);
-/** `assets` 的四个字段，一个不多一个不少。 */
-const ASSETS_FIELDS = Object.freeze(['container', 'manifest', 'serverPolicy', 'verify']);
+/** `assets` 的五个字段，一个不多一个不少。 */
+const ASSETS_FIELDS = Object.freeze(['container', 'manifest', 'serverPolicy', 'verify', 'mirrors']);
 /** 资源容器的扩展名：它是 `tools/make-spresources.mjs` 的产物，由格式定义（`SPRES001` 魔数 + 压紧 JSON 头）。 */
 const SPRESOURCES_EXT = '.spresources';
+
+/**
+ * `assets.mirrors[]` —— **作者自备 CDN 承载本包自己的容器**（DESIGN §28.40）。它是「素材加载源」这一格的唯一入口，
+ * 三条边界写在这里，一处也不在别处：
+ *
+ *   * **只镜像本包自己的容器。** 这条通道改的是「这份容器的字节从哪台主机取」，**不是**「整棵 `/assets` 树指向谁」。
+ *     后者做不到诚实：`data/assets.json` 只有**清单级**的摘要、没有逐文件摘要，哈希锁得住清单字节、**锁不住图**；
+ *     把一整个站点的素材树交给第三方主机也正是「不分发官方素材」那条红线要拦的形态。所以一个坏镜像的爆炸半径是
+ *     **一个包自己的那份容器**，不是全站素材（`server/http/static.js` 的 `/assets` 分支一行都没动）。
+ *   * **`base` 只认绝对 `https://`**，且必须写出尾斜杠：拼的是 `<base><包内文件名>`，少一个斜杠会拼出一个看起来
+ *     对、取不到的地址。`http:` / `data:` / `file:` / 协议相对 / URL 里带凭据一律拒 —— 与 `VOICE_CDN_BAD_URL`
+ *     （§28.36）逐字同一条口径。
+ *   * **`sha256` 必须等于装载期算出来的容器摘要**（`assetsIssues.digest`）：镜像里的字节是不是「同一份容器」由这
+ *     一步判定，它**不是**包自己的一句话 —— 服务端先按包内文件算出摘要，再拿它去比每一条镜像的声明
+ *     （`server/workshop.js`），对不上的那条**不生效**并点名。于是「镜像换了内容」在装载期就被抓住。
+ *
+ * 镜像**不在服务端取字节**（与 `voiceCdn` 相反）：服务端一次网络请求都不发 —— 取字节的是**客户端**，走既有的
+ * `bundle.js` 逐文件 SHA-1[0:12] 导入与 Cache Storage。所以这一格没有服务端超时、没有服务端磁盘缓存、没有启动期
+ * 阻塞；一台 CDN 挂掉只影响**想用它的人**，而回落目标（包内那条 `/workshop-resources/` URL）永远在。
+ */
+export const ASSETS_MIRROR_FIELDS = Object.freeze(['id', 'base', 'sha256']);
+/** 一个包最多声明几条镜像：多到「全都试一遍」比「一条都不试」更慢时，这条通道就不再是优化了。 */
+export const ASSETS_MIRROR_MAX = 4;
+/** 镜像 id：`sources(ctx)` 只许谈这个名字，所以它必须是一个能被点名的短标识（见 `CLIENT_SOURCES_BAD_ORDER`）。 */
+export const ASSETS_MIRROR_ID_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+/** 容器摘要的形态（与 `VOICE_CDN_SHA256_RE` 逐字相同）。 */
+export const ASSETS_MIRROR_SHA256_RE = /^[0-9a-f]{64}$/;
+/** 一条 `base` 的长度上限：与 `common.js isResourceUrl` 的 512 同一条口径，一条声明不该能拖住一次拼接。 */
+const ASSETS_MIRROR_BASE_MAX = 512;
 
 /**
  * `assets` 在**装载期**（文件真的在不在、摘要对不对）会用的两个拒绝码（DESIGN §28.13.3，B3a 段）。
@@ -247,25 +407,31 @@ export const ASSETS_FILE_CODES = Object.freeze({
  * `client.panels[*].slot`（DESIGN §28.8）：**闭枚举**。写成自由字符串的话，一个拼错的挂载点就是一个永远不出现的
  * 界面 —— 而挂载点是设计稿里已经数得清的那些。
  *
- * 前四个是 0.11.0 的**浮层**（引擎按需创建容器、`position: fixed`）。后五个是业主 2026-10-10 裁决里
+ * 前四个是 0.11.0 的**浮层**（引擎按需创建容器、`position: fixed`）。后十二个是业主 2026-10-10 裁决里
  * 「插进**已存在**的组件」那一半：容器由**组件自己**渲染（`[data-mod-slot]`），面板因此能往商店卡加一个角标、
- * 给盟约条加一个手势、往干员详情插一节 —— 而不是只能挂在浮层上。
+ * 给盟约条加一个手势、往干员详情 / 调配页 / 自选编队每一格已填的干员卡（`screen.loadout.card` / `screen.diy.card`）
+ * 以及房间屏的旁栏（`screen.room.aside`）、大厅的左栏（`screen.lobby.aside`）、房内聊天面板的标题行
+ * （`screen.room.chat`）、起名页「开始」按钮之下的入场位（`screen.title.entry`，宿主由 `screens/title.js` 自己渲染）
+ * 插一节 —— 而不是只能挂在浮层上。起名页那一格只是**界面**：入场判据（`entryGateBlocked` / `screenActions.enter`）
+ * 不由它决定，包挂在那里也改不了。统计页那一栏（`screen.stats.profile`，宿主由 `screens/stats.js` 自己渲染）同理：
+ * 它落在「个人信息」（`Dr. <名字>` 与「独立模拟 / 联合模拟」那张表）那一栏的末尾，只加界面、不改任何统计数字。
  */
 export const CLIENT_PANEL_SLOTS = Object.freeze([
   'root.overlays', 'root.guide', 'screen.game.aside', 'screen.result.footer',
   'screen.game.shopCard', 'screen.game.bondStrip', 'screen.game.hud', 'screen.game.overlay',
-  'screen.loadout.detail',
+  'screen.loadout.detail', 'screen.loadout.card', 'screen.diy.card', 'screen.room.aside',
+  'screen.lobby.aside', 'screen.room.chat', 'screen.title.entry', 'screen.stats.profile',
 ]);
 /**
- * **可重复的宿主**：引擎在这些位置渲染*多个*容器（每张商店卡一个），一个面板会挂进**每一个**，并通过
- * `ctx.hostKey` 知道自己是哪一份（商店卡那个键就是棋子的 id）。
+ * **可重复的宿主**：引擎在这些位置渲染*多个*容器（每张商店卡、自选编队每一格已填的卡各一个），一个面板会挂进
+ * **每一个**，并通过 `ctx.hostKey` 知道自己是哪一份（商店卡那个键是棋子的 id，自选编队那一格是干员 id 本人）。
  *
  * 为什么需要这一档：`cardMarks.js` 要的是「每张卡上一个标记」，而不是「屏幕上有一个标记」。把它塞进不可重复的
  * 浮层等于让包自己去做「哪张卡在哪」这件事 —— 而那需要 store，正是 §28.8 不给它的东西。
  */
-export const CLIENT_PANEL_REPEATABLE = Object.freeze(['screen.game.shopCard']);
+export const CLIENT_PANEL_REPEATABLE = Object.freeze(['screen.game.shopCard', 'screen.diy.card']);
 /**
- * 引擎**具名组件**的闭枚举（`client.panels[].wraps[].component`，DESIGN §28.19）。九个挂载点说的是「插进哪个
+ * 引擎**具名组件**的闭枚举（`client.panels[].wraps[].component`，DESIGN §28.19）。十二个挂载点说的是「插进哪个
  * 位置」，这一张说的是「**哪个组件本身**被改写」—— 一个槽位永远表达不了「这个界面现在长得不一样了」。
  *
  * 名字与 `CLIENT_PANEL_SLOTS` 是**两个**命名空间（`game.bondStrip` vs `screen.game.bondStrip`）：前者是组件，
@@ -278,22 +444,42 @@ export const CLIENT_PANEL_REPEATABLE = Object.freeze(['screen.game.shopCard']);
  */
 export const CLIENT_WRAP_COMPONENTS = Object.freeze([
   'game.bondStrip', 'game.hud.topBar', 'game.shopCard', 'loadout.detail',
+  'lobby.modPicker', 'lobby.modManager', 'room.modManager', 'briefing.bonds', 'briefing.banned', 'sweep.bonds',
 ]);
 /** 改写方式：`wrap` = 包住引擎的那一份（外层拿到内层的结果当 `orig`）；`replace` = 整段换掉（`orig` 是 `null`）。 */
 export const CLIENT_WRAP_MODES = Object.freeze(['wrap', 'replace']);
 /** 面板的字段：四个 + `styles`（这个面板自带的样式表）+ `data`（它要读的数据表）+ `messages`（它要收发的通道）
- *  + `wraps`（它要包裹 / 替换的引擎组件）。 */
-const CLIENT_PANEL_FIELDS = Object.freeze(['id', 'slot', 'module', 'order', 'gate', 'styles', 'data', 'messages', 'wraps']);
+ *  + `wraps`（它要包裹 / 替换的引擎组件）+ `scope`（这些通道在**大厅**还是**房间里**广播 —— 缺省 `'room'`）。 */
+const CLIENT_PANEL_FIELDS = Object.freeze(['id', 'slot', 'module', 'order', 'gate', 'styles', 'data', 'messages', 'wraps', 'scope']);
+/**
+ * 整屏声明的字段（`client.screens[]`，DESIGN §28.55）：`id` / `route` / `module` 三格必填，其余四格可选，
+ * 与面板**共用同一批判据**（同一条装载期文件判据、同一批数据表闭枚举、同一套通道名形状）。
+ * 刻意**没有** `wraps`：整屏替换的是**整条路由**，不是包裹引擎的某个组件 —— 那是面板那一格的活。
+ */
+export const CLIENT_SCREEN_FIELDS = Object.freeze(['id', 'route', 'module', 'order', 'styles', 'data', 'messages']);
+/**
+ * 整屏能替换的**路由闭枚举**（DESIGN §28.55）。
+ *
+ * 为什么只有四条：`selectRoute`（`public/js/store.js`）与 `main.js` 的 `SCREENS` 都只到这四个值 ——
+ * 结算与干员调配是路由**内部**的视图，不是路由。所以写成自由字符串没有意义：第五条不是「以后再支持」，
+ * 是一条永远不会命中的死格子。客户端那份镜像（`public/js/ui/extensions.js` 的 `MOD_SCREEN_ROUTES`）由
+ * `test/modClientScreens.test.mjs` 钉在一起，两处各说各话就是第二个会漂的真相。
+ */
+export const CLIENT_SCREEN_ROUTES = Object.freeze(['title', 'lobby', 'room', 'game']);
+/** 一份整屏最多带几份样式表 —— 与 `CLIENT_MAX_PANEL_STYLES` 同一个量级：注入这件事必须有界。 */
+const CLIENT_MAX_SCREEN_STYLES = 8;
 /** 一个面板最多声明几条包通道（上限让「通道」这件事有界；今天没有一个真包用到两条以上）。 */
 const CLIENT_MAX_PANEL_MESSAGES = 8;
 /**
- * 一条**包通道**的名字（`client.panels[].messages`，docs/WORKSHOP.md §1.9.6）。作者只写后半段，线上是
- * `<包id>.<名字>` —— 所以这个名字必须是**小写字母开头的短名**：它会出现在线上、会进 `pack.msg` 的字段、
- * 要能被 `^[a-z][a-z0-9_-]{0,63}$` 判死（拼错一个名字就是一条永远收不到的消息，那正是这一层到处在拒绝的形态）。
+ * 一条**包通道**的名字（docs/WORKSHOP.md §1.9.6）。作者只写后半段，线上是 `<包id>.<名字>` —— 所以这个名字必须是
+ * **小写字母开头的短名**：它会出现在线上、会进 `pack.msg` 的字段、要能被 `^[a-z][a-z0-9_-]{0,63}$` 判死（拼错一个
+ * 名字就是一条永远收不到的消息，那正是这一层到处在拒绝的形态）。
+ *
+ * **一份判据，两半共用**（DESIGN §28.23）：`client.panels[].messages`（这个包**说得出**哪些通道）与
+ * `server.modules[].channels`（这个包的对局**收得到**哪些通道）必须是同一批名字 —— 各写一套就等于允许
+ * 「说得出但收不到」或「收得到但说不出」这两种永远不生效的声明。所以它从这里导出，不再各写一份。
  */
-const CLIENT_PANEL_CHANNEL_RE = /^[a-z][a-z0-9_-]{0,63}$/;
-/** 一个面板最多读几张表（今天是 13 张，写着是为了让「全读」这件事有个上限而不是一个通配）。 */
-const CLIENT_MAX_PANEL_DATA_TABLES = 13;
+export const PACK_CHANNEL_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 /**
  * 一个面板可以**读**的数据表（业主裁决 2026-10-10 的「数据口」那一半，DESIGN §28.8）。
  *
@@ -310,6 +496,22 @@ export const CLIENT_PANEL_DATA_TABLES = Object.freeze([
   'chess', 'bonds', 'items', 'bands', 'enemies', 'bosses',
   'stages', 'tokens', 'choices', 'config', 'assets', 'backups', 'local', 'notices',
 ]);
+/**
+ * 一个面板最多读几张表 —— **由上面那张名单推导**，不是一个手写的数字。
+ *
+ * 这里原本写着 `= 13`，而名单在 `notices`（§28.15）加进来之后是 **14** 张：于是「把这个面板要读的表全列出来」
+ * 这件最自然的事会被 `CLIENT_BAD_PANEL_DATA` 拒掉，而错误文案还写着「at most 13 tables **(that is all of them)**」
+ * —— 文案与事实正好相反，作者拿到的是「你列太多了」，而真相是「我们忘了改这个数」。这一格的语义本来就是
+ * **「全部」**（它的判据是 `CLIENT_PANEL_DATA_TABLES.includes(...)`，名单是唯一的白名单），所以上限必须跟着名单走。
+ *
+ * 为什么**推导**而不是「把 13 改成 14」：手写第二个真相正是它漂掉的原因，改一次数字只换来下一次漂。
+ * `export` 出去是为了让 `test/modClientData.test.js` 能把它钉住（「上限 == 名单长度」+「14 张全声明必须被接受」）。
+ *
+ * 提高这个数的**影响面为零**：它从来不是「哪几张表可以读」的判据（那是 `includes`），只是「一次能列几张」的数量上限，
+ * 所以任何今天合法的声明在新值下**依然合法**（放宽只会多接受，不会少接受）。一个包今天就能单独声明 `notices`
+ * （长度 1 < 13），所以「第 14 张表读不到」这件事从来没有发生过 —— 发生的是「一次列全 14 张」被判成错误。
+ */
+export const CLIENT_MAX_PANEL_DATA_TABLES = CLIENT_PANEL_DATA_TABLES.length;
 /** 一个包能声明它需要哪些浏览器能力；缺一即「浏览器不支持」，不是「装了但静默不工作」（DESIGN §28.13）。 */
 export const CLIENT_REQUIRES = Object.freeze(['serviceWorker', 'cacheStorage', 'webCrypto']);
 /**
@@ -365,8 +567,15 @@ const BATTLE_MODULE_EXT = '.mjs';
  * 结果 —— `install(room)` 拿到的是一个只读的观察面（成员快照、阶段、事件），没有 store、没有战场句柄、没有 socket、
  * 没有文件系统，返回值被忽略。判据是**能力**而不是意图：等哪一天这一层真的交出一件能改「谁在玩 / 装了什么 / 这一局
  * 的结果」的东西，那件东西必须 `combat: true`（§28.20 的闸门分类规则）。
+ *
+ * 那一天到了，就是 `hold`（§28.57）：它能决定「空席的房间还留不留」= 能决定一局会不会被回收 ⇒ 单独要求
+ * `combat: true`（`ROOM_HOLD_NEEDS_COMBAT`，见 `normalizePackManifest` 那道门）。同一份契约里的其余成员
+ * （快照 / 访问器 / 订阅）照旧不受 combat 闸门 —— 被 gate 的是那一件能力，不是整格载荷，正是上面那句话的口径。
+ *
+ * **导出**它是因为 `shared/modSurface.js` 的 `server.room.hold` 那一格把它当锚点用（「`hold` 真的在闭字段里」
+ * 这句话的守卫）—— 锚在一个没导出的名字上是一条**永远对不上**的登记。
  */
-const ROOM_FIELDS = Object.freeze(['module']);
+export const ROOM_FIELDS = Object.freeze(['module', 'hold']);
 /** 房间钩子模块的扩展名：它只由**服务端**加载（浏览器与战场都不加载），所以是 `.mjs`，与 `server.meta` 同一条。 */
 const ROOM_MODULE_EXT = '.mjs';
 /**
@@ -380,12 +589,41 @@ const ROOM_MODULE_EXT = '.mjs';
  *     目录根本不在门面里）；
  *   * `uses` 里有 `matchClass` 的包**必须**声明 `combat: true`：一个 `MatchClass` 包装器原则上能改对局结果，
  *     而「要改结果的必须进房间摘要闸门与 golden 那条线」是业主裁决（与 `server.meta` 同一条）。
+ *
+ * 后加的两格（`metrics` / `route`，加一格不抬 `MOD_API_VERSION`）都**不**要求 `combat: true`，因为它们都改不了
+ * 对局：`metrics` 交出的是一份**深冻结的标量快照**（读，不是写），`route` 交出的是**只读 GET/HEAD 的公开 JSON**
+ * （它甚至进不了对局进程 —— 它在 HTTP 处理器里跑）。判据是**能力**而不是意图，与 `server.room` 同一条。
+ *
+ * 再后加的一格 `tickets`（DESIGN §28.59）同样**不**要求 `combat: true`：`host.tickets` 只交出**验证**一个函数
+ * （`bindTickets.verify`），**拿不到密钥、签不了票** —— 包能问「这张票说的是谁」，答这个的永远只有游戏核心。
+ * 它改不了对局，也改不了谁是谁：认证的是核心签的那张一次性的票。
  */
-export const SERVER_MODULE_USES = Object.freeze(['boot', 'shutdown', 'matchClass', 'healthz']);
+export const SERVER_MODULE_USES = Object.freeze(['boot', 'shutdown', 'matchClass', 'healthz', 'metrics', 'route', 'lane', 'tickets']);
 /** `server.modules[*]` 的字段，一个不多一个不少。 */
-const SERVER_MODULE_FIELDS = Object.freeze(['id', 'entry', 'uses', 'write']);
-/** 一个包最多声明几个服务端模块。 */
-const MAX_SERVER_MODULES = 8;
+const SERVER_MODULE_FIELDS = Object.freeze(['id', 'entry', 'uses', 'write', 'channels', 'lane']);
+/**
+ * 一条 lane 的声明字段（DESIGN §28.56）：刻意只两格。路径**语法**不在这里判 —— 那份判据只有
+ * `server/http/wsLanes.js` 的 `isLanePath` / `validateLanes` 一处，装载期由 `server/modLanes.js` 调它；
+ * 这里再抄一遍就是第二个会漂的真相。限额（每进程 lane 总数、每包 lane 数）也归宿主的表管 —— 作者能声明的
+ * 只有「我要哪条路径」与「后面跑的是什么」。
+ *
+ * ⚠️ 来源分支里这一格的注释写的是 §28.53（那是 `client.screens` 的号）—— 合并时按**能力**归一到 §28.56，
+ * 不做机械的号段平移（同一份来源文件里有四处同样的错标，都改了）。
+ */
+const MODULE_LANE_FIELDS = Object.freeze(['path', 'summary']);
+/**
+ * 一个包最多声明几个服务端模块。**导出**它是因为 `shared/modSurface.js` 的 `server.modules.lane` 那一格把它
+ * 当锚点用（「lane 的条数是宿主的表预算，作者能声明的只有路径与说明」这句话的守卫）—— 锚在一个没导出的名字上
+ * 是一条**永远对不上**的登记（来源分支就是这么写的，`test/modSurface.test.js` 因此恒红）。导出不改变任何行为：
+ * 它本来就在校验路径上被读。
+ */
+export const MAX_SERVER_MODULES = 8;
+/**
+ * 一个服务端模块最多声明几条**接收通道**（`server.modules[].channels`，DESIGN §28.23）：玩家从包自己的面板
+ * （`client.panels[].messages` + `pack.msg`）发出来的消息，由**这一格**声明谁在对局里收。与面板那半边的
+ * `CLIENT_MAX_PANEL_MESSAGES` 同一个数量级 —— 这不是数据通道，是玩法动作的入口，写着是为了让它有界。
+ */
+export const MAX_SERVER_MODULE_CHANNELS = 8;
 /** 服务端模块的扩展名：它是**服务端**加载的 ESM（浏览器不加载，战斗也不加载）。 */
 const SERVER_MODULE_EXT = '.mjs';
 /**
@@ -449,7 +687,73 @@ function parseAssetsDecl(raw) {
   if (!ASSETS_VERIFY_ALGORITHMS.includes(verify)) {
     return fail('ASSETS_BAD_VERIFY', `assets.verify must be one of: ${ASSETS_VERIFY_ALGORITHMS.join(', ')}`);
   }
-  return { ok: true, decl: { container: raw.container, manifest: raw.manifest, serverPolicy, verify } };
+  // `mirrors`（DESIGN §28.40）是**可选的**一格，而且与 `skins` / `voiceCdn` / `variants` 同一条纪律：
+  // **只在真的声明过时才进归一化结果**。没声明它的包（今天所有的包）哈希逐字节不变；`identifyPack` 哈希的是
+  // 这份清单的 `canonicalJson`，给每个包都加一个 `mirrors: []` 会换掉每一个已发布包的身份。
+  const mirrorsParsed = raw.mirrors === undefined ? null : parseAssetsMirrors(raw.mirrors);
+  if (mirrorsParsed && !mirrorsParsed.ok) return mirrorsParsed;
+  return {
+    ok: true,
+    decl: {
+      container: raw.container, manifest: raw.manifest, serverPolicy, verify,
+      ...(mirrorsParsed ? { mirrors: mirrorsParsed.decl } : {}),
+    },
+  };
+}
+
+/**
+ * `assets.mirrors[]` 的形状（DESIGN §28.40）。判据与理由见 `ASSETS_MIRROR_FIELDS` 上面那一段；这里只说两件
+ * 实现上的事：
+ *
+ *   * **一条镜像不成立就拒整个 `assets`**，不做「丢掉坏的那条、留下好的」：形状层的既有纪律是「作者写下的东西
+ *     要么全被读懂、要么点名拒」（§28.13.3），静默丢一条会让作者以为它有四条镜像、实际只有三条。**装载期**那条
+ *     摘要比对相反 —— 它一次网络请求都不发，只把与包内字节不符的那条**停用**并点名（服务端算出来的摘要才是
+ *     真相，而包仍然可用）。两处口径不同是因为它们回答的问题不同。
+ *   * **`sha256` 只判形态，不比数值**：数值要等装载期把包内容器真的读一遍才有得比（`server/workshop.js`），
+ *     形状层连包目录都看不到。
+ * @param {unknown} raw
+ * @returns {{ ok: true, decl: Array<{ id: string, base: string, sha256: string }> } | { ok: false, error: string, detail: string }}
+ */
+function parseAssetsMirrors(raw) {
+  if (!Array.isArray(raw) || !raw.length) {
+    return fail('ASSETS_MIRROR_BAD_SHAPE', 'assets.mirrors must be a non-empty array of { id, base, sha256 } (drop the key instead of sending [])');
+  }
+  if (raw.length > ASSETS_MIRROR_MAX) {
+    return fail('ASSETS_MIRROR_TOO_MANY', `assets.mirrors declares ${raw.length} mirrors; at most ${ASSETS_MIRROR_MAX} — the loader tries them in order, so a fifth one only ever costs time`);
+  }
+  /** @type {Array<{ id: string, base: string, sha256: string }>} */
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < raw.length; i++) {
+    const at = `assets.mirrors[${i}]`;
+    const entry = raw[i];
+    if (!isPlainObj(entry)) return fail('ASSETS_MIRROR_BAD_SHAPE', `${at} must be an object: { id, base, sha256 }`);
+    for (const key of Object.keys(entry)) {
+      if (!ASSETS_MIRROR_FIELDS.includes(key)) {
+        return fail('ASSETS_MIRROR_UNKNOWN_FIELD', `${at}: "${key}" is not a field of a mirror entry (${ASSETS_MIRROR_FIELDS.join(', ')})`);
+      }
+    }
+    if (typeof entry.id !== 'string' || !ASSETS_MIRROR_ID_RE.test(entry.id)) {
+      return fail('ASSETS_MIRROR_BAD_ID', `${at}.id must be a short lowercase id (a letter first, then a-z 0-9 _ -, at most 32) — it is the only name sources(ctx) is allowed to talk about`);
+    }
+    if (seen.has(entry.id)) {
+      return fail('ASSETS_MIRROR_DUPLICATE_ID', `${at}.id "${entry.id}" is declared twice (one id, one mirror: the second one is unreachable and the ordering would be ambiguous)`);
+    }
+    seen.add(entry.id);
+    if (typeof entry.base !== 'string' || entry.base.length > ASSETS_MIRROR_BASE_MAX || !entry.base.endsWith('/')) {
+      return fail('ASSETS_MIRROR_BAD_BASE', `${at}.base must be a string of at most ${ASSETS_MIRROR_BASE_MAX} characters ending in "/" — the container is fetched as <base><its file name inside the pack>, so a missing slash builds an address that looks right and never resolves`);
+    }
+    let parsed = null;
+    try { parsed = new URL(entry.base); } catch { parsed = null; }
+    if (!parsed || parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      return fail('ASSETS_MIRROR_BAD_BASE', `${at}.base must be an absolute "https://" URL with a host, no credentials, no query and no fragment — this channel fetches from the AUTHOR's own CDN, and https is the only protocol it will speak (http: / data: / file: / protocol-relative all refuse)`);
+    }
+    if (typeof entry.sha256 !== 'string' || !ASSETS_MIRROR_SHA256_RE.test(entry.sha256)) {
+      return fail('ASSETS_MIRROR_BAD_DIGEST', `${at}.sha256 must be a 64-character lowercase hex sha256 of the container bytes that base serves — the loader compares it with the digest it computed from the pack's own container and drops any mirror that does not match`);
+    }
+    out.push({ id: entry.id, base: entry.base, sha256: entry.sha256 });
+  }
+  return { ok: true, decl: out };
 }
 
 /** 面板模块的扩展名：这个通道送的是**代码**（浏览器 import 它），所以只有 `.js`。 */
@@ -486,11 +790,11 @@ const isSafeServerModulePath = (p) =>
  */
 function parseClientDecl(raw) {
   if (!isPlainObj(raw)) {
-    return fail('CLIENT_DECL_BAD_SHAPE', 'client must be an object: { panels: [...], requires: [...] }');
+    return fail('CLIENT_DECL_BAD_SHAPE', 'client must be an object: { panels?: [...], screens?: [...], requires?: [...], theme?: { vars } }');
   }
   for (const key of Object.keys(raw)) {
-    if (key !== 'panels' && key !== 'requires' && key !== 'theme') {
-      return fail('CLIENT_UNKNOWN_FIELD', `client: "${key}" is not a declared field (panels, requires, theme)`);
+    if (key !== 'panels' && key !== 'screens' && key !== 'requires' && key !== 'theme') {
+      return fail('CLIENT_UNKNOWN_FIELD', `client: "${key}" is not a declared field (panels, screens, requires, theme)`);
     }
   }
   // `client` 至少要声明**一件能用的东西**：面板，或主题变量。业主裁决 2026-10-10 之后主题可以单独存在 —— 一个只想
@@ -499,8 +803,11 @@ function parseClientDecl(raw) {
   // 「这个包有客户端界面」这句话变成假的）。
   if (raw.panels !== undefined && !Array.isArray(raw.panels)) return fail('CLIENT_BAD_PANELS', 'client.panels must be an array of panel declarations');
   if (Array.isArray(raw.panels) && !raw.panels.length) return fail('CLIENT_BAD_PANELS', 'client.panels must declare at least one panel (drop the key instead of sending [])');
-  if (raw.panels === undefined && raw.theme === undefined) {
-    return fail('CLIENT_BAD_PANELS', 'client must declare at least one of: panels (client interfaces), theme (CSS variables) — a client block that declares neither, or only requires, says nothing at all');
+  // 整屏与面板一样是「一件能用的事」：空数组照旧被拒（与不写没区别，却会让「这个包有整屏界面」这句话变成假的）。
+  if (raw.screens !== undefined && !Array.isArray(raw.screens)) return fail('CLIENT_BAD_SCREENS', 'client.screens must be an array of whole-screen declarations');
+  if (Array.isArray(raw.screens) && !raw.screens.length) return fail('CLIENT_BAD_SCREENS', 'client.screens must declare at least one screen (drop the key instead of sending [])');
+  if (raw.panels === undefined && raw.screens === undefined && raw.theme === undefined) {
+    return fail('CLIENT_BAD_PANELS', 'client must declare at least one of: panels, screens (whole-screen routes), theme (CSS variables) — a client block that declares neither, or only requires, says nothing at all');
   }
   const panels = [];
   const seen = new Set();
@@ -559,7 +866,8 @@ function parseClientDecl(raw) {
     if (panel.gate !== undefined) clean.gate = panel.gate;
     if (styles.length) clean.styles = styles;
     // 数据口（`client.panels[].data`）：声明这个面板要读哪几张表。名字必须在闭枚举里（拼错的表名 = 一个永远
-    // 拿不到数据的读取），上限 13、去掉重复、按枚举次序写进清单（清单字节要稳定）。
+    // 拿不到数据的读取），上限就是「全部」（`CLIENT_MAX_PANEL_DATA_TABLES`，由名单推导）、去掉重复、
+    // 按枚举次序写进清单（清单字节要稳定）。
     if (panel.data !== undefined) {
       if (!Array.isArray(panel.data) || !panel.data.length) {
         return fail('CLIENT_BAD_PANEL_DATA', `client.panels["${panel.id}"].data must be a non-empty array of table names (drop the key instead of sending [])`);
@@ -588,7 +896,7 @@ function parseClientDecl(raw) {
         return fail('CLIENT_BAD_PANEL_MESSAGES', `client.panels["${panel.id}"].messages: at most ${CLIENT_MAX_PANEL_MESSAGES} channels per panel`);
       }
       for (const channel of panel.messages) {
-        if (typeof channel !== 'string' || !CLIENT_PANEL_CHANNEL_RE.test(channel)) {
+        if (typeof channel !== 'string' || !PACK_CHANNEL_RE.test(channel)) {
           return fail('CLIENT_BAD_PANEL_CHANNEL', `client.panels["${panel.id}"].messages: "${String(channel)}" is not a channel name (lowercase letter first, then a-z 0-9 _ -, at most 64 — the wire name is "<this pack's id>.<channel>")`);
         }
       }
@@ -597,6 +905,14 @@ function parseClientDecl(raw) {
       }
       clean.messages = stableStringList(panel.messages);
     }
+    // 面板的**作用域**（`client.panels[].scope`，§1.9.6 的新一格）：这个面板声明的通道在哪一层广播 ——
+    // `'room'`（缺省：只在房间里，与从前逐字节相同）或 `'lobby'`（大厅范围，`server/lobby.js` 的 `packLobbyChannels`）。
+    // 只有两个值：写别的（含拼错的大小写）就是一个说不出的作用域，与坏通道名同一个形态，点名拒绝。
+    // 归一化只在 `'lobby'` 时写下这个键 —— `'room'` 就是不写，于是「没声明」与「声明 room」得到同一份字节。
+    if (panel.scope !== undefined && panel.scope !== 'room' && panel.scope !== 'lobby') {
+      return fail('CLIENT_BAD_PANEL_SCOPE', `client.panels["${panel.id}"].scope must be "room" or "lobby" (got ${JSON.stringify(panel.scope)})`);
+    }
+    if (panel.scope === 'lobby') clean.scope = 'lobby';
     // 组件级改写（`client.panels[].wraps`，DESIGN §28.19）：这个面板要包裹 / 替换哪几个**引擎具名组件**。
     // 与 `data` / `messages` 那两格**不同**的一条纪律：一条用不了的 wraps 声明让**整个面板**落地不了 ——
     // 一半的改写（链挂上了、另一半没挂）比完全没有改写更难查，与坏模块 / 坏样式表同一个结局。
@@ -636,6 +952,61 @@ function parseClientDecl(raw) {
     }
     panels.push(clean);
   }
+  // 整屏声明（`client.screens[]`，DESIGN §28.55）：与面板**共用同一批判据**，因为两者在客户端走同一条投递路径
+  // （`welcome.modPanels` 一份线表，服务端只多给一个 `kind: 'screen'`）。刻意共用的还有 `seen`：`id` 是**一个**
+  // 包内命名空间 —— 面板与整屏同名就是两份声明抢一个 key，客户端只会挂上其中一份，而作者以为挂了两份。
+  const screens = [];
+  const screenRoutes = new Set();
+  for (const [i, screen] of (Array.isArray(raw.screens) ? raw.screens : []).entries()) {
+    if (!isPlainObj(screen)) return fail('CLIENT_BAD_SCREEN', `client.screens[${i}] must be an object: { id, route, module, order?, styles?, data?, messages? }`);
+    for (const key of Object.keys(screen)) {
+      if (!CLIENT_SCREEN_FIELDS.includes(key)) return fail('CLIENT_SCREEN_UNKNOWN_FIELD', `client.screens[${i}]: "${key}" is not a screen field (${CLIENT_SCREEN_FIELDS.join(', ')})`);
+    }
+    if (typeof screen.id !== 'string' || !RECORD_ID_RE.test(screen.id)) return fail('CLIENT_BAD_SCREEN_ID', `client.screens[${i}].id: "${String(screen.id)}" is not a valid screen id`);
+    if (seen.has(screen.id)) return fail('CLIENT_SCREEN_DUPLICATE_ID', `client.screens: "${screen.id}" is already used by a panel or screen (ids share one pack namespace)`);
+    seen.add(screen.id);
+    if (!CLIENT_SCREEN_ROUTES.includes(screen.route)) return fail('CLIENT_BAD_SCREEN_ROUTE', `client.screens["${screen.id}"].route must be one of: ${CLIENT_SCREEN_ROUTES.join(', ')}`);
+    // 一个包一条路由只许一份：两份就是「哪一份赢」这个没人能回答的问题（**跨包**那一层由客户端按
+    // order → 包 id → 声明 id 确定性裁决，见 `public/js/ui/extensions.js` 的 `syncActiveScreen`）。
+    if (screenRoutes.has(screen.route)) return fail('CLIENT_SCREEN_DUPLICATE_ROUTE', `client.screens: route "${screen.route}" is declared twice in one pack (one pack may provide at most one screen per route)`);
+    screenRoutes.add(screen.route);
+    if (!isSafeModulePath(screen.module)) return fail('CLIENT_BAD_SCREEN_MODULE', `client.screens["${screen.id}"].module must be a relative path inside the pack ending in .js (e.g. "screens/lobby.js")`);
+    if (screen.order !== undefined && !Number.isInteger(screen.order)) return fail('CLIENT_BAD_SCREEN_ORDER', `client.screens["${screen.id}"].order must be an integer`);
+    const clean = { id: screen.id, route: screen.route, module: screen.module };
+    if (screen.order !== undefined) clean.order = screen.order;
+    if (screen.styles !== undefined) {
+      if (!Array.isArray(screen.styles) || !screen.styles.length) return fail('CLIENT_BAD_SCREEN_STYLES', `client.screens["${screen.id}"].styles must be a non-empty array of pack-relative .css paths (drop the key instead of sending [])`);
+      if (screen.styles.length > CLIENT_MAX_SCREEN_STYLES) return fail('CLIENT_BAD_SCREEN_STYLES', `client.screens["${screen.id}"].styles: at most ${CLIENT_MAX_SCREEN_STYLES} stylesheets per screen`);
+      const styles = [];
+      for (const style of screen.styles) {
+        if (typeof style !== 'string' || !isSafeRelativePath(style) || !style.endsWith(CLIENT_PANEL_STYLES_EXT) || style.length <= CLIENT_PANEL_STYLES_EXT.length) {
+          return fail('CLIENT_BAD_SCREEN_STYLE', `client.screens["${screen.id}"].styles: "${String(style)}" must be a pack-relative .css path`);
+        }
+        styles.push(style);
+      }
+      if (new Set(styles).size !== styles.length) return fail('CLIENT_DUPLICATE_SCREEN_STYLE', `client.screens["${screen.id}"].styles lists a stylesheet twice`);
+      clean.styles = styles.sort();
+    }
+    if (screen.data !== undefined) {
+      if (!Array.isArray(screen.data) || !screen.data.length || screen.data.length > CLIENT_MAX_PANEL_DATA_TABLES) return fail('CLIENT_BAD_SCREEN_DATA', `client.screens["${screen.id}"].data must be a non-empty list of readable table names`);
+      for (const table of screen.data) {
+        if (!CLIENT_PANEL_DATA_TABLES.includes(table)) return fail('CLIENT_BAD_SCREEN_DATA', `client.screens["${screen.id}"].data: "${String(table)}" is not a readable data table`);
+      }
+      if (new Set(screen.data).size !== screen.data.length) return fail('CLIENT_DUPLICATE_SCREEN_DATA', `client.screens["${screen.id}"].data lists the same table twice`);
+      clean.data = CLIENT_PANEL_DATA_TABLES.filter((name) => screen.data.includes(name));
+    }
+    if (screen.messages !== undefined) {
+      if (!Array.isArray(screen.messages) || !screen.messages.length || screen.messages.length > CLIENT_MAX_PANEL_MESSAGES) return fail('CLIENT_BAD_SCREEN_MESSAGES', `client.screens["${screen.id}"].messages must be a non-empty list of at most ${CLIENT_MAX_PANEL_MESSAGES} pack channels`);
+      for (const channel of screen.messages) {
+        if (typeof channel !== 'string' || !PACK_CHANNEL_RE.test(channel)) return fail('CLIENT_BAD_SCREEN_CHANNEL', `client.screens["${screen.id}"].messages: "${String(channel)}" is not a valid pack channel name`);
+      }
+      if (new Set(screen.messages).size !== screen.messages.length) return fail('CLIENT_DUPLICATE_SCREEN_CHANNEL', `client.screens["${screen.id}"].messages lists the same channel twice`);
+      clean.messages = stableStringList(screen.messages);
+    }
+    screens.push(clean);
+  }
+  // 按 id 排序，与面板同一条理由：键序是清单字节的一部分，不能随作者书写顺序变（DESIGN §28.2）。
+  screens.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const rawRequires = raw.requires === undefined ? [] : raw.requires;
   if (!Array.isArray(rawRequires)) {
     return fail('CLIENT_BAD_REQUIRES', `client.requires must be an array (one of: ${CLIENT_REQUIRES.join(', ')})`);
@@ -687,7 +1058,11 @@ function parseClientDecl(raw) {
     theme = { vars };
   }
   // requires 按闭枚举次序，不按作者书写顺序：同一个包两处写法不同的清单必须是同一份字节（DESIGN §28.2）
-  return { ok: true, decl: { panels, requires: CLIENT_REQUIRES.filter((c) => requires.includes(c)), ...(theme ? { theme } : {}) } };
+  // `screens` **只在写出来时**才进清单（与 `variants` / `behaviour` 同一条纪律）：`identifyPack` 哈希的就是这份
+  // 归一化清单，给每个包都补一个 `screens: []` 会让**所有已发布包的哈希全部改变**。而它**必须**进哈希：屏模块与
+  // 样式表的源码字节进身份摘要（`server/workshop.js identifyPack`），两份不同的整屏共用同一个摘要就等于
+  // 房间的摘要闸门放行两份不同的界面（DESIGN §28.2）。
+  return { ok: true, decl: { panels, ...(raw.screens === undefined ? {} : { screens }), requires: CLIENT_REQUIRES.filter((c) => requires.includes(c)), ...(theme ? { theme } : {}) } };
 }
 
 /**
@@ -737,12 +1112,70 @@ function parseServerModulesDecl(raw) {
     if (mod.write !== undefined && typeof mod.write !== 'boolean') {
       return fail('MODULES_BAD_WRITE', `server.modules["${mod.id}"].write must be true or false (may this module write into its own state directory?)`);
     }
+    // `channels`（DESIGN §28.23）：这个模块在对局里**接收**哪些包通道。判据四条，与面板那半边同一个通道名形状
+    //（`PACK_CHANNEL_RE`）——「客户端能说什么」与「服务端在对局里收什么」必须是同一批名字，不能各写一套。
+    if (mod.channels !== undefined) {
+      if (!Array.isArray(mod.channels) || !mod.channels.length) {
+        return fail('MODULES_BAD_CHANNELS', `server.modules["${mod.id}"].channels must be a non-empty array of channel names (drop the key instead of sending []) — the names are the ones a panel of this pack declares in "messages"`);
+      }
+      if (mod.channels.length > MAX_SERVER_MODULE_CHANNELS) {
+        return fail('MODULES_TOO_MANY_CHANNELS', `server.modules["${mod.id}"].channels: at most ${MAX_SERVER_MODULE_CHANNELS} channels per module (got ${mod.channels.length})`);
+      }
+      for (const channel of mod.channels) {
+        if (typeof channel !== 'string' || !PACK_CHANNEL_RE.test(channel)) {
+          return fail('MODULES_BAD_CHANNEL', `server.modules["${mod.id}"].channels: "${String(channel)}" is not a channel name (^[a-z][a-z0-9_-]{0,63}$ — the same shape client.panels[].messages uses)`);
+        }
+      }
+      if (new Set(mod.channels).size !== mod.channels.length) {
+        return fail('MODULES_DUPLICATE_CHANNEL', `server.modules["${mod.id}"].channels lists the same channel twice`);
+      }
+      // 通道的接收人是**对局**（`Match.handlePackMsg`），而对局只可能是 `matchClass` 包装器交给平台的 —— 所以
+      // 没有 matchClass 的 channels 是一条没有接收人的声明。拒掉，而不是让它永远不生效（本层到处在消灭的形态）。
+      if (!mod.uses.includes('matchClass')) {
+        return fail('MODULES_CHANNELS_NEED_MATCH', `server.modules["${mod.id}"].channels is delivered to the running match (Match.handlePackMsg, DESIGN §28.23), so this module must also declare the "matchClass" mount point — channels without matchClass have no receiver`);
+      }
+    }
+    // `lane`（DESIGN §28.56）：这个模块向宿主认领一条 WebSocket 升级路径 —— 另一种玩法的联机面。这里只判
+    // **形状**与「有没有声明挂载点」；路径语法与建表裁决住在 `server/http/wsLanes.js` + `server/modLanes.js`
+    // （一份真相，不在这一层抄第二遍）。
+    if (mod.lane !== undefined) {
+      if (!isPlainObj(mod.lane)) {
+        return fail('MODULES_BAD_LANE', `server.modules["${mod.id}"].lane must be an object: { path, summary? } — one lane per module (the table is process-wide, exact-match and bounded, DESIGN §28.44)`);
+      }
+      for (const key of Object.keys(mod.lane)) {
+        if (!MODULE_LANE_FIELDS.includes(key)) {
+          return fail('MODULES_BAD_LANE', `server.modules["${mod.id}"].lane: "${key}" is not a lane field (${MODULE_LANE_FIELDS.join(', ')}) — limits such as peer caps are the host table's business, not a declaration`);
+        }
+      }
+      if (!mod.uses.includes('lane')) {
+        return fail('MODULES_LANE_UNDECLARED', `server.modules["${mod.id}"].lane is declared but "lane" is not in this module's uses — a mount point that is not declared is never mounted`);
+      }
+      if (typeof mod.lane.path !== 'string' || !mod.lane.path) {
+        return fail('MODULES_LANE_BAD_PATH', `server.modules["${mod.id}"].lane.path must be a non-empty string rooted at "/" (e.g. "/mod-ws/<pack-id>/duel") — its syntax is judged once, by server/http/wsLanes.js, at load time`);
+      }
+      if (mod.lane.summary !== undefined && (typeof mod.lane.summary !== 'string' || !mod.lane.summary.trim())) {
+        return fail('MODULES_LANE_BAD_SUMMARY', `server.modules["${mod.id}"].lane.summary must be a non-empty string (it is the boot-log line that says what runs behind this path)`);
+      }
+    }
+    // 反过来的那一条也判：挂了 `lane` 这个挂载点却没给路径，就是一条没有路由可认领的挂载点 —— 装载期点名，
+    // 不留到运行时才发现「模块等着被叫，表里根本没有它这一行」。
+    if (mod.uses.includes('lane') && mod.lane === undefined) {
+      return fail('MODULES_LANE_NEEDS_PATH', `server.modules["${mod.id}"] declares the "lane" mount point but no lane.path — a lane without a path can never be routed to (declare { path, summary? }, or drop "lane" from uses)`);
+    }
     out.push({
       id: mod.id,
       entry: mod.entry,
       // 按闭枚举次序（不按作者书写顺序）：清单字节要稳定，与 `requires` / `registers` 同一条。
       uses: SERVER_MODULE_USES.filter((u) => mod.uses.includes(u)),
       write: mod.write === true,
+      // 只在**声明了的时候**进清单（声明进身份哈希，没声明的包逐字节不变），并且排序：两个书写顺序不同的
+      // 写法必须是同一个包（与 `uses` 按闭枚举次序同一条纪律）。
+      ...(mod.channels === undefined ? {} : { channels: [...mod.channels].sort() }),
+      // lane 同样**只在声明时**才进清单（§28.56）：路径是行为声明，两份只差路径的包共用同一个摘要，
+      // 客户端就会连到一条服务端根本没有的进程上（§28.2 同一条理由）。字段顺序固定，`summary` 没写就不存在。
+      ...(mod.lane === undefined ? {} : { lane: mod.lane.summary === undefined
+        ? { path: mod.lane.path }
+        : { path: mod.lane.path, summary: mod.lane.summary } }),
     });
   }
   out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -756,7 +1189,81 @@ function parseServerModulesDecl(raw) {
  * 加一格（例如历史上的 `meta`、`modules`、`battle`、`room`）= 一起做三件事：加进这张表、进表面清单、加一条钉它的测试。
  * 三处缺一，守卫就红 —— 这就是「引擎被移植改写时，中间层不会静默少一格」的那道闸门。
  */
-export const SERVER_MEMBERS = Object.freeze(['preDispatch', 'meta', 'modules', 'battle', 'room']);
+export const SERVER_MEMBERS = Object.freeze(['preDispatch', 'meta', 'modules', 'battle', 'room', 'transport']);
+
+/**
+ * `pack.json.server.transport` —— **声明式的启动期传输配置**（DESIGN §28.30）。
+ *
+ * 为什么需要它：WebSocket 的 `perMessageDeflate` 今天写死在 `server/http/websocket.js:58`（`false`）。一个包
+ * （参考包 `ws-compression-reference`）能拿到的唯一办法是**手改引擎那一行** —— 正是这一层到处在消灭的东西。
+ *
+ * 为什么它**只是声明**、而不是「包注入服务端代码去改 wss」：
+ *   * 后者的能力面是**进程启动选项写权限**（一个包能改监听、改压缩、改超时），那已经不是「内容 / 界面 /
+ *     只读观察」里的任何一层，而是运维杠杆；业主裁决「**声明式足够就不做**」说的就是这条；
+ *   * 声明能给的同一个结果，代价小一个数量级：一张字段闭集、每个字段有上下界、启动日志点名生效值。
+ *
+ * 语义（与 `assets.serverPolicy` 的 `resourcePolicy` 逐字同一条先例）：它是**进程级**的 —— `perMessageDeflate`
+ * 是 `WebSocketServer` 的构造选项，不是某个房间的属性，所以一个包声明它，全服务器的 socket 都变了。因此
+ * **任何一条声明都会在启动日志里点名**，而多包声明时按 **DESIGN §28.3「包 id 小的赢」**取一份，其余点名忽略。
+ *
+ * 它改不了对局：压缩只改字节怎么走线，不改任何一条消息的内容与顺序 ⇒ **不要求** `combat: true`。
+ */
+export const TRANSPORT_FIELDS = Object.freeze([
+  'deflate', 'threshold', 'level', 'memLevel', 'concurrencyLimit',
+  'serverNoContextTakeover', 'clientNoContextTakeover', 'serverMaxWindowBits', 'clientMaxWindowBits',
+]);
+/** `deflate` 之外的每个字段的合法区间（闭区间，整数）。写出来是为了让「一个包能设多细」有界。 */
+export const TRANSPORT_BOUNDS = Object.freeze({
+  threshold: [0, 1048576],
+  level: [0, 9],
+  memLevel: [1, 9],
+  concurrencyLimit: [1, 1000],
+  serverMaxWindowBits: [8, 15],
+  clientMaxWindowBits: [8, 15],
+});
+
+/**
+ * `pack.json.server.transport` —— 声明式启动期传输配置（DESIGN §28.30，字段与理由见 `TRANSPORT_FIELDS`）。
+ *
+ * 归一化两条：`deflate` **必须在**（一个没有开关的块什么都没说，与 `SERVER_EMPTY_MEMBER` 同一条口径 ——
+ * 宁可拒绝，也不收一份读不出意图的声明）；其余字段可省，省掉 = 用 `ws` 自己的缺省（引擎**不**在这里抄一份
+ * 库的缺省值，抄一份就是第二个会漂的真相）。写回时按 `TRANSPORT_FIELDS` 的次序，所以清单字节稳定（进身份哈希）。
+ * @returns {{ ok: true, decl: object } | { ok: false, error: string, detail: string }}
+ */
+function parseTransportDecl(raw) {
+  if (!isPlainObj(raw)) {
+    return fail('TRANSPORT_BAD_SHAPE', 'server.transport must be an object: { deflate, threshold?, level?, memLevel?, concurrencyLimit?, serverNoContextTakeover?, clientNoContextTakeover?, serverMaxWindowBits?, clientMaxWindowBits? }');
+  }
+  for (const key of Object.keys(raw)) {
+    if (!TRANSPORT_FIELDS.includes(key)) {
+      return fail('TRANSPORT_UNKNOWN_FIELD', `server.transport: "${key}" is not a declared field (${TRANSPORT_FIELDS.join(', ')})`);
+    }
+  }
+  if (typeof raw.deflate !== 'boolean') {
+    return fail('TRANSPORT_BAD_DEFLATE', 'server.transport.deflate must be true or false — it is the switch itself, and a block without it says nothing');
+  }
+  /** @type {Record<string, any>} */
+  const out = { deflate: raw.deflate };
+  for (const [key, [lo, hi]] of Object.entries(TRANSPORT_BOUNDS)) {
+    if (raw[key] === undefined) continue;
+    if (!Number.isInteger(raw[key]) || raw[key] < lo || raw[key] > hi) {
+      return fail('TRANSPORT_BAD_VALUE', `server.transport.${key} must be an integer between ${lo} and ${hi}, got ${JSON.stringify(raw[key])}`);
+    }
+    out[key] = raw[key];
+  }
+  for (const key of ['serverNoContextTakeover', 'clientNoContextTakeover']) {
+    if (raw[key] === undefined) continue;
+    if (typeof raw[key] !== 'boolean') {
+      return fail('TRANSPORT_BAD_VALUE', `server.transport.${key} must be true or false, got ${JSON.stringify(raw[key])}`);
+    }
+    out[key] = raw[key];
+  }
+  // 键序稳定：清单是身份哈希的输入，写法不同不该换一个摘要。
+  /** @type {Record<string, any>} */
+  const ordered = {};
+  for (const key of TRANSPORT_FIELDS) if (out[key] !== undefined) ordered[key] = out[key];
+  return { ok: true, decl: { transport: ordered } };
+}
 
 /**
  * `pack.json.server` —— 分发前的准入钩子（§28.13）、对局元注册表（§29）、**服务端模块**（§28.14）与
@@ -797,6 +1304,11 @@ function parseServerDecl(raw) {
     const meta = parseMetaDecl(raw.meta);
     if (!meta.ok) return meta;
     decl.meta = meta.decl.meta;
+  }
+  if (raw.transport !== undefined) {
+    const transport = parseTransportDecl(raw.transport);
+    if (!transport.ok) return transport;
+    decl.transport = transport.decl.transport;
   }
   if (raw.preDispatch === undefined) return { ok: true, decl };
   const pre = raw.preDispatch;
@@ -958,7 +1470,98 @@ function parseRoomDecl(raw) {
   if (!raw.module.endsWith(ROOM_MODULE_EXT) || raw.module.length <= ROOM_MODULE_EXT.length) {
     return fail('ROOM_BAD_MODULE', `server.room.module must be a "${ROOM_MODULE_EXT}" module — the server loads it, the browser never does (unlike server.battle, which both ends run)`);
   }
-  return { ok: true, decl: { room: { module: raw.module } } };
+  // `hold`（DESIGN §28.57）：这个包要**申请**「空席房间先别销毁」。它不改对局内部，但它能决定一局会不会
+  // 因为「没真人了」而被回收 —— 那是对局结果的一部分，所以按 §28.14 / §28.52 同一条纪律要求 `combat: true`
+  // （闸门在 `normalizePackManifest` 里，因为它要读包级声明）。**只在写出来时**才进清单：没写的包逐字节不变。
+  if (raw.hold !== undefined && raw.hold !== true && raw.hold !== false) {
+    return fail('ROOM_BAD_HOLD', `server.room.hold must be true or false (may this pack ask the host to keep an emptied room alive), got ${typeof raw.hold}`);
+  }
+  return { ok: true, decl: { room: { module: raw.module, ...(raw.hold === undefined ? {} : { hold: raw.hold === true }) } } };
+}
+
+/**
+ * 对局种类声明（DESIGN §28.54）的闭字段与上界。
+ *
+ * ⚠️ 符号名以**实物**为准：`MATCH_KIND_FIELDS` 是**单数** `KIND`（曾有一次笔误写成复数
+ * `MATCH_KINDS_FIELDS`，以这一行为准），因为 `shared/modSurface.js` 的能力条目按这个名字登记符号，
+ * 两处必须逐字对上 —— 拼错就是一条永远对不上的登记。
+ *
+ * 座位上界取 12：比宿主最大房间还宽的「玩法」根本没人能组局，写进去只会成为一条永不满足的声明。
+ */
+export const MATCH_KIND_FIELDS = Object.freeze(['id', 'seats', 'label']);
+/** 种类 id 与包通道同一套字符集 —— 两条通道说的是同一件事（作者起的、有界的名字），不该各定一套拼法。 */
+export const MATCH_KIND_ID_RE = /^[a-z][a-z0-9_-]{0,63}$/;
+/** 一个包最多声明几种对局。**有界**：种类声明会进包的归一化清单（见下面解析点），无界就是无界摘要。 */
+export const MAX_PACK_MATCH_KINDS = 4;
+/** 每种对局的座位上下界（1..12，与宿主最大房间同宽）。 */
+export const MATCH_KIND_SEATS_MAX = 12;
+
+/**
+ * `pack.json.matchKinds` —— 这个包的 `matchClass` 包装器**在什么条件下**把一局换成另一种玩法（DESIGN §28.54）。
+ *
+ * 它是**声明与协商面，不是分派表**：管理器**不认玩法名**，判定住在包自己的模块里（`host.matchKinds()`）。
+ * 两条判据都照本层既有的形状，因为它们的失败方向都是「写了等于没写」：
+ *   * 必须有 `matchClass` 作接收人（与 `MODULES_CHANNELS_NEED_MATCH` 同形，判在下面归一化流程里）；
+ *   * 且**只在写出来时**才进归一化结果（没声明的包哈希逐字节不变，与 `variants` / `behaviour` 同一条纪律）。
+ *
+ * ⚠️ 「只在写出来时才进」不是风格问题：`identifyPack` 哈希的就是这份归一化清单，给**所有**包补一个
+ * `matchKinds: []` 会改掉**每一个已发布包**的摘要。
+ * @returns {{ ok: true, decl: object[] } | { ok: false, error: string, detail: string }}
+ */
+function parseMatchKindsDecl(raw) {
+  if (!Array.isArray(raw)) return fail('MATCHKINDS_BAD_SHAPE', 'matchKinds must be an array of { id, seats?: { min, max }, label? }');
+  if (!raw.length) return fail('MATCHKINDS_EMPTY', 'matchKinds must declare at least one kind (drop the key instead of sending [])');
+  if (raw.length > MAX_PACK_MATCH_KINDS) {
+    return fail('MATCHKINDS_TOO_MANY', `matchKinds: at most ${MAX_PACK_MATCH_KINDS} kinds per pack (got ${raw.length})`);
+  }
+  const out = [];
+  const seen = new Set();
+  for (const [i, kind] of raw.entries()) {
+    if (!isPlainObj(kind)) return fail('MATCHKINDS_BAD_SHAPE', `matchKinds[${i}] must be an object: { id, seats?: { min, max }, label? }`);
+    for (const key of Object.keys(kind)) {
+      if (!MATCH_KIND_FIELDS.includes(key)) {
+        return fail('MATCHKINDS_UNKNOWN_FIELD', `matchKinds[${i}]: "${key}" is not a kind field (${MATCH_KIND_FIELDS.join(', ')})`);
+      }
+    }
+    if (typeof kind.id !== 'string' || !MATCH_KIND_ID_RE.test(kind.id)) {
+      return fail('MATCHKINDS_BAD_ID', `matchKinds[${i}].id: "${String(kind.id)}" is not a valid kind id (^[a-z][a-z0-9_-]{0,63}$ — the same shape pack channels use)`);
+    }
+    if (seen.has(kind.id)) return fail('MATCHKINDS_DUPLICATE_ID', `matchKinds: "${kind.id}" is declared twice (one id, one kind)`);
+    seen.add(kind.id);
+    const clean = { id: kind.id };
+    if (kind.seats !== undefined) {
+      if (!isPlainObj(kind.seats)) {
+        return fail('MATCHKINDS_BAD_SEATS', `matchKinds["${kind.id}"].seats must be { min, max } (integers from 1 to ${MATCH_KIND_SEATS_MAX})`);
+      }
+      for (const key of Object.keys(kind.seats)) {
+        if (key !== 'min' && key !== 'max') {
+          return fail('MATCHKINDS_BAD_SEATS', `matchKinds["${kind.id}"].seats: "${key}" is not a seat bound (min, max)`);
+        }
+      }
+      for (const name of ['min', 'max']) {
+        const v = kind.seats[name];
+        if (!Number.isInteger(v) || v < 1 || v > MATCH_KIND_SEATS_MAX) {
+          return fail('MATCHKINDS_BAD_SEATS', `matchKinds["${kind.id}"].seats.${name} must be an integer from 1 to ${MATCH_KIND_SEATS_MAX}, got ${String(v)}`);
+        }
+      }
+      if (kind.seats.min > kind.seats.max) {
+        return fail('MATCHKINDS_BAD_SEATS', `matchKinds["${kind.id}"].seats: min ${kind.seats.min} is larger than max ${kind.seats.max}`);
+      }
+      clean.seats = { min: kind.seats.min, max: kind.seats.max };
+    }
+    if (kind.label !== undefined) {
+      const label = strField(kind.label, 60);
+      if (!label) {
+        return fail('MATCHKINDS_BAD_LABEL', `matchKinds["${kind.id}"].label must be a non-empty string of at most 60 characters (author-facing text, not a player-visible string — so it takes no i18n entry)`);
+      }
+      clean.label = label;
+    }
+    out.push(clean);
+  }
+  // 按 id 排序而不是书写顺序：两份书写顺序不同的清单必须是同一份字节（与 `requires` / `registers` 同一条纪律）。
+  // ⚠️ 这条不是美化：这份清单进包的归一化摘要，**书写顺序能改摘要就是摘要闸门能被绕过**。
+  out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return { ok: true, decl: out };
 }
 
 /**
@@ -1021,6 +1624,60 @@ function parseRoutesDecl(raw) {
  * @returns {{ ok: true, decl: Record<string, string> } | { ok: false, error: string, detail: string }}
  */
 /**
+ * `pack.json.dependencies` / `pack.json.conflicts` —— 管理器合同（DESIGN §28.48）的形状：`[{ id, range? }]`。
+ *
+ * `id` 是**另一个工坊包**的 id（`PACK_ID_RE` 同一套字符集 —— 一个 `../escape` 在这里就被点名拒，绝不留到
+ * 装载期去拼路径），`range` 是那个包 `version` 的区间（`shared/packs.js` 的同一套语法，缺省 = 任意版本）。
+ *
+ * 两条形状纪律，都是「不许猜作者的意思」：
+ *   * **逐字重复的条目去重**（`{id:'b'}` 写两遍是同一个意思），输出按 `(id, range)` 排序 ⇒ 归一化确定、
+ *     同一个包在两端得到同一份清单；
+ *   * **同一个 id 配两个不同的 range 是点名拒绝**（`*_CONFLICTING_RANGES`）—— 哪个区间算数？作者没说，
+ *     猜一个就等于替他做了一个会影响装载的决定。
+ *
+ * 这里只管形状。**语义在装载期**：是不是真的缺、版本合不合、有没有和别的包互斥、链上有没有断、有没有环，
+ * 全部由 `adjudicatePackGraph` 在那份**已加载的包集合**上裁决（形状对、语义照样可以死）。
+ * @param {unknown} raw
+ * @param {string} what `dependencies` / `conflicts`（进错误码与文案）
+ * @returns {{ ok: true, decl: object[] } | { ok: false, error: string, detail: string }}
+ */
+function parseModRefsDecl(raw, what) {
+  if (!Array.isArray(raw)) {
+    return fail(`${what.toUpperCase()}_BAD_SHAPE`, `${what} must be a list of { id, range? } entries (a pack id of another workshop pack)`);
+  }
+  const out = [];
+  const seen = new Map();
+  for (const [i, row] of raw.entries()) {
+    const where = `${what}[${i}]`;
+    if (!isPlainObj(row)) return fail(`${what.toUpperCase()}_BAD_ENTRY`, `${where} must be an object: { id, range? }`);
+    for (const key of Object.keys(row)) {
+      if (!['id', 'range'].includes(key)) return fail(`${what.toUpperCase()}_UNKNOWN_FIELD`, `${where}: "${key}" is not a declared field (id, range)`);
+    }
+    if (typeof row.id !== 'string' || !PACK_ID_RE.test(row.id)) {
+      return fail(`${what.toUpperCase()}_BAD_ID`, `${where}.id ${JSON.stringify(row.id ?? null)} is not a pack id`);
+    }
+    if (row.range !== undefined && (typeof row.range !== 'string' || !isVersionRange(row.range))) {
+      return fail(`${what.toUpperCase()}_BAD_RANGE`, `${where}.range: ${JSON.stringify(row.range ?? null)} is not a version range (">=1.0.0", "1.x" …)`);
+    }
+    const key = `${row.id}@${row.range ?? '*'}`;
+    if (seen.has(key)) continue; // 逐字相同的重复条目：去重（输出按 (id, range) 排序，确定性不变）
+    seen.set(key, row.id);
+    out.push(row.range === undefined ? { id: row.id } : { id: row.id, range: row.range });
+  }
+  // 同 id 不同 range：语义没法确定（哪个区间算数？），点名拒绝而不是猜
+  const byId = new Map();
+  for (const e of out) {
+    if (!byId.has(e.id)) byId.set(e.id, []);
+    byId.get(e.id).push(e.range ?? '*');
+  }
+  for (const [id, ranges] of byId) {
+    if (new Set(ranges).size > 1) return fail(`${what.toUpperCase()}_CONFLICTING_RANGES`, `${what}: "${id}" is listed with different ranges (${ranges.join(' vs ')}) — one entry per dependency`);
+  }
+  out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : (a.range ?? '') < (b.range ?? '') ? -1 : 1));
+  return { ok: true, decl: out };
+}
+
+/**
  * `pack.json.notices` —— 包的**纯文本声明**（DESIGN §28.15，业主 2026-10-10：「公告 / 鸣谢这一类非游戏内容的声明」）。
  *
  * 两个成员都是**包内相对 `.json` 路径**（不是内联文本）：与 `i18n` 同一条理由 —— 一段要展示给人看的正文属于内容，
@@ -1082,6 +1739,166 @@ function parseI18nDecl(raw) {
   return { ok: true, decl: out };
 }
 
+/**
+ * 形态（clip set）通道的形状（`pack.json.forms`，DESIGN §28.29）。
+ *
+ * 判据逐条（每条都对应一种「作者写了却不生效」的失败方向）：
+ *   * 表名必须是 `chars` / `enemies` / `tokens` —— 与 `ART_TABLES` 的对象表**同一组**（形态说的是 spine 模型，
+ *     而模型只住在这三张表里）；写别的名字**点名拒绝**（`FORMS_UNKNOWN_TABLE`），不是悄悄丢掉；
+ *   * 形态名必须是 `FORM_KIND_RE` 形状的字符串（它会成为 `FORMS[spine][kind]` 的键，也是 sim fx 里 `form` 的值）；
+ *   * 形态级字段只许 `change` / `end` / `leave` / `next` / `roles`（`FORMS_SPEC_UNKNOWN_FIELD`）；
+ *   * 三个 clip 名（`change` / `end` / `leave`）必须是字符串或 null —— 渲染器拿它去 skeleton 里找 clip；
+ *   * `roles` 由 `checkFormRoles` 判（键在白名单里、值是非空字符串 / null / 一个 `{begin, loop, end}` 对象）；
+ *   * **第一方已有的形态名一律拒绝**（`FORMS_FIRST_PARTY_OVERLAP`）：合并规则是第一方优先（§28.29 裁决 2），
+ *     所以「包想覆盖第一方」这件事一旦被静静丢掉，作者面对的就是「写了等于没写」—— 这一层存在的全部理由就是
+ *     消灭那个方向，所以它在这里被点名，而不是在并表时被过滤。
+ *
+ * `next` 的死链判定**不在这里**：它要等同一个 spine id 上的形态名都收齐（`formNextDeadLink`，在
+ * `normalizePackManifest` 里形状判完之后跑）。
+ */
+function parseFormsDecl(raw) {
+  if (!isPlainObj(raw)) {
+    return fail('FORMS_BAD_SHAPE', `forms must be an object: { ${FORM_TABLES.join('|')}: { "<spine id>": { "<form name>": { roles } } } }`);
+  }
+  /** @type {Record<string, Record<string, object>>} */
+  const decl = {};
+  for (const [table, entries] of Object.entries(raw)) {
+    if (!FORM_TABLES.includes(table)) {
+      return fail('FORMS_UNKNOWN_TABLE', `forms: "${table}" is not a form table (one of: ${FORM_TABLES.join(', ')} — the three tables that carry a spine model)`);
+    }
+    if (!isPlainObj(entries)) {
+      return fail('FORMS_BAD_SHAPE', `forms.${table} must be an object: { "<spine id>": { "<form name>": { roles } } }`);
+    }
+    for (const [id, spec] of Object.entries(entries)) {
+      if (!RECORD_ID_RE.test(id)) {
+        return fail('FORMS_BAD_ID', `forms.${table}: "${id}" is not a valid spine id (the key is the spine id / defId the view looks the form up by)`);
+      }
+      if (!isPlainObj(spec)) {
+        return fail('FORMS_BAD_SHAPE', `forms.${table}["${id}"] must be an object of { "<form name>": { change?, end?, leave?, next?, roles } }`);
+      }
+      const official = firstPartyFormNames(id);
+      for (const [kind, form] of Object.entries(spec)) {
+        const where = `forms.${table}["${id}"].${kind}`;
+        if (!FORM_KIND_RE.test(kind)) {
+          return fail('FORMS_BAD_KIND', `${where}: the form name must be a plain name (letters, digits, "_", starting with a letter) — it becomes a key of the form table and the value of an fx "form"`);
+        }
+        if (official.has(kind)) {
+          return fail('FORMS_FIRST_PARTY_OVERLAP', `${where}: the first-party FORMS table already has the form "${kind}" on "${id}" and it wins (DESIGN §28.29) — pick a form name of your own; a declaration that cannot take effect is refused rather than dropped`);
+        }
+        if (!isPlainObj(form)) return fail('FORMS_BAD_SHAPE', `${where} must be an object: { change?, end?, leave?, next?, roles }`);
+        for (const key of Object.keys(form)) {
+          if (!FORM_SPEC_KEYS.includes(key)) {
+            return fail('FORMS_SPEC_UNKNOWN_FIELD', `${where}: "${key}" is not a field of a form (${FORM_SPEC_KEYS.join(', ')}) — the renderer reads change / end / leave / next / roles`);
+          }
+        }
+        for (const clip of ['change', 'end', 'leave']) {
+          const v = form[clip];
+          if (v === undefined || v === null) continue;
+          if (typeof v !== 'string' || !v) return fail('FORMS_BAD_CLIP', `${where}.${clip} must be a non-empty clip name string (or null: no such clip)`);
+        }
+        if (form.next !== undefined && form.next !== null) {
+          if (typeof form.next !== 'string' || !FORM_KIND_RE.test(form.next)) {
+            return fail('FORMS_BAD_NEXT', `${where}.next must be the name of another form on "${id}"`);
+          }
+        }
+        if (form.roles === undefined || form.roles === null) {
+          // `roles: null` / `roles: {}` 在渲染器里是同一件事（什么都不画的形态，中间态与终态都用得上），
+          // 但**省略** roles 与「这个形态没有 clip」不是同一件事：前者多半是作者忘了写。
+          return fail('FORMS_MISSING_ROLES', `${where} has no "roles" — every form states its clip set (use "roles": {} for a form that draws nothing of its own)`);
+        }
+        const roles = checkFormRoles(form.roles);
+        if (!roles.ok) return fail('FORMS_BAD_ROLES', `${where}.${roles.reason}`);
+        (decl[table] ||= {})[id] ||= {};
+        decl[table][id][kind] = {
+          ...(form.change !== undefined && form.change !== null ? { change: form.change } : {}),
+          ...(form.end !== undefined && form.end !== null ? { end: form.end } : {}),
+          ...(form.leave !== undefined && form.leave !== null ? { leave: form.leave } : {}),
+          ...(form.next !== undefined && form.next !== null ? { next: form.next } : {}),
+          roles: roles.value,
+        };
+      }
+    }
+  }
+  return { ok: true, decl };
+}
+
+/**
+ * `next` 那条链的判据（`FORMS_NEXT_UNKNOWN`）：`next` 必须指向**同一个 spine id 上**已声明的形态 ——
+ * 第一方 `FORMS` 里的那一个，或本包同一份声明里的那一个。指向别处就是死链：渲染器读
+ * `formsFor(spine)?.[f.next]`，取到 `undefined` 时那条 `end` 动画落地后**什么都不会切**。
+ *
+ * 纯函数（喂一份声明就能测失败分支），调用点在 `normalizePackManifest` 的形状判完之后。
+ * @param {Record<string, Record<string, object>>} decl 已过形状层的 `forms`
+ * @returns {{ table: string, id: string, kind: string, next: string } | null} 第一条死链
+ */
+export function formNextDeadLink(decl) {
+  for (const [table, entries] of Object.entries(isPlainObj(decl) ? decl : {})) {
+    for (const [id, forms] of Object.entries(entries)) {
+      const known = firstPartyFormNames(id);
+      for (const kind of Object.keys(forms)) known.add(kind);
+      for (const [kind, form] of Object.entries(forms)) {
+        const next = form && form.next;
+        if (typeof next === 'string' && !known.has(next)) return { table, id, kind, next };
+      }
+    }
+  }
+  return null;
+}
+
+/** `fx.manifest` 的扩展名：这条通道送的是**数据**（浏览器 fetch 它，`/workshop-assets` 也只放行 `.json`）。 */
+const FX_MANIFEST_EXT = '.json';
+
+/**
+ * 静态相位通道的形状（`pack.json.fx`，DESIGN §28.29 的 `silentPhases` 与 §35.1 的 `manifest`）。
+ *
+ * 判据都是「不生效」的方向：未知字段点名拒绝（`FX_UNKNOWN_FIELD`），`silentPhases` 数组里每一条必须是非空
+ * 字符串（`FX_BAD_SILENT_PHASE`），`manifest` 必须是包内 `assets/` 下的相对 `.json` 路径（`FX_BAD_MANIFEST`）。
+ * `silentPhases: []` 是**合法但什么都不做**的声明 —— 与 `routes: []` 同一个语义，所以它不算贡献项；`manifest`
+ * 相反是一条**带文件**的声明，所以它算（见 `contributesDecl`）。
+ *
+ * `manifest` 说的是「这个包自带的官方战斗特效清单」（docs/WORKSHOP.md §1.19.2）：装载器还会在包目录上核对那份
+ * 文件真的存在（`server/workshop.js` 的 `fxManifestIssues`，与 `assets` / `client.panels` 同一条纪律）。
+ */
+function parseFxDecl(raw) {
+  if (!isPlainObj(raw)) return fail('FX_BAD_SHAPE', 'fx must be an object: { silentPhases: ["<phase kind>", …], manifest: "<path inside assets/>" }');
+  const FX_FIELDS = ['silentPhases', 'manifest'];
+  for (const key of Object.keys(raw)) {
+    if (!FX_FIELDS.includes(key)) {
+      return fail('FX_UNKNOWN_FIELD', `fx: "${key}" is not a declared field (${FX_FIELDS.join(', ')})`);
+    }
+  }
+  if (raw.silentPhases === undefined && raw.manifest === undefined) {
+    return fail('FX_BAD_SHAPE', `fx must declare at least one of: ${FX_FIELDS.join(', ')} — an empty object says nothing and is refused rather than ignored`);
+  }
+  /** @type {string[]} */
+  const silentPhases = [];
+  if (raw.silentPhases !== undefined) {
+    if (!Array.isArray(raw.silentPhases)) {
+      return fail('FX_BAD_SHAPE', 'fx.silentPhases must be an array of phase kinds (e.g. ["bombed", "warning"])');
+    }
+    for (const kind of raw.silentPhases) {
+      if (typeof kind !== 'string' || !kind) {
+        return fail('FX_BAD_SILENT_PHASE', `fx.silentPhases: ${JSON.stringify(kind)} must be a non-empty string (the "kind" of a 'phase' fx)`);
+      }
+      if (!silentPhases.includes(kind)) silentPhases.push(kind);
+    }
+    silentPhases.sort();
+  }
+  let manifest = null;
+  if (raw.manifest !== undefined && raw.manifest !== null) {
+    if (typeof raw.manifest !== 'string' || !raw.manifest.trim()) {
+      return fail('FX_BAD_MANIFEST', `fx.manifest must be a non-empty string — the path of the manifest inside the pack's own assets/ folder (e.g. "fx/manifest.json")`);
+    }
+    manifest = raw.manifest.trim();
+    if (!isSafeAssetPath(manifest)) {
+      return fail('FX_BAD_MANIFEST', `fx.manifest "${manifest}" must be a relative path inside the pack's assets/ folder (no leading "/", no "..", no URL, no "\\")`);
+    }
+    if (!manifest.endsWith(FX_MANIFEST_EXT) || manifest.length <= FX_MANIFEST_EXT.length) {
+      return fail('FX_BAD_MANIFEST', `fx.manifest "${manifest}" must name a "${FX_MANIFEST_EXT}" file — it is the file table the client reads`);
+    }
+  }
+  return { ok: true, decl: manifest ? { silentPhases, manifest } : { silentPhases } };
+}
 
 /**
  * `pack.json.operators[<charId>]` 允许的两个列表字段。**只此一份**：形状校验（`normalizePackManifest`）与
@@ -1143,11 +1960,47 @@ export const ART_TABLES = {
   tokens: { urls: ['avatar', 'portrait'], strings: ['owner', 'spineVariant'], spine: 'flat' },
   skills: { flat: true, target: ['skills'] },
   profSub: { flat: true, target: ['prof', 'sub'] },
-  // 盟约图标（mod 新增）：assets.bonds[bondId] 的值就是路径字符串（data/assets.json 实测）
+  // 盟约图标与分队（策略）图标：与 skills / profSub **同一张脸** —— `data/assets.json` 实测 `bonds["yanShip"]`
+  // 与 `bands["band_bldsk"]` 的值直接就是路径字符串（`/assets/bond/yanShip.png` / `/assets/band/band_bldsk.png`），
+  // 不是「对象 + urls 字段」。这两张表缺了会让**整包**在下面的闸门处被拒（`ART_UNKNOWN_TABLE`），而真实 mod
+  // （一个盟约拓展包把自己新加的盟约 / 策略图标摆在这里）正是这么写的 —— 一个只多两张图标表的合法包，
+  // 代价却是连 `data.chess` 都进不去。
+  //
+  // 落点：`assets.bonds` / `assets.bands`，客户端 `public/js/ui/assetUrls.js` 的 `bondIconUrl(m, bondId)` /
+  // `bandIconUrl(m, bandId)` 读的就是这两个键 —— **键名必须与消费端一致**，写成 `bond` / `band` 不会报错，
+  // 只会静默回落到没有图标（`test/workshopArtTables.test.js` 钉住了这一点）。
   bonds: { flat: true, target: ['bonds'] },
-  // 策略（band）头像（mod 新增）：assets.bands[bandId] 的值就是路径字符串
   bands: { flat: true, target: ['bands'] },
+  // 单位战斗音效（落点 `assets.audio.sfx.units[<charId>]`）。**它解决什么**：客户端按 `sfx.units[<模型 id>]`
+  // 取 attack / hit / skill / die / born（public/js/assets.js unitSfxUrl、public/js/audio.js unit()），
+  // 而包自带的干员在这张**官方素材管线产物**里没有条目 —— 结果就是「打起来一声不响」（业主 2026-10-17：
+  // 颂乐人偶 5 名成员的技能音效全缺）。与 `art` 其余表**同一条纪律**：形状照官方条目的实际字段抄，路径是包内
+  // 相对路径（装载时变成 /workshop-assets 的绝对 URL），客户端零改动。
+  //
+  // 三个新形状键（只有这张表用，别的表不声明就等于没有）：
+  //   * `maps` —— 「技能 index → 一条音频路径」的对象（`skills` 技能发动音 / `attacks` 技能期间挥击 / `hits`
+  //     技能期间命中；引擎侧对应 tools/assets/audio.mjs pickModeAttacks / pickModeHits，客户端 audio.js
+  //     unit() 按 `skills[i]` / `attacks[i]` / `hits[i]` 取）；
+  //   * `objects` —— 官方音源表给的「概率 / 音量」对象（`mix` / `attackMix` / `hitMix`，原样抄；缺省即必定播放）。
+  sfxUnits: {
+    flat: false, target: ['audio', 'sfx', 'units'],
+    urls: ['attack', 'hit', 'skill', 'die', 'born'], strings: [],
+    maps: ['skills', 'attacks', 'hits'], objects: ['mix', 'attackMix', 'hitMix'],
+  },
 };
+
+/**
+ * 每一张扁平表都必须给出 `target`（它在 `assets.json` 里的落点路径）。
+ *
+ * 为什么在**模块加载**时抛而不是留到运行时：`target` 只有 `mergeWorkshopFlatArt` 一个读者，一张扁平表缺了它
+ * 出现的症状是「校验通过、`report.flatArt` 也数到了、图就是没进清单」—— 又一个静默失效，正是这一层一直在拒绝
+ * 的那一类。纪律是「加一张扁平表 = 两行」，漏掉第二行现在会在导入时就炸，而不是等到有人发现图标不显示。
+ */
+for (const [table, shape] of Object.entries(ART_TABLES)) {
+  if (!shape.flat) continue;
+  if (Array.isArray(shape.target) && shape.target.length) continue;
+  throw new Error(`ART_TABLES["${table}"] is flat and must declare a non-empty "target" (the path inside assets.json it is merged into)`);
+}
 /**
  * 一个 spine 对象里的路径字段、路径数组字段，以及原样抄过去但要查类型的字段。
  *
@@ -1220,6 +2073,27 @@ function parseArtEntry(entry, where, shape) {
       out[key] = value;
       continue;
     }
+    // `maps`（sfxUnits 的 skills / attacks / hits）：「技能 index → 包内路径」的对象。index 必须是十进制数字
+    // （客户端的消费端 `u.skills[skillIndex]` 拿数字下标查，写 `"S1"` 那样的键查不到，是**静默**失效 ——
+    // 所以这里响亮拒绝）；值是包内相对路径，与 urls 同一个判据。
+    if ((shape.maps || []).includes(key)) {
+      if (!isPlainObj(value)) return { error: 'ART_BAD_SHAPE', detail: `${where}.${key} must map skill indexes to a path inside assets/ ({ "<index>": "<path>" })` };
+      const map = {};
+      for (const [idx, p] of Object.entries(value)) {
+        if (!/^\d+$/.test(idx)) return { error: 'ART_BAD_SHAPE', detail: `${where}.${key}: "${idx}" must be a skill index (a non-negative integer)` };
+        if (!isSafeAssetPath(p)) return { error: 'ART_PATH_UNSAFE', detail: `${where}.${key}["${idx}"]: "${String(p)}" must be a relative path inside assets/` };
+        map[idx] = p;
+      }
+      if (Object.keys(map).length) out[key] = map;
+      continue;
+    }
+    // `objects`（sfxUnits 的 mix / attackMix / hitMix）：官方音源表给的「概率 / 音量」，**原样抄**，不做形状解释
+    // （它是素材管线产物，形状由 tools/assets/audio.mjs 定义；照官方抄就不会漂）。
+    if ((shape.objects || []).includes(key)) {
+      if (!isPlainObj(value)) return { error: 'ART_BAD_SHAPE', detail: `${where}.${key} must be an object (the official sound bank's chance / volume)` };
+      out[key] = value;
+      continue;
+    }
     if (key === 'spine') {
       if (shape.spine === 'flat') {
         const parsed = parseArtSpine(value, `${where}.spine`);
@@ -1240,7 +2114,7 @@ function parseArtEntry(entry, where, shape) {
     }
     return {
       error: 'ART_UNKNOWN_FIELD',
-      detail: `${where}: "${key}" is not a field of this art entry (${[...shape.urls, ...shape.strings, 'spine'].join(', ')})`,
+      detail: `${where}: "${key}" is not a field of this art entry (${[...shape.urls, ...shape.strings, ...(shape.maps || []), ...(shape.objects || []), 'spine'].join(', ')})`,
     };
   }
   return { entry: out, error: null };
@@ -1250,6 +2124,12 @@ function parseArtEntry(entry, where, shape) {
  * Validate and normalise one pack's `pack.json`.
  * @param {any} raw parsed pack.json
  * @param {string} [dirName] the pack's directory name (authoritative when the manifest omits / contradicts `id`)
+ * @param {{ hasAssets?: boolean, behaviourSwitches?: Record<string, any> }} [opts] `hasAssets` = 这个包在磁盘上有
+ *   `assets/` 文件夹（判贡献项用）；`behaviourSwitches` = 行为开关的闭枚举表，**默认就是真的那一份**
+ *   （`shared/behaviour.js` 的 `BEHAVIOUR_SWITCHES`）。它做成入参的唯一理由与 `surfaceLedgerIssues(ids,
+ *   generation)` / `behaviourSwitchIssues(table)` 逐字相同：本刀那张表是**空的**，写死的话「写了才进清单」
+ *   与 `BEHAVIOUR_NEEDS_COMBAT` 这两条分支就**任何测试都碰不到** —— 一条从来没验过失败分支的守卫，和没有
+ *   守卫是一回事。生产路径（装载器 / 校验器 / 编辑器）一律不传它。
  * @returns {{ ok: true, pack: { id: string, name: string, version: string, author: string|null, license: string|null,
  *   description: string|null, gameVersion: string|null, content: string[], overrides: string[],
  *   voices: Record<string, Record<string, string[]>>, voiceLangs: Record<string, Record<string, Record<string, string[]>>>,
@@ -1263,15 +2143,46 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   // 顶层键闭集（`PACK_FIELDS`）：一个我们不认识的键**点名拒绝**，绝不读过去。这是本刀那条共通纪律的落点 ——
   // 三个社区 mod 里的 `variants` / `skins` / `i18n` 全都是「写了等于没写」的静默丢，而作者从错误文案里
   // 得不到任何线索。判据放在最前面：一个连键都不认识的清单，后面的字段级判据都是在猜它想说什么。
+  //
+  // 例外只有一条：`target: "stardust"` 的包（给 Stardust 宿主的**声明型包**）额外允许 Stardust profile 的几格
+  // （`type` / `capabilities` / `englishName` / `authors` / `app`），以及**那格里声明的能力自己认领的字段**
+  // （`STARDUST_CAPABILITY_FIELDS`，例如 `announcements` 能力的 `announcements`）—— 同一份 pack.json 两端各自
+  // 读得懂，谁都不许把对方认识的键当成笔误。
+  const starTarget = raw.target === 'stardust';
+  // 能力认领的字段只对**声明了那个能力**的包放行：`announcements` 字段跟着 `capabilities: ["announcements"]` 走
+  // （与 Stardust 侧 `MOD_CAPABILITY_NOT_DECLARED` 同一条规则，本引擎这边只管形状）。
+  const starClaimed = new Set();
+  if (starTarget && Array.isArray(raw.capabilities)) {
+    for (const cap of raw.capabilities) {
+      for (const name of STARDUST_CAPABILITY_FIELDS[cap] || []) starClaimed.add(name);
+    }
+  }
   for (const key of Object.keys(raw)) {
     if (PACK_FIELDS.includes(key)) continue;
+    if (starTarget && STARDUST_TARGET_FIELDS.includes(key)) continue;
+    if (starClaimed.has(key)) continue;
     return fail(PACK_UNKNOWN_FIELD_CODE,
-      `pack.json: "${key.length > MAX_KEY_SHOWN ? `${key.slice(0, MAX_KEY_SHOWN)}…` : key}" is not a field of this pack format (${PACK_FIELDS.join(', ')}). A key this loader does not know is never read: write it as one of the fields above, or drop it — a declaration that is ignored is worse than a refusal`);
+      `pack.json: "${key.length > MAX_KEY_SHOWN ? `${key.slice(0, MAX_KEY_SHOWN)}…` : key}" is not a field of this pack format (${PACK_FIELDS.join(', ')}${starTarget ? `, plus ${STARDUST_TARGET_FIELDS.join(', ')} (and the fields a declared Stardust capability claims) for target "stardust"` : ''}). A key this loader does not know is never read: write it as one of the fields above, or drop it — a declaration that is ignored is worse than a refusal`);
   }
   const id = typeof raw.id === 'string' && raw.id ? raw.id : dirName;
   if (!PACK_ID_RE.test(id)) return fail('BAD_PACK_ID', `"${id}" is not a valid pack id (letters, digits, _ and - only)`);
   if (dirName && typeof raw.id === 'string' && raw.id && raw.id !== dirName) {
     return fail('PACK_ID_MISMATCH', `pack.json id "${raw.id}" does not match its directory "${dirName}"`);
+  }
+  // `content` 的成员资格：**不认识的条目点名整包拒绝**，不再静默过滤。
+  //
+  // 从前这里是 `raw.content.filter(… includes(f))`：一个包写 `content: ["chess", "variants"]` 时，`variants` 被
+  // 安静地丢掉，作者看到的是「pack.json 合法、包加载了、可我写的那件事没发生」—— 正是 `PACK_FIELDS` 那段注释
+  // 点名的三个社区 mod（`variants` / `skins` / `i18n`）撞上的那面墙，只是位置从「顶层键」挪到了「这张表的成员」。
+  // 这一刀把它一并修掉（业主口径：不认识的声明必须响亮失败）。
+  if (raw.content !== undefined && !Array.isArray(raw.content)) {
+    return fail('BAD_CONTENT_LIST', '"content" must be an array of file names (an empty array is a pack that brings no data file)');
+  }
+  for (const f of Array.isArray(raw.content) ? raw.content : []) {
+    if (typeof f === 'string' && WORKSHOP_CONTENT_FILES.includes(f)) continue;
+    const shown = typeof f === 'string' ? (f.length > MAX_KEY_SHOWN ? `${f.slice(0, MAX_KEY_SHOWN)}…` : f) : (Array.isArray(f) ? 'an array' : typeof f);
+    return fail('UNKNOWN_CONTENT_FILE',
+      `content: "${shown}" is not a data file of this pack format (${WORKSHOP_CONTENT_FILES.join(', ')}). A name this loader does not know is never read: a pack that wrote it would ship a file nothing merges — "config" in particular has NO content channel (see docs/WORKSHOP.md §1.1), and a 口径 is declared as pack.json.variants (its VALUES go in the "variants" content file, DESIGN §28.51)`);
   }
   const content = Array.isArray(raw.content)
     ? [...new Set(raw.content.filter((f) => typeof f === 'string' && WORKSHOP_CONTENT_FILES.includes(f)))].sort()
@@ -1297,7 +2208,16 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   // accepted, so a typo cannot silently produce a line that never plays.
   const voices = raw.voices === undefined ? {} : raw.voices;
   if (!isPlainObj(voices)) return fail('VOICE_BAD_SHAPE', 'voices must be an object: { "<charId>": { "<slot>": ["<path>"] } }');
-  if (Object.keys(voices).length && opts.hasAssets !== true) {
+  /**
+   * `voices` / `voiceLangs` 里**包内相对路径**的那几条（字符串条目）。CDN 条目（对象）不要求 `assets/` 文件夹 ——
+   * 它读的不是包里的字节。这个判据放在解析**之前**是刻意的：`VOICE_NEEDS_ASSETS` 与 `VOICE_SLOT_UNKNOWN` 谁先报
+   * 是既有行为，不动它（`test/workshopVoices.test.js` 钉着那几条）。
+   */
+  const anyLocalVoicePath = (tbl) => isPlainObj(tbl) && Object.values(tbl).some((slots) => isPlainObj(slots)
+    && Object.values(slots).some((v) => (Array.isArray(v) ? v : [v]).some((e) => typeof e === 'string' && e)));
+  const hasLocalVoice = anyLocalVoicePath(voices)
+    || Object.values(isPlainObj(raw.voiceLangs) ? raw.voiceLangs : {}).some(anyLocalVoicePath);
+  if (Object.keys(voices).length && opts.hasAssets !== true && hasLocalVoice) {
     return fail('VOICE_NEEDS_ASSETS', 'a pack that declares voices must put the files in its assets/ folder (e.g. assets/voice/…)');
   }
   /**
@@ -1308,7 +2228,9 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
    * Paths are relative and inside assets/, with no traversal — the same rule the /workshop-assets route enforces
    * (that route refuses `.` and `..` segments, so a `.` here would only ever produce a URL that 404s).
    */
-  const parseVoiceTable = (table, where) => {
+  /** CDN 条目的登记处（`pack.voiceCdn`）：`{ lang, charId, slot, file, url, sha256 }`。 */
+  const voiceCdn = [];
+  const parseVoiceTable = (table, where, lang) => {
     if (!isPlainObj(table)) return fail('VOICE_BAD_SHAPE', `${where} must map slots to file lists`);
     /** @type {Record<string, Record<string, string[]>>} */
     const out = {};
@@ -1320,7 +2242,40 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
         if (!VOICE_SLOTS.includes(slot)) {
           return fail('VOICE_SLOT_UNKNOWN', `${where}["${charId}"]["${slot}"] is not a voice slot (one of: ${VOICE_SLOTS.join(', ')})`);
         }
-        const list = (Array.isArray(files) ? files : [files]).filter((f) => typeof f === 'string' && f);
+        /** @type {string[]} */
+        const list = [];
+        for (const [i, entry] of (Array.isArray(files) ? files : [files]).entries()) {
+          const at = `${where}["${charId}"]["${slot}"]${Array.isArray(files) ? `[${i}]` : ''}`;
+          // 作者自备 CDN 的条目（DESIGN §28.33）：`{ url, sha256, file }`。它解析出来的**文件位置**进同一张表，
+          // 所以播放侧（索引 / 合并 / 客户端）一个字节都不用改；引擎装载期负责把字节从作者的地址取到本地缓存
+          // （`server/voiceCdn.js`），客户端仍然只看见 /workshop-assets 那一条既有路由。
+          if (isPlainObj(entry)) {
+            for (const key of Object.keys(entry)) {
+              if (!VOICE_CDN_FIELDS.includes(key)) {
+                return fail('VOICE_CDN_UNKNOWN_FIELD', `${at}: "${key}" is not a field of a CDN voice entry (${VOICE_CDN_FIELDS.join(', ')})`);
+              }
+            }
+            if (typeof entry.url !== 'string' || !entry.url.startsWith('https://')) {
+              return fail('VOICE_CDN_BAD_URL', `${at}.url must be an absolute "https://" URL — this channel fetches from the AUTHOR's own CDN, and https is the only protocol it will speak (http: / data: / file: / protocol-relative all refuse)`);
+            }
+            let parsed = null;
+            try { parsed = new URL(entry.url); } catch { parsed = null; }
+            if (!parsed || parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) {
+              return fail('VOICE_CDN_BAD_URL', `${at}.url must be an absolute "https://" URL with a host and no credentials in it`);
+            }
+            if (typeof entry.sha256 !== 'string' || !VOICE_CDN_SHA256_RE.test(entry.sha256)) {
+              return fail('VOICE_CDN_BAD_DIGEST', `${at}.sha256 must be a 64-character lowercase hex sha256 of the bytes that URL serves — the engine checks it against what it downloads and refuses anything else`);
+            }
+            const lowerFile = String(entry.file).toLowerCase();
+            if (!isSafeRelativePath(entry.file) || !VOICE_CDN_AUDIO_EXTS.some((ext) => lowerFile.endsWith(ext))) {
+              return fail('VOICE_CDN_BAD_FILE', `${at}.file must be a relative path inside assets/ ending in ${VOICE_CDN_AUDIO_EXTS.join(' / ')} (e.g. "voice/char_1/place_1.mp3") — that is the URL the client will ask for`);
+            }
+            voiceCdn.push({ lang: lang || null, charId, slot, file: entry.file, url: entry.url, sha256: entry.sha256 });
+            list.push(entry.file);
+            continue;
+          }
+          if (typeof entry === 'string' && entry) list.push(entry);
+        }
         if (!list.length) return fail('VOICE_EMPTY', `${where}["${charId}"]["${slot}"] names no file`);
         for (const f of list) {
           if (f.startsWith('/') || f.includes('\\') || f.split('/').some((seg) => seg === '..' || seg === '.') || /^[A-Za-z]:/.test(f)) {
@@ -1333,7 +2288,7 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
     }
     return { ok: true, table: out };
   };
-  const parsedVoices = parseVoiceTable(voices, 'voices');
+  const parsedVoices = parseVoiceTable(voices, 'voices', null);
   if (!parsedVoices.ok) return parsedVoices;
   const voiceLines = parsedVoices.table;
   // 多语言配音：`voiceLangs: { "<lang>": { <charId>: { <slot>: ["<path>"] } } }` —— 一个语种一张表，与上面 `voices`
@@ -1345,7 +2300,7 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   if (!isPlainObj(voiceLangs)) {
     return fail('VOICE_LANG_BAD_SHAPE', 'voiceLangs must be an object: { "<lang>": { "<charId>": { "<slot>": ["<path>"] } } }');
   }
-  if (Object.keys(voiceLangs).length && opts.hasAssets !== true) {
+  if (Object.keys(voiceLangs).length && opts.hasAssets !== true && hasLocalVoice) {
     return fail('VOICE_NEEDS_ASSETS', 'a pack that declares voices must put the files in its assets/ folder (e.g. assets/voice/…)');
   }
   /** @type {Record<string, Record<string, Record<string, string[]>>>} */
@@ -1365,6 +2320,21 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   // VOICE_LANGS order is the canonical one (same reason workshopVoiceLangIndex sorts): the table this function returns
   // goes straight into the merged manifest, whose bytes must not depend on how the author happened to write pack.json.
   const orderedLangLines = Object.fromEntries(VOICE_LANGS.filter((l) => voiceLangLines[l]).map((l) => [l, voiceLangLines[l]]));
+  // 作者自备 CDN 的语音素材（DESIGN §28.33）：登记表按 `lang → charId → slot → file` 排序后再输出，因为它是**身份
+  // 哈希的输入**（`canonicalJson(pack)`），作者书写次序不同不该换一个摘要。
+  //
+  // 两条闸门，都在这里（解析完才知道有没有 CDN 条目）：
+  //   * `license` **必须有**：素材的再分发者是这个包的作者，与 assets/ 那条同一条理由 —— 只是字节放在别人的 CDN 上，
+  //     授权问题一点没变（`ASSETS_NEED_LICENSE` 只管 `assets/` 文件夹，所以这里单独判一条）；
+  //   * 一条 CDN 条目都没有时，归一化结果里**没有** `voiceCdn` 这个键（与 `client` / `i18n` 同一条「只在键存在时
+  //     才写回」的纪律）⇒ 今天所有包的归一化清单与哈希**逐字节不变**。
+  const orderedVoiceCdn = voiceCdn
+    .slice()
+    .sort((a, b) => `${a.lang || ''}\u0000${a.charId}\u0000${a.slot}\u0000${a.file}`.localeCompare(`${b.lang || ''}\u0000${b.charId}\u0000${b.slot}\u0000${b.file}`));
+  if (orderedVoiceCdn.length && !license) {
+    return fail('VOICE_CDN_NEEDS_LICENSE',
+      'a pack that fetches voice lines from a CDN must declare a license (e.g. "CC0-1.0", "CC-BY-4.0", or "see assets/LICENSE.txt") — the pack redistributes those bytes, so the manifest has to say under what terms');
+  }
   // 盟约图标（这个包自带的 art）：`bondIcons: { "<bondId>": "<path inside assets/>" }`。
   //
   // 为什么需要它：客户端按**盟约 id** 从 `data/assets.json` 的 `bonds` 取图标（public/js/assets.js bondIconUrl），
@@ -1425,6 +2395,14 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   // 都写在那一张表里，校验、索引与并表三处共用，不会各自漂移。
   const art = raw.art === undefined ? {} : raw.art;
   if (!isPlainObj(art)) return fail('ART_BAD_SHAPE', 'art must be an object: { chars|enemies|tokens: { "<id>": { … } } }');
+  // ① 形状 → ② **表名闭集** → ③ `ART_NEEDS_ASSETS`：**表名合不合法与有没有 assets/ 是两件独立的事**，
+  // 所以闭集排在素材目录那条闸之前（2026-10-13 修的是**顺序**，判据一条没动）。为什么顺序是诊断性的一部分：
+  // 作者把音频写成 `art.audio` 时，若先撞 `ART_NEEDS_ASSETS`，他看到的是一句「请把文件放进 assets/」——
+  // 于是去建目录、重跑、还是同一句话，而**真因（这张表根本不存在）从头到尾没有人告诉他**。
+  // 闭集先报，报的才是他要改的那一处；而表名写对、只是没建 assets/ 的包照旧得到 `ART_NEEDS_ASSETS`。
+  for (const table of Object.keys(art)) {
+    if (!ART_TABLES[table]) return fail('ART_UNKNOWN_TABLE', `"${table}" is not an art table (one of: ${Object.keys(ART_TABLES).join(', ')})`);
+  }
   if (Object.keys(art).length && opts.hasAssets !== true) {
     return fail('ART_NEEDS_ASSETS', 'a pack that declares art must put the files in its assets/ folder (e.g. assets/art/…)');
   }
@@ -1432,6 +2410,8 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   const artEntries = {};
   for (const [table, entries] of Object.entries(art)) {
     const shape = ART_TABLES[table];
+    // 第二道闸：上面那趟闭集已经按**同一个表**判过（上面拒了就到不了这里）。留着它是为了后面那句 `shape.flat` /
+    // `shape.spine` —— 表名若不认识，缺了这条守卫就会变成一句 `TypeError`，而不是一条点名到表名的拒绝。
     if (!shape) return fail('ART_UNKNOWN_TABLE', `"${table}" is not an art table (one of: ${Object.keys(ART_TABLES).join(', ')})`);
     if (!isPlainObj(entries)) return fail('ART_BAD_SHAPE', `art.${table} must be an object: { "<id>": { … } }`);
     const clean = {};
@@ -1450,6 +2430,19 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
       if (Object.keys(parsed.entry).length) clean[id] = parsed.entry;
     }
     if (Object.keys(clean).length) artEntries[table] = clean;
+  }
+  // `art.bonds` 与 `bondIcons` 是**同一件事的两个写法** —— 两条路最后都写 `assets.bonds[<bondId>]`，客户端
+  // （`public/js/ui/assetUrls.js` 的 `bondIconUrl`）只看得到一条。同一个 id 两处都声明时**点名拒绝整包**，
+  // 而不是「谁赢」：`mergeWorkshopFlatArt` 排在 `mergeWorkshopBondIcons` 之后（见 `applyWorkshop` 的调用序），
+  // 真按顺序判就是 `art.bonds` 静默压掉 `bondIcons` —— 作者改了 `bondIcons` 那一份却发现图标没变，日志一句话
+  // 都没有。**两边都声明同一个 id 就是一次真正的冲突**（它们给的是同一个最终值），必须由作者自己删掉一份。
+  //
+  // 只撞**同一个 id**才算冲突：两处声明**不同**的盟约是各管一个图标，两份声明都生效，谁也不覆盖谁。
+  const artBondIds = isPlainObj(artEntries.bonds) ? Object.keys(artEntries.bonds) : [];
+  for (const bondId of artBondIds) {
+    if (!Object.hasOwn(raw.bondIcons && isPlainObj(raw.bondIcons) ? raw.bondIcons : {}, bondId)) continue;
+    return fail('BOND_ICON_CONFLICT',
+      `"${bondId}" is declared in both pack.json.bondIcons and pack.json.art.bonds — both write assets.bonds["${bondId}"], so only one of them can be the icon. Keep exactly one: drop it from art.bonds, or drop it from bondIcons`);
   }
   // 时装（`pack.json.skins`，皮肤层设计稿 §3）：一套外观的**数据**在 A 层声明，**行为**在 mod 里。
   //
@@ -1591,6 +2584,19 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
     }
     directToHand.sort();
   }
+  // 自选池摘除开关（`stripDiyOverlaps`，行为层，不进记录）：`true` 表示「本包把一名干员做成棋子时，若他同时躺在
+  // 自选池里，就把他从 `diy.ownedPool` 摘掉」—— 同一名干员因此只剩「棋子」这一条路，不会带着两种效果同时出现在
+  // 一局里（docs/WORKSHOP.md §1.2）。范围是**全部重叠**：官方池里本就有他，或本包自己用 `operators` 声明进池。
+  //
+  // 为什么是**每个包自己**声明、默认不摘：`diy.ownedPool` 是「自选槽能挑谁」的名单本身（`shared/diy.js` 从它
+  // 出格子，`tools/golden.mjs` 给池里每一位配一个精锐场景），摘掉它就是**改对局结果** —— 按 DESIGN §28.10.1
+  // 「池子属于安装方」，作者要不要走这一步必须显式写出来；没写的包照旧只被记录。
+  //
+  // 只在声明过 `true` 时才进归一化结果（与 `skins` / `declared` 同一条纪律）：没声明的包清单逐字节不变，
+  // `identifyPack` 的哈希也不动 —— 而它改的是「池子里有没有这个人」= 行为，所以声明了的包**必须**进哈希（§28.2）。
+  if (raw.stripDiyOverlaps !== undefined && typeof raw.stripDiyOverlaps !== 'boolean') {
+    return fail('STRIP_DIY_BAD_SHAPE', '"stripDiyOverlaps" must be true or false (may this pack remove its own operators from the 自选 pool?)');
+  }
   // 中间层四组能力声明（DESIGN §28.13）：`assets` 客户端资源容器、`client` C 层注册点、`server.preDispatch`
   // 分发前钩子、`routes` 只读路由。本轮**纯加法**：解析、点名拒绝、并进身份哈希，没有一条行为读它们。
   //
@@ -1598,10 +2604,35 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   // 但**键在不在**影响哈希 —— 所以下面用 `raw[k] !== undefined` 判定「这个包声明了没有」。
   const assetsParsed = raw.assets === undefined ? null : parseAssetsDecl(raw.assets);
   if (assetsParsed && !assetsParsed.ok) return assetsParsed;
+  // 镜像也是**再分发**：同一份字节从作者的域名上发给别人时，授权问题不因为换了一台主机就消失 —— 与
+  // `VOICE_CDN_NEEDS_LICENSE`（§28.36）逐字同一条理由。`ASSETS_NEED_LICENSE` 判的是「包里有没有 `assets/`
+  // 文件夹」，而容器路径不一定要落在那棵树下，所以这里单独判一条，并且只对**声明了 mirrors 的包**生效
+  // （今天一个都没有 ⇒ 已发布包的哈希与判据一字不变）。
+  if (assetsParsed && assetsParsed.decl.mirrors && !license) {
+    return fail('ASSETS_MIRROR_NEEDS_LICENSE',
+      'assets.mirrors makes this pack the redistributor of its own container, so pack.json must declare a license (e.g. "CC0-1.0", "CC-BY-4.0", or "see assets/LICENSE.txt")');
+  }
   const clientParsed = raw.client === undefined ? null : parseClientDecl(raw.client);
   if (clientParsed && !clientParsed.ok) return clientParsed;
   const serverParsed = raw.server === undefined ? null : parseServerDecl(raw.server);
   if (serverParsed && !serverParsed.ok) return serverParsed;
+  // 包通道的服务端那一半（DESIGN §28.23）：`server.modules[].channels` 里点名的每一条，必须也被本包的某个**声明面**
+  // 声明过（`client.panels[].messages` **或** `client.screens[].messages`）。理由不是洁癖：Lobby 的 `packChannels`
+  // 白名单是**从面板清单推出来的** —— 没有声明面声明过的通道，客户端根本发不出来，那是一条「声明了却不可能发生」
+  // 的声明。整屏与面板一起算：两者在客户端是同一份线表，谁都不该被漏掉。
+  if (serverParsed) {
+    const panelChannels = new Set();
+    for (const panel of [...(clientParsed ? clientParsed.decl.panels : []), ...(clientParsed ? (clientParsed.decl.screens || []) : [])]) {
+      for (const channel of (panel.messages || [])) panelChannels.add(channel);
+    }
+    for (const m of serverParsed.decl.modules || []) {
+      for (const channel of m.channels || []) {
+        if (!panelChannels.has(channel)) {
+          return fail('MODULES_UNKNOWN_CHANNEL', `server.modules["${m.id}"].channels: "${channel}" is not declared by any of this pack's client.panels[].messages or client.screens[].messages — the engine only lets a pack send declared channels, so this one could never arrive (add it to a panel or screen "messages", or drop it here)`);
+        }
+      }
+    }
+  }
   const routesParsed = raw.routes === undefined ? null : parseRoutesDecl(raw.routes);
   if (routesParsed && !routesParsed.ok) return routesParsed;
   // `i18n`（fanpack G-04）：给**已有语种**补词条的声明，形状见 `parseI18nDecl`。它同样遵守上面那条
@@ -1612,6 +2643,70 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   // 结果」的纪律 —— 没声明 notices 的包哈希逐字节不变。
   const noticesParsed = raw.notices === undefined ? null : parseNoticesDecl(raw.notices);
   if (noticesParsed && !noticesParsed.ok) return noticesParsed;
+  // 管理器合同（DESIGN §28.48）：对**其它工坊包**的依赖与互斥声明 —— 形状在这里，**语义在装载期裁决**
+  //（`adjudicatePackGraph`：缺失 / 版本不合 / 互斥 / 级联 / 循环，全部具名拒绝）。与 `notices` 同一条
+  // 「写了才进归一化结果」的纪律 —— 没声明的包哈希逐字节不变（DESIGN §28.2）。
+  const depsParsed = raw.dependencies === undefined ? null : parseModRefsDecl(raw.dependencies, 'dependencies');
+  if (depsParsed && !depsParsed.ok) return depsParsed;
+  const conflictsParsed = raw.conflicts === undefined ? null : parseModRefsDecl(raw.conflicts, 'conflicts');
+  if (conflictsParsed && !conflictsParsed.ok) return conflictsParsed;
+  // 形态（clip set）通道与静态相位通道（DESIGN §28.29）：两条都是**行为增量** —— 第一方 `FORMS` / `SILENT_PHASES`
+  // 冻结不动，包只能在自己新声明的 spine id / 形态名 / 'phase' 种类上加东西。同一条「写了才进归一化结果」的
+  // 纪律：没声明这两个键的包（今天所有的包）哈希逐字节不变。
+  const formsParsed = raw.forms === undefined ? null : parseFormsDecl(raw.forms);
+  if (formsParsed && !formsParsed.ok) return formsParsed;
+  if (formsParsed) {
+    // `next` 的死链要等同一个 spine id 上的形态名都收齐才判 —— 形状层已经收齐了，这里判。
+    const dead = formNextDeadLink(formsParsed.decl);
+    if (dead) {
+      return fail('FORMS_NEXT_UNKNOWN', `forms.${dead.table}["${dead.id}"].${dead.kind}.next points at "${dead.next}", which is not a form of "${dead.id}" (declare it in this pack, or name a first-party form of that spine) — the renderer would fall through on that link`);
+    }
+  }
+  const fxParsed = raw.fx === undefined ? null : parseFxDecl(raw.fx);
+  if (fxParsed && !fxParsed.ok) return fxParsed;
+  // 变体 / 口径声明（DESIGN §28.39）：形状与闭枚举都在 `shared/variants.js` 判，这里只负责「写了才进清单」。
+  // **不是贡献项**（与 `playtest` 同一个语义）：一个只声明了 `variants: [{ axis: "deploy" }]` 的包什么都没带来
+  // —— 口径选的是引擎已有的另一套表现，不是内容。所以它不进 `contributesDecl`，一个只带它的包照旧 `EMPTY_PACK`。
+  const variantsParsed = raw.variants === undefined ? null : parseVariantsDecl(raw.variants);
+  if (variantsParsed && !variantsParsed.ok) return variantsParsed;
+  // 对局种类声明（DESIGN §28.54）：形状（数组 / 闭字段 / 上界 / 去重 / 排序）都在 `parseMatchKindsDecl` 判。
+  // 接收人闸门（`MATCHKINDS_NEED_MATCH_CLASS`）判在下面归一化流程里 —— 它要读**已解析完的** `server.modules`。
+  const matchKindsParsed = raw.matchKinds === undefined ? null : parseMatchKindsDecl(raw.matchKinds);
+  if (matchKindsParsed && !matchKindsParsed.ok) return matchKindsParsed;
+  // 行为开关声明（DESIGN §28.43）：形状与闭枚举都在 `shared/behaviour.js` 判，这里只负责「写了才进清单」。
+  // **不是贡献项**（与 `variants` / `playtest` 同一个语义）：行为开关改的是引擎里**已经实现**的一条规则，
+  // 它自己不带来任何内容。所以一个只带 `behaviour` 的包照旧 `EMPTY_PACK`（文案里点名它）。
+  const behaviourParsed = raw.behaviour === undefined ? null : parseBehaviourDecl(raw.behaviour, opts.behaviourSwitches);
+  if (behaviourParsed && !behaviourParsed.ok) return behaviourParsed;
+  // 启用声明（DESIGN §28.50）：`false` = 这个包装好了但现在不参与。**不是贡献项**（与 `variants` 同一个语义）：
+  // 一个只写 `"enabled": true` 的包什么都没带来，照旧 `EMPTY_PACK`；而 `"enabled": false` 的包连装载都不进
+  // （`server/workshop.js loadWorkshop` 在归一化之后读它），所以它也到不了 `EMPTY_PACK` 那一行。
+  const enabledParsed = raw.enabled === undefined ? null : parseEnabledDecl(raw.enabled);
+  if (enabledParsed && !enabledParsed.ok) return enabledParsed;
+  // 调用预算（DESIGN §28.52，沙箱档的运行时保护）：`{ max? }`，缺省 8000，**只许收紧不许放宽**。
+  // 这一格**不是贡献项**（与 `variants` / `behaviour` / `enabled` 同一个语义）：它不带来任何内容，也不改引擎的规则
+  // ——它给的是**上限**，一个只带 `callBudget` 的包照旧 `EMPTY_PACK`。它**也**不要求 `combat: true`：与
+  // `variants` / `behaviour` 那两条 `*_NEEDS_COMBAT` 的区别是**方向** —— 那两格授予能力（所以必须声明意图），
+  // 这一格**只收紧**（`max ≤ 默认值`），它永远不能让一个包变得更有能力，要求 `combat: true` 只会把诚实的
+  // 内容包挡在沙箱档外面。但它**必须**进身份哈希：一个会截断回调、一个不截，是两种对局行为（见下面的归一化位置）。
+  const callBudgetParsed = raw.callBudget === undefined ? null : parseCallBudgetDecl(raw.callBudget);
+  if (callBudgetParsed && !callBudgetParsed.ok) return callBudgetParsed;
+  // 目标引擎（`target`，DESIGN §28.46）：缺省 `forge`（本引擎自己装）。`stardust` 的包是**声明型**的 ——
+  // 本引擎认识它、不装载它（server/workshop.js 记一行 foreign），所以它不需要任何 Forge 贡献项
+  // （EMPTY_PACK 对它不适用），`type` / `capabilities` 两格按 Stardust profile 校验。写了才进归一化结果。
+  const target = raw.target === undefined ? 'forge' : raw.target;
+  if (!PACK_TARGETS.includes(target)) {
+    return fail('PACK_TARGET_UNKNOWN', `target: ${JSON.stringify(raw.target)} is not one of ${PACK_TARGETS.join(' / ')}`);
+  }
+  let starProfile = null;
+  if (target === 'stardust') {
+    if (raw.type !== 'mod') return fail('STARDUST_TARGET_BAD_TYPE', `target "stardust" needs "type": "mod" (got ${JSON.stringify(raw.type ?? null)}) — it is the type the Stardust host loads`);
+    const caps = raw.capabilities === undefined ? [] : raw.capabilities;
+    if (!Array.isArray(caps) || caps.some((c) => typeof c !== 'string' || !/^[a-z][A-Za-z0-9_.-]{0,63}$/.test(c))) {
+      return fail('STARDUST_TARGET_BAD_CAPABILITIES', 'capabilities must be a list of capability ids (lowercase first, then letters/digits/._-)');
+    }
+    starProfile = { capabilities: [...new Set(caps)].sort() };
+  }
   // 一条声明只有在清单里**真的写了这个键**时才进归一化结果。这一条是本刀最容易做坏的地方：无条件写进去会让
   // 每一个已存在的包（它们没有这些键）的归一化清单多出四个键，于是内容哈希全变、`identifyPack` 的
   // `manifest` 与 `hash` 也跟着变 —— 房间的摘要闸门会开始误判（DESIGN §28.2）。
@@ -1623,30 +2718,60 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   if (routesParsed) declared.push(['routes', routesParsed.decl]);
   if (i18nParsed) declared.push(['i18n', i18nParsed.decl]);
   if (noticesParsed) declared.push(['notices', noticesParsed.decl]);
+  if (depsParsed) declared.push(['dependencies', depsParsed.decl]);
+  if (conflictsParsed) declared.push(['conflicts', conflictsParsed.decl]);
+  if (formsParsed) declared.push(['forms', formsParsed.decl]);
+  if (fxParsed) declared.push(['fx', fxParsed.decl]);
+  // `enabled` 比 `variants` / `behaviour` 多一条约束（§28.50 的判据 2：**缺省 = 引擎今天的行为**）：
+  // 无条件写进去会让 `"enabled": true` 与「没写」在**数据上**不再等价 —— 而 `identifyPack` 哈希的正是
+  // `canonicalJson(pack)`（`server/workshop.js` step 1），于是写了 `true` 的包会换掉包身份、房间摘要跟着漂，
+  // 而它做的事与没写一字不差。所以**只有 `false` 才进清单**：那是这一格唯一真正改变行为的取值，
+  // 「装好了但不参与」必须进身份（两台机器摘要相同 ⇒ 行为相同）；`true` 与缺席在数据上逐字等价。
+  if (enabledParsed && enabledParsed.value === false) declared.push(['enabled', false]);
   /** 一条声明算不算「贡献」：归一化后的值里有没有东西。`routes: []` 与 `client: { panels: [], requires: [] }`
    *  都是**合法但什么都不做**的声明（与 `voices: {}` / `art: { chars: {} }` 同一个语义），照旧不算贡献 ——
    *  所以「一个只写了 `routes: []` 的包」仍然是空包。反向的那条同样载重：`assets` / `client.panels` /
    *  `server.preDispatch` 的必填字段在形状层就各自非空，所以它们只声明出来就**是**贡献项；`server.battle` 与
    *  `server.room` 同理（形状层就要求 `module` 是一个合法的包内 `.mjs`）。 */
   const contributes = (v) => (Array.isArray(v) ? v.length > 0 : Object.keys(v).length > 0);
+  /**
+   * 一条声明算不算**贡献项**。与上面 `contributes` 的差别只有 `fx` 那一处：`silentPhases: []` 与 `routes: []`、
+   * `client: { panels: [], requires: [] }` 是同一个语义（**合法但什么都不做**）—— 照 `contributes` 数的话，
+   * 一个只写了 `"fx": { "silentPhases": [] }` 的包会从空包变成「有贡献」，那正是这一层最不该出现的
+   * 「声明了等于没声明还不报错」。声明本身仍然留在归一化清单里（作者写了什么就回什么），只是不算贡献。
+   *
+   * `fx.manifest` 是 `fx` 里**唯一带文件**的那一格（`docs/WORKSHOP.md` §1.19.2）：它让包把自己那批官方战斗特效
+   * 一起分发，所以只声明它就**算**贡献 —— 与 `silentPhases` 相反，它确实往对局里带了东西。
+   */
+  const contributesDecl = ([name, v]) => (name === 'fx'
+    ? ((Array.isArray(v.silentPhases) && v.silentPhases.length > 0) || !!v.manifest)
+    : contributes(v));
+  // `manifest` 只有**真的写了**才进归一化结果（与 `enabled: false` 那一格同一个理由，见 §28.50）：无条件补一个
+  // `manifest: null` 会让每一个已存在的 `fx: { silentPhases: [...] }` 包的归一化清单多一个键，于是内容哈希变、
+  // 房间摘要跟着漂 —— 而它做的事与没写一字不差。
   // A pack may bring data files, voice lines (either table), 盟约图标, 装备图标, 外观素材, 助战声明, 自选池声明
   // — never none of them (docs/WORKSHOP.md §1.4). 这条检查必须放在**所有**贡献项都解析完之后：放在前面会出现
   // 「一个只带 `operators` 的包被判成空包」，而在它前面引用后面声明的变量则是 TDZ 报错。
   // `playtest` **不是**贡献项：它是行为开关，一个只带它的包仍然什么都没带来，照旧 EMPTY_PACK
   // （test/playtestDirectToHand.test.js 有断言钉住这一点）。四组新声明的贡献语义见上面 `contributes` 的注释：
   // A 段把提案的语义落死（B 段实现行为时不用再改），而「只带 `playtest` 照旧被拒」这条既有裁决一字未动。
-  if (!content.length && !Object.keys(voiceLines).length && !Object.keys(orderedLangLines).length
+  // `target: "stardust"` 的包**不是**本引擎的包：它的价值在 Stardust 宿主那一侧，本引擎只看形状、不装载
+  //（server/workshop.js 记一行 foreign），所以「没有 Forge 贡献项」是它的正常形态，EMPTY_PACK 对它不适用。
+  if (target !== 'stardust' && !content.length && !Object.keys(voiceLines).length && !Object.keys(orderedLangLines).length
     && !Object.keys(bondIconFiles).length && !Object.keys(itemIconFiles).length && !Object.keys(artEntries).length
     && !skinEntries.length
-    && !Object.keys(orderedOperators).length && !declared.some(([, v]) => contributes(v))) {
-    // `support` 与 `playtest` 是这份清单里**唯二**「声明了也不算贡献」的字段，所以它们单独出现时必须被点名 ——
+    && !Object.keys(orderedOperators).length && !declared.some(contributesDecl)) {
+    // 这份清单里「声明了也不算贡献」的字段**都要点名**：`support` / `playtest`（当初只有这两个）、本包自己的行为
+    // 开关 `stripDiyOverlaps`，以及后加的 `variants` / `behaviour`（它们只是「这一局按哪一套跑」的声明，自己不往
+    // 对局里带任何东西），以及管理器合同的 `dependencies` / `conflicts`（DESIGN §28.48：它们说的是「和别的包什么
+    // 关系」，一个只声明依赖的包自己不带来任何内容 —— 与 `support` 同一条）。
     // 只声明助战的包今天整包被拒（plugin-pack G6：一个 `support: [...]` + `content: []` 的包得到的就是这一条），
     // 而原来的文案里**没有** `support` 这个词，作者只能对着 `EMPTY_PACK` 猜。`support` 只决定**助战卡池**里放谁，
     // 干员本体还是由 `content: ["chess"]` 带进来的 —— 所以放宽它不是这一刀的活（那是既有裁决），把话说明白才是。
-    const notContributions = ['support', 'playtest']
+    const notContributions = ['support', 'playtest', 'stripDiyOverlaps', 'variants', 'behaviour', 'dependencies', 'conflicts', 'callBudget', 'matchKinds']
       .filter((n) => raw[n] !== undefined);
     const names = [...WORKSHOP_CONTENT_FILES, 'voices', 'voiceLangs', 'bondIcons', 'itemIcons', 'art', 'skins', 'operators',
-      'assets', 'client', 'server.preDispatch', 'server.meta', 'server.battle', 'server.room', 'server.modules', 'routes', 'i18n', 'notices'];
+      'assets', 'client', 'server.preDispatch', 'server.meta', 'server.battle', 'server.room', 'server.modules', 'server.transport', 'routes', 'i18n', 'notices', 'forms', 'fx'];
     const alsoNot = notContributions.length
       ? ` (note: ${notContributions.map((n) => `"${n}"`).join(' and ')} ${notContributions.length === 1 ? 'is' : 'are'} NOT a contribution — a pack that declares ${notContributions.length === 1 ? 'it' : 'them'} alone brings nothing into a match)`
       : '';
@@ -1655,7 +2780,36 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   // 版本声明（DESIGN §28.5）：`api` 是**模组 API** 的区间（钩子总线与 kit 契约），`game` 是**上游游戏版本**的区间，
   // 两者都用 shared/packs.js isVersionRange 的语法（`>=0.2.0`、`0.2.x`、`^0.2.0`、`~0.2.1`、`*`、`||`）。
   // `gameVersion` 保留一代作为 `game` 的别名：编辑器与现成的包都在写它，读的时候优先 `game`。
-  const api = strField(raw.api, 60);
+  //
+  // 三条**类型闸门先于一切**（B7 段）。理由是这个缺口最坏的地方不是「写错了没人管」，而是**失败方向是静默的**：
+  // `strField` 把非字符串读成 null，于是 `api: 1` 在下面两条 `api &&` 的校验里**都短路**，归一化结果 `api: null`
+  // —— 包当没声明一样通过，作者看到的是「包合法、我写的区间没生效」，正是本仓库 §1.1 那句「写了等于没写」。
+  // 三条纪律：
+  //   1. **只有键存在且不是字符串才拒**。缺键 / `undefined` / `null` **照旧一个字节都不受影响**：`null` 在
+  //      JSON 里的意思就是「没有值」—— 编辑器的写元数据那一端也把它当「删掉这个键」（`packMetaEditor.test.js`：
+  //      `description: null` ⇒ `!Object.hasOwn(obj, 'description')`），`layer` 的既有解析分支逐字相同
+  //      （`raw.layer === undefined || raw.layer === null ? null : …`）。所以「显式 null = 等于没写」是既有语义，
+  //      这里跟随它，不发明一条「null 也算无效声明」。空串 / 全空白同理（`""` 与 `"   "` 只是把键写成了空的）。
+  //   2. **空串不是错误**：它连区间都没写成，`BAD_API_RANGE` 也只对「写了但写坏」的**非空**区间开口。
+  //   3. **不问「这个字段有没有人读」**：`game` 有 `gameVersion` 兜底时，`game` 写坏仍然是错 —— 一个作者改错的
+  //      键如果只是被另一个键盖住，他看到的是「包里明明写着 game，怎么读出来是 gameVersion」。三个键各自的类型
+  //      独立判，判完再按 `game` > `gameVersion` 的既有优先级解析（这里**没有**改优先级）。
+  /** 一个**声明了就不能是别的类型**的字符串字段：`{ s }` 成功（缺省 / `null` / 空串读成 `null`），否则一个判罚。
+   *  与 `strField` 的分工是「谁负责报错」：它保持沉默，这一层点名。@type {(key: string, v: any, code: string) => { s?: string|null, bad?: object }} */
+  const declaredString = (key, v, code) => {
+    if (v === undefined || v === null) return { s: null };
+    if (typeof v === 'string') return { s: strField(v, 60) };
+    return { bad: fail(code, `"${key}" must be a string (a version range such as ">=1 <2" or "1.x"), got ${Array.isArray(v) ? 'an array' : typeof v} — a non-string declaration would be read as "not declared"`) };
+  };
+  const apiDecl = declaredString('api', raw.api, 'BAD_API_TYPE');
+  if (apiDecl.bad) return apiDecl.bad;
+  const gameDecl = declaredString('game', raw.game, 'BAD_GAME_TYPE');
+  if (gameDecl.bad) return gameDecl.bad;
+  // `gameVersion` 是别名，所以它拿同一个码：一个包声明了两个版本号而坏的那个叫 `gameVersion`，作者该知道的
+  // 是「这个键的类型不对」，而不是两个看起来无关的判罚。
+  const gameVersionDecl = declaredString('gameVersion', raw.gameVersion, 'BAD_GAME_TYPE');
+  if (gameVersionDecl.bad) return gameVersionDecl.bad;
+  const api = apiDecl.s;
   if (api && !isVersionRange(api)) return fail('BAD_API_RANGE', `"api": "${api}" is not a version range (">=1 <2", "1.x" …)`);
   // `api` 的可比对那一半（DESIGN §28.5 的前置项，本轮补上）：`shared/constants.js MOD_API_VERSION` 是钩子总线与
   // kit 契约的版本，**只在包自己声明了 `api` 时才比对** —— 没声明的包（今天所有的包）一个字节都不受影响。
@@ -1665,12 +2819,27 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   if (api && !appVersionMatches(api, `${MOD_API_VERSION}.0.0`)) {
     return fail('MOD_API_INCOMPATIBLE', `this pack declares "api": "${api}", which excludes the installed mod API ${MOD_API_VERSION} (DESIGN §28.5: write the range this pack was written against, or drop the field)`);
   }
-  const game = strField(raw.game, 60) ?? strField(raw.gameVersion, 60);
+  // 优先级**一字未改**（`game` > `gameVersion`），只是两边都已经过类型闸门，所以这里的 `??` 今天能到达的
+  // 只有「都写了、`game` 是空串」这一种情形 —— 空串读成没声明，于是落到 `gameVersion` 那一侧。
+  const game = gameDecl.s ?? gameVersionDecl.s;
   if (game && !isVersionRange(game)) return fail('BAD_GAME_RANGE', `"game": "${game}" is not a version range (">=0.2.0", "0.2.x" …)`);
   // 声明的层（DESIGN §28.1）：A 内容 / B 服务端逻辑 / C 客户端界面。写错了要拒，不能猜。
   const layer = raw.layer === undefined || raw.layer === null ? null : String(raw.layer).trim().toUpperCase();
   if (layer !== null && !MOD_LAYERS.includes(layer)) return fail('BAD_LAYER', `"layer": "${raw.layer}" is not one of ${MOD_LAYERS.join(' / ')}`);
   if (raw.combat !== undefined && typeof raw.combat !== 'boolean') return fail('BAD_COMBAT', '"combat" must be true or false (may this pack change a battle result?)');
+  // `matchKinds`（DESIGN §28.54）的接收人闸门，形状照 `MODULES_CHANNELS_NEED_MATCH`：种类声明说的是「这一局换成
+  // 另一种玩法」，而全场只有 `matchClass` 包装器能换掉对局（`server/index.js` 用它包住 `MatchClass`）；没有它，
+  // 这句话没有执行者，所以点名拒 —— 不许留一条**永远不会发生**的效果（本层到处在消灭的形态）。
+  //
+  // ⚠️ `combat` **不在这里重复判**：合法的 `matchKinds` 必须有 `matchClass` 包装器，而上面 §28.14 那条
+  // `MODULES_NEEDS_COMBAT` 已经先一步拦下「有包装器却不肯认 combat」。在这里再写一条就是**永远不会命中的死格子**
+  // （判据是能力，不是意图 —— 见 §28.20 的闸门分类规则）。
+  if (matchKindsParsed) {
+    const kindWrappers = serverParsed ? (serverParsed.decl.modules || []).filter((m) => m.uses.includes('matchClass')) : [];
+    if (!kindWrappers.length) {
+      return fail('MATCHKINDS_NEED_MATCH_CLASS', 'pack.json.matchKinds has no executor: only a server module whose uses includes "matchClass" can replace the match (server/index.js wraps MatchClass with it), so this pack must either mount one or drop the kind declarations — a kind nothing reads is the silent failure this layer keeps refusing');
+    }
+  }
   // `server.meta` 改的是**对局结果**，所以按业主裁决（2026-10-10）它必须声明 `combat: true` —— 那正是「要改
   // 对局结果的包进入房间摘要闸门 + golden 语料」这条线的入口（DESIGN §28.13.1 与 §29）。**硬闸门，不是警告**：
   // 一个能改结果却把自己标成 `combat: false` 的包，会让「不声明 combat 的包改不了结果」这句话从**结构性保证**
@@ -1687,6 +2856,48 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
   // 只挂 `boot` / `shutdown` / `healthz` 的模块不在此列 —— 那三件碰不到对局。
   if (serverParsed && (serverParsed.decl.modules || []).some((m) => m.uses.includes('matchClass')) && raw.combat !== true) {
     return fail('MODULES_NEED_COMBAT', 'a server module whose uses includes "matchClass" wraps the match itself, so this pack must declare "combat": true — that is what puts it into the room digest gate and the golden corpus (DESIGN §28.14); a module that only mounts boot / shutdown / healthz does not need it');
+  }
+  // lane 的**命名空间**（DESIGN §28.56）：一条 lane 是全进程精确匹配的，两个包抢同一条路径必须在建表之前就
+  // 分开，而不是靠先到先得。规则只有一条、且只需要包 id：路径必须是 `/mod-ws/<本包id>` 或它的直接子路径。
+  // 语法本身不在这里判（`isLanePath` / `LANE_RESERVED` 那份判据只在 `server/http/wsLanes.js` 一处）。
+  if (serverParsed) {
+    // `server.room.hold: true` 要 `combat: true`（§28.57）：能决定「空席的房间还留不留」就是能决定一局
+    // 会不会被回收掉 —— 与 `matchClass` / `matchKinds` 同一条「能力判据而非意图」。位置在这里是因为它要读
+    // **包级**的 `combat`，而 `server` 的形状已经解析完了。
+    const holdDecl = serverParsed.decl.room && serverParsed.decl.room.hold === true;
+    if (holdDecl && raw.combat !== true) {
+      return fail('ROOM_HOLD_NEEDS_COMBAT', 'server.room.hold lets this pack keep an emptied room alive, which decides whether a running match is reclaimed at all, so the pack must declare "combat": true — that is what puts it into the room digest gate and the golden corpus (DESIGN §28.57)');
+    }
+    const lanePrefix = `/mod-ws/${id}`;
+    for (const m of serverParsed.decl.modules || []) {
+      if (!m.lane) continue;
+      const p = m.lane.path;
+      if (p !== lanePrefix && !p.startsWith(`${lanePrefix}/`)) {
+        return fail('MODULES_LANE_BAD_NAMESPACE', `server.modules["${m.id}"].lane.path "${p}" must live under this pack's own namespace "${lanePrefix}" (one path per lane, the table is process-wide and exact-match — squatting outside your namespace would let this pack shadow another pack's or the engine's endpoint)`);
+      }
+    }
+  }
+  // 变体 / 口径（DESIGN §28.39）**也**要 `combat: true`，理由与上面三条逐字同构：一个口径改的就是**对局的结果**
+  // —— `deploy: "max"` 把 `config.economy.deployCap` 从官方的 8 抬到 12（场上同时多站四个人），
+  // `training` 说的是这一局用哪一套练度。判据是**能力**而不是意图：一条**能**改结果的口径声明，必须进房间摘要
+  // 闸门与 golden 语料，否则「不声明 combat 的包改不了结果」这句话就从结构性保证退化成一句口号。
+  // `form`（第 6 刀，DESIGN §28.41）同样：`form: "elite"` 让每条普通干员按精锐形态的职能出战，改的就是对局结果。
+  //
+  // 位置在 `EMPTY_PACK` 之**后**（一个只声明了口径、什么都没带来的包照旧先得到 `EMPTY_PACK` —— 那才是它的真
+  // 问题），并且在上面三条 `combat` 类型检查之后：`BAD_COMBAT` 先报，作者才知道该改的是类型而不是缺一个 `true`。
+  if (variantsParsed && raw.combat !== true) {
+    return fail('VARIANTS_NEED_COMBAT', 'a pack that declares "variants" pins a 口径 that changes match results (deploy slots / operator training / operator form), so it must declare "combat": true — that is what puts it into the room digest gate and the golden corpus (DESIGN §28.39, §28.41); a pack that cannot state that must not pin a 口径');
+  }
+  // 行为开关（DESIGN §28.43）**也**要 `combat: true`，理由与上面四条逐字同构 —— 第五道同一条线。一格的入场券本就是
+  // 「它改一条规则」（`docs/WORKSHOP.md` §1.1 的 `giveBondBiasOnly` 就是活例子：它改的是一局的商店出货概率＝改对局
+  // 结果）。判据是**能力**而不是意图：一条**能**改结果的开关声明，必须进房间摘要闸门与 golden 语料，否则「不声明
+  // combat 的包改不了结果」这句话就从结构性保证退化成一句口号。
+  //
+  // 位置与 `VARIANTS_NEED_COMBAT` 同序：在 `BAD_COMBAT`（类型）之后、`EMPTY_PACK` 之后、上面四条 `*_NEEDS_COMBAT`
+  // 之后。将来若有一格**明确改不了结果**的开关（例如纯客户端规则），它必须**不**要求 `combat: true`，并把
+  // 「不改结果」写进那一格的 `effect` —— 判据是能力，不是意图（§28.20 的闸门分类规则）。
+  if (behaviourParsed && raw.combat !== true) {
+    return fail('BEHAVIOUR_NEEDS_COMBAT', 'a pack that declares "behaviour" pins a rule switch that changes how the engine plays, which can change match results, so it must declare "combat": true — that is what puts it into the room digest gate and the golden corpus (DESIGN §28.43); a pack that cannot state that must not pin a behaviour switch');
   }
   // `server.room` **不在**上面这条线里（DESIGN §28.20）：它的契约是「观察与声明」——`install(room)` 拿到的是一个只读
   // 观察面（成员快照 / 阶段 / 事件 / 一条日志），没有 store、没有战场句柄、没有 socket、没有文件系统，返回值被忽略。
@@ -1712,6 +2923,9 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
       overrides,
       voices: voiceLines,
       voiceLangs: orderedLangLines,
+      // 作者自备 CDN 的语音素材（DESIGN §28.33）：**只在声明过时才存在** —— 与 `skins` 同一条纪律，
+      // 理由逐字相同（给每个包都加一个 `voiceCdn: []` 会让所有已发布包的哈希全部改变）。
+      ...(orderedVoiceCdn.length ? { voiceCdn: orderedVoiceCdn } : {}),
       bondIcons: bondIconFiles,
       itemIcons: itemIconFiles,
       art: artEntries,
@@ -1722,9 +2936,36 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
       support: supportIds,
       operators: orderedOperators,
       playtest: { directToHand },
+      // 自选池摘除开关：只声明过 `true` 时才存在（见上面那段；没声明的包哈希逐字节不变）。
+      ...(raw.stripDiyOverlaps === true ? { stripDiyOverlaps: true } : {}),
+      // 变体 / 口径声明（DESIGN §28.39）：**只在声明过时才存在**，与 `skins` / `voiceCdn` 同一条纪律、理由逐字
+      // 相同 —— `identifyPack` 哈希的就是这份归一化清单的 `canonicalJson`（`server/workshop.js`），给每个包都加
+      // 一个 `variants: []` 会让**所有已发布包的哈希全部改变**。而它**必须**进哈希：一个口径改的是对局结果，
+      // 两份只差口径的包共用同一个摘要，房间的摘要闸门就会放行两种不同的行为（DESIGN §28.2）。
+      ...(variantsParsed ? { variants: variantsParsed.decl } : {}),
+      // 行为开关声明（DESIGN §28.43）：**只在声明过时才存在**，与 `variants` / `skins` / `voiceCdn` 同一条纪律、
+      // 理由逐字相同 —— `identifyPack` 哈希的就是这份归一化清单的 `canonicalJson`（`server/workshop.js`），给每个
+      // 包都加一个 `behaviour: []` 会让**所有已发布包的哈希全部改变**。而它**必须**进哈希：一条开关改的是引擎的
+      // 规则，两份只差开关的包共用同一个摘要，房间的摘要闸门就会放行两种不同的行为（DESIGN §28.2）。
+      ...(behaviourParsed ? { behaviour: behaviourParsed.decl } : {}),
+      // 调用预算（DESIGN §28.52）：**只在声明过时才存在**，与 `variants` / `behaviour` / `skins` 同一条纪律、
+      // 理由逐字相同 —— `identifyPack` 哈希的就是这份归一化清单的 `canonicalJson`（`server/workshop.js`），给每个
+      // 包都补一个 `callBudget: { max: 8000 }` 会让**所有已发布包的哈希全部改变**；而它**必须**进哈希：一份会截断
+      // 回调的包与一份不截的包是两种对局行为，共用同一个摘要就等于房间闸门放行两种玩法（DESIGN §28.2）。
+      ...(callBudgetParsed ? { callBudget: callBudgetParsed.decl } : {}),
+      // 对局种类声明（DESIGN §28.54）：**只在声明过时才存在**，与 `variants` / `behaviour` / `callBudget` 同一条
+      // 纪律、理由逐字相同 —— `identifyPack` 哈希的就是这份归一化清单的 `canonicalJson`（`server/workshop.js`），
+      // 给每个包都补一个 `matchKinds: []` 会让**所有已发布包的哈希全部改变**。
+      // ⚠️ 而它**必须**进哈希：种类声明决定「这一局由谁算」（换玩法 = 换对局结果），两份只差种类声明的包共用
+      // 同一个摘要，就等于房间的摘要闸门放行两种不同的玩法（DESIGN §28.2）。
+      ...(matchKindsParsed ? { matchKinds: matchKindsParsed.decl } : {}),
       // 四组新声明：**只在声明过时才存在**（见上面 `declared` 的注释）。哈希覆盖它们靠的就是这一条 ——
       // `identifyPack` 哈希的是这份归一化清单的 `canonicalJson`（server/workshop.js）。
       ...Object.fromEntries(declared),
+      // 目标引擎与 Stardust profile（同一条「写了才进归一化结果」的纪律）：`target: "forge"` 显式写出来时也进
+      // （那是一个声明），`type` / `capabilities` 只在 stardust 目标下存在。
+      ...(raw.target !== undefined ? { target } : {}),
+      ...(starProfile ? { type: 'mod', capabilities: starProfile.capabilities } : {}),
     },
   };
 }
@@ -1760,16 +3001,90 @@ export function playtestUnknownIds(declared, overrides, ownChessIds) {
 }
 
 /**
+ * **口径数据通道**（DESIGN §28.51）：解析一个包的 `variants.json`。这是**唯一**一份形状判据（装载器
+ * `server/workshop.js`、编辑器与 `npm run workshop:validate` 都走 `normalizeContentFile` 这一个入口）。
+ *
+ * 收的形状 —— 与投稿 `c26a6ed4c1e7` 的原件（`payload/packs/fanpack/variants.json`）**逐层 1:1**，只把它的
+ * `{ $: value }` 叶子解成原生值（那一层是它自己安装器的 patch 方言，引擎的 `mergeRecord` 不需要它）：
+ * ```jsonc
+ * { "training": {                   // ① 轴名 —— `VARIANT_AXES` 的键（不许新增轴）
+ *     "chess": {                    // ② 数据文件 —— `WORKSHOP_CONTENT_FILES` 的名字（不许未知键）
+ *       "chess_char_9_01_a": {      // ③ 记录 id —— 装载期必须在合并后的数据里已有（不许发明记录）
+ *         "stats": { "atk": 676 } } } } }   // ④ 字段级补丁 —— 只许写目标记录已有的键
+ * ```
+ *
+ * 这里只判**形状与闭枚举**（① ② ③ 的 id 合法性 ④ 是对象）；「目标存不存在」「补丁的键存不存在」要读**合并后**
+ * 的数据，所以那一半在 `applyVariantDataPatches`（同样是唯一一份）。拒绝码：
+ *   * `VARIANTS_BAD_SHAPE`   —— 不是对象 / 某一层不是对象或为空 / 记录 id 不合法 / 补丁不是非空对象；
+ *   * `VARIANTS_UNKNOWN_AXIS`—— 表名不是 `VARIANT_AXES` 的轴（文案里列出全部合法轴）；
+ *   * `VARIANTS_UNKNOWN_FILE`—— 第二层不是 `WORKSHOP_CONTENT_FILES` 的名字（也不许是 `variants` 自己）；
+ *   * `EMPTY_CONTENT`        —— 一个什么都不补的 `variants.json`（正是这条通道存在的理由要消灭的失败方向）。
+ *
+ * @param {any} json parsed `variants.json`
+ * @returns {{ ok: true, records: Record<string, Record<string, Record<string, object>>> }
+ *          | { ok: false, error: string, detail: string }}
+ */
+export function normalizeVariantDataFile(json) {
+  if (!isPlainObj(json)) {
+    return fail('VARIANTS_BAD_SHAPE', 'variants.json must be a JSON object of { "<axis>": { "<file>": { "<id>": { …patch } } } } — it holds 口径 values, not records');
+  }
+  const axes = Object.keys(json);
+  if (!axes.length) {
+    return fail('EMPTY_CONTENT', 'variants.json declares no 口径 axis — a file that patches nothing is exactly the failure mode this channel exists to prevent');
+  }
+  /** @type {Record<string, Record<string, Record<string, object>>>} */
+  const tables = {};
+  for (const axis of axes) {
+    if (!isVariantAxis(axis)) {
+      const shown = axis.length > MAX_KEY_SHOWN ? `${axis.slice(0, MAX_KEY_SHOWN)}…` : axis;
+      return fail('VARIANTS_UNKNOWN_AXIS', `variants.json["${shown}"] is not an axis of this 口径 format. Known axes: ${VARIANT_AXIS_NAMES.map((a) => `"${a}"`).join(', ')} — a table the loader does not know is never applied, so it is refused instead of ignored (declare the axis in pack.json.variants and name it here, DESIGN §28.51)`);
+    }
+    const byFile = json[axis];
+    if (!isPlainObj(byFile) || !Object.keys(byFile).length) {
+      return fail('VARIANTS_BAD_SHAPE', `variants.json["${axis}"] must be an object of { "<file>": { "<id>": patch } } with at least one data file`);
+    }
+    /** @type {Record<string, Record<string, object>>} */
+    const files = {};
+    for (const [file, records] of Object.entries(byFile)) {
+      if (!isOverridableContentFile(file)) {
+        return fail('VARIANTS_UNKNOWN_FILE', `variants.json["${axis}"]["${file}"] is not a data file of this pack format (${WORKSHOP_CONTENT_FILES.filter(isOverridableContentFile).join(', ')}). A patch can only target a record of a table this format really merges; a name the loader does not know would patch nothing`);
+      }
+      if (!isPlainObj(records) || !Object.keys(records).length) {
+        return fail('VARIANTS_BAD_SHAPE', `variants.json["${axis}"]["${file}"] must be an object of { "<id>": patch } with at least one record`);
+      }
+      /** @type {Record<string, object>} */
+      const out = {};
+      for (const [id, patch] of Object.entries(records)) {
+        if (!RECORD_ID_RE.test(id)) {
+          return fail('VARIANTS_BAD_SHAPE', `variants.json["${axis}"]["${file}"] key "${id.length > MAX_KEY_SHOWN ? `${id.slice(0, MAX_KEY_SHOWN)}…` : id}" is not a valid record id`);
+        }
+        if (!isPlainObj(patch) || !Object.keys(patch).length) {
+          return fail('VARIANTS_BAD_SHAPE', `variants.json["${axis}"]["${file}"]["${id}"] must be a non-empty object of the fields to patch`);
+        }
+        out[id] = patch;
+      }
+      files[file] = out;
+    }
+    tables[axis] = files;
+  }
+  return { ok: true, records: tables };
+}
+
+/**
  * Validate one content file of a pack: a `{ [id]: record }` map, every key a safe id, every value a JSON object, and —
  * when the record carries its own id field — that field equal to the key.
  *
  * `units`（新干员的干员记录）**另外**要过一遍「下游用得上吗」：见 `UNIT_REQUIRED_FIELDS` 的长注释 —— 我们只查那
  * 六个字段，其余一律照抄，不复制官方 schema。
+ *
+ * `variants`（口径数据通道，DESIGN §28.51）**不是** `{ [id]: record }`：它的形状判据只有一份，就是
+ * `normalizeVariantDataFile`，这里只负责转发 —— 一个形状有两份判据，就是一个「哪个才算数」的问题。
  * @param {string} file data file basename, e.g. 'chess'
  * @param {any} json parsed file
  * @returns {{ ok: true, records: Record<string, object> } | { ok: false, error: string, detail: string }}
  */
 export function normalizeContentFile(file, json) {
+  if (file === 'variants') return normalizeVariantDataFile(json);
   if (!isPlainObj(json)) return fail('BAD_CONTENT', `${file}.json must be a JSON object of { id: record }`);
   const field = ID_FIELD_BY_FILE[file] || null;
   /** @type {Record<string, object>} */
@@ -1948,28 +3263,48 @@ export function workshopI18nFiles(packs, readFile, readBase) {
  * 干员声明进 `operators` 时**不会**让池里出现第二条 —— 但「他本来就在池里、现在又被这个包变成棋子」这件事
  * 以前**没有任何地方说出来**，这个函数就是那句话。
  *
- * @param {Array<{ id?: string, operators?: Record<string, unknown>, files?: Record<string, Record<string, object>> }>} packs
+ * @param {Array<{ id?: string, operators?: Record<string, unknown>, behaviour?: Array<{ switch: string, option: string }>, files?: Record<string, Record<string, object>> }>} packs
  * @param {Readonly<Record<string, any>>} data 合并后的数据（`data.backups.units` / `data.backups.diy.ownedPool`）
- * @param {{ apply?: boolean }} [opts] `apply: true` 时**真的摘除**（见下）；默认 false = 只报告（今天的口径）
- * @returns {{ overlaps: Array<{ pack: string, charId: string, inPoolBefore: boolean, poolEntry: boolean, entryFrom: string, note: string }>, stripped: string[], applied: boolean }}
- *   `overlaps` 逐条点名（`inPoolBefore` = 官方池里本来就有他，`poolEntry` = 他是这个包声明进池的）；
- *   `stripped` 是**被摘掉**的 id（`apply: false` 时这一列是「如果摘会是哪些」，好让改动面一目了然）；
+ * @param {{ apply?: boolean }} [opts] `apply: true` = 维护者总开关，**所有**包的这类重叠都摘（见下）；默认 false 时
+ *   只摘**自己声明了** `behaviour: [{ switch: 'diyPoolOverlap', option: 'strip' }]` 的那些包的
+ * @returns {{ overlaps: Array<{ pack: string, charId: string, inPoolBefore: boolean, poolEntry: boolean, entryFrom: string, strip: boolean, note: string }>, stripped: string[], declaredStripped: string[], applied: boolean }}
+ *   `overlaps` 逐条点名（`inPoolBefore` = 官方池里本来就有他，`poolEntry` = 他是这个包声明进池的，
+ *   `strip` = **这一条**这一次到底摘没摘）；
+ *   `stripped` 是**候选**名单（`apply: false` 时这一列是「如果按维护者开关摘会是哪些」，语义与从前逐字相同）；
+ *   `declaredStripped` 是**被包自己的声明摘掉**的 id（与 `apply` 无关：声明了就算，好让报告点名到 char id ——
+ *   「摘了谁必须能被点名」这条不因为通道从维护者换成作者而放松）；
  *   `applied` 说明这一次到底改没改数据。
  *
  * **为什么默认不摘**：摘掉一份已经在池里的干员 = 池子变小、可挑的干员变少、`tools/golden.mjs` 给池里每一位
  * 配的那个精锐场景整个消失（实测 fanpack 那份数据里 8 名，`ownedPool` 71 → 63）。按 `AGENTS.md` 的 golden 规矩，
  * 一次**有意的玩法改动**必须在同一个提交里跑 `golden:update` 并逐条点名移动了哪些场景 —— 而那不是一个
- * 加载器函数有权替维护者决定的事。所以这里给的是**开关**：`apply: true` 才摘，且摘了谁必须能被点名。
+ * 加载器函数有权替维护者决定的事。
+ *
+ * 摘除因此有**两条通道**，落到同一个动作上：
+ *   ① **维护者总开关** `{ apply: true }`（今天的口径，语义一字未动）；
+ *   ② **包级声明** `behaviour: [{ switch: 'diyPoolOverlap', option: 'strip' }]`（DESIGN §28.43 的第 5 格）——
+ *      作者自己说「把**本包**做成棋子的那几名干员从自选池摘掉」。**通道②刻意按包读取**：合并成一个全局值之后
+ *      「A 包声明 strip」会连 B 包的重叠一起摘掉，而 B 从没声明过（理由写在 `shared/behaviour.js` 那一格的注释里）。
+ * 不声明的包（今天的 golden 语料）落 `report` 那一档 ⇒ 逐字节不变。
  */
 export function stripPackOperators(packs, data, { apply = false } = {}) {
   const backups = isPlainObj(data) && isPlainObj(data.backups) ? data.backups : {};
   const ownedPool = Array.isArray(backups.diy?.ownedPool) ? backups.diy.ownedPool : [];
   const inPool = new Set(ownedPool);
-  /** @type {Array<{ pack: string, charId: string, inPoolBefore: boolean, poolEntry: boolean, entryFrom: string, note: string }>} */
+  /** @type {Array<{ pack: string, charId: string, inPoolBefore: boolean, poolEntry: boolean, entryFrom: string, strip: boolean, note: string }>} */
   const overlaps = [];
   /** @type {string[]} */
   const stripped = [];
+  /** @type {string[]} 被**包自己的声明**摘掉的 id（与维护者开关 `apply` 无关：声明了就算，报告要能点名到 char id） */
+  const declaredStripped = [];
   for (const pack of (Array.isArray(packs) ? packs : []).filter((p) => p && typeof p.id === 'string' && p.id).sort(byPackId)) {
+    // 本地扩展：顶层 `stripDiyOverlaps: true`（本 Forge 的包用它）也摘；上游通道见下。
+    const optedIn = pack.stripDiyOverlaps === true;
+    // ⚠️ 这一格按**包自己**的 decl 读，**刻意不走** `mergeBehaviourDecls`（读法全表就此一格，理由见
+    // `shared/behaviour.js` 的 `diyPoolOverlap` 注释）：合并成一个全局值之后，A 包声明 `strip` 会把 **B 包**的重叠
+    // 也摘掉，而 B 根本没声明过 —— 这一格说的是「**本包**做成的棋子」，不是一条全局口径。判据仍是同一份
+    // `behaviourValue`，闭枚举仍是同一张表，所以「只有一份实现」没有破。
+    const byDecl = behaviourValue(pack.behaviour, 'diyPoolOverlap') === 'strip';
     /** @type {Map<string, string>} charId → 这个包把它变成棋子的那条记录 id */
     const chessByChar = new Map();
     for (const [chessId, rec] of Object.entries(isPlainObj(pack.files?.chess) ? pack.files.chess : {})) {
@@ -1982,27 +3317,40 @@ export function stripPackOperators(packs, data, { apply = false } = {}) {
       const poolEntry = Object.hasOwn(declared, charId);
       if (!inPoolBefore && !poolEntry) continue;
       if (inPoolBefore) stripped.push(charId);
+      // 这一条到底摘不摘：维护者总开关（`apply`）**或**本包自己的声明（顶层 stripDiyOverlaps / behaviour diyPoolOverlap）。
+      const strips = byDecl || optedIn;
+      const strip = inPoolBefore && (apply || strips);
+      if (inPoolBefore && strips) declaredStripped.push(charId);
+      const strippedTail = ' Stripped from the pool (opt-in): the pool offers one fewer operator and the golden corpus moves with it';
+      const keptTail = ' Stripping him from the pool changes what the pool offers, so it is the maintainer\'s call — pass { apply: true } to do it, or let this pack declare behaviour "diyPoolOverlap": "strip" (see the loader report)';
+      const declaredTail = ' Stripped from the pool by this pack\'s OWN "diyPoolOverlap": "strip" declaration (pack.json behaviour): the pool offers one fewer operator and the golden corpus moves with it';
       overlaps.push({
-        pack: pack.id, charId, inPoolBefore, poolEntry,
+        pack: pack.id, charId, inPoolBefore, poolEntry, optedIn,
         entryFrom: chessByChar.get(charId),
+        strip,
         note: inPoolBefore
-          ? `"${charId}" is in the 自选 pool (data/backups.json diy.ownedPool) AND this pack turns him into the chess piece "${chessByChar.get(charId)}" — he can be fielded twice, and the 自选 slot bypasses the piece's own bond.${apply ? ' Stripped from the pool (opt-in): the pool offers one fewer operator and the golden corpus moves with it' : ' Stripping him from the pool changes what the pool offers, so it is the maintainer\'s call — pass { apply: true } to do it (see the loader report)'}`
-          : `this pack puts "${charId}" into the 自选 pool through pack.json operators AND ships the chess piece "${chessByChar.get(charId)}" for the same operator — one operator with two ways in`,
+          ? `"${charId}" is in the 自选 pool (data/backups.json diy.ownedPool) AND this pack turns him into the chess piece "${chessByChar.get(charId)}" — he can be fielded twice, and the 自选 slot bypasses the piece's own bond.${apply ? strippedTail : strips ? declaredTail : keptTail}`
+          : `this pack puts "${charId}" into the 自选 pool through pack.json operators AND ships the chess piece "${chessByChar.get(charId)}" for the same operator — one operator with two ways in.${apply ? strippedTail : strips ? declaredTail : keptTail}`,
       });
     }
   }
+  // 一个 id 可能被多个包同时点名（两个包都把同一个官方干员做成棋子）：报告里按包逐条留着，落地时只摘一次。
+  const strippedIds = [...new Set(stripped)];
   // 真的摘除：只动 `ownedPool` 这一份名单（`diy.operators` 那一条记录留着 —— 它在池外也仍被界面按 id 读，
   // 摘掉名单条目就够了，删记录反而会让别的引用找不到它）。摘除是**就地**改一个拷贝，调用方决定要不要采用。
+  // 摘谁：维护者开关打开时是**全部候选**（今天的口径），否则是**被包自己声明**的那一批。
   let applied = false;
-  if (apply && stripped.length && isPlainObj(backups.diy)) {
-    const drop = new Set(stripped);
-    const remaining = ownedPool.filter((id) => !drop.has(id));
-    if (remaining.length !== ownedPool.length) {
-      data.backups = { ...backups, diy: { ...backups.diy, ownedPool: remaining } };
-      applied = true;
+  if (isPlainObj(backups.diy)) {
+    const drop = new Set(apply ? stripped : declaredStripped);
+    if (drop.size) {
+      const remaining = ownedPool.filter((id) => !drop.has(id));
+      if (remaining.length !== ownedPool.length) {
+        data.backups = { ...backups, diy: { ...backups.diy, ownedPool: remaining } };
+        applied = true;
+      }
     }
   }
-  return { overlaps, stripped, applied };
+  return { overlaps, stripped, declaredStripped, applied };
 }
 
 /**
@@ -2128,7 +3476,9 @@ export function workshopPlaytestIndex(packs) {
  *     loadout layer (`shared/loadoutRecord.js` resolveRecordLoadout / loadoutRecord, `server/sim/simdata.js`).
  *     Half-merging e.g. a `skill` (a new index with the old blackboard) would create a record nobody wrote and no
  *     validator describes; replacing is the only honest reading of "this pack ships its own skill".
- *   * **arrays** — replaced by definition, a field-wise array merge has no meaning here.
+ *   * **arrays** — replaced by definition, a field-wise array merge has no meaning here. Two exceptions, both of them
+ *     lists where the meaning really is additive or keyed: `OVERRIDE_KEYED_LISTS` (entry by entry on an identity key)
+ *     and `OVERRIDE_UNION_LISTS` (a bare id roster, merged as a set union).
  *
  * Everything else (numbers, strings, booleans and the plain objects that hold them, e.g. `stats`, `assets`' sibling
  * numeric maps) is merged field by field, recursively, so an override that writes ONE number keeps every other field of
@@ -2167,9 +3517,28 @@ export const OVERRIDE_REPLACE_KEYS = Object.freeze([
 export const OVERRIDE_KEYED_LISTS = Object.freeze({ talents: 'index', talentsBase: 'index', talentChanges: 'talentIndex' });
 
 /**
+ * 裸 id **名册**列表：覆盖时**求并集**（`base ∪ patch`，保序去重），既不整段替换、也不按字段合并。
+ *
+ * 为什么（2026-10-13，业主报「多索雷斯里有龙舌兰、迅捷里没有」）：`members` / `visibleMembers` 是盟约记录里
+ * 那份「这条盟约有哪些干员」的**展示名册**（客户端的盟约详情 / 简报读它，见 `public/js/ui/gameLogic/bonds.js`
+ * 的 `bondMembers`）。它天然是**累加**语义 —— 一个包往官方的【迅捷】里加一名自己的干员，说的是「还有一名」，
+ * 不是「把官方的十一名都删掉、换成我这一名」。而它按上面那条「数组整段替换」的规则走，于是产生两个后果：
+ *   * 两个包各自覆盖同一条官方盟约时会**互相抹掉**对方的成员，且谁生效取决于包的加载顺序（不是契约）；
+ *   * 作者必须手抄官方的整份名单，官方那边一加人这份就过期。
+ * 求并集让「多个包往同一条盟约里加人」有确定结果，作者只写自己的那几位即可。
+ *
+ * 顺序：base（官方 / 先前的包）在前、原序不变，patch 里 base 没有的按 patch 顺序追加 —— 名册只关心「有谁」，
+ * 但「官方在前」让官方干员的相对次序不因某个包而变。两边的重复项与自身重复都去掉。
+ *
+ * 注意这条**只**给「id 的名册」用：`bonds`（干员身上带哪些盟约）仍然是整段替换 —— 那一边的重复与顺序都有
+ * 意义（变形同构体、调和看的是最终那一份），而且它的语义是「我身上就带这些」而不是「再多带这些」。
+ */
+export const OVERRIDE_UNION_LISTS = Object.freeze(['members', 'visibleMembers']);
+
+/**
  * Merge one override record onto the record it replaces: field by field, with `OVERRIDE_REPLACE_KEYS` and arrays taken
- * wholesale (`OVERRIDE_KEYED_LISTS` excepted — those merge on their identity key). The input objects are never mutated
- * (the caller may keep the official data frozen).
+ * wholesale (`OVERRIDE_KEYED_LISTS` merge on their identity key, `OVERRIDE_UNION_LISTS` as a set union — those two
+ * excepted). The input objects are never mutated (the caller may keep the official data frozen).
  * @param {object} base the record being overridden (official, or a record an earlier pack contributed)
  * @param {object} patch the pack's record
  * @returns {object} a new record
@@ -2183,9 +3552,26 @@ export function mergeRecord(base, patch) {
       out[key] = mergeKeyedList(base[key], value, idKey);
       continue;
     }
+    if (OVERRIDE_UNION_LISTS.includes(key) && Array.isArray(value)) {
+      out[key] = unionList(Array.isArray(base[key]) ? base[key] : [], value);
+      continue;
+    }
     if (OVERRIDE_REPLACE_KEYS.includes(key) || Array.isArray(value)) { out[key] = value; continue; }
     out[key] = isPlainObj(value) && isPlainObj(base[key]) ? mergeRecord(base[key], value) : value;
   }
+  return out;
+}
+
+/**
+ * 求并集（`OVERRIDE_UNION_LISTS` 的合并体）：`base` 在前、原序不变，`patch` 里 `base` 没有的按 `patch` 顺序追加；
+ * 两边的重复项与自身重复都去掉。`base` 不是数组时按空算（那条记录本来没有这个字段 ⇒ 作者写的就是全部）。
+ * @param {unknown[]} baseList @param {unknown[]} patchList
+ * @returns {unknown[]}
+ */
+function unionList(baseList, patchList) {
+  const out = [];
+  const seen = new Set();
+  for (const v of [...baseList, ...patchList]) if (!seen.has(v)) { seen.add(v); out.push(v); }
   return out;
 }
 
@@ -2391,6 +3777,100 @@ function baseContainerFor(base, file) {
 }
 
 /**
+ * **口径数据通道的执行点**（DESIGN §28.51）：把每个包 `variants.json` 的表合到**已经并完**的数据上。这一层
+ * 一条记录都不新增 —— 它只改**已经在 `out` 里**的记录，所以它是「字段级补丁」而不是「第二条 content 通道」。
+ *
+ * 三条判据，每条都点名（绝不静默丢）：
+ *   1. `VARIANTS_UNDECLARED_AXIS` —— 表写了一条轴，而这个包**没有**在 `pack.json.variants` 里声明它。这是这条
+ *      通道最容易踩的坑（「写了等于没写」正是本层要消灭的失败方向），所以它是**拒绝**，不是跳过。
+ *   2. `VARIANTS_TARGET_MISSING`  —— 目标 `<文件>:<id>` 在合并后的数据里不存在。要发明记录请用 `content`
+ *      （新 id）或 `overrides`（官方 id）—— 那是那两条通道的活，这一条只负责「已有记录的另一套数值」。
+ *   3. `VARIANTS_UNKNOWN_KEY`     —— 补丁写了目标记录**没有**的键。闭合世界与 `overrides` 的
+ *      `UNKNOWN_OVERRIDE_FIELD` **逐字同一条判据**（`unknownOverrideKeys`），层级也一样（记录顶层）。
+ *
+ * **生效条件**：轴在 `mergeVariantDecls`（既有规则：包 id 字典序小的赢）里落到**这个包声明的那个选项**上。
+ * 别的包赢了同一个轴 ⇒ 这个包的表**不应用**，但**具名**记进 `report.variantPatches`（`status: 'overridden'`）
+ * —— 与 `mergeVariantDecls.overridden` 同一条「输的一方必须看到一行字」的纪律。
+ *
+ * @param {Record<string, any>} out 合并中的顶层数据（会被就地补出新对象，绝不改到 `data/` 的冻结对象）
+ * @param {Array<{ id: string, variants?: Array<{ axis: string, default: string }>|null, files?: Record<string, any> }>} packs
+ * @param {{ errors: Array<object>, variantPatches?: object[] }} report
+ * @returns {number} 真正写进去的补丁条数
+ */
+function applyVariantDataPatches(out, packs, report) {
+  report.variantPatches = [];
+  const sorted = (Array.isArray(packs) ? packs : [])
+    .filter((p) => p && typeof p === 'object' && typeof p.id === 'string' && p.id)
+    .slice()
+    .sort(byPackId);
+  // 轴 → **赢了那个轴的包 id**（不是选项名）：两个包可以声明同一个选项，那时「谁的表生效」只能由赢家决定。
+  const won = new Map(mergeVariantDecls(sorted).decl.map((e) => [e.axis, e.by]));
+  let applied = 0;
+  for (const pack of sorted) {
+    const tables = pack.files && pack.files.variants;
+    if (!isPlainObj(tables)) continue;
+    for (const [axis, byFile] of Object.entries(tables)) {
+      const own = variantValue(pack.variants, axis);
+      if (own === null) {
+        report.errors.push({
+          pack: pack.id, file: 'variants', id: axis, code: 'VARIANTS_UNDECLARED_AXIS',
+          reason: `variants.json patches the 口径 axis "${axis}", but pack.json does not declare that axis — a table whose axis nobody declared is never applied, so it is refused instead of silently ignored (add { "axis": "${axis}", "default": "<option>" } to pack.json.variants)`,
+        });
+        continue;
+      }
+      const holder = won.get(axis);
+      if (holder !== pack.id) {
+        report.variantPatches.push({
+          pack: pack.id, axis, option: own, status: 'overridden', lostTo: holder ?? null,
+          reason: `pack "${holder ?? '(none)'}" declares the 口径 axis "${axis}" and wins it (the smaller pack id wins, DESIGN §28.3) — this pack's table for that axis is not applied`,
+        });
+        continue;
+      }
+      // 落盘位置与 content 那一条**同一张表**（`units` 进 `backups.units`，其余同名），而且同样**逐层浅复制**：
+      // 路径之外的同层兄弟原样留着，`data/*.json` 一个字节都不动。
+      for (const [file, records] of Object.entries(byFile)) {
+        const path = OVERLAY_TARGET_BY_FILE[file] || [file];
+        const chain = [];
+        let cur = out;
+        for (const seg of path.slice(0, -1)) {
+          const inner = isPlainObj(cur[seg]) ? { ...cur[seg] } : {};
+          chain.push({ owner: cur, key: seg, value: inner });
+          cur = inner;
+        }
+        const leaf = path[path.length - 1];
+        const prior = isPlainObj(cur[leaf]) ? { ...cur[leaf] } : {};
+        for (const [id, patch] of Object.entries(records)) {
+          const target = prior[id];
+          if (!isPlainObj(target)) {
+            report.errors.push({
+              pack: pack.id, file, id, code: 'VARIANTS_TARGET_MISSING',
+              reason: `variants.json patches "${file}:${id}", which is not in the merged data — the 口径 data channel can only give an EXISTING record another set of values; add the record with content ("${file}") for a new id, or with overrides ("${file}:${id}") to replace an official one`,
+            });
+            continue;
+          }
+          const unknown = unknownOverrideKeys(target, patch);
+          if (unknown && unknown.length) {
+            report.errors.push({
+              pack: pack.id, file, id, code: 'VARIANTS_UNKNOWN_KEY', definedBy: 'the record it patches',
+              reason: `variants.json["${axis}"]["${file}"]["${id}"] names ${unknown.map((k) => `"${k}"`).join(', ')}, which the record it patches does not have — a 口径 patch may only change keys that exist (the same closed world as an "overrides" entry)`,
+            });
+            continue;
+          }
+          prior[id] = mergeRecord(target, patch);
+          applied++;
+          report.variantPatches.push({
+            pack: pack.id, axis, option: own, status: 'applied', file, id, keys: Object.keys(patch).sort(),
+          });
+        }
+        cur[leaf] = prior;
+        for (let i = chain.length - 1; i >= 0; i--) chain[i].owner[chain[i].key] = chain[i].value;
+      }
+    }
+  }
+  return applied;
+}
+
+/**
  * Apply every pack's content on top of the official data and return a NEW top-level object (the input is never
  * mutated; the caller freezes the result). Official ids are only replaced when the pack declared them in `overrides`;
  * a collision that was not declared is a reported error and the record already in place is kept.
@@ -2406,7 +3886,17 @@ function baseContainerFor(base, file) {
  */
 export function applyWorkshop(base, packs) {
   const out = { ...(isPlainObj(base) ? base : {}) };
-  const report = { packs: [], added: {}, overridden: {}, errors: [] };
+  const report = { packs: [], added: {}, overridden: {}, errors: [], variantPatches: [] };
+  /**
+   * **同一个 id 被多个包贡献**时被丢掉的那几份 —— `data.workshopConflicts` 的来源（「干员冲突兼容」那一层读它）。
+   *
+   * 合并规则（DESIGN §28.3）只留赢家、输家整个丢掉，而那是**数据**该有的行为（一份合并结果，客户端与服务端
+   * 都只看得见一份）。代价是玩家连「还有另一份」都无从知道：两个包各加了一个阿米娅，界面上永远只有字典序小的
+   * 那个包的那一份，而且没有任何一处会告诉他还有别的。这一趟**不改合并、不改报告**（赢家仍是赢家，那条
+   * `PACK_ID_COLLISION` 一条不少），只把丢掉的那几份收起来 —— 供玩家自己挑。
+   */
+  /** @type {Record<string, Record<string, { winner: string, alts: Array<{ pack: string, record: object }> }>>} */
+  const lostRecords = {};
   const push = (bag, file, id) => { (bag[file] ||= []).push(id); };
   /** 工坊新增/覆盖的每一条干员记录（供 `chessLookIssues` 事后判断它有没有模型）。 */
   const looked = [];
@@ -2422,6 +3912,10 @@ export function applyWorkshop(base, packs) {
     const declared = new Set(Array.isArray(pack.overrides) ? pack.overrides : []);
     const entry = { id: pack.id, name: pack.name || pack.id, files: {} };
     for (const [file, records] of Object.entries(pack.files || {})) {
+      // 口径数据通道（DESIGN §28.51）：`variants` **不是**一张记录表，所以它不走这一层。它必须等**所有包**的
+      // 内容都并完之后才应用（目标可能是另一个包贡献的记录），见下面 `applyVariantDataPatches`。漏掉这一句的后果
+      // 很具体：`overlayContentFile` 会把 `{chess:{…}}` 当成「一条 id 叫 chess 的记录」并进 `out.variants`。
+      if (file === 'variants') continue;
       // 落盘位置由 `overlayContentFile` 决定（`units` 并进 `data.backups.units`，其余文件就是 `out[file]`）。
       // `priorMap` 是 **官方数据 + 这个包之前已经并进去的每一个包**（变量曾经叫 `official`，把它当成「只有官方」
       // 正是那条把作者引到 `data/` 去找一条其实属于另一个包的记录的错误文案）。
@@ -2438,6 +3932,16 @@ export function applyWorkshop(base, packs) {
             pack: pack.id, file, id, code: 'PACK_ID_COLLISION', definedBy: holder,
             reason: `"${id}" is already contributed by pack "${holder}" — the pack with the smaller id keeps it (DESIGN §28.3). Rename this record, or let "${holder}" drop it; an "overrides" entry does not win against another pack`,
           });
+          // 留下来给玩家挑（见 `lostRecords` 的注释）。这一份要**成形**才能当候选用：
+          //   * 新 id（官方没有这一条）：输家给的就是一条完整记录，直接用；
+          //   * 覆盖官方 id（走 overrides 的那种）：输家给的是一条**字段补丁**，候选应当是「官方 + 这条补丁」的
+          //     合成体，否则玩家挑到的是一份缺一半字段的记录（`unknownOverrideKeys` 那套闭合世界判据也只为
+          //     补丁而设）。赢家那一份末尾由 `out[file][id]` 取，天然已经是官方 + 赢家补丁。
+          const official = isPlainObj(baseContainerFor(base, file)) ? baseContainerFor(base, file)[id] : null;
+          const candidate = isPlainObj(official) ? mergeRecord(official, rec) : rec;
+          if (!lostRecords[file]) lostRecords[file] = {};
+          if (!lostRecords[file][id]) lostRecords[file][id] = { winner: holder, alts: [] };
+          lostRecords[file][id].alts.push({ pack: pack.id, record: candidate });
           return null;
         }
         if (exists && !declared.has(key)) {
@@ -2470,6 +3974,9 @@ export function applyWorkshop(base, packs) {
     }
     report.packs.push(entry);
   }
+  // 口径数据通道（DESIGN §28.51）：必须在**所有包**的内容都并完之后 —— 它的目标可以是另一个包贡献的记录。
+  // 也必须在 `linkWorkshopStages` 之前：那一步读 `stages` 记录之间的引用，补丁改的是那些记录本身。
+  applyVariantDataPatches(out, packs, report);
   linkWorkshopStages(out, report);
   mergeWorkshopVoices(out, packs, report);
   mergeWorkshopBondIcons(out, packs, report);
@@ -2484,6 +3991,14 @@ export function applyWorkshop(base, packs) {
   // 时装（`pack.json.skins` → `assets.skins`）：与 art 同一条「并进既有清单、路径变绝对 URL」的路，
   // 所以客户端零改动就能 `ctx.data.get('assets').skins[charId]` 读到它（皮肤 mod 的 list/lookup 全靠这一张表）。
   mergeWorkshopSkins(out, packs, report);
+  // 形态（clip set）通道（`pack.json.forms` → `assets.modForms`）：与 art / skins 同一条「并进既有清单」的路，
+  // 所以客户端零改动就能 `data.get('assets').modForms` 读到它，`shared/packForms.js` 的 `formsFor` 把它折进
+  // 第一方 `FORMS`（第一方优先，§28.29）。包与包撞同名形态在**这里**点名（照跑 `artClaims` / `SKIN_COLLISION`
+  // 的既有规矩），因为「谁赢取决于加载次序」是这个仓库一直在拒绝的东西。
+  mergeWorkshopForms(out, packs, report);
+  // 静态相位（`pack.json.fx.silentPhases` → `assets.silentPhases`）：落点是同一张清单，但它不是素材，
+  // 而是 `fx/kinds.js` 那个 `SILENT_PHASES` Set 的成员集合 —— 去重 / 排序，声明次序不影响结果。
+  mergeWorkshopFx(out, packs, report);
   mergeWorkshopSupport(out, packs, report);
   // 自选池（`diy.ownedPool` / `diy.operators`）：读 `data.backups.units` 里那条已经合并好的记录，
   // 所以必须排在内容文件那一层之后 —— 它在这个函数里是最末一批，天然满足。
@@ -2493,21 +4008,84 @@ export function applyWorkshop(base, packs) {
   // 「我明明勾了」和「试玩里没有」之间反复，而日志一句话都不说。
   for (const e of workshopPlaytestIndex(packs).errors) report.errors.push({ pack: e.pack, file: 'playtest', id: e.id, code: e.code, definedBy: e.definedBy, reason: e.reason });
   report.looks = [...chessLookIssues(out, looked), ...enemyLookIssues(out, lookedEnemies)];
-  // `stripPackOperators`（fanpack G-16）：**只记录，不摘除**。一个被包变成棋子的干员同时还在自选池里这件事，
-  // 以前没有任何地方说出来；而「真的把他摘出池」会改变自选槽能挑到的干员（= 改对局结果），
-  // 与「`test/golden/*.json` 一个字节不动」的验收不能同时成立 —— 所以它是一条**待裁决**的记录，
-  // 不是一次静默的行为差异（理由与实测数字见 `stripPackOperators` 的注释）。
-  // 摘除是**开关**（`{ apply: true }`），这条默认路径不摘：`applied` 与 `stripped` 照实带出来，好让报告说清
-  // 「如果摘会是哪些」与「这一次到底改没改」。默认路径下 `applied` 恒为 false。
+  // 特质授予的盟约（`trait.grantsBonds`，DESIGN §28.49）：与 `looks` 并列的一条**只读**点名通道（它查的不是外观，
+  // `workshopSummary` 也分开数）。必须排在内容文件那一层之后 —— 它要读**合并后**的 `out.chess` 与 `out.bonds`
+  // （盟约可能是另一个包加进来的）。**不改数据、不拒包**：坏 id 由读取点的 `hasBond` 挡在计数之外。
+  report.traitGrants = traitGrantWarnings(out, looked);
+  // `stripPackOperators`（fanpack G-16）：**记录 + 包级声明通道**。一个被包变成棋子的干员同时还在自选池里这件事，
+  // 以前没有任何地方说出来；而「真的把他摘出池」会改变自选槽能挑到的干员（= 改对局结果）——所以**默认不摘**，
+  // 这是 `stripPackOperators` 的缺省档（理由与实测数字见它的注释）。
+  // 摘除有两条通道：① 维护者总开关 `{ apply: true }`（这条装载路径**不**传它）；② 包自己声明
+  // `behaviour: [{ switch: 'diyPoolOverlap', option: 'strip' }]`（DESIGN §28.43 的第 5 格）—— 这条路径**走**，
+  // 因为那正是「通道通了」：作者声明了，装载出来的池子就该是他声明的样子。**此外本 Forge 的包用顶层
+  // `stripDiyOverlaps: true` 声明（本仓库扩展），那是等效的第二个声明通道**（`stripPackOperators` 同样按包读取，
+  // 与 behaviour 那条并列：任一条成立即摘）。不声明的包逐字节不变。
+  // 报告三样照实带出来：`overlaps` 逐条点名、`strippedPool`（如果按维护者开关摘会是哪些）、
+  // `strippedByPack`（**被声明**摘掉的，可点名到 char id）、`poolStripped`（这一次到底改没改）。
   {
     const pool = stripPackOperators(packs, out);
     report.overlaps = pool.overlaps;
     report.strippedPool = pool.stripped;
+    report.strippedByPack = pool.declaredStripped;
     report.poolStripped = pool.applied;
+    // 被摘掉的干员不再躺在池里，所以它也不该继续出现在「本包往池里加过谁」那份报告里 —— 报告要照实说。
+    if (pool.declaredStripped.length && isPlainObj(report.operators)) {
+      const drop = new Set(pool.declaredStripped);
+      for (const [p, ids] of Object.entries(report.operators)) {
+        const kept = ids.filter((id) => !drop.has(id));
+        if (kept.length) report.operators[p] = kept; else delete report.operators[p];
+      }
+    }
   }
   for (const list of Object.values(report.added)) list.sort();
   for (const list of Object.values(report.overridden)) list.sort();
+  // 冲突索引（见 `lostRecords`）：赢家那一份从合并结果里取，放在**最前面**，好让读者（与玩家）第一眼看到的就是
+  // 「今天实际生效的那一份」。形状 `{ [file]: { [id]: { winner, packs: [{ pack, record }…] } } }` —— `packs[0]`
+  // 恒是赢家。没有冲突就**不设这个键**（一份普通的合并结果与 0.18.7 逐字节相同）。
+  if (Object.keys(lostRecords).length) {
+    /** @type {Record<string, Record<string, { winner: string, packs: Array<{ pack: string, record: object }> }>>} */
+    const index = {};
+    for (const [file, byId] of Object.entries(lostRecords)) {
+      for (const [id, { winner, alts }] of Object.entries(byId)) {
+        const winnerRec = isPlainObj(out[file]) ? out[file][id] : null;
+        if (!isPlainObj(winnerRec)) continue;
+        if (!index[file]) index[file] = {};
+        index[file][id] = { winner, packs: [{ pack: winner, record: winnerRec }, ...alts] };
+      }
+    }
+    if (Object.keys(index).length) out.workshopConflicts = index;
+  }
   return { data: out, report };
+}
+
+/**
+ * `trait.grantsBonds` 写歪了的地方 —— 一条 chess 记录的「特质授予哪些盟约」（DESIGN §28.49）。
+ *
+ * **为什么单独一趟、为什么只读**：`unknownOverrideKeys` 只比**顶层**键（`Object.keys`），所以往 `trait` 里加子键
+ * **天然通得过装载器** —— 一个拼错的盟约 id、或一个写歪的形状，会安安静静地变成「这条特质什么都不授予」。
+ * 业主吃过这一类亏（docs/WORKSHOP.md §1.1：`content` 没声明 `chess` ⇒ 编辑器里在、磁盘里在、**永远进不了游戏、
+ * 没有任何报错**）。所以这里**逐条点名**；但**不拒包、不改记录**（一条 typo 不该让整包装不上，与 `assets.mirrors`
+ * 那条「停用并点名，不拒包」同一条），坏 id 由读取点的 `hasBond` 挡在计数之外。
+ *
+ * 判据本体在 `shared/morph.js` 的 `traitGrantIssues`；作者侧的同一个函数在 `shared/chessAuthoring.js` 里被
+ * `validateChessRecord` 调用（`npm run workshop:validate` 与编辑器）。没有盟约表就不判存在性。
+ * @param {Readonly<Record<string, any>>} data 合并后的数据
+ * @param {Array<{ pack: string, id: string }>} looked 工坊贡献的干员记录
+ * @returns {Array<{ pack: string, id: string, code: string, field: string, value: any, reason: string }>}
+ */
+function traitGrantWarnings(data, looked) {
+  const chess = isPlainObj(data) && isPlainObj(data.chess) ? data.chess : null;
+  const bonds = isPlainObj(data) && isPlainObj(data.bonds) ? data.bonds : null;
+  if (!chess || !bonds) return [];
+  const bondIds = new Set(Object.keys(bonds));
+  const out = [];
+  for (const { pack, id } of looked) {
+    const rec = chess[id];
+    for (const issue of traitGrantIssues(isPlainObj(rec) ? rec.trait : null, { bondIds })) {
+      out.push({ pack, id, code: issue.code, field: issue.field, value: issue.value, reason: `${id}: ${issue.message}` });
+    }
+  }
+  return out;
 }
 
 /**
@@ -2838,7 +4416,7 @@ function mergeWorkshopItemIcons(data, packs, report) {
 export function workshopArtIndex(packs, { prefix = WORKSHOP_MEDIA_PREFIX } = {}) {
   /** @type {Record<string, Record<string, object>>} */
   const out = {};
-  const toUrl = (packId, p) => `${prefix}${packId}/${String(p).split('/').map(encodeURIComponent).join('/')}`;
+  const toUrl = (packId, p) => workshopAssetUrl(packId, p, prefix);
   // 按包 id 排序再处理：谁赢只取决于包 id，不取决于加载顺序（与既有的三条素材通道同一条规则）
   for (const pack of [...(Array.isArray(packs) ? packs : [])].sort(byPackId)) {
     const art = isPlainObj(pack?.art) ? pack.art : null;
@@ -2868,6 +4446,12 @@ function artEntryUrls(entry, shape, toUrl) {
   for (const [key, value] of Object.entries(entry)) {
     if (shape.urls.includes(key)) out[key] = toUrl(value);
     else if (shape.strings.includes(key)) out[key] = value;
+    // `maps`（sfxUnits 的 skills / attacks / hits）：每个技能 index 的路径都换成 URL
+    else if ((shape.maps || []).includes(key) && isPlainObj(value)) {
+      out[key] = Object.fromEntries(Object.entries(value).map(([idx, p]) => [idx, toUrl(p)]));
+    }
+    // `objects`（mix / attackMix / hitMix）：没有路径，原样抄给客户端
+    else if ((shape.objects || []).includes(key)) out[key] = value;
     else if (key === 'spine' && isPlainObj(value)) {
       out.spine = shape.spine === 'flat'
         ? spineUrls(value, toUrl)
@@ -2916,11 +4500,22 @@ function mergeWorkshopArt(data, packs, report) {
   }
   const next = { ...assets };
   for (const table of tables) {
-    const entries = isPlainObj(next[table]) ? { ...next[table] } : {};
-    for (const [id, patch] of Object.entries(index[table])) {
-      entries[id] = mergeArtEntry(isPlainObj(entries[id]) ? entries[id] : {}, patch);
+    const shape = ART_TABLES[table];
+    // 落点：表自己声明的 `target`（缺省 = `[表名]`，即 `assets.<表>` —— 既有那几张表的行为逐字不变）。
+    // `sfxUnits` 的落点是嵌套的 `assets.audio.sfx.units`，所以这里逐段浅复制、写完后自底向上拼回去
+    // （`mergeWorkshopFlatArt` 对同样的 `target` 用的是同一条做法）。
+    const target = Array.isArray(shape.target) && shape.target.length ? shape.target : [table];
+    const chain = [];
+    let cur = next;
+    for (const seg of target) {
+      const inner = isPlainObj(cur[seg]) ? { ...cur[seg] } : {};
+      chain.push({ owner: cur, key: seg, value: inner });
+      cur = inner;
     }
-    next[table] = entries;
+    for (const [id, patch] of Object.entries(index[table])) {
+      cur[id] = mergeArtEntry(isPlainObj(cur[id]) ? cur[id] : {}, patch, shape);
+    }
+    for (let i = chain.length - 1; i >= 0; i--) chain[i].owner[chain[i].key] = chain[i].value;
   }
   data.assets = next;
   report.art = artClaimCounts(claimed, (t) => !ART_TABLES[t]?.flat);
@@ -2957,9 +4552,11 @@ function mergeWorkshopSkins(data, packs, report) {
     }
     return;
   }
-  const toUrl = (packId, p) => `${WORKSHOP_MEDIA_PREFIX}${packId}/${String(p).split('/').map(encodeURIComponent).join('/')}`;
+  const toUrl = (packId, p) => workshopAssetUrl(packId, p);
   /** @type {Record<string, object[]>} */
   const byChar = {};
+  /** @type {Record<string, number>} 包 id → 真的并进 `assets.skins` 的套数（日志那一份，见函数尾）。 */
+  const entriesByPack = {};
   /** @type {Map<string, string>} `"<charId>|<skinId>"` → 占住它的包 id */
   const claimed = new Map();
   for (const pack of withSkins) {
@@ -2974,6 +4571,7 @@ function mergeWorkshopSkins(data, packs, report) {
         continue;
       }
       claimed.set(key, pack.id);
+      entriesByPack[pack.id] = (entriesByPack[pack.id] || 0) + 1;
       // 外观那一半与 art 同一条转换（字段级、spine 再往下一层）：复用 `artEntryUrls`，判据只有一份
       const art = isPlainObj(skin.art) ? artEntryUrls(skin.art, ART_TABLES.chars, (p) => toUrl(pack.id, p)) : null;
       const voices = isPlainObj(skin.voices)
@@ -2998,6 +4596,117 @@ function mergeWorkshopSkins(data, packs, report) {
   for (const [charId, arr] of Object.entries(byChar)) next[charId] = [...(Array.isArray(prevSkins[charId]) ? prevSkins[charId] : []), ...arr];
   data.assets = { ...assets, skins: next };
   report.skins = Object.fromEntries(Object.entries(byChar).map(([charId, arr]) => [charId, arr.length]));
+  // 启动日志那一份（`workshopSummary`）：按**包**数，而不是按干员。`report.skins` 的键是 charId（消费点按
+  // 干员问「有哪几套」），而日志说的是「这个包带来了几套」—— 两个问题，所以两张表，都从同一趟循环里出来。
+  // 数的是**真的进了 `assets.skins` 的那些**：被 `SKIN_COLLISION` 拒掉的与「清单不在」的都没进，也就不该出现在
+  // 这一行里（否则日志会替一个什么都没生效的包邀功）。
+  report.skinsByPack = Object.fromEntries(Object.entries(entriesByPack).filter(([, n]) => n));
+}
+
+/**
+ * 把包声明的**形态（clip set）**并进 `assets.modForms`（`pack.json.forms`，DESIGN §28.29）。
+ *
+ * 为什么落在 `assets.json`：形态是 spine 模型的伴生语义，而包的模型本来就并进这一张清单
+ * （`mergeWorkshopArt` / `mergeWorkshopFlatArt` / `mergeWorkshopSkins`），客户端**零改动**就能通过
+ * `data.get('assets')` 读到 —— 与 `assets.skins` 逐字同一条理由（见 mergeWorkshopSkins 的注释）。
+ *
+ * 落盘形状：`assets.modForms[spineId][formName] = { pack: '<包 id>', form: { change?…, roles } }` ——
+ * 带上 `pack` 是为了两件事：（a）两个包撞同名形态时谁赢了要说得出名字（`FORM_COLLISION`）；
+ * （b）客户端 `installPackForms` 按包 id 判「谁先占位」，于是**结果不取决于加载次序**。
+ *
+ * 第一方优先那一半不在这里判：`FORMS_FIRST_PARTY_OVERLAP` 在形状层（`parseFormsDecl`）就已经把
+ * 「包想盖第一方」拒了，所以并到这里的每一条都是第一方没有的形态名。第二道闸仍在客户端
+ * （`installPackForms` 显式丢掉同名条目并报出来），因为浏览器拿到的是 JSON，而那张清单不该被信任。
+ */
+function mergeWorkshopForms(data, packs, report) {
+  const list = [...(Array.isArray(packs) ? packs : [])].sort(byPackId);
+  const withForms = list.filter((p) => isPlainObj(p?.forms) && Object.keys(p.forms).length);
+  if (!withForms.length) return;
+  const assets = isPlainObj(data.assets) ? data.assets : null;
+  if (!assets) {
+    for (const pack of withForms) {
+      report.errors.push({
+        pack: pack.id, file: 'assets', id: 'forms', code: 'MANIFEST_MISSING',
+        reason: 'this pack declares forms (clip sets), but data/assets.json is missing — run `npm run assets` so the client has a manifest to extend',
+      });
+    }
+    return;
+  }
+  /** @type {Record<string, Record<string, object>>} */
+  const bySpine = {};
+  /** @type {Map<string, string>} `"<spine id>|<form name>"` → 占住它的包 id */
+  const claimed = new Map();
+  /** @type {Record<string, string[]>} 包 id → 真的并进去的 `"<spine id>|<形态名>"` */
+  const byPack = {};
+  for (const pack of withForms) {
+    for (const [table, entries] of Object.entries(pack.forms)) {
+      for (const [id, forms] of Object.entries(entries)) {
+        for (const [kind, form] of Object.entries(forms)) {
+          const key = `${id}|${kind}`;
+          const holder = claimed.get(key);
+          if (holder) {
+            report.errors.push({
+              pack: pack.id, file: 'assets', id: `forms.${table}.${id}.${kind}`, code: 'FORM_COLLISION', definedBy: holder,
+              reason: `another pack (${holder}) already adds the form "${kind}" on spine "${id}"; the pack with the smaller id keeps it — rename the form, or let "${holder}" drop it`,
+            });
+            continue;
+          }
+          claimed.set(key, pack.id);
+          ((bySpine[id] ||= {})[kind] = { pack: pack.id, form });
+          (byPack[pack.id] ||= []).push(`forms.${table}.${id}.${kind}`);
+        }
+      }
+    }
+  }
+  if (!Object.keys(bySpine).length) return;
+  const prev = isPlainObj(assets.modForms) ? assets.modForms : {};
+  const next = { ...prev };
+  for (const [spineId, forms] of Object.entries(bySpine)) {
+    next[spineId] = { ...(isPlainObj(prev[spineId]) ? prev[spineId] : {}), ...forms };
+  }
+  data.assets = { ...assets, modForms: next };
+  for (const arr of Object.values(byPack)) arr.sort();
+  report.forms = byPack;
+}
+
+/**
+ * 把包声明的**静态相位**并进一个数据文件（`pack.json.fx.silentPhases`，DESIGN §28.29）。
+ *
+ * 落点与形态不同：相位名不是素材，是 `fx/kinds.js` 里一个 Set 的成员，所以它并进 `assets.silentPhases`。
+ * 为什么仍然走 `assets.json`：客户端的 `fxSpec` 在**每一个特效**上被调用，它必须是一次同步查表，不能是
+ * 「等一个文件加载」——而 `assets.json` 是渲染层启动时就已经在手里的那份清单（`ui/fieldHost.js` 把它交给
+ * 渲染器），所以它是这条通道唯一不需要新增取数路径的家。
+ *
+ * 去重 + 排序：`silentPhases` 是**声明**（谁先说的不重要），两句话说同一件事不该变成两个成员。
+ */
+function mergeWorkshopFx(data, packs, report) {
+  const list = [...(Array.isArray(packs) ? packs : [])].sort(byPackId);
+  const withPhases = list.filter((p) => isPlainObj(p?.fx) && Array.isArray(p.fx.silentPhases) && p.fx.silentPhases.length);
+  if (!withPhases.length) return;
+  const assets = isPlainObj(data.assets) ? data.assets : null;
+  if (!assets) {
+    for (const pack of withPhases) {
+      report.errors.push({
+        pack: pack.id, file: 'assets', id: 'fx', code: 'MANIFEST_MISSING',
+        reason: 'this pack declares fx.silentPhases, but data/assets.json is missing — run `npm run assets` so the client has a manifest to extend',
+      });
+    }
+    return;
+  }
+  const prev = Array.isArray(assets.silentPhases) ? assets.silentPhases : [];
+  const merged = [...prev];
+  /** @type {Record<string, string[]>} */
+  const byPack = {};
+  for (const pack of withPhases) {
+    for (const kind of pack.fx.silentPhases) {
+      if (!merged.includes(kind)) merged.push(kind);
+      (byPack[pack.id] ||= []).push(kind);
+    }
+  }
+  merged.sort();
+  for (const arr of Object.values(byPack)) arr.sort();
+  data.assets = { ...assets, silentPhases: merged };
+  report.silentPhases = byPack;
 }
 
 /**
@@ -3074,28 +4783,59 @@ function mergeWorkshopFlatArt(data, packs, report) {
     return;
   }
   const next = { ...data.assets };
+  /** 这一趟**真的并进去了**的表（缺落点的那几张不算：日志里数了却没并，就是一句假话）。 */
+  const merged = new Set();
   for (const table of tables) {
-    // `target` 就是那张表在 `assets.json` 里的路径：`['skills']` 或 `['prof','sub']`。**逐个**段浅复制
-    // （长度 1 时落点就是 `assets.skills` 这个表本身 —— 要往表里写，不是把整张表换成一条路径）。
+    const target = ART_TABLES[table].target;
+    // 「清单里**本来就有**这张表」是写入的前置条件 —— `mergeWorkshopItemIcons` 对 `assets.items` 立的是同一条
+    // 规矩（`:3021`），理由也一样：`art.bonds` / `art.bands` 的用途是给**已有的**盟约/分队配图（`assets.bonds` /
+    // `assets.bands` 是素材管线产物，官方那 23 + 40 条），把一个不存在的落点凭空造出来，就成了「客户端按 id 查得到
+    // 一张图，可 `data/bonds.json` 里根本没有这个盟约」的假象。缺这张表时**点名报告**，让作者去跑 `npm run assets`。
+    //
+    // 守卫只对**落点是 `assets.<表>` 自己**的扁平表生效（`bonds` / `bands`）。`skills` / `profSub` 的落点是
+    // `assets.skills` / `assets.prof.sub` —— 那两张是 art 这一层**本来就在创建**的表（既有语义，见
+    // test/workshopOperators.test.js「并进 assets.skills / assets.prof.sub」那组用例），对它们查 pre-existence
+    // 会把一条已经定下来的行为改掉。
+    const ownMap = target.length === 1 && target[0] === table;
+    if (ownMap && !isPlainObj(next[target[0]])) {
+      for (const p of list) {
+        if (!Object.hasOwn(isPlainObj(p?.art) ? p.art : {}, table)) continue;
+        report.errors.push({
+          pack: p.id, file: 'assets', id: `art.${table}`, code: 'MANIFEST_MISSING',
+          reason: `this pack ships art.${table} icons, but data/assets.json has no "${target[0]}" map — run \`npm run assets\` so the client has a table to extend`,
+        });
+      }
+      continue;
+    }
+    // **逐个**段浅复制（长度 1 时落点就是 `assets.<表>` 这个表本身 —— 要往表里写，不是把整张表换成一条路径）。
     const chain = [];
     let cur = /** @type {Record<string, any>} */ (next);
-    for (const seg of ART_TABLES[table].target) {
+    for (const seg of target) {
       const inner = isPlainObj(cur[seg]) ? { ...cur[seg] } : {};
       chain.push({ owner: cur, key: seg, value: inner });
       cur = inner;
     }
     for (const [id, url] of Object.entries(index[table])) cur[id] = url;
     for (let i = chain.length - 1; i >= 0; i--) chain[i].owner[chain[i].key] = chain[i].value;
+    merged.add(table);
   }
   data.assets = next;
-  report.flatArt = artClaimCounts(claimed, (t) => ART_TABLES[t]?.flat);
+  report.flatArt = artClaimCounts(claimed, (t) => merged.has(t));
 }
 
-/** 一个条目按字段合并；`spine` 再往里一层（一侧之内的字段逐项合并，见 mergeWorkshopArt 的注释）。 */
-function mergeArtEntry(cur, patch) {
+/**
+ * 一个条目按字段合并；`spine` 再往里一层（一侧之内的字段逐项合并，见 mergeWorkshopArt 的注释），
+ * `shape.maps` 那几张「index → 路径」的表**按 index 逐项**合并（这条只对声明了 `maps` 的表生效，其余表一个字节不变）：
+ * 一个包给一个**官方已有**的单位补上 `skills["2"]` 时，官方那 `0` / `1` 两条得留着。
+ */
+function mergeArtEntry(cur, patch, shape = null) {
   const out = { ...cur };
   for (const [key, value] of Object.entries(patch)) {
-    if (key !== 'spine' || !isPlainObj(value)) { out[key] = value; continue; }
+    if (key !== 'spine' || !isPlainObj(value)) {
+      const byIndex = Array.isArray(shape?.maps) && shape.maps.includes(key);
+      out[key] = byIndex && isPlainObj(value) && isPlainObj(cur[key]) ? { ...cur[key], ...value } : value;
+      continue;
+    }
     const spine = isPlainObj(cur.spine) ? { ...cur.spine } : {};
     for (const [k, v] of Object.entries(value)) {
       spine[k] = isPlainObj(v) && isPlainObj(spine[k]) ? { ...spine[k], ...v } : v;
@@ -3317,14 +5057,48 @@ export function workshopSummary(report) {
     if (itemIcons) bits.push(`${itemIcons.length} item icon${itemIcons.length === 1 ? '' : 's'}`);
     const art = report.art && report.art[p.id];
     if (art) bits.push(`${art.length} art entr${art.length === 1 ? 'y' : 'ies'} (${art.join(', ')})`);
-    // 扁平图标表（`assets.skills` / `assets.prof.sub`）与上面那条分开数：它们的落点不是 `assets.<表>`，
-    // 一条日志里混在一起会让读的人去 assets.chars 里找一个技能图标。
+    // 时装（`pack.json.skins`）：漏了这一段，一个带来 271 套时装的包在启动日志里就是 "nothing" ——
+    // 而「装了但什么都没发生」正是这一层最容易被读错的那种失败（业主实测 skin-catalogue 撞上的就是它）。
+    const skins = report.skinsByPack && report.skinsByPack[p.id];
+    if (skins) bits.push(`${skins} outfit${skins === 1 ? '' : 's'}`);
+    // 扁平表（`assets.skills` / `assets.prof.sub` / `assets.bonds` / `assets.bands`）与上面那条分开数：它们的落点
+    // 不是 `assets.<表>`，一条日志里混在一起会让读的人去 assets.chars 里找一个技能图标。
+    //
+    // **每一张扁平表各占一句 `<表> +N (…)`**，分组规则从 `ART_TABLES[表].target` 推出来，不硬编码表名。
+    // 以前这四张表被糊成一句 `N icons`（`art.bonds` 是盟约**图集**，不是图标），读日志的人会去 `assets.skills`
+    // 里找一个盟约 id；而「表名 + N」正好是作者能在 `pack.json` 里对照着改的那个名字。
     const flatArt = report.flatArt && report.flatArt[p.id];
-    if (flatArt) bits.push(`${flatArt.length} icon${flatArt.length === 1 ? '' : 's'} (${flatArt.join(', ')})`);
+    if (flatArt) {
+      /** @type {Map<string, string[]>} */
+      const byTable = new Map();
+      for (const key of flatArt) {
+        const table = key.slice(0, key.indexOf('.'));
+        if (!byTable.has(table)) byTable.set(table, [key]);
+        else /** @type {string[]} */ (byTable.get(table)).push(key);
+      }
+      for (const table of [...byTable.keys()].sort()) {
+        const keys = /** @type {string[]} */ (byTable.get(table));
+        bits.push(`${table} +${keys.length} (${keys.join(', ')})`);
+      }
+    }
     const support = report.support && report.support[p.id];
     if (support) bits.push(`助战 +${support.length}`);
     const operators = report.operators && report.operators[p.id];
     if (operators) bits.push(`自选池 +${operators.length}`);
+    // 口径数据通道（DESIGN §28.51）：**写进去的**与**被别的包抢掉的**分开数 —— 一个 `variants.json` 被抢掉时
+    // 启动日志里只剩 "nothing"，读日志的人会去查一个其实装对了的包。两边都点名。
+    const patched = (report.variantPatches || []).filter((v) => v.pack === p.id && v.status === 'applied');
+    const patchedOver = (report.variantPatches || []).filter((v) => v.pack === p.id && v.status === 'overridden');
+    if (patched.length) {
+      const byAxis = new Map();
+      for (const v of patched) byAxis.set(v.axis, (byAxis.get(v.axis) || 0) + 1);
+      bits.push(`口径数值 ${[...byAxis].map(([a, n]) => `${a} ${n}`).join(', ')} 条`);
+    }
+    if (patchedOver.length) bits.push(`${patchedOver.length} 张口径表被别的包抢掉了（该轴由更小的包 id 声明）`);
+    // 特质授予的盟约写歪了 / 指向不存在的盟约（`trait.grantsBonds`，DESIGN §28.49）：与「没有模型」分开数 ——
+    // 把两件事糊成一句 `N 个干员…`，读日志的人会去 assets.chars 里找一个盟约 id。
+    const grantIssues = (report.traitGrants || []).filter((g) => g.pack === p.id).length;
+    if (grantIssues) bits.push(`${grantIssues} 处 trait.grantsBonds 无效（启动日志逐条点名）`);
     const looks = (report.looks || []).filter((l) => l.pack === p.id);
     // 干员与怪物分开数：一句话里混着「3 个干员」而其中两个是怪物，读日志的人会去找错对象
     const lookOperators = looks.filter((l) => l.kind !== 'enemy').length;
@@ -3336,4 +5110,142 @@ export function workshopSummary(report) {
   if (report.supportOff) parts.push('助战 pool contributions off (support.json "workshop": false)');
   if (report.errors.length) parts.push(`${report.errors.length} rejected record(s)`);
   return parts.join('; ');
+}
+
+/**
+ * 管理器合同的**装载期裁决**（DESIGN §28.48）—— 对一份**已加载的包集合**按 `dependencies` / `conflicts`
+ * 声明做跨包裁决。形状由 `parseModRefsDecl` 在前面判过；这里判的是**语义**（形状合法、语义照样可以死）。
+ *
+ * 为什么必须在装载期判而不是校验期：一个包声明了什么，只有在**本机上真的装了哪些包**之后才成立。作者交上来的
+ * 是一份 pack.json，他看不到别人的 workshop/ 里有什么。所以「缺依赖」不是他写错了，而是**这台机器上这个组合
+ * 不成立** —— 这正是装载期的判断。
+ *
+ * 五条规则，全部**确定性**（同一份输入永远同一份输出；迭代顺序按包 id 排序，与既有裁决「同 id 抢占按包 id
+ * 排序」同一条确定性来源），全部**具名**（拒绝理由点名双方，见 `refused[].reason`）：
+ *
+ *   * **缺失依赖** —— 声明的 id 不在集合里 ⇒ **依赖方被拒**（`missing dependency "x"`）；
+ *   * **版本不合** —— 依赖在、但它的 `version` 不满足声明的 range ⇒ **依赖方被拒**
+ *     （`dependency "x" version 1.0.0 does not satisfy ">=2.0.0"`）。依赖包**自己没有写 `version`** 时视为
+ *     **满足** —— 它的 version 是「未声明」，不是「不匹配」。机制上：`normalizePackManifest` 把没写 version 的
+ *     包归一化成 `0.0.0`，所以这里把 `0.0.0` 当作「未声明」（见 `declaredVersion`）。这一条是 PR 原文的**规则**，
+ *     但 PR 自带的那条测试断言的是**相反**的行为 —— 本移植按规则实现，冲突已记进 commit 消息的差异清单；
+ *   * **互斥** —— A 声明了对 B 的冲突（B 在集合里、且 B 的 `version` 满足 range）⇒ **包 id 大的那个**被拒
+ *     （`conflicts with "alpha" (declared by "alpha")`）。双方都声明时同一条边只裁决一次，结论一样；
+ *   * **级联** —— 被拒的依赖让它的依赖方也无法工作 ⇒ 级联拒绝，理由链完整（`depends on "x", which was refused`），
+ *     **迭代到不动点**（A 依赖 B、B 依赖 C、C 被拒 ⇒ C、B、A 全拒，一次迭代不够）；
+ *   * **循环** —— 幸存集合里的依赖边成环 ⇒ **环上全体被拒**（`dependency cycle: a → b → c → a`）。它与级联
+ *     不同：环上每个包自己的依赖都「在」，但这份声明本身是死锁，没有任何一个能先装载。
+ *
+ * 纯函数：不改输入，不读磁盘，不抛异常。`kept` 就是真正装载的集合，`refused` 由调用方变成具名的启动日志。
+ * @param {{ id: string, version?: string, name?: string,
+ *           dependencies?: { id: string, range?: string }[],
+ *           conflicts?: { id: string, range?: string }[] }[]} packs
+ * @returns {{ kept: unknown[], refused: { id: string, reason: string }[] }}
+ */
+export function adjudicatePackGraph(packs) {
+  const list = (Array.isArray(packs) ? packs : []).slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const byId = new Map();
+  for (const p of list) if (!byId.has(p.id)) byId.set(p.id, p);
+  /** @type {Map<string, string>} 包 id → 拒绝理由 */
+  const refused = new Map();
+  // 「这个包声明了版本吗」—— `normalizePackManifest` 把**没写** `version` 的包归一化成立面的 `0.0.0`，
+  // 所以装载期看到的是一个字符串，分不出「没写」与「写了 0.0.0」。本仓库的口径是**没写 = 未声明**：
+  // 所以 `0.0.0` 在这里当作「未声明」处理，任何 range 都算**满足**（与 `range` 缺省 = 任意版本同一条意思）。
+  // 这一条是 PR 原文的规则（「依赖包自己没有 version 时视为满足（它的 version 是「未声明」，不是「不匹配」）」）；
+  // ⚠️ 注意 PR 自带的那条测试断言的是**相反**的行为（未声明 ⇒ 0.0.0 ⇒ `>=2.0.0` 不合 ⇒ 拒），
+  // 与本规则冲突，本移植按规则实现、并把它记进 commit 消息的差异清单。
+  const declaredVersion = (p) => (typeof p.version === 'string' && p.version.trim() && p.version.trim() !== '0.0.0' ? p.version.trim() : null);
+  const satisfied = (range, target) => {
+    if (range === undefined || range === '') return true;
+    const v = declaredVersion(target);
+    if (v === null) return true; // 未声明版本 ⇒ 视为满足（不是「不匹配」）
+    return appVersionMatches(range, v);
+  };
+
+  // 第一层：缺失 / 版本不合 / 互斥（互斥按 id 大者败；双方都声明时同一条边只裁决一次）
+  for (const p of list) {
+    for (const dep of p.dependencies ?? []) {
+      const target = byId.get(dep.id);
+      if (!target) refused.set(p.id, `missing dependency "${dep.id}"`);
+      else if (dep.range !== undefined && !satisfied(dep.range, target)) {
+        refused.set(p.id, `dependency "${dep.id}" version ${target.version ?? '(undeclared)'} does not satisfy "${dep.range}"`);
+      }
+    }
+    for (const c of p.conflicts ?? []) {
+      const target = byId.get(c.id);
+      if (!target || (c.range !== undefined && !satisfied(c.range, target))) continue;
+      const loser = p.id > c.id ? p.id : c.id;
+      const winner = p.id > c.id ? c.id : p.id;
+      if (loser === winner) continue;
+      refused.set(loser, `conflicts with "${winner}" (declared by "${p.id}")`);
+    }
+  }
+  // 级联：依赖链上任何一个被拒，依赖方跟着拒（迭代到不动点）
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const p of list) {
+      if (refused.has(p.id)) continue;
+      for (const dep of p.dependencies ?? []) {
+        if (refused.has(dep.id) && !byId.has(dep.id)) continue; // 缺失依赖已经在第一层点名
+        if (refused.has(dep.id)) {
+          refused.set(p.id, `depends on "${dep.id}", which was refused`);
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+  // 循环：幸存集合里的依赖边成环 ⇒ 环上全体被拒（与级联不同：环上每个包自己的依赖都「在」，但声明本身是死锁）
+  const edges = new Map();
+  for (const p of list) {
+    if (refused.has(p.id)) continue;
+    const targets = (p.dependencies ?? []).map((d) => d.id).filter((id) => byId.has(id) && !refused.has(id));
+    edges.set(p.id, targets);
+  }
+  const state = new Map();
+  const stack = [];
+  const visit = (id) => {
+    state.set(id, 1);
+    stack.push(id);
+    for (const t of edges.get(id) ?? []) {
+      const s = state.get(t);
+      if (s === 1) {
+        const cycle = stack.slice(stack.indexOf(t));
+        for (const m of cycle) refused.set(m, `dependency cycle: ${cycle.concat(cycle[0]).join(' → ')}`);
+        return true;
+      }
+      if (s === undefined && visit(t)) return true;
+    }
+    stack.pop();
+    state.set(id, 2);
+    return false;
+  };
+  for (const p of list) if (!refused.has(p.id) && !state.has(p.id)) { if (visit(p.id)) break; }
+
+  const kept = list.filter((p) => !refused.has(p.id));
+  const refusedList = [...refused.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([id, reason]) => ({ id, reason }));
+  return { kept, refused: refusedList };
+}
+
+/**
+ * 一张数据文件能不能当 `pack.json.overrides` 的目标（`"<文件>:<id>"`）。
+ *
+ * **只此一份**：装载期那条 `VARIANTS_UNKNOWN_FILE` 的判据、编辑器读取端（`readPackMeta` 的 `isContentFile`）
+ * 与写入端（`writePackOverrides`）都调它。三处各写一遍 `.filter((f) => f !== 'variants')` 的代价不是多打几个
+ * 字：界面会说「这条没问题」而写入端说「拒」—— 同一件事两个答案，作者按哪个都错（DESIGN §28.51）。
+ *
+ * `variants` 是**内容文件，但不是可覆盖目标**：它装的是给已有记录写的字段级补丁，没有 `<文件>:<id>` 这种
+ * 「一条记录」可以被覆盖，所以它一律不算（与 `VARIANTS_UNKNOWN_FILE` 的文案同一条理由）。
+ *
+ * **为什么定义在文件末尾、而不是 `WORKSHOP_CONTENT_FILES` 旁边**：这份文件被文档引用了 30 多处
+ * `shared/workshop.js:<行号>`（`test/promptCitations.test.js` 钉着它们）。插在上面会让下面每一处引用静默
+ * 漂 15 行 —— 而那条判据只报「引到的那一行是空的」，其余会变成「点得开、但点错了地方」，没人会知道。
+ * 放在末尾，一个字节都不动它们。
+ * @param {unknown} file
+ */
+export function isOverridableContentFile(file) {
+  return typeof file === 'string' && file !== 'variants' && WORKSHOP_CONTENT_FILES.includes(file);
 }

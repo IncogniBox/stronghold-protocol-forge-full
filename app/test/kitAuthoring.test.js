@@ -87,6 +87,8 @@ describe('kit authoring: the shipped example kit is the reference', () => {
 
   test('its own header explains the import rule — and prose must not trip it', () => {
     const source = fs.readFileSync(DEMO_KIT, 'utf8');
+    // 示例 kit 讲的是「三条硬规则」，它的头注释里写着 `import` 这个词并解释相对路径为什么不行：
+    // 这段说明文字**不得**被扫描器当成真的依赖（§28.18 之后 `./…` 是合法形式，示例仍然一个 import 都不写）。
     assert.match(source, /不能 import/, 'the demo kit documents the rule in a comment');
     assert.deepEqual(kitErrors(validateKit(source, { id: 'chess_ws_abyss_hunter_a', ownChessIds: ['chess_ws_abyss_hunter_a'] })), []);
   });
@@ -106,9 +108,18 @@ describe('kit authoring: the three rules that fail silently', () => {
       `import { x } from '../../sim/battle.js';\n${kit('')}`,
       `import x from '/sim/x.js';\n${kit('')}`,
       `const x = require('./x.js');\n${kit('')}`,
-      `export { x } from './x.js';\n${kit('')}`,
+      `export { x } from '../shared/tier1.js';\n${kit('')}`,
+      `import x from './lib/x.mjs';\n${kit('')}`,
     ]) {
       assert.ok(codes(validateKit(src, { id: 'chess_ws_x_a', ownChessIds: ['chess_ws_x_a'] })).includes('KIT_IMPORT'), src);
+    }
+  });
+
+  test('§28.18: a DOWNWARD relative import or re-export of the kit\'s own package is not an error', () => {
+    // `../…` walks up and can never agree on both ends; `./…` means `<packDir>/kits/…` on disk and
+    // `/workshop-kits/<pack>/…` in the browser — the same file (DESIGN §28.18). A re-export is the same dependency.
+    for (const src of [`import { x } from './lib/x.js';\n${kit('')}`, `export { x } from './lib/x.js';\n${kit('')}`]) {
+      assert.deepEqual(kitErrors(validateKit(src, { id: 'chess_ws_x_a', ownChessIds: ['chess_ws_x_a'] })), [], src);
     }
   });
 
@@ -202,6 +213,35 @@ describe('kit authoring: ownership (the same rule loadWorkshopKits enforces)', (
   test('the pack\'s own operator needs no override', () => {
     const src = 'export default function kit() { return {}; }';
     assert.deepEqual(kitErrors(validateKit(src, { id: 'chess_ws_mine_a', ownChessIds: ['chess_ws_mine_a'] })), []);
+  });
+
+  // 第二个键空间（docs/WORKSHOP.md §4.7）：一个 kit 的 id 还可以是**本包声明进自选池的 charId**（模拟层对自选干员
+  // 就是按 charId 查 kit 的）或**本包的召唤物 token id**（`tokens.kits?.[def.id]`）。编辑器必须与加载器同判，否则
+  // 作者会看到「编辑器放行、加载器丢掉」——那正是 KIT_NO_TARGET 这条判据要消掉的那种静默失败。
+  test('a charId this pack declares into the 自选 pool (pack.json operators) is a legal target', () => {
+    const src = 'export default function kit() { return {}; }';
+    assert.deepEqual(codes(validateKit(src, { id: 'char_ws_clemnt', ownChessIds: ['chess_ws_mine_a'], overrides: [] })), ['KIT_NO_TARGET']);
+    assert.deepEqual(kitErrors(validateKit(src, { id: 'char_ws_clemnt', ownCharIds: ['char_ws_clemnt'] })), []);
+  });
+
+  test('a summon token id this pack ships (tokens.json) is a legal target too', () => {
+    const src = 'export default function kit() { return {}; }';
+    assert.deepEqual(codes(validateKit(src, { id: 'token_ws_mask', ownChessIds: ['chess_ws_mine_a'], overrides: [] })), ['KIT_NO_TARGET']);
+    assert.deepEqual(kitErrors(validateKit(src, { id: 'token_ws_mask', ownTokenIds: ['token_ws_mask'] })), []);
+    // …and the sanctioned way to replace an OFFICIAL summon's behaviour is the declared `tokens:<id>`
+    assert.deepEqual(codes(validateKit(src, { id: 'token_10000_silent_healrb', ownTokenIds: [] })), ['KIT_NO_TARGET']);
+    assert.deepEqual(kitErrors(validateKit(src, { id: 'token_10000_silent_healrb', overrides: ['tokens:token_10000_silent_healrb'] })), []);
+  });
+
+  test('an id in BOTH key spaces is refused by name, not silently given to one of them', () => {
+    const src = 'export default function kit() { return {}; }';
+    const issues = validateKit(src, {
+      id: 'char_605_cmedic', ownChessIds: ['char_605_cmedic'], ownTokenIds: ['char_605_cmedic'], ambiguousIds: ['char_605_cmedic'],
+    });
+    assert.deepEqual(codes(issues), ['KIT_TARGET_AMBIGUOUS']);
+    assert.match(issues[0].hint, /operator half wins/);
+    // an ambiguous id is refused even when the pack DOES own it in one space: the file name cannot say which one it means
+    assert.deepEqual(codes(validateKit(src, { id: 'x_ws_y', ownTokenIds: ['x_ws_y'], ambiguousIds: ['x_ws_y'] })), ['KIT_TARGET_AMBIGUOUS']);
   });
 
   test('a bad id and an empty file are refused outright', () => {

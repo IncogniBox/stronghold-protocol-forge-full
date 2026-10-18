@@ -143,12 +143,13 @@ describe('工坊外观素材：声明（pack.json 的 art）', () => {
     assert.equal(e.spineAliasOf, 'enemy_10001_trslim');
   });
 
-  test('tokens：avatar + 扁平的 spine + 原样抄的 owner；textures 去重', () => {
+  test('tokens：avatar + portrait（召唤物立绘）+ spineVariant + 扁平的 spine + 原样抄的 owner；textures 去重', () => {
     const r = norm({
       art: {
         tokens: {
           token_ws_thing: {
-            avatar: 'art/token.png', owner: 'char_ws_my_op',
+            avatar: 'art/token.png', portrait: 'art/token_full.png', owner: 'char_ws_my_op',
+            spineVariant: 'winter',
             spine: spine('token', { textures: ['art/token.png', 'art/token.png', 'art/token_2.png'] }),
           },
         },
@@ -157,8 +158,25 @@ describe('工坊外观素材：声明（pack.json 的 art）', () => {
     assert.equal(r.ok, true, r.detail);
     const t = r.pack.art.tokens.token_ws_thing;
     assert.equal(t.avatar, 'art/token.png');
+    // G-08 / G-09 收口：这两格是真实 mod 要用的，白名单里原本没有 ⇒ 作者只能弃用
+    assert.equal(t.portrait, 'art/token_full.png', 'portrait（召唤物立绘）与 avatar 同类：一条包内相对路径');
+    assert.equal(t.spineVariant, 'winter', 'spineVariant 是一条非空字符串（选引擎已有的变体名，不是路径）');
     assert.equal(t.owner, 'char_ws_my_op');
     assert.deepEqual(t.spine.textures, ['art/token.png', 'art/token_2.png']);
+  });
+
+  test('tokens 的新格子照旧挡两种错：未知字段点名、portrait 的穿越路径拒', () => {
+    const unknown = norm({ art: { tokens: { t: { avatar: 'a.png', nope: 1 } } } });
+    assert.equal(unknown.ok, false);
+    assert.equal(unknown.error, 'ART_UNKNOWN_FIELD');
+    assert.match(unknown.detail, /portrait/, '拒绝理由要列出合法字段（含新开的这两个），否则作者只能猜');
+    assert.match(unknown.detail, /spineVariant/);
+    const escape = norm({ art: { tokens: { t: { portrait: '../escape.png' } } } });
+    assert.equal(escape.ok, false);
+    assert.equal(escape.error, 'ART_PATH_UNSAFE', 'portrait 是新开的路径格，穿越必须照样被拒');
+    const emptyVariant = norm({ art: { tokens: { t: { spineVariant: '' } } } });
+    assert.equal(emptyVariant.ok, false);
+    assert.equal(emptyVariant.error, 'ART_BAD_SHAPE', 'spineVariant 不许空串（空名选不到任何变体）');
   });
 
   test('没有声明时是空对象（不是 undefined），包照常加载', () => {
@@ -192,6 +210,12 @@ describe('工坊外观素材：声明（pack.json 的 art）', () => {
       [{ art: { tokens: { t: { owner: '' } } } }, { hasAssets: true }, 'ART_BAD_SHAPE'],
       // 表 / 字段 / 侧
       [{ art: { weapons: { x: { avatar: 'a.png' } } } }, { hasAssets: true }, 'ART_UNKNOWN_TABLE'],
+      // 音频**没有** art 表：它走 `voices` / `voiceLangs`（落点 `assets.audio.voice` /
+      // `assets.audio.voiceLangs[<lang>]`，docs/WORKSHOP.md §1.4）。作者照着 `data/assets.json` 里那个
+      // `assets.audio` 写 `art.audio` 时，被拒的码是**表名闭集**这一个（与 `art.weapons`、单数 `art.bond`
+      // 逐字同一格），不是顶层的 `PACK_UNKNOWN_FIELD` —— 后者管的是 `pack.json` 的**顶层键**。
+      // 2026-10-13 实测：这一条**本来就拒**（`ART_UNKNOWN_TABLE`），判据此前没有钉它，所以补上。
+      [{ art: { audio: { voice: { char_ws_x: { select: ['a.mp3'] } } } } }, { hasAssets: true }, 'ART_UNKNOWN_TABLE'],
       [{ art: { chars: { c: { nickname: 'x' } } } }, { hasAssets: true }, 'ART_UNKNOWN_FIELD'],
       [{ art: { chars: { c: { spine: { side: { skel: 'a.skel', atlas: 'a.atlas' } } } } } }, { hasAssets: true }, 'ART_UNKNOWN_FIELD'],
       [{ art: { chars: { c: { spine: { front: { skel: 'a.skel', atlas: 'a.atlas', nope: 1 } } } } } }, { hasAssets: true }, 'ART_UNKNOWN_FIELD'],
@@ -215,6 +239,11 @@ describe('工坊外观素材：声明（pack.json 的 art）', () => {
       // 素材住在包自己的 assets/ 里
       [{ art: { chars: { c: { avatar: 'a.png' } } } }, { hasAssets: false }, 'ART_NEEDS_ASSETS'],
       [{ art: { enemies: { e: { icon: 'a.png' } } } }, { hasAssets: false }, 'ART_NEEDS_ASSETS'],
+      // 表名闭集排在「有没有 assets/」**之前**（2026-10-13 修的是**顺序**，不是判据）：两者是两件独立的事，
+      // 而真因优先。写得对但没 assets/ ⇒ 仍是 `ART_NEEDS_ASSETS`（上面两条）；**表名根本不存在**时即便
+      // 没有 assets/ 也必须报 `ART_UNKNOWN_TABLE` —— 从前这里报的是 `ART_NEEDS_ASSETS`，于是作者会去建一个
+      // 解决不了问题的目录，而「这张表不存在」从头到尾没人告诉他（一次名不副实的诊断）。
+      [{ art: { audio: { voice: { char_ws_x: { select: ['a.mp3'] } } } } }, { hasAssets: false }, 'ART_UNKNOWN_TABLE'],
     ];
     for (const [extra, opts, error] of cases) refused(extra, opts, error);
   });

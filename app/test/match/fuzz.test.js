@@ -24,11 +24,17 @@ function randomIntent(rng, m, ps) {
   const uid = () => (pieces.length && rng() < 0.8 ? rng.pick(pieces) : 1 + rng.int(5000));
   const to = () => (rng() < 0.6 ? { area: 'board', row: rng() < 0.8 ? 9 + rng.int(4) : rng.int(19), col: rng() < 0.8 ? 2 + rng.int(9) : rng.int(21) } : { area: 'hand', idx: rng.int(10) });
   switch (t) {
+    case 'g.infoReady': return { t, setupRevision: m.setupRevision ?? 0 };
+    case 'g.rerollVote': return { t, voteId: m.setupVote?.id ?? 1 + rng.int(10), agree: rng() < 0.5 };
     case 'g.band': return { t, bandId: rng() < 0.8 ? rng.pick(BANDS) : rng.pick(['constructor', '__proto__', 'band_x', 'a'.repeat(64)]) };
     case 'g.buy': return { t, slot: rng.int(16) };
     case 'g.sell': case 'g.destroy': return { t, uid: uid() };
     case 'g.move': return { t, uid: uid(), to: to() };
     case 'g.equip': return { t, itemUid: uid(), targetUid: uid() };
+    // 第 8 刀第四格（DESIGN §28.43.2）：`g.unequip { itemUid }` 只带一个字段，与 `g.equip.itemUid` 同一个判据。
+    // 少了这一行它会掉进 `default`（`{ t }` 缺字段）⇒ 这一条断言当场红 —— 这正是它该做的事：**表里加了类型
+    // 就必须同时教会这里怎么造合法载荷**，否则新意图永远进不了模糊测试的覆盖。
+    case 'g.unequip': return { t, itemUid: uid() };
     case 'g.art': return { t, itemUid: uid(), row: rng.int(19), col: rng.int(21) };
     case 'g.reward': case 'g.choice': return { t, idx: rng.int(6) };
     case 'g.ready': return { t, ready: rng() < 0.4 };

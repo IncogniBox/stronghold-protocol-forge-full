@@ -1,0 +1,3415 @@
+{
+ "chess_char_4_17_a": {
+  "chessId": "chess_char_4_17_a",
+  "bonds": [
+   "yanShip",
+   "dossolesShip"
+  ]
+ },
+ "chess_char_4_17_b": {
+  "chessId": "chess_char_4_17_b",
+  "bonds": [
+   "yanShip",
+   "dossolesShip"
+  ]
+ },
+ "chess_char_3_03_a": {
+  "chessId": "chess_char_3_03_a",
+  "bonds": [
+   "yanShip",
+   "visiShip",
+   "dossolesShip"
+  ]
+ },
+ "chess_char_3_03_b": {
+  "chessId": "chess_char_3_03_b",
+  "bonds": [
+   "yanShip",
+   "visiShip",
+   "dossolesShip"
+  ]
+ },
+ "chess_char_4_09_a": {
+  "chessId": "chess_char_4_09_a",
+  "bonds": [
+   "egirShip",
+   "soloShip",
+   "dossolesShip"
+  ]
+ },
+ "chess_char_4_09_b": {
+  "chessId": "chess_char_4_09_b",
+  "bonds": [
+   "egirShip",
+   "soloShip",
+   "dossolesShip"
+  ]
+ },
+ "chess_ws_dos_holungday_a": {
+  "tier": 6,
+  "isHidden": false,
+  "isDiy": false,
+  "visible": true,
+  "chessType": "NORMAL",
+  "directToHand": false,
+  "name": "假日威龙陈",
+  "appellation": "Ch'en the Holungday",
+  "charId": "char_1013_chen2",
+  "profession": "SNIPER",
+  "subProfessionId": "reaperrange",
+  "subProfessionName": "散射手",
+  "position": "RANGED",
+  "nationId": "rhodes",
+  "bonds": [
+   "dossolesShip",
+   "preciShip"
+  ],
+  "garrisonIds": [
+   "garrison_dos_holungday_a"
+  ],
+  "price": 4,
+  "sellPrice": 1,
+  "immunities": {
+   "stun": false,
+   "silence": false,
+   "sleep": false,
+   "frozen": false,
+   "levitate": false
+  },
+  "rangeId": "2-5",
+  "rangeGrid": [
+   [
+    1,
+    1
+   ],
+   [
+    1,
+    2
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    0,
+    1
+   ],
+   [
+    0,
+    2
+   ],
+   [
+    -1,
+    1
+   ],
+   [
+    -1,
+    2
+   ]
+  ],
+  "dmgType": "phys",
+  "attackKind": "ranged",
+  "projectile": "arrow",
+  "canHitFly": true,
+  "targetPriority": null,
+  "trait": {
+   "desc": "攻击范围内的所有敌人，对自己前方一横排的敌人攻击力提升至150%",
+   "descRaw": "攻击范围内的<@ba.kw>所有敌人</>，对自己前方一横排的敌人攻击力提升至150%",
+   "bb": {
+    "atk_scale": 1.5
+   },
+   "bbStr": {},
+   "rangeGrid": [
+    [
+     1,
+     1
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     1
+    ]
+   ]
+  },
+  "tokens": [],
+  "assets": {
+   "avatar": "char_1013_chen2",
+   "portrait": "char_1013_chen2_2",
+   "spine": "char_1013_chen2",
+   "skillIcon": "skchr_chen2_1",
+   "subProfIcon": null
+  },
+  "workshop": {
+   "schema": 1,
+   "id": "dos_holungday"
+  },
+  "chessId": "chess_ws_dos_holungday_a",
+  "baseId": "chess_ws_dos_holungday_a",
+  "goldenId": "chess_ws_dos_holungday_b",
+  "isGolden": false,
+  "rarity": 6,
+  "upgradeNum": 3,
+  "upgradeChessId": "chess_ws_dos_holungday_b",
+  "status": {
+   "phase": 2,
+   "level": 1,
+   "skillLevel": 4,
+   "equipLevel": 0
+  },
+  "stats": {
+   "maxHp": 1875,
+   "atk": 682,
+   "def": 182,
+   "res": 0,
+   "cost": 30,
+   "blockCnt": 1,
+   "bat": 2.3,
+   "aspd": 100,
+   "respawnTime": 66,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "skill": {
+   "skillId": "skchr_chen2_1",
+   "iconId": "skchr_chen2_1",
+   "name": "高压冲击",
+   "level": 4,
+   "desc": "攻击力+55%，攻击时对攻击范围内的所有敌人应用特性加成\n攻击装有4发弹药，打完后结束（可随时停止技能）",
+   "descRaw": "攻击力<@ba.vup>+55%</>，攻击时对攻击范围内的所有敌人应用特性加成\n<@ba.rem>攻击装有4发弹药，打完后结束（可随时停止技能）</>",
+   "skillType": "AUTO",
+   "durationType": "AMMO",
+   "duration": -1,
+   "spType": "INCREASE_WHEN_ATTACK",
+   "spCost": 6,
+   "initSp": 0,
+   "maxChargeTime": 1,
+   "increment": 1,
+   "bb": {
+    "atk": 0.55,
+    "attack@trigger_time": 4
+   },
+   "bbStr": {},
+   "rangeId": null,
+   "rangeGrid": null,
+   "prefabId": "skchr_chen2_1",
+   "trigger": {
+    "rule": "DEFAULT",
+    "rawRule": "DEFAULT",
+    "customRangeGrid": null
+   },
+   "index": 0,
+   "overrideTokenKey": null
+  },
+  "skills": [
+   {
+    "skillId": "skchr_chen2_1",
+    "iconId": "skchr_chen2_1",
+    "name": "高压冲击",
+    "level": 4,
+    "desc": "攻击力+55%，攻击时对攻击范围内的所有敌人应用特性加成\n攻击装有4发弹药，打完后结束（可随时停止技能）",
+    "descRaw": "攻击力<@ba.vup>+55%</>，攻击时对攻击范围内的所有敌人应用特性加成\n<@ba.rem>攻击装有4发弹药，打完后结束（可随时停止技能）</>",
+    "skillType": "AUTO",
+    "durationType": "AMMO",
+    "duration": -1,
+    "spType": "INCREASE_WHEN_ATTACK",
+    "spCost": 6,
+    "initSp": 0,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 0.55,
+     "attack@trigger_time": 4
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_chen2_1",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 0,
+    "overrideTokenKey": null,
+    "isDefault": true
+   },
+   {
+    "skillId": "skchr_chen2_2",
+    "iconId": "skchr_chen2_2",
+    "name": "“堇青之夜”",
+    "level": 4,
+    "desc": "攻击力+50%，每次攻击在范围内生成持续5秒的粘液，地面敌人经过时移动速度-20%、防御力-100（不叠加），蓄力额外效果：改为20发弹药\n攻击装有8发弹药，打完后结束（可随时停止技能）",
+    "descRaw": "攻击力<@ba.vup>+50%</>，每次攻击在范围内生成持续5秒的粘液，地面敌人经过时移动速度<@ba.vup>-20%</>、防御力<@ba.vup>-100</>（不叠加），<$ba.charged>蓄力</>额外效果：改为20发弹药\n<@ba.rem>攻击装有8发弹药，打完后结束（可随时停止技能）</>",
+    "skillType": "MANUAL",
+    "durationType": "AMMO",
+    "duration": -1,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 27,
+    "initSp": 5,
+    "maxChargeTime": 2,
+    "increment": 1,
+    "bb": {
+     "atk": 0.5,
+     "attack@move_speed": -0.2,
+     "attack@def": -100,
+     "attack@projectile_life_time": 5,
+     "attack@trigger_time": 8,
+     "attack@another_trigger_time": 20
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_chen2_2",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 1,
+    "overrideTokenKey": null,
+    "isDefault": false
+   },
+   {
+    "skillId": "skchr_chen2_3",
+    "iconId": "skchr_chen2_3",
+    "name": "“假日风暴”",
+    "level": 4,
+    "desc": "攻击范围扩大，攻击力+55%，攻击造成两次伤害，对攻击范围内的所有敌人应用特性加成，每次攻击在范围内生成持续5秒的粘液，地面敌人经过时移动速度-30%、防御力-150（不叠加）\n攻击装有32发弹药，每次攻击消耗2发，打完后结束（可随时停止技能）",
+    "descRaw": "攻击范围<@ba.vup>扩大</>，攻击力<@ba.vup>+55%</>，攻击造成两次伤害，对攻击范围内的所有敌人应用特性加成，每次攻击在范围内生成持续5秒的粘液，地面敌人经过时移动速度<@ba.vup>-30%</>、防御力<@ba.vup>-150</>（不叠加）\n<@ba.rem>攻击装有32发弹药，每次攻击消耗2发，打完后结束（可随时停止技能）</>",
+    "skillType": "MANUAL",
+    "durationType": "AMMO",
+    "duration": -1,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 65,
+    "initSp": 20,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 0.55,
+     "attack@move_speed": -0.3,
+     "attack@def": -150,
+     "attack@projectile_life_time": 5,
+     "attack@trigger_time": 32
+    },
+    "bbStr": {},
+    "rangeId": "2-6",
+    "rangeGrid": [
+     [
+      2,
+      2
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      1
+     ],
+     [
+      -1,
+      2
+     ],
+     [
+      -2,
+      2
+     ]
+    ],
+    "prefabId": "skchr_chen2_3",
+    "trigger": {
+     "rule": "ACTIVE_RANGE",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": [
+      [
+       2,
+       2
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       0,
+       0
+      ],
+      [
+       0,
+       1
+      ],
+      [
+       0,
+       2
+      ],
+      [
+       -1,
+       1
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       -2,
+       2
+      ]
+     ]
+    },
+    "index": 2,
+    "overrideTokenKey": null,
+    "isDefault": false
+   }
+  ],
+  "talents": [
+   {
+    "index": 0,
+    "name": "节约风气",
+    "desc": "在场时自身弹药类技能攻击时22%（+2%）概率不消耗对应弹药，其他【狙击】干员的弹药类技能改为10%概率不消耗（同类效果取最高）",
+    "descRaw": "在场时自身弹药类技能攻击时22%<@ba.talpu>（+2%）</>概率不消耗对应弹药，其他【狙击】干员的弹药类技能改为10%概率不消耗（同类效果取最高）",
+    "bb": {
+     "spareshot_chen.prob": 0.22,
+     "prob": 0.1
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   },
+   {
+    "index": 1,
+    "name": "假日余韵",
+    "desc": "攻击速度+8，当场地中存在水地形时改为攻击速度+12",
+    "descRaw": "攻击速度+8，当场地中存在水地形时改为攻击速度+12",
+    "bb": {
+     "chen2_t_2[common].attack_speed": 8,
+     "chen2_t_2[map].attack_speed": 4
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "module": {
+   "id": "uniequip_002_chen2",
+   "name": "沙滩战斗套装",
+   "type": "RPR-X",
+   "level": 0,
+   "active": false
+  }
+ },
+ "chess_ws_dos_holungday_b": {
+  "tier": 6,
+  "isHidden": false,
+  "isDiy": false,
+  "visible": true,
+  "chessType": "NORMAL",
+  "directToHand": false,
+  "name": "假日威龙陈",
+  "appellation": "Ch'en the Holungday",
+  "charId": "char_1013_chen2",
+  "profession": "SNIPER",
+  "subProfessionId": "reaperrange",
+  "subProfessionName": "散射手",
+  "position": "RANGED",
+  "nationId": "rhodes",
+  "bonds": [
+   "dossolesShip",
+   "preciShip"
+  ],
+  "garrisonIds": [
+   "garrison_dos_holungday_b"
+  ],
+  "price": 4,
+  "sellPrice": 1,
+  "immunities": {
+   "stun": false,
+   "silence": false,
+   "sleep": false,
+   "frozen": false,
+   "levitate": false
+  },
+  "rangeId": "2-5",
+  "rangeGrid": [
+   [
+    1,
+    1
+   ],
+   [
+    1,
+    2
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    0,
+    1
+   ],
+   [
+    0,
+    2
+   ],
+   [
+    -1,
+    1
+   ],
+   [
+    -1,
+    2
+   ]
+  ],
+  "dmgType": "phys",
+  "attackKind": "ranged",
+  "projectile": "arrow",
+  "canHitFly": true,
+  "targetPriority": null,
+  "trait": {
+   "desc": "攻击范围内的所有敌人，对自己前方一横排的敌人攻击力提升至160%",
+   "descRaw": "攻击范围内的<@ba.kw>所有敌人</>，对自己前方一横排的敌人攻击力提升至<@ba.kw>160%</>",
+   "bb": {
+    "atk_scale": 1.6
+   },
+   "bbStr": {},
+   "rangeGrid": [
+    [
+     1,
+     1
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     1
+    ]
+   ]
+  },
+  "tokens": [],
+  "assets": {
+   "avatar": "char_1013_chen2",
+   "portrait": "char_1013_chen2_2",
+   "spine": "char_1013_chen2",
+   "skillIcon": "skchr_chen2_1",
+   "subProfIcon": null
+  },
+  "workshop": {
+   "schema": 1,
+   "id": "dos_holungday"
+  },
+  "chessId": "chess_ws_dos_holungday_b",
+  "baseId": "chess_ws_dos_holungday_a",
+  "goldenId": "chess_ws_dos_holungday_b",
+  "isGolden": true,
+  "rarity": 6,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "status": {
+   "phase": 2,
+   "level": 60,
+   "skillLevel": 7,
+   "equipLevel": 0
+  },
+  "statsBase": {
+   "maxHp": 2290,
+   "atk": 764,
+   "def": 196,
+   "res": 0,
+   "cost": 30,
+   "blockCnt": 1,
+   "bat": 2.3,
+   "aspd": 100,
+   "respawnTime": 66,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "traitBase": {
+   "desc": "攻击范围内的所有敌人，对自己前方一横排的敌人攻击力提升至150%",
+   "descRaw": "攻击范围内的<@ba.kw>所有敌人</>，对自己前方一横排的敌人攻击力提升至150%",
+   "bb": {
+    "atk_scale": 1.5
+   },
+   "bbStr": {},
+   "rangeGrid": [
+    [
+     1,
+     1
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     1
+    ]
+   ]
+  },
+  "talentsBase": [
+   {
+    "index": 0,
+    "name": "节约风气",
+    "desc": "在场时自身弹药类技能攻击时22%（+2%）概率不消耗对应弹药，其他【狙击】干员的弹药类技能改为10%概率不消耗（同类效果取最高）",
+    "descRaw": "在场时自身弹药类技能攻击时22%<@ba.talpu>（+2%）</>概率不消耗对应弹药，其他【狙击】干员的弹药类技能改为10%概率不消耗（同类效果取最高）",
+    "bb": {
+     "spareshot_chen.prob": 0.22,
+     "prob": 0.1
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   },
+   {
+    "index": 1,
+    "name": "假日余韵",
+    "desc": "攻击速度+8，当场地中存在水地形时改为攻击速度+12",
+    "descRaw": "攻击速度+8，当场地中存在水地形时改为攻击速度+12",
+    "bb": {
+     "chen2_t_2[common].attack_speed": 8,
+     "chen2_t_2[map].attack_speed": 4
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "stats": {
+   "maxHp": 2290,
+   "atk": 794,
+   "def": 233,
+   "res": 0,
+   "cost": 30,
+   "blockCnt": 1,
+   "bat": 2.3,
+   "aspd": 100,
+   "respawnTime": 66,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "skill": {
+   "skillId": "skchr_chen2_1",
+   "iconId": "skchr_chen2_1",
+   "name": "高压冲击",
+   "level": 7,
+   "desc": "攻击力+70%，攻击时对攻击范围内的所有敌人应用特性加成\n攻击装有4发弹药，打完后结束（可随时停止技能）",
+   "descRaw": "攻击力<@ba.vup>+70%</>，攻击时对攻击范围内的所有敌人应用特性加成\n<@ba.rem>攻击装有4发弹药，打完后结束（可随时停止技能）</>",
+   "skillType": "AUTO",
+   "durationType": "AMMO",
+   "duration": -1,
+   "spType": "INCREASE_WHEN_ATTACK",
+   "spCost": 5,
+   "initSp": 0,
+   "maxChargeTime": 1,
+   "increment": 1,
+   "bb": {
+    "atk": 0.7,
+    "attack@trigger_time": 4
+   },
+   "bbStr": {},
+   "rangeId": null,
+   "rangeGrid": null,
+   "prefabId": "skchr_chen2_1",
+   "trigger": {
+    "rule": "DEFAULT",
+    "rawRule": "DEFAULT",
+    "customRangeGrid": null
+   },
+   "index": 0,
+   "overrideTokenKey": null
+  },
+  "skills": [
+   {
+    "skillId": "skchr_chen2_1",
+    "iconId": "skchr_chen2_1",
+    "name": "高压冲击",
+    "level": 7,
+    "desc": "攻击力+70%，攻击时对攻击范围内的所有敌人应用特性加成\n攻击装有4发弹药，打完后结束（可随时停止技能）",
+    "descRaw": "攻击力<@ba.vup>+70%</>，攻击时对攻击范围内的所有敌人应用特性加成\n<@ba.rem>攻击装有4发弹药，打完后结束（可随时停止技能）</>",
+    "skillType": "AUTO",
+    "durationType": "AMMO",
+    "duration": -1,
+    "spType": "INCREASE_WHEN_ATTACK",
+    "spCost": 5,
+    "initSp": 0,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 0.7,
+     "attack@trigger_time": 4
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_chen2_1",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 0,
+    "overrideTokenKey": null,
+    "isDefault": true
+   },
+   {
+    "skillId": "skchr_chen2_2",
+    "iconId": "skchr_chen2_2",
+    "name": "“堇青之夜”",
+    "level": 7,
+    "desc": "攻击力+65%，每次攻击在范围内生成持续5秒的粘液，地面敌人经过时移动速度-30%、防御力-150（不叠加），蓄力额外效果：改为20发弹药\n攻击装有8发弹药，打完后结束（可随时停止技能）",
+    "descRaw": "攻击力<@ba.vup>+65%</>，每次攻击在范围内生成持续5秒的粘液，地面敌人经过时移动速度<@ba.vup>-30%</>、防御力<@ba.vup>-150</>（不叠加），<$ba.charged>蓄力</>额外效果：改为20发弹药\n<@ba.rem>攻击装有8发弹药，打完后结束（可随时停止技能）</>",
+    "skillType": "MANUAL",
+    "durationType": "AMMO",
+    "duration": -1,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 24,
+    "initSp": 10,
+    "maxChargeTime": 2,
+    "increment": 1,
+    "bb": {
+     "atk": 0.65,
+     "attack@move_speed": -0.3,
+     "attack@def": -150,
+     "attack@projectile_life_time": 5,
+     "attack@trigger_time": 8,
+     "attack@another_trigger_time": 20
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_chen2_2",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 1,
+    "overrideTokenKey": null,
+    "isDefault": false
+   },
+   {
+    "skillId": "skchr_chen2_3",
+    "iconId": "skchr_chen2_3",
+    "name": "“假日风暴”",
+    "level": 7,
+    "desc": "攻击范围扩大，攻击力+70%，攻击造成两次伤害，对攻击范围内的所有敌人应用特性加成，每次攻击在范围内生成持续5秒的粘液，地面敌人经过时移动速度-40%、防御力-200（不叠加）\n攻击装有32发弹药，每次攻击消耗2发，打完后结束（可随时停止技能）",
+    "descRaw": "攻击范围<@ba.vup>扩大</>，攻击力<@ba.vup>+70%</>，攻击造成两次伤害，对攻击范围内的所有敌人应用特性加成，每次攻击在范围内生成持续5秒的粘液，地面敌人经过时移动速度<@ba.vup>-40%</>、防御力<@ba.vup>-200</>（不叠加）\n<@ba.rem>攻击装有32发弹药，每次攻击消耗2发，打完后结束（可随时停止技能）</>",
+    "skillType": "MANUAL",
+    "durationType": "AMMO",
+    "duration": -1,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 60,
+    "initSp": 25,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 0.7,
+     "attack@move_speed": -0.4,
+     "attack@def": -200,
+     "attack@projectile_life_time": 5,
+     "attack@trigger_time": 32
+    },
+    "bbStr": {},
+    "rangeId": "2-6",
+    "rangeGrid": [
+     [
+      2,
+      2
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      1
+     ],
+     [
+      -1,
+      2
+     ],
+     [
+      -2,
+      2
+     ]
+    ],
+    "prefabId": "skchr_chen2_3",
+    "trigger": {
+     "rule": "ACTIVE_RANGE",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": [
+      [
+       2,
+       2
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       0,
+       0
+      ],
+      [
+       0,
+       1
+      ],
+      [
+       0,
+       2
+      ],
+      [
+       -1,
+       1
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       -2,
+       2
+      ]
+     ]
+    },
+    "index": 2,
+    "overrideTokenKey": null,
+    "isDefault": false
+   }
+  ],
+  "talents": [
+   {
+    "index": 0,
+    "name": "节约风气",
+    "desc": "在场时自身弹药类技能攻击时22%（+2%）概率不消耗对应弹药，其他【狙击】干员的弹药类技能改为10%概率不消耗（同类效果取最高）",
+    "descRaw": "在场时自身弹药类技能攻击时22%<@ba.talpu>（+2%）</>概率不消耗对应弹药，其他【狙击】干员的弹药类技能改为10%概率不消耗（同类效果取最高）",
+    "bb": {
+     "spareshot_chen.prob": 0.22,
+     "prob": 0.1
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   },
+   {
+    "index": 1,
+    "name": "假日余韵",
+    "desc": "攻击速度+8，当场地中存在水地形时改为攻击速度+12",
+    "descRaw": "攻击速度+8，当场地中存在水地形时改为攻击速度+12",
+    "bb": {
+     "chen2_t_2[common].attack_speed": 8,
+     "chen2_t_2[map].attack_speed": 4
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "modules": [
+   {
+    "uniEquipId": "uniequip_002_chen2",
+    "name": "沙滩战斗套装",
+    "typeName": "RPR-X",
+    "typeIcon": "rpr-x",
+    "icon": "uniequip_002_chen2",
+    "level": 1,
+    "attr": {
+     "atk": 30,
+     "def": 37
+    },
+    "traitOverride": {
+     "desc": "攻击范围内的所有敌人，对自己前方一横排的敌人攻击力提升至160%",
+     "descRaw": "攻击范围内的<@ba.kw>所有敌人</>，对自己前方一横排的敌人攻击力提升至<@ba.kw>160%</>",
+     "bb": {
+      "atk_scale": 1.6
+     },
+     "bbStr": {},
+     "rangeGrid": [
+      [
+       1,
+       1
+      ],
+      [
+       0,
+       0
+      ],
+      [
+       0,
+       1
+      ],
+      [
+       -1,
+       1
+      ]
+     ]
+    },
+    "talentChanges": [],
+    "isDefault": true
+   },
+   {
+    "uniEquipId": "uniequip_003_chen2",
+    "name": "假期的最后一天",
+    "typeName": "RPR-Y",
+    "typeIcon": "rpr-y",
+    "icon": "uniequip_003_chen2",
+    "level": 1,
+    "attr": {
+     "cost": -8,
+     "maxHp": 135,
+     "atk": 55
+    },
+    "traitOverride": {
+     "desc": "攻击范围内的所有敌人，对自己前方一横排的敌人攻击力提升至150%",
+     "descRaw": "攻击范围内的<@ba.kw>所有敌人</>，对自己前方一横排的敌人攻击力提升至150%",
+     "bb": {
+      "atk_scale": 1.5
+     },
+     "bbStr": {},
+     "rangeGrid": [
+      [
+       1,
+       1
+      ],
+      [
+       0,
+       0
+      ],
+      [
+       0,
+       1
+      ],
+      [
+       -1,
+       1
+      ]
+     ],
+     "moduleDesc": "部署费用减少",
+     "moduleDescRaw": "部署费用<@ba.kw>减少</>"
+    },
+    "talentChanges": [],
+    "isDefault": false
+   }
+  ],
+  "module": {
+   "id": "uniequip_002_chen2",
+   "name": "沙滩战斗套装",
+   "type": "RPR-X",
+   "level": 1,
+   "active": true
+  }
+ },
+ "chess_ws_dos_lin_a": {
+  "tier": 5,
+  "isHidden": false,
+  "isDiy": false,
+  "visible": true,
+  "chessType": "NORMAL",
+  "directToHand": false,
+  "name": "林",
+  "appellation": "Lin",
+  "charId": "char_4080_lin",
+  "profession": "CASTER",
+  "subProfessionId": "phalanx",
+  "subProfessionName": "阵法术师",
+  "position": "RANGED",
+  "nationId": "lungmen",
+  "bonds": [
+   "yanShip",
+   "dossolesShip",
+   "skillfulShip"
+  ],
+  "garrisonIds": [
+   "garrison_dos_lin_a",
+   "garrison_dos_lin_prep_a"
+  ],
+  "price": 4,
+  "sellPrice": 1,
+  "immunities": {
+   "stun": false,
+   "silence": false,
+   "sleep": false,
+   "frozen": false,
+   "levitate": false
+  },
+  "rangeId": "x-1",
+  "rangeGrid": [
+   [
+    2,
+    0
+   ],
+   [
+    1,
+    -1
+   ],
+   [
+    1,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    0,
+    -2
+   ],
+   [
+    0,
+    -1
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    0,
+    1
+   ],
+   [
+    0,
+    2
+   ],
+   [
+    -1,
+    -1
+   ],
+   [
+    -1,
+    0
+   ],
+   [
+    -1,
+    1
+   ],
+   [
+    -2,
+    0
+   ]
+  ],
+  "dmgType": "arts",
+  "attackKind": "none",
+  "projectile": "none",
+  "canHitFly": false,
+  "targetPriority": null,
+  "trait": {
+   "desc": "通常时不攻击且防御力和法术抗性大幅度提升，技能开启时攻击造成群体法术伤害",
+   "descRaw": "通常时<@ba.kw>不攻击</>且防御力和法术抗性大幅度<@ba.kw>提升</>，技能开启时攻击造成<@ba.kw>群体法术伤害</>",
+   "bb": {
+    "def": 2,
+    "magic_resistance": 20
+   },
+   "bbStr": {},
+   "rangeGrid": null
+  },
+  "tokens": [],
+  "assets": {
+   "avatar": "char_4080_lin",
+   "portrait": "char_4080_lin_2",
+   "spine": "char_4080_lin",
+   "skillIcon": "skchr_lin_1",
+   "subProfIcon": null
+  },
+  "workshop": {
+   "schema": 1,
+   "id": "dos_lin"
+  },
+  "chessId": "chess_ws_dos_lin_a",
+  "baseId": "chess_ws_dos_lin_a",
+  "goldenId": "chess_ws_dos_lin_b",
+  "isGolden": false,
+  "rarity": 5,
+  "upgradeNum": 3,
+  "upgradeChessId": "chess_ws_dos_lin_b",
+  "status": {
+   "phase": 2,
+   "level": 1,
+   "skillLevel": 4,
+   "equipLevel": 0
+  },
+  "stats": {
+   "maxHp": 1679,
+   "atk": 764,
+   "def": 212,
+   "res": 15,
+   "cost": 22,
+   "blockCnt": 1,
+   "bat": 2,
+   "aspd": 100,
+   "respawnTime": 70,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "skill": {
+   "skillId": "skchr_lin_1",
+   "iconId": "skchr_lin_1",
+   "name": "玲珑",
+   "level": 4,
+   "desc": "可以在下列状态和初始状态间切换：\n攻击间隔略微增大，攻击力+25%，攻击使目标停顿0.8秒",
+   "descRaw": "<@ba.rem>可以在下列状态和初始状态间切换：</>\n攻击间隔<@ba.vdown>略微增大</>，攻击力<@ba.vup>+25%</>，攻击使目标<$ba.sluggish>停顿</><@ba.vup>0.8</>秒",
+   "skillType": "MANUAL",
+   "durationType": "NONE",
+   "duration": -1,
+   "spType": "INCREASE_WITH_TIME",
+   "spCost": 8,
+   "initSp": 0,
+   "maxChargeTime": 1,
+   "increment": 1,
+   "bb": {
+    "atk": 0.25,
+    "attack@sluggish": 0.8,
+    "base_attack_time": 1
+   },
+   "bbStr": {},
+   "rangeId": null,
+   "rangeGrid": null,
+   "prefabId": "skchr_lin_1",
+   "trigger": {
+    "rule": "SEARCH",
+    "rawRule": "SEARCH",
+    "customRangeGrid": null
+   },
+   "index": 0,
+   "overrideTokenKey": null
+  },
+  "skills": [
+   {
+    "skillId": "skchr_lin_1",
+    "iconId": "skchr_lin_1",
+    "name": "玲珑",
+    "level": 4,
+    "desc": "可以在下列状态和初始状态间切换：\n攻击间隔略微增大，攻击力+25%，攻击使目标停顿0.8秒",
+    "descRaw": "<@ba.rem>可以在下列状态和初始状态间切换：</>\n攻击间隔<@ba.vdown>略微增大</>，攻击力<@ba.vup>+25%</>，攻击使目标<$ba.sluggish>停顿</><@ba.vup>0.8</>秒",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": -1,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 8,
+    "initSp": 0,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 0.25,
+     "attack@sluggish": 0.8,
+     "base_attack_time": 1
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_lin_1",
+    "trigger": {
+     "rule": "SEARCH",
+     "rawRule": "SEARCH",
+     "customRangeGrid": null
+    },
+    "index": 0,
+    "overrideTokenKey": null,
+    "isDefault": true
+   },
+   {
+    "skillId": "skchr_lin_2",
+    "iconId": "skchr_lin_2",
+    "name": "荫庇",
+    "level": 4,
+    "desc": "攻击速度+50，自身不容易受到敌人攻击，技能期间使攻击范围内所有友方单位享受第一天赋效果",
+    "descRaw": "攻击速度<@ba.vup>+50</>，自身不容易受到敌人攻击，技能期间使攻击范围内所有友方单位享受第一天赋效果",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 25,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 40,
+    "initSp": 20,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "attack_speed": 50,
+     "taunt_level": -1
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_lin_2",
+    "trigger": {
+     "rule": "SEARCH",
+     "rawRule": "SEARCH",
+     "customRangeGrid": null
+    },
+    "index": 1,
+    "overrideTokenKey": null,
+    "isDefault": false
+   },
+   {
+    "skillId": "skchr_lin_3",
+    "iconId": "skchr_lin_3",
+    "name": "流光乍裂",
+    "level": 4,
+    "desc": "攻击力+125%，攻击范围与琉璃璧的破碎伤害范围扩大，琉璃璧破碎的伤害阈值提升至2倍，每次攻击若击倒敌人则使身上的琉璃璧破碎并立刻生成\n可主动关闭技能（期间可随时停止技能）",
+    "descRaw": "攻击力<@ba.vup>+125%</>，攻击范围与琉璃璧的破碎伤害范围<@ba.vup>扩大</>，琉璃璧破碎的伤害阈值提升至<@ba.vup>2</>倍，每次攻击若击倒敌人则使身上的琉璃璧破碎并立刻生成\n<@ba.rem>可主动关闭技能（期间可随时停止技能）</>",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 26,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 56,
+    "initSp": 16,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 1.25,
+     "talent_scale": 2
+    },
+    "bbStr": {},
+    "rangeId": "x-2",
+    "rangeGrid": [
+     [
+      2,
+      -1
+     ],
+     [
+      2,
+      0
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      1,
+      -2
+     ],
+     [
+      1,
+      -1
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      0,
+      -2
+     ],
+     [
+      0,
+      -1
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      -2
+     ],
+     [
+      -1,
+      -1
+     ],
+     [
+      -1,
+      0
+     ],
+     [
+      -1,
+      1
+     ],
+     [
+      -1,
+      2
+     ],
+     [
+      -2,
+      -1
+     ],
+     [
+      -2,
+      0
+     ],
+     [
+      -2,
+      1
+     ]
+    ],
+    "prefabId": "skchr_lin_3",
+    "trigger": {
+     "rule": "CUSTOM_RANGE",
+     "rawRule": "CUSTOM_RANGE_SEARCH_ENEMY",
+     "customRangeGrid": [
+      [
+       2,
+       -1
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       1,
+       -2
+      ],
+      [
+       1,
+       -1
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       0,
+       -2
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       0,
+       0
+      ],
+      [
+       0,
+       1
+      ],
+      [
+       0,
+       2
+      ],
+      [
+       -1,
+       -2
+      ],
+      [
+       -1,
+       -1
+      ],
+      [
+       -1,
+       0
+      ],
+      [
+       -1,
+       1
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       -2,
+       -1
+      ],
+      [
+       -2,
+       0
+      ],
+      [
+       -2,
+       1
+      ]
+     ]
+    },
+    "index": 2,
+    "overrideTokenKey": null,
+    "isDefault": false
+   }
+  ],
+  "talents": [
+   {
+    "index": 0,
+    "name": "计出万全",
+    "desc": "拥有可以抵挡所有伤害的琉璃璧；琉璃璧在受到单次超过200点伤害时破碎，对周围所有敌人造成相当于林攻击力110%（+10%）的法术伤害、使其晕眩1秒，并在8秒后再次生成",
+    "descRaw": "拥有可以抵挡所有伤害的琉璃璧；琉璃璧在受到单次超过200点伤害时破碎，对周围所有敌人造成相当于林攻击力110%<@ba.talpu>（+10%）</>的法术伤害、使其<$ba.stun>晕眩</>1秒，并在8秒后再次生成",
+    "bb": {
+     "value": 200,
+     "atk_scale": 1.1,
+     "stun": 1,
+     "interval": 8
+    },
+    "bbStr": {},
+    "rangeGrid": [
+     [
+      2,
+      0
+     ],
+     [
+      1,
+      -1
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      0,
+      -2
+     ],
+     [
+      0,
+      -1
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      -1
+     ],
+     [
+      -1,
+      0
+     ],
+     [
+      -1,
+      1
+     ],
+     [
+      -2,
+      0
+     ]
+    ],
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   },
+   {
+    "index": 1,
+    "name": "韬光",
+    "desc": "受到攻击时，有55%（+5%）几率回复1点技力",
+    "descRaw": "受到攻击时，有55%<@ba.talpu>（+5%）</>几率回复1点技力",
+    "bb": {
+     "prob": 0.55,
+     "sp": 1
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "module": {
+   "id": "uniequip_002_lin",
+   "name": "“七窍玲珑”",
+   "type": "PLX-X",
+   "level": 0,
+   "active": false
+  }
+ },
+ "chess_ws_dos_lin_b": {
+  "tier": 5,
+  "isHidden": false,
+  "isDiy": false,
+  "visible": true,
+  "chessType": "NORMAL",
+  "directToHand": false,
+  "name": "林",
+  "appellation": "Lin",
+  "charId": "char_4080_lin",
+  "profession": "CASTER",
+  "subProfessionId": "phalanx",
+  "subProfessionName": "阵法术师",
+  "position": "RANGED",
+  "nationId": "lungmen",
+  "bonds": [
+   "yanShip",
+   "dossolesShip",
+   "skillfulShip"
+  ],
+  "garrisonIds": [
+   "garrison_dos_lin_b",
+   "garrison_dos_lin_prep_b"
+  ],
+  "price": 4,
+  "sellPrice": 1,
+  "immunities": {
+   "stun": false,
+   "silence": false,
+   "sleep": false,
+   "frozen": false,
+   "levitate": false
+  },
+  "rangeId": "x-1",
+  "rangeGrid": [
+   [
+    2,
+    0
+   ],
+   [
+    1,
+    -1
+   ],
+   [
+    1,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    0,
+    -2
+   ],
+   [
+    0,
+    -1
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    0,
+    1
+   ],
+   [
+    0,
+    2
+   ],
+   [
+    -1,
+    -1
+   ],
+   [
+    -1,
+    0
+   ],
+   [
+    -1,
+    1
+   ],
+   [
+    -2,
+    0
+   ]
+  ],
+  "dmgType": "arts",
+  "attackKind": "none",
+  "projectile": "none",
+  "canHitFly": false,
+  "targetPriority": null,
+  "trait": {
+   "desc": "通常时不攻击且防御力和法术抗性更大幅度提升，技能开启时保留部分效果且攻击造成群体法术伤害",
+   "descRaw": "通常时<@ba.kw>不攻击</>且防御力和法术抗性更大幅度<@ba.kw>提升</>，技能开启时保留部分效果且攻击造成<@ba.kw>群体法术伤害</>",
+   "bb": {
+    "def": 2.15,
+    "magic_resistance": 25,
+    "lin_e_002[buff].def": 1,
+    "lin_e_002[buff].magic_resistance": 10
+   },
+   "bbStr": {},
+   "rangeGrid": null
+  },
+  "tokens": [],
+  "assets": {
+   "avatar": "char_4080_lin",
+   "portrait": "char_4080_lin_2",
+   "spine": "char_4080_lin",
+   "skillIcon": "skchr_lin_1",
+   "subProfIcon": null
+  },
+  "workshop": {
+   "schema": 1,
+   "id": "dos_lin"
+  },
+  "chessId": "chess_ws_dos_lin_b",
+  "baseId": "chess_ws_dos_lin_a",
+  "goldenId": "chess_ws_dos_lin_b",
+  "isGolden": true,
+  "rarity": 5,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "status": {
+   "phase": 2,
+   "level": 60,
+   "skillLevel": 7,
+   "equipLevel": 0
+  },
+  "statsBase": {
+   "maxHp": 1924,
+   "atk": 843,
+   "def": 232,
+   "res": 15,
+   "cost": 22,
+   "blockCnt": 1,
+   "bat": 2,
+   "aspd": 100,
+   "respawnTime": 70,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "traitBase": {
+   "desc": "通常时不攻击且防御力和法术抗性大幅度提升，技能开启时攻击造成群体法术伤害",
+   "descRaw": "通常时<@ba.kw>不攻击</>且防御力和法术抗性大幅度<@ba.kw>提升</>，技能开启时攻击造成<@ba.kw>群体法术伤害</>",
+   "bb": {
+    "def": 2,
+    "magic_resistance": 20
+   },
+   "bbStr": {},
+   "rangeGrid": null
+  },
+  "talentsBase": [
+   {
+    "index": 0,
+    "name": "计出万全",
+    "desc": "拥有可以抵挡所有伤害的琉璃璧；琉璃璧在受到单次超过200点伤害时破碎，对周围所有敌人造成相当于林攻击力110%（+10%）的法术伤害、使其晕眩1秒，并在8秒后再次生成",
+    "descRaw": "拥有可以抵挡所有伤害的琉璃璧；琉璃璧在受到单次超过200点伤害时破碎，对周围所有敌人造成相当于林攻击力110%<@ba.talpu>（+10%）</>的法术伤害、使其<$ba.stun>晕眩</>1秒，并在8秒后再次生成",
+    "bb": {
+     "value": 200,
+     "atk_scale": 1.1,
+     "stun": 1,
+     "interval": 8
+    },
+    "bbStr": {},
+    "rangeGrid": [
+     [
+      2,
+      0
+     ],
+     [
+      1,
+      -1
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      0,
+      -2
+     ],
+     [
+      0,
+      -1
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      -1
+     ],
+     [
+      -1,
+      0
+     ],
+     [
+      -1,
+      1
+     ],
+     [
+      -2,
+      0
+     ]
+    ],
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   },
+   {
+    "index": 1,
+    "name": "韬光",
+    "desc": "受到攻击时，有55%（+5%）几率回复1点技力",
+    "descRaw": "受到攻击时，有55%<@ba.talpu>（+5%）</>几率回复1点技力",
+    "bb": {
+     "prob": 0.55,
+     "sp": 1
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "stats": {
+   "maxHp": 1924,
+   "atk": 905,
+   "def": 277,
+   "res": 15,
+   "cost": 22,
+   "blockCnt": 1,
+   "bat": 2,
+   "aspd": 100,
+   "respawnTime": 70,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "skill": {
+   "skillId": "skchr_lin_1",
+   "iconId": "skchr_lin_1",
+   "name": "玲珑",
+   "level": 7,
+   "desc": "可以在下列状态和初始状态间切换：\n攻击间隔略微增大，攻击力+40%，攻击使目标停顿0.9秒",
+   "descRaw": "<@ba.rem>可以在下列状态和初始状态间切换：</>\n攻击间隔<@ba.vdown>略微增大</>，攻击力<@ba.vup>+40%</>，攻击使目标<$ba.sluggish>停顿</><@ba.vup>0.9</>秒",
+   "skillType": "MANUAL",
+   "durationType": "NONE",
+   "duration": -1,
+   "spType": "INCREASE_WITH_TIME",
+   "spCost": 6,
+   "initSp": 0,
+   "maxChargeTime": 1,
+   "increment": 1,
+   "bb": {
+    "atk": 0.4,
+    "attack@sluggish": 0.9,
+    "base_attack_time": 1
+   },
+   "bbStr": {},
+   "rangeId": null,
+   "rangeGrid": null,
+   "prefabId": "skchr_lin_1",
+   "trigger": {
+    "rule": "SEARCH",
+    "rawRule": "SEARCH",
+    "customRangeGrid": null
+   },
+   "index": 0,
+   "overrideTokenKey": null
+  },
+  "skills": [
+   {
+    "skillId": "skchr_lin_1",
+    "iconId": "skchr_lin_1",
+    "name": "玲珑",
+    "level": 7,
+    "desc": "可以在下列状态和初始状态间切换：\n攻击间隔略微增大，攻击力+40%，攻击使目标停顿0.9秒",
+    "descRaw": "<@ba.rem>可以在下列状态和初始状态间切换：</>\n攻击间隔<@ba.vdown>略微增大</>，攻击力<@ba.vup>+40%</>，攻击使目标<$ba.sluggish>停顿</><@ba.vup>0.9</>秒",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": -1,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 6,
+    "initSp": 0,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 0.4,
+     "attack@sluggish": 0.9,
+     "base_attack_time": 1
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_lin_1",
+    "trigger": {
+     "rule": "SEARCH",
+     "rawRule": "SEARCH",
+     "customRangeGrid": null
+    },
+    "index": 0,
+    "overrideTokenKey": null,
+    "isDefault": true
+   },
+   {
+    "skillId": "skchr_lin_2",
+    "iconId": "skchr_lin_2",
+    "name": "荫庇",
+    "level": 7,
+    "desc": "攻击速度+90，自身不容易受到敌人攻击，技能期间使攻击范围内所有友方单位享受第一天赋效果",
+    "descRaw": "攻击速度<@ba.vup>+90</>，自身不容易受到敌人攻击，技能期间使攻击范围内所有友方单位享受第一天赋效果",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 25,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 35,
+    "initSp": 25,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "attack_speed": 90,
+     "taunt_level": -1
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_lin_2",
+    "trigger": {
+     "rule": "SEARCH",
+     "rawRule": "SEARCH",
+     "customRangeGrid": null
+    },
+    "index": 1,
+    "overrideTokenKey": null,
+    "isDefault": false
+   },
+   {
+    "skillId": "skchr_lin_3",
+    "iconId": "skchr_lin_3",
+    "name": "流光乍裂",
+    "level": 7,
+    "desc": "攻击力+160%，攻击范围与琉璃璧的破碎伤害范围扩大，琉璃璧破碎的伤害阈值提升至2.5倍，每次攻击若击倒敌人则使身上的琉璃璧破碎并立刻生成\n可主动关闭技能（期间可随时停止技能）",
+    "descRaw": "攻击力<@ba.vup>+160%</>，攻击范围与琉璃璧的破碎伤害范围<@ba.vup>扩大</>，琉璃璧破碎的伤害阈值提升至<@ba.vup>2.5</>倍，每次攻击若击倒敌人则使身上的琉璃璧破碎并立刻生成\n<@ba.rem>可主动关闭技能（期间可随时停止技能）</>",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 28,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 52,
+    "initSp": 22,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 1.6,
+     "talent_scale": 2.5
+    },
+    "bbStr": {},
+    "rangeId": "x-2",
+    "rangeGrid": [
+     [
+      2,
+      -1
+     ],
+     [
+      2,
+      0
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      1,
+      -2
+     ],
+     [
+      1,
+      -1
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      0,
+      -2
+     ],
+     [
+      0,
+      -1
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      -2
+     ],
+     [
+      -1,
+      -1
+     ],
+     [
+      -1,
+      0
+     ],
+     [
+      -1,
+      1
+     ],
+     [
+      -1,
+      2
+     ],
+     [
+      -2,
+      -1
+     ],
+     [
+      -2,
+      0
+     ],
+     [
+      -2,
+      1
+     ]
+    ],
+    "prefabId": "skchr_lin_3",
+    "trigger": {
+     "rule": "CUSTOM_RANGE",
+     "rawRule": "CUSTOM_RANGE_SEARCH_ENEMY",
+     "customRangeGrid": [
+      [
+       2,
+       -1
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       1,
+       -2
+      ],
+      [
+       1,
+       -1
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       0,
+       -2
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       0,
+       0
+      ],
+      [
+       0,
+       1
+      ],
+      [
+       0,
+       2
+      ],
+      [
+       -1,
+       -2
+      ],
+      [
+       -1,
+       -1
+      ],
+      [
+       -1,
+       0
+      ],
+      [
+       -1,
+       1
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       -2,
+       -1
+      ],
+      [
+       -2,
+       0
+      ],
+      [
+       -2,
+       1
+      ]
+     ]
+    },
+    "index": 2,
+    "overrideTokenKey": null,
+    "isDefault": false
+   }
+  ],
+  "talents": [
+   {
+    "index": 0,
+    "name": "计出万全",
+    "desc": "拥有可以抵挡所有伤害的琉璃璧；琉璃璧在受到单次超过200点伤害时破碎，对周围所有敌人造成相当于林攻击力110%（+10%）的法术伤害、使其晕眩1秒，并在8秒后再次生成",
+    "descRaw": "拥有可以抵挡所有伤害的琉璃璧；琉璃璧在受到单次超过200点伤害时破碎，对周围所有敌人造成相当于林攻击力110%<@ba.talpu>（+10%）</>的法术伤害、使其<$ba.stun>晕眩</>1秒，并在8秒后再次生成",
+    "bb": {
+     "value": 200,
+     "atk_scale": 1.1,
+     "stun": 1,
+     "interval": 8
+    },
+    "bbStr": {},
+    "rangeGrid": [
+     [
+      2,
+      0
+     ],
+     [
+      1,
+      -1
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      0,
+      -2
+     ],
+     [
+      0,
+      -1
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      -1
+     ],
+     [
+      -1,
+      0
+     ],
+     [
+      -1,
+      1
+     ],
+     [
+      -2,
+      0
+     ]
+    ],
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   },
+   {
+    "index": 1,
+    "name": "韬光",
+    "desc": "受到攻击时，有55%（+5%）几率回复1点技力",
+    "descRaw": "受到攻击时，有55%<@ba.talpu>（+5%）</>几率回复1点技力",
+    "bb": {
+     "prob": 0.55,
+     "sp": 1
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "modules": [
+   {
+    "uniEquipId": "uniequip_002_lin",
+    "name": "“七窍玲珑”",
+    "typeName": "PLX-X",
+    "typeIcon": "plx-x",
+    "icon": "uniequip_002_lin",
+    "level": 1,
+    "attr": {
+     "atk": 62,
+     "def": 45
+    },
+    "traitOverride": {
+     "desc": "通常时不攻击且防御力和法术抗性更大幅度提升，技能开启时保留部分效果且攻击造成群体法术伤害",
+     "descRaw": "通常时<@ba.kw>不攻击</>且防御力和法术抗性更大幅度<@ba.kw>提升</>，技能开启时保留部分效果且攻击造成<@ba.kw>群体法术伤害</>",
+     "bb": {
+      "def": 2.15,
+      "magic_resistance": 25,
+      "lin_e_002[buff].def": 1,
+      "lin_e_002[buff].magic_resistance": 10
+     },
+     "bbStr": {},
+     "rangeGrid": null
+    },
+    "talentChanges": [],
+    "isDefault": true
+   },
+   {
+    "uniEquipId": "uniequip_003_lin",
+    "name": "“情与义”",
+    "typeName": "PLX-Y",
+    "typeIcon": "plx-y",
+    "icon": "uniequip_003_lin",
+    "level": 1,
+    "attr": {
+     "atk": 50,
+     "def": 20
+    },
+    "traitOverride": {
+     "desc": "通常时不攻击且防御力和法术抗性大幅度提升，技能开启时攻击造成群体法术伤害",
+     "descRaw": "通常时<@ba.kw>不攻击</>且防御力和法术抗性大幅度<@ba.kw>提升</>，技能开启时攻击造成<@ba.kw>群体法术伤害</>",
+     "bb": {
+      "def": 2,
+      "magic_resistance": 20,
+      "damage_scale": 0.15
+     },
+     "bbStr": {},
+     "rangeGrid": null,
+     "moduleDesc": "范围内敌人越多造成的伤害越高（最高提升15%）",
+     "moduleDescRaw": "范围内敌人越多造成的伤害越高（最高提升<@ba.kw>15%</>）"
+    },
+    "talentChanges": [
+     {
+      "talentIndex": -1,
+      "name": null,
+      "desc": null,
+      "descRaw": null,
+      "bb": {
+       "damage_scale": 0.03,
+       "max_valid_stack_cnt": 5
+      },
+      "bbStr": {},
+      "rangeGrid": null,
+      "tokenKey": null,
+      "hidden": true
+     }
+    ],
+    "isDefault": false
+   }
+  ],
+  "module": {
+   "id": "uniequip_002_lin",
+   "name": "“七窍玲珑”",
+   "type": "PLX-X",
+   "level": 1,
+   "active": true
+  }
+ },
+ "chess_ws_dos_crow_a": {
+  "tier": 3,
+  "isHidden": false,
+  "isDiy": false,
+  "visible": true,
+  "chessType": "NORMAL",
+  "directToHand": false,
+  "name": "羽毛笔",
+  "appellation": "La Pluma",
+  "charId": "char_421_crow",
+  "profession": "WARRIOR",
+  "subProfessionId": "reaper",
+  "subProfessionName": "收割者",
+  "position": "MELEE",
+  "nationId": "bolivar",
+  "bonds": [
+   "dossolesShip",
+   "indomShip"
+  ],
+  "garrisonIds": [
+   "garrison_dos_crow_a"
+  ],
+  "price": 3,
+  "sellPrice": 1,
+  "immunities": {
+   "stun": false,
+   "silence": false,
+   "sleep": false,
+   "frozen": false,
+   "levitate": false
+  },
+  "rangeId": "1-3",
+  "rangeGrid": [
+   [
+    1,
+    1
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    0,
+    1
+   ],
+   [
+    -1,
+    1
+   ]
+  ],
+  "dmgType": "phys",
+  "attackKind": "melee",
+  "projectile": "none",
+  "canHitFly": false,
+  "targetPriority": null,
+  "trait": {
+   "desc": "无法被友方角色治疗，攻击造成群体伤害，每攻击到一个敌人回复自身50生命，最大生效数等于阻挡数",
+   "descRaw": "无法被友方角色治疗，攻击造成<@ba.kw>群体伤害</>，每攻击到一个敌人回复自身<@ba.kw>50</>生命，最大生效数等于阻挡数",
+   "bb": {
+    "value": 50
+   },
+   "bbStr": {},
+   "rangeGrid": null
+  },
+  "tokens": [],
+  "assets": {
+   "avatar": "char_421_crow",
+   "portrait": "char_421_crow_2",
+   "spine": "char_421_crow",
+   "skillIcon": "skchr_crow_1",
+   "subProfIcon": null
+  },
+  "workshop": {
+   "schema": 1,
+   "id": "dos_crow"
+  },
+  "chessId": "chess_ws_dos_crow_a",
+  "baseId": "chess_ws_dos_crow_a",
+  "goldenId": "chess_ws_dos_crow_b",
+  "isGolden": false,
+  "rarity": 3,
+  "upgradeNum": 3,
+  "upgradeChessId": "chess_ws_dos_crow_b",
+  "status": {
+   "phase": 2,
+   "level": 1,
+   "skillLevel": 4,
+   "equipLevel": 0
+  },
+  "stats": {
+   "maxHp": 1867,
+   "atk": 552,
+   "def": 409,
+   "res": 0,
+   "cost": 20,
+   "blockCnt": 2,
+   "bat": 1.3,
+   "aspd": 100,
+   "respawnTime": 60,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "skill": {
+   "skillId": "skchr_crow_1",
+   "iconId": "skchr_crow_1",
+   "name": "高速切割",
+   "level": 4,
+   "desc": "下次攻击的攻击力提升至120%，并连续攻击两次",
+   "descRaw": "下次攻击的攻击力提升至<@ba.vup>120%</>，并连续攻击两次",
+   "skillType": "AUTO",
+   "durationType": "NONE",
+   "duration": 0,
+   "spType": "INCREASE_WHEN_ATTACK",
+   "spCost": 3,
+   "initSp": 0,
+   "maxChargeTime": 1,
+   "increment": 1,
+   "bb": {
+    "atk_scale": 1.2
+   },
+   "bbStr": {},
+   "rangeId": null,
+   "rangeGrid": null,
+   "prefabId": "skchr_crow_1",
+   "trigger": {
+    "rule": "DEFAULT",
+    "rawRule": "DEFAULT",
+    "customRangeGrid": null
+   },
+   "index": 0,
+   "overrideTokenKey": null
+  },
+  "skills": [
+   {
+    "skillId": "skchr_crow_1",
+    "iconId": "skchr_crow_1",
+    "name": "高速切割",
+    "level": 4,
+    "desc": "下次攻击的攻击力提升至120%，并连续攻击两次",
+    "descRaw": "下次攻击的攻击力提升至<@ba.vup>120%</>，并连续攻击两次",
+    "skillType": "AUTO",
+    "durationType": "NONE",
+    "duration": 0,
+    "spType": "INCREASE_WHEN_ATTACK",
+    "spCost": 3,
+    "initSp": 0,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk_scale": 1.2
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_crow_1",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 0,
+    "overrideTokenKey": null,
+    "isDefault": true
+   },
+   {
+    "skillId": "skchr_crow_2",
+    "iconId": "skchr_crow_2",
+    "name": "收割",
+    "level": 4,
+    "desc": "攻击间隔较小幅度缩短，攻击力+40%，对生命值低于50%的敌人造成伤害时使该次伤害的攻击力额外+30%",
+    "descRaw": "攻击间隔<@ba.vup>较小幅度缩短</>，攻击力<@ba.vup>+40%</>，对生命值低于<@ba.vup>50%</>的敌人造成伤害时使该次伤害的攻击力额外<@ba.vup>+30%</>",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 23,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 47,
+    "initSp": 30,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 0.4,
+     "crow_s_2[atk].atk": 0.3,
+     "hp_ratio": 0.5,
+     "base_attack_time": -0.35
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_crow_2",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 1,
+    "overrideTokenKey": null,
+    "isDefault": false
+   }
+  ],
+  "talents": [
+   {
+    "index": 0,
+    "name": "渐入佳境",
+    "desc": "每击杀一个敌人+3攻速，最多叠加12次",
+    "descRaw": "每击杀一个敌人+3攻速，最多叠加12次",
+    "bb": {
+     "attack_speed": 3,
+     "max_stack_cnt": 12
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "module": {
+   "id": "uniequip_002_crow",
+   "name": "水蓝色黎明",
+   "type": "REA-X",
+   "level": 0,
+   "active": false
+  },
+  "note": "技能两名俱全（技能图标见 pack.json 的 art.skills）；精锐记录带默认模组，其 stats/trait/talents 为默认模组合成后的结果，statsBase/traitBase/talentsBase 为不带模组的原样。数值取自上游 character_table 的精英 2 + 满潜（潜能 6）口径。"
+ },
+ "chess_ws_dos_crow_b": {
+  "tier": 3,
+  "isHidden": false,
+  "isDiy": false,
+  "visible": true,
+  "chessType": "NORMAL",
+  "directToHand": false,
+  "name": "羽毛笔",
+  "appellation": "La Pluma",
+  "charId": "char_421_crow",
+  "profession": "WARRIOR",
+  "subProfessionId": "reaper",
+  "subProfessionName": "收割者",
+  "position": "MELEE",
+  "nationId": "bolivar",
+  "bonds": [
+   "dossolesShip",
+   "indomShip"
+  ],
+  "garrisonIds": [
+   "garrison_dos_crow_b"
+  ],
+  "price": 3,
+  "sellPrice": 1,
+  "immunities": {
+   "stun": false,
+   "silence": false,
+   "sleep": false,
+   "frozen": false,
+   "levitate": false
+  },
+  "rangeId": "1-3",
+  "rangeGrid": [
+   [
+    1,
+    1
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    0,
+    1
+   ],
+   [
+    -1,
+    1
+   ]
+  ],
+  "dmgType": "phys",
+  "attackKind": "melee",
+  "projectile": "none",
+  "canHitFly": false,
+  "targetPriority": null,
+  "trait": {
+   "desc": "无法被友方角色治疗，攻击造成群体伤害，每攻击到一个敌人回复自身60生命，最大生效数等于阻挡数",
+   "descRaw": "无法被友方角色治疗，攻击造成<@ba.kw>群体伤害</>，每攻击到一个敌人回复自身<@ba.kw>60</>生命，最大生效数等于阻挡数",
+   "bb": {
+    "value": 60
+   },
+   "bbStr": {},
+   "rangeGrid": null
+  },
+  "tokens": [],
+  "assets": {
+   "avatar": "char_421_crow",
+   "portrait": "char_421_crow_2",
+   "spine": "char_421_crow",
+   "skillIcon": "skchr_crow_1",
+   "subProfIcon": null
+  },
+  "workshop": {
+   "schema": 1,
+   "id": "dos_crow"
+  },
+  "chessId": "chess_ws_dos_crow_b",
+  "baseId": "chess_ws_dos_crow_a",
+  "goldenId": "chess_ws_dos_crow_b",
+  "isGolden": true,
+  "rarity": 3,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "status": {
+   "phase": 2,
+   "level": 60,
+   "skillLevel": 7,
+   "equipLevel": 0
+  },
+  "statsBase": {
+   "maxHp": 2153,
+   "atk": 625,
+   "def": 460,
+   "res": 0,
+   "cost": 20,
+   "blockCnt": 2,
+   "bat": 1.3,
+   "aspd": 100,
+   "respawnTime": 60,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "traitBase": {
+   "desc": "无法被友方角色治疗，攻击造成群体伤害，每攻击到一个敌人回复自身50生命，最大生效数等于阻挡数",
+   "descRaw": "无法被友方角色治疗，攻击造成<@ba.kw>群体伤害</>，每攻击到一个敌人回复自身<@ba.kw>50</>生命，最大生效数等于阻挡数",
+   "bb": {
+    "value": 50
+   },
+   "bbStr": {},
+   "rangeGrid": null
+  },
+  "talentsBase": [
+   {
+    "index": 0,
+    "name": "渐入佳境",
+    "desc": "每击杀一个敌人+3攻速，最多叠加12次",
+    "descRaw": "每击杀一个敌人+3攻速，最多叠加12次",
+    "bb": {
+     "attack_speed": 3,
+     "max_stack_cnt": 12
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "stats": {
+   "maxHp": 2313,
+   "atk": 643,
+   "def": 478,
+   "res": 0,
+   "cost": 20,
+   "blockCnt": 2,
+   "bat": 1.3,
+   "aspd": 100,
+   "respawnTime": 60,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "skill": {
+   "skillId": "skchr_crow_1",
+   "iconId": "skchr_crow_1",
+   "name": "高速切割",
+   "level": 7,
+   "desc": "下次攻击的攻击力提升至135%，并连续攻击两次",
+   "descRaw": "下次攻击的攻击力提升至<@ba.vup>135%</>，并连续攻击两次",
+   "skillType": "AUTO",
+   "durationType": "NONE",
+   "duration": 0,
+   "spType": "INCREASE_WHEN_ATTACK",
+   "spCost": 3,
+   "initSp": 0,
+   "maxChargeTime": 1,
+   "increment": 1,
+   "bb": {
+    "atk_scale": 1.35
+   },
+   "bbStr": {},
+   "rangeId": null,
+   "rangeGrid": null,
+   "prefabId": "skchr_crow_1",
+   "trigger": {
+    "rule": "DEFAULT",
+    "rawRule": "DEFAULT",
+    "customRangeGrid": null
+   },
+   "index": 0,
+   "overrideTokenKey": null
+  },
+  "skills": [
+   {
+    "skillId": "skchr_crow_1",
+    "iconId": "skchr_crow_1",
+    "name": "高速切割",
+    "level": 7,
+    "desc": "下次攻击的攻击力提升至135%，并连续攻击两次",
+    "descRaw": "下次攻击的攻击力提升至<@ba.vup>135%</>，并连续攻击两次",
+    "skillType": "AUTO",
+    "durationType": "NONE",
+    "duration": 0,
+    "spType": "INCREASE_WHEN_ATTACK",
+    "spCost": 3,
+    "initSp": 0,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk_scale": 1.35
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_crow_1",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 0,
+    "overrideTokenKey": null,
+    "isDefault": true
+   },
+   {
+    "skillId": "skchr_crow_2",
+    "iconId": "skchr_crow_2",
+    "name": "收割",
+    "level": 7,
+    "desc": "攻击间隔较小幅度缩短，攻击力+55%，对生命值低于50%的敌人造成伤害时使该次伤害的攻击力额外+40%",
+    "descRaw": "攻击间隔<@ba.vup>较小幅度缩短</>，攻击力<@ba.vup>+55%</>，对生命值低于<@ba.vup>50%</>的敌人造成伤害时使该次伤害的攻击力额外<@ba.vup>+40%</>",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 25,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 44,
+    "initSp": 30,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "atk": 0.55,
+     "crow_s_2[atk].atk": 0.4,
+     "hp_ratio": 0.5,
+     "base_attack_time": -0.35
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_crow_2",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 1,
+    "overrideTokenKey": null,
+    "isDefault": false
+   }
+  ],
+  "talents": [
+   {
+    "index": 0,
+    "name": "渐入佳境",
+    "desc": "每击杀一个敌人+3攻速，最多叠加12次",
+    "descRaw": "每击杀一个敌人+3攻速，最多叠加12次",
+    "bb": {
+     "attack_speed": 3,
+     "max_stack_cnt": 12
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "modules": [
+   {
+    "uniEquipId": "uniequip_002_crow",
+    "name": "水蓝色黎明",
+    "typeName": "REA-X",
+    "typeIcon": "rea-x",
+    "icon": "uniequip_002_crow",
+    "isDefault": true,
+    "level": 1,
+    "attr": {
+     "maxHp": 160,
+     "atk": 18,
+     "def": 18
+    },
+    "traitOverride": {
+     "desc": "无法被友方角色治疗，攻击造成群体伤害，每攻击到一个敌人回复自身60生命，最大生效数等于阻挡数",
+     "descRaw": "无法被友方角色治疗，攻击造成<@ba.kw>群体伤害</>，每攻击到一个敌人回复自身<@ba.kw>60</>生命，最大生效数等于阻挡数",
+     "bb": {
+      "value": 60
+     },
+     "bbStr": {},
+     "rangeGrid": null
+    },
+    "talentChanges": []
+   }
+  ],
+  "module": {
+   "id": "uniequip_002_crow",
+   "name": "水蓝色黎明",
+   "type": "REA-X",
+   "level": 1,
+   "active": true
+  },
+  "note": "技能两名俱全（技能图标见 pack.json 的 art.skills）；精锐记录带默认模组，其 stats/trait/talents 为默认模组合成后的结果，statsBase/traitBase/talentsBase 为不带模组的原样。数值取自上游 character_table 的精英 2 + 满潜（潜能 6）口径。"
+ },
+ "chess_ws_dos_takila_a": {
+  "tier": 2,
+  "isHidden": false,
+  "isDiy": false,
+  "visible": true,
+  "chessType": "NORMAL",
+  "directToHand": false,
+  "name": "龙舌兰",
+  "appellation": "Tequila",
+  "charId": "char_486_takila",
+  "profession": "WARRIOR",
+  "subProfessionId": "librator",
+  "subProfessionName": "解放者",
+  "position": "MELEE",
+  "nationId": "bolivar",
+  "bonds": [
+   "dossolesShip",
+   "swiftShip"
+  ],
+  "garrisonIds": [
+   "garrison_dos_takila_a"
+  ],
+  "price": 3,
+  "sellPrice": 1,
+  "immunities": {
+   "stun": false,
+   "silence": false,
+   "sleep": false,
+   "frozen": false,
+   "levitate": false
+  },
+  "rangeId": "1-2",
+  "rangeGrid": [
+   [
+    1,
+    0
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    0,
+    1
+   ],
+   [
+    -1,
+    0
+   ]
+  ],
+  "dmgType": "phys",
+  "attackKind": "none",
+  "projectile": "none",
+  "canHitFly": false,
+  "targetPriority": null,
+  "trait": {
+   "desc": "通常不攻击且阻挡数为0，技能未开启时40秒内攻击力逐渐提升至最高+200%且技能结束时重置攻击力",
+   "descRaw": "通常不攻击且阻挡数为0，技能未开启时<@ba.kw>40</>秒内攻击力逐渐提升至最高<@ba.kw>+200%</>且技能结束时重置攻击力",
+   "bb": {
+    "atk": 2,
+    "mid_stack_cnt": 20,
+    "max_stack_cnt": 40
+   },
+   "bbStr": {},
+   "rangeGrid": null
+  },
+  "tokens": [],
+  "assets": {
+   "avatar": "char_486_takila",
+   "portrait": "char_486_takila_2",
+   "spine": "char_486_takila",
+   "skillIcon": "skchr_takila_1",
+   "subProfIcon": null
+  },
+  "workshop": {
+   "schema": 1,
+   "id": "dos_takila"
+  },
+  "chessId": "chess_ws_dos_takila_a",
+  "baseId": "chess_ws_dos_takila_a",
+  "goldenId": "chess_ws_dos_takila_b",
+  "isGolden": false,
+  "rarity": 2,
+  "upgradeNum": 3,
+  "upgradeChessId": "chess_ws_dos_takila_b",
+  "status": {
+   "phase": 2,
+   "level": 1,
+   "skillLevel": 4,
+   "equipLevel": 0
+  },
+  "stats": {
+   "maxHp": 3118,
+   "atk": 256,
+   "def": 425,
+   "res": 15,
+   "cost": 10,
+   "blockCnt": 3,
+   "bat": 1.2,
+   "aspd": 100,
+   "respawnTime": 70,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "skill": {
+   "skillId": "skchr_takila_1",
+   "iconId": "skchr_takila_1",
+   "name": "当机立断",
+   "level": 4,
+   "desc": "攻击速度+29，每次攻击造成相当于攻击力135%的物理伤害",
+   "descRaw": "攻击速度<@ba.vup>+29</>，每次攻击造成相当于攻击力<@ba.vup>135%</>的物理伤害",
+   "skillType": "MANUAL",
+   "durationType": "NONE",
+   "duration": 20,
+   "spType": "INCREASE_WITH_TIME",
+   "spCost": 25,
+   "initSp": 0,
+   "maxChargeTime": 1,
+   "increment": 1,
+   "bb": {
+    "attack_speed": 29,
+    "attack@atk_scale": 1.35
+   },
+   "bbStr": {},
+   "rangeId": null,
+   "rangeGrid": null,
+   "prefabId": "skchr_takila_1",
+   "trigger": {
+    "rule": "DEFAULT",
+    "rawRule": "DEFAULT",
+    "customRangeGrid": null
+   },
+   "index": 0,
+   "overrideTokenKey": null
+  },
+  "skills": [
+   {
+    "skillId": "skchr_takila_1",
+    "iconId": "skchr_takila_1",
+    "name": "当机立断",
+    "level": 4,
+    "desc": "攻击速度+29，每次攻击造成相当于攻击力135%的物理伤害",
+    "descRaw": "攻击速度<@ba.vup>+29</>，每次攻击造成相当于攻击力<@ba.vup>135%</>的物理伤害",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 20,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 25,
+    "initSp": 0,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "attack_speed": 29,
+     "attack@atk_scale": 1.35
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_takila_1",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 0,
+    "overrideTokenKey": null,
+    "isDefault": true
+   },
+   {
+    "skillId": "skchr_takila_2",
+    "iconId": "skchr_takila_2",
+    "name": "剑走偏锋",
+    "level": 4,
+    "desc": "攻击范围扩大，同时攻击2名敌人，每次攻击造成相当于攻击力170%的物理伤害，蓄力额外效果：改为同时攻击3名敌人，持续时间延长为30秒\n可主动关闭技能（期间可随时停止技能）",
+    "descRaw": "攻击范围<@ba.vup>扩大</>，同时攻击<@ba.vup>2</>名敌人，每次攻击造成相当于攻击力<@ba.vup>170%</>的物理伤害，<$ba.charged>蓄力</>额外效果：改为同时攻击<@ba.vup>3</>名敌人，持续时间延长为<@ba.vup>30</>秒\n<@ba.rem>可主动关闭技能（期间可随时停止技能）</>",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 15,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 25,
+    "initSp": 5,
+    "maxChargeTime": 2,
+    "increment": 1,
+    "bb": {
+     "attack@atk_scale": 1.7,
+     "enhance_duration": 30,
+     "attack@plus_max_target": 3,
+     "attack@plus_atk_scale": 1.7,
+     "duration_plus": 15
+    },
+    "bbStr": {},
+    "rangeId": "2-3",
+    "rangeGrid": [
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      0
+     ],
+     [
+      -1,
+      1
+     ]
+    ],
+    "prefabId": "skchr_takila_2",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 1,
+    "overrideTokenKey": null,
+    "isDefault": false
+   }
+  ],
+  "talents": [
+   {
+    "index": 0,
+    "name": "伺机而动",
+    "desc": "技能未开启时每次受到攻击时对目标造成相当于龙舌兰攻击力23%（+3%）的法术伤害",
+    "descRaw": "技能未开启时每次受到攻击时对目标造成相当于龙舌兰攻击力23%<@ba.talpu>（+3%）</>的法术伤害",
+    "bb": {
+     "atk_scale": 0.23
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "module": {
+   "id": "uniequip_002_takila",
+   "name": "“双重身份”",
+   "type": "LIB-X",
+   "level": 0,
+   "active": false
+  },
+  "note": "技能两名俱全（技能图标见 pack.json 的 art.skills）；精锐记录带默认模组，其 stats/trait/talents 为默认模组合成后的结果，statsBase/traitBase/talentsBase 为不带模组的原样。数值取自上游 character_table 的精英 2 + 满潜（潜能 6）口径。"
+ },
+ "chess_ws_dos_takila_b": {
+  "tier": 2,
+  "isHidden": false,
+  "isDiy": false,
+  "visible": true,
+  "chessType": "NORMAL",
+  "directToHand": false,
+  "name": "龙舌兰",
+  "appellation": "Tequila",
+  "charId": "char_486_takila",
+  "profession": "WARRIOR",
+  "subProfessionId": "librator",
+  "subProfessionName": "解放者",
+  "position": "MELEE",
+  "nationId": "bolivar",
+  "bonds": [
+   "dossolesShip",
+   "swiftShip"
+  ],
+  "garrisonIds": [
+   "garrison_dos_takila_b"
+  ],
+  "price": 3,
+  "sellPrice": 1,
+  "immunities": {
+   "stun": false,
+   "silence": false,
+   "sleep": false,
+   "frozen": false,
+   "levitate": false
+  },
+  "rangeId": "1-2",
+  "rangeGrid": [
+   [
+    1,
+    0
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    0,
+    1
+   ],
+   [
+    -1,
+    0
+   ]
+  ],
+  "dmgType": "phys",
+  "attackKind": "none",
+  "projectile": "none",
+  "canHitFly": false,
+  "targetPriority": null,
+  "trait": {
+   "desc": "通常不攻击且阻挡数为0，技能未开启时40秒内攻击力逐渐提升至最高+200%且技能结束时重置攻击力",
+   "descRaw": "通常不攻击且阻挡数为0，技能未开启时<@ba.kw>40</>秒内攻击力逐渐提升至最高<@ba.kw>+200%</>且技能结束时重置攻击力",
+   "bb": {
+    "atk": 2,
+    "mid_stack_cnt": 20,
+    "max_stack_cnt": 40,
+    "init_atk": 1
+   },
+   "bbStr": {},
+   "rangeGrid": null,
+   "moduleDesc": "部署后获得+100%加成",
+   "moduleDescRaw": "部署后获得<@ba.kw>+100%</>加成"
+  },
+  "tokens": [],
+  "assets": {
+   "avatar": "char_486_takila",
+   "portrait": "char_486_takila_2",
+   "spine": "char_486_takila",
+   "skillIcon": "skchr_takila_1",
+   "subProfIcon": null
+  },
+  "workshop": {
+   "schema": 1,
+   "id": "dos_takila"
+  },
+  "chessId": "chess_ws_dos_takila_b",
+  "baseId": "chess_ws_dos_takila_a",
+  "goldenId": "chess_ws_dos_takila_b",
+  "isGolden": true,
+  "rarity": 2,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "status": {
+   "phase": 2,
+   "level": 60,
+   "skillLevel": 7,
+   "equipLevel": 0
+  },
+  "statsBase": {
+   "maxHp": 3595,
+   "atk": 290,
+   "def": 482,
+   "res": 15,
+   "cost": 10,
+   "blockCnt": 3,
+   "bat": 1.2,
+   "aspd": 100,
+   "respawnTime": 70,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "traitBase": {
+   "desc": "通常不攻击且阻挡数为0，技能未开启时40秒内攻击力逐渐提升至最高+200%且技能结束时重置攻击力",
+   "descRaw": "通常不攻击且阻挡数为0，技能未开启时<@ba.kw>40</>秒内攻击力逐渐提升至最高<@ba.kw>+200%</>且技能结束时重置攻击力",
+   "bb": {
+    "atk": 2,
+    "mid_stack_cnt": 20,
+    "max_stack_cnt": 40
+   },
+   "bbStr": {},
+   "rangeGrid": null
+  },
+  "talentsBase": [
+   {
+    "index": 0,
+    "name": "伺机而动",
+    "desc": "技能未开启时每次受到攻击时对目标造成相当于龙舌兰攻击力23%（+3%）的法术伤害",
+    "descRaw": "技能未开启时每次受到攻击时对目标造成相当于龙舌兰攻击力23%<@ba.talpu>（+3%）</>的法术伤害",
+    "bb": {
+     "atk_scale": 0.23
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   }
+  ],
+  "stats": {
+   "maxHp": 3773,
+   "atk": 303,
+   "def": 495,
+   "res": 15,
+   "cost": 10,
+   "blockCnt": 3,
+   "bat": 1.2,
+   "aspd": 100,
+   "respawnTime": 70,
+   "spRecovery": 1,
+   "hpRecoveryPerSec": 0,
+   "moveSpeed": 1,
+   "tauntLevel": 0,
+   "massLevel": 0,
+   "deployLimit": 1,
+   "deckStack": 0
+  },
+  "skill": {
+   "skillId": "skchr_takila_1",
+   "iconId": "skchr_takila_1",
+   "name": "当机立断",
+   "level": 7,
+   "desc": "攻击速度+38，每次攻击造成相当于攻击力150%的物理伤害",
+   "descRaw": "攻击速度<@ba.vup>+38</>，每次攻击造成相当于攻击力<@ba.vup>150%</>的物理伤害",
+   "skillType": "MANUAL",
+   "durationType": "NONE",
+   "duration": 20,
+   "spType": "INCREASE_WITH_TIME",
+   "spCost": 20,
+   "initSp": 0,
+   "maxChargeTime": 1,
+   "increment": 1,
+   "bb": {
+    "attack_speed": 38,
+    "attack@atk_scale": 1.5
+   },
+   "bbStr": {},
+   "rangeId": null,
+   "rangeGrid": null,
+   "prefabId": "skchr_takila_1",
+   "trigger": {
+    "rule": "DEFAULT",
+    "rawRule": "DEFAULT",
+    "customRangeGrid": null
+   },
+   "index": 0,
+   "overrideTokenKey": null
+  },
+  "skills": [
+   {
+    "skillId": "skchr_takila_1",
+    "iconId": "skchr_takila_1",
+    "name": "当机立断",
+    "level": 7,
+    "desc": "攻击速度+38，每次攻击造成相当于攻击力150%的物理伤害",
+    "descRaw": "攻击速度<@ba.vup>+38</>，每次攻击造成相当于攻击力<@ba.vup>150%</>的物理伤害",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 20,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 20,
+    "initSp": 0,
+    "maxChargeTime": 1,
+    "increment": 1,
+    "bb": {
+     "attack_speed": 38,
+     "attack@atk_scale": 1.5
+    },
+    "bbStr": {},
+    "rangeId": null,
+    "rangeGrid": null,
+    "prefabId": "skchr_takila_1",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 0,
+    "overrideTokenKey": null,
+    "isDefault": true
+   },
+   {
+    "skillId": "skchr_takila_2",
+    "iconId": "skchr_takila_2",
+    "name": "剑走偏锋",
+    "level": 7,
+    "desc": "攻击范围扩大，同时攻击2名敌人，每次攻击造成相当于攻击力200%的物理伤害，蓄力额外效果：改为同时攻击3名敌人，持续时间延长为30秒\n可主动关闭技能（期间可随时停止技能）",
+    "descRaw": "攻击范围<@ba.vup>扩大</>，同时攻击<@ba.vup>2</>名敌人，每次攻击造成相当于攻击力<@ba.vup>200%</>的物理伤害，<$ba.charged>蓄力</>额外效果：改为同时攻击<@ba.vup>3</>名敌人，持续时间延长为<@ba.vup>30</>秒\n<@ba.rem>可主动关闭技能（期间可随时停止技能）</>",
+    "skillType": "MANUAL",
+    "durationType": "NONE",
+    "duration": 15,
+    "spType": "INCREASE_WITH_TIME",
+    "spCost": 20,
+    "initSp": 10,
+    "maxChargeTime": 2,
+    "increment": 1,
+    "bb": {
+     "attack@atk_scale": 2,
+     "enhance_duration": 30,
+     "attack@plus_max_target": 3,
+     "attack@plus_atk_scale": 2,
+     "duration_plus": 15
+    },
+    "bbStr": {},
+    "rangeId": "2-3",
+    "rangeGrid": [
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      -1,
+      0
+     ],
+     [
+      -1,
+      1
+     ]
+    ],
+    "prefabId": "skchr_takila_2",
+    "trigger": {
+     "rule": "DEFAULT",
+     "rawRule": "DEFAULT",
+     "customRangeGrid": null
+    },
+    "index": 1,
+    "overrideTokenKey": null,
+    "isDefault": false
+   }
+  ],
+  "talents": [
+   {
+    "index": 0,
+    "name": "伺机而动",
+    "desc": "技能未开启时每次受到攻击时对目标造成相当于龙舌兰攻击力23%（+3%）的法术伤害",
+    "descRaw": "技能未开启时每次受到攻击时对目标造成相当于龙舌兰攻击力23%<@ba.talpu>（+3%）</>的法术伤害",
+    "bb": {
+     "atk_scale": 0.23
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": false,
+    "fromModule": false
+   },
+   {
+    "index": -1,
+    "name": null,
+    "desc": null,
+    "descRaw": null,
+    "bb": {
+     "init_atk": 1
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": true,
+    "fromModule": true
+   }
+  ],
+  "modules": [
+   {
+    "uniEquipId": "uniequip_002_takila",
+    "name": "“双重身份”",
+    "typeName": "LIB-X",
+    "typeIcon": "lib-x",
+    "icon": "uniequip_002_takila",
+    "isDefault": true,
+    "level": 1,
+    "attr": {
+     "maxHp": 178,
+     "atk": 13,
+     "def": 13
+    },
+    "traitOverride": {
+     "desc": "通常不攻击且阻挡数为0，技能未开启时40秒内攻击力逐渐提升至最高+200%且技能结束时重置攻击力",
+     "descRaw": "通常不攻击且阻挡数为0，技能未开启时<@ba.kw>40</>秒内攻击力逐渐提升至最高<@ba.kw>+200%</>且技能结束时重置攻击力",
+     "bb": {
+      "atk": 2,
+      "mid_stack_cnt": 20,
+      "max_stack_cnt": 40,
+      "init_atk": 1
+     },
+     "bbStr": {},
+     "rangeGrid": null,
+     "moduleDesc": "部署后获得+100%加成",
+     "moduleDescRaw": "部署后获得<@ba.kw>+100%</>加成"
+    },
+    "talentChanges": [
+     {
+      "talentIndex": -1,
+      "name": null,
+      "desc": null,
+      "descRaw": null,
+      "bb": {
+       "init_atk": 1
+      },
+      "bbStr": {},
+      "rangeGrid": null,
+      "tokenKey": null,
+      "hidden": true
+     }
+    ]
+   }
+  ],
+  "module": {
+   "id": "uniequip_002_takila",
+   "name": "“双重身份”",
+   "type": "LIB-X",
+   "level": 1,
+   "active": true
+  },
+  "note": "技能两名俱全（技能图标见 pack.json 的 art.skills）；精锐记录带默认模组，其 stats/trait/talents 为默认模组合成后的结果，statsBase/traitBase/talentsBase 为不带模组的原样。数值取自上游 character_table 的精英 2 + 满潜（潜能 6）口径。"
+ }
+}

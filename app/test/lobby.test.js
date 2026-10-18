@@ -11,7 +11,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { startServer, parseRange, acceptsGzip, parseTrustProxy } from '../server/index.js';
+import { startServer, parseRange, acceptsGzip, pickEncoding, parseTrustProxy } from '../server/index.js';
 import { loadData, lookup, getChess, getBond, getBand, getMode, getConfig, INDEXED_FILES } from '../server/data.js';
 import * as dataModule from '../server/data.js';
 import { CODE_ALPHABET, BOT_NAMES } from '../server/lobby.js';
@@ -19,7 +19,8 @@ import { sanitizeName, TokenBucket, SessionRegistry, clientAddress, normalizeIp,
 import { StubMatch as Match } from '../server/match/StubMatch.js';
 import { Match as RealMatch } from '../server/match/Match.js';
 import { TestClient } from './helpers/wsClient.js';
-import { ERR, MAX_SEATS, MAX_SPECTATORS, PHASE, EMOTES } from '../shared/constants.js';
+import { ERR, MAX_SEATS, MAX_SPECTATORS, PHASE, EMOTES, PROTOCOL_VERSION } from '../shared/constants.js';
+import { LOBBY_DEFAULTS } from '../server/lobby.js';
 
 const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{4}$`);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -67,10 +68,20 @@ function clientPool(getUrl) {
   };
 }
 
+/**
+ * Create a CO-OP room and wait for its first `room.state`.
+ *
+ * …at the OFFICIAL 4 seats, EXPLICITLY. Since 业主裁令 2026-10-12 the server's ceiling is 20, so a create that names no
+ * cap builds a 20-seat room — and these tests are about the official-room flow (「房满」, seat indices, spectators),
+ * which fills up after four people. Naming 4 keeps them measuring what they were written for; the default ceiling
+ * itself is pinned in test/roomSeatCap.test.js and by 「a create that names no cap gets the server ceiling」 below.
+ * The wait keys on host/mode/difficulty only: a 4-seat frame carries NO `seatCap` key (it equals the official
+ * `MAX_SEATS`), so requiring it there would time out.
+ */
 async function createRoom(c, mode = 'coop', difficulty = 'NORMAL') {
-  const r = await c.request({ t: 'room.create', mode, difficulty });
+  const r = await c.request({ t: 'room.create', mode, difficulty, seatCap: MAX_SEATS });
   assert.equal(r.t, 'ok', JSON.stringify(r));
-  return c.waitFor('room.state', (s) => s.hostId === c.id && s.mode === mode);
+  return c.waitFor('room.state', (s) => s.hostId === c.id && s.mode === mode && s.difficulty === difficulty);
 }
 
 async function joinRoom(c, code) {
@@ -109,6 +120,8 @@ describe('static http server', () => {
   const js = `// app\n${'export const x = 1;\n'.repeat(200)}`;
   const mp3 = randomBytes(5000);
   const skel = Buffer.from('skel'.repeat(400));
+  // over the 8 MB compression cache limit: compressed as a stream
+  const big = `// big\n${Array.from({ length: 360000 }, (_, i) => `export const v${i} = ${i % 97};`).join('\n')}\n`;
 
   before(async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-static-'));
@@ -127,6 +140,7 @@ describe('static http server', () => {
     w('public/assets/spine/x.skel', skel);
     w('public/assets/spine/x.atlas', 'x.png\nsize: 64,64\n'.repeat(40));
     w('public/assets/img/a.png', randomBytes(32));
+    w('public/js/huge.js', big);
     w('public/assets/img/a.webp', randomBytes(32));
     w('public/fonts/f.woff2', randomBytes(32));
     w('public/fonts/f.ttf', randomBytes(32));
@@ -138,7 +152,10 @@ describe('static http server', () => {
     srv = await startServer({
       port: 0, host: '127.0.0.1', quiet: true,
       publicDir: path.join(tmp, 'public'), dataDir: path.join(tmp, 'data'), sharedDir: path.join(tmp, 'shared'),
+      assetIndex: { delayMs: 0 },
     });
+    // the content hashes of public/assets + public/fonts (the ETags of those files): ready before the first request
+    await srv.assetIndex.whenReady();
   });
 
   after(async () => {
@@ -161,17 +178,20 @@ describe('static http server', () => {
     assert.equal(redirect.headers.location, '/sub/?x=1');
   });
 
-  test('javascript: correct MIME, gzip when accepted, identity otherwise', async () => {
-    const gz = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate, br' } });
-    assert.equal(gz.status, 200);
-    assert.equal(gz.headers['content-type'], 'text/javascript; charset=utf-8');
-    assert.equal(gz.headers['content-encoding'], 'gzip');
-    assert.equal(gz.headers.vary, 'Accept-Encoding');
-    assert.equal(Number(gz.headers['content-length']), gz.body.length);
+  test('javascript: correct MIME, brotli when named, gzip when accepted, identity otherwise', async () => {
+    const br = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate, br' } });
+    assert.equal(br.status, 200);
+    assert.equal(br.headers['content-type'], 'text/javascript; charset=utf-8');
+    assert.equal(br.headers['content-encoding'], 'br', 'a browser on an HTTPS page (or localhost) names br');
+    assert.equal(br.headers.vary, 'Accept-Encoding');
+    assert.equal(Number(br.headers['content-length']), br.body.length);
+    assert.equal(zlib.brotliDecompressSync(br.body).toString(), js);
+    const gz = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate' } });
+    assert.equal(gz.headers['content-encoding'], 'gzip', 'a LAN http:// page: gzip');
     assert.equal(zlib.gunzipSync(gz.body).toString(), js);
-    // cached second response is identical
-    const gz2 = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } });
-    assert.deepEqual(gz2.body, gz.body);
+    // cached second responses are identical
+    assert.deepEqual((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } })).body, gz.body);
+    assert.deepEqual((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br' } })).body, br.body);
 
     const plain = await httpReq(srv.port, '/js/app.js');
     assert.equal(plain.headers['content-encoding'], undefined);
@@ -206,6 +226,27 @@ describe('static http server', () => {
     }
     const skelGz = await httpReq(srv.port, '/assets/spine/x.skel', { headers: { 'accept-encoding': 'gzip' } });
     assert.deepEqual(zlib.gunzipSync(skelGz.body), skel);
+    const skelBr = await httpReq(srv.port, '/assets/spine/x.skel', { headers: { 'accept-encoding': 'gzip, br' } });
+    assert.equal(skelBr.headers['content-encoding'], 'br');
+    assert.deepEqual(zlib.brotliDecompressSync(skelBr.body), skel);
+    // media is never compressed, whatever the client names
+    assert.equal((await httpReq(srv.port, '/assets/audio/bgm.mp3', { headers: { 'accept-encoding': 'br, gzip' } })).headers['content-encoding'], undefined);
+    assert.equal((await httpReq(srv.port, '/assets/img/a.png', { headers: { 'accept-encoding': 'br' } })).headers['content-encoding'], undefined);
+  });
+
+  test('a file over the compression cache limit is compressed as a stream (brotli and gzip); HEAD sends no body', async () => {
+    const br = await httpReq(srv.port, '/js/huge.js', { headers: { 'accept-encoding': 'br' } });
+    assert.equal(br.headers['content-encoding'], 'br');
+    assert.equal(br.headers['content-length'], undefined, 'streamed: no length up front');
+    assert.equal(zlib.brotliDecompressSync(br.body).toString(), big);
+    assert.ok(br.body.length < big.length / 4);
+    const gz = await httpReq(srv.port, '/js/huge.js', { headers: { 'accept-encoding': 'gzip' } });
+    assert.equal(gz.headers['content-encoding'], 'gzip');
+    assert.equal(zlib.gunzipSync(gz.body).toString(), big);
+    const head = await httpReq(srv.port, '/js/huge.js', { method: 'HEAD', headers: { 'accept-encoding': 'br' } });
+    assert.equal(head.status, 200);
+    assert.equal(head.body.length, 0);
+    assert.equal(head.headers['content-encoding'], 'br');
   });
 
   test('ETag / Last-Modified revalidation and Cache-Control policy', async () => {
@@ -225,10 +266,18 @@ describe('static http server', () => {
     assert.equal(stale.status, 200);
     const gzEtag = (await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } })).headers.etag;
     assert.notEqual(gzEtag, etag, 'gzip variant has its own ETag');
+    const brEtag = (await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br' } })).headers.etag;
+    assert.equal(brEtag, etag.replace(/"$/, '-br"'), 'so has the brotli variant');
+    assert.equal((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br', 'if-none-match': brEtag } })).status, 304);
+    assert.equal((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip', 'if-none-match': brEtag } })).status, 200, 'not the gzip variant');
 
-    // unversioned art/fonts/vendor: cached for a day (files can be rewritten in place by the asset tools)
+    // unversioned art: never cached for a day (an upgrade would leave the old bytes behind — and the root-scope
+    // resource SW answers /assets/**, so a stale copy is a missing picture, not a slow one). A font is not in that SW's
+    // interception surface, so fonts and vendor keep the day. The art carries its content hash as ETag
+    // (server/http/assetIndex.js), so a rewrite with the same bytes is a 304.
     const asset = await httpReq(srv.port, '/assets/img/a.png');
-    assert.equal(asset.headers['cache-control'], 'public, max-age=86400');
+    assert.equal(asset.headers['cache-control'], 'no-cache');
+    assert.match(asset.headers.etag, /^"[0-9a-f]{16}"$/);
     const font = await httpReq(srv.port, '/fonts/f.woff2');
     assert.equal(font.headers['cache-control'], 'public, max-age=86400');
     const assetV = await httpReq(srv.port, '/assets/img/a.png?v=abc');
@@ -279,6 +328,75 @@ describe('static http server', () => {
     assert.equal(textRange.status, 206, 'ranges are served identity-encoded');
     assert.equal(textRange.headers['content-encoding'], undefined);
     assert.equal(textRange.body.toString(), js.slice(0, 2));
+  });
+
+  for (const url of ['/assets/audio/bgm.mp3', '/media/bgm']) {
+    for (const range of ['bytes=0-0', `bytes=${mp3.length}-`]) {
+      test(`HEAD ignores Range ${range} on ${url}`, async () => {
+        const full = await httpReq(srv.port, url);
+        const head = await httpReq(srv.port, url, { method: 'HEAD', headers: { range } });
+        assert.equal(head.status, 200);
+        assert.equal(head.headers['content-length'], String(full.body.length));
+        assert.equal(head.headers['content-range'], undefined);
+        assert.equal(head.headers['content-type'], full.headers['content-type']);
+        assert.equal(head.headers.etag, full.headers.etag);
+        assert.equal(head.body.length, 0);
+      });
+    }
+  }
+
+  for (const encoding of ['gzip', 'br']) {
+    test(`HEAD ignores Range when selecting the ${encoding} representation`, async () => {
+      const url = '/js/app.js';
+      const headers = { 'accept-encoding': encoding };
+      const full = await httpReq(srv.port, url, { headers });
+      assert.equal(full.status, 200);
+      assert.equal(full.headers['content-encoding'], encoding);
+      for (const range of ['bytes=0-0', `bytes=${Buffer.byteLength(js)}-`]) {
+        const head = await httpReq(srv.port, url, { method: 'HEAD', headers: { ...headers, range } });
+        assert.equal(head.status, 200);
+        assert.equal(head.headers['content-encoding'], encoding);
+        assert.equal(head.headers['content-length'], String(full.body.length));
+        assert.equal(head.headers['content-range'], undefined);
+        assert.equal(head.headers.etag, full.headers.etag);
+        assert.equal(head.headers.vary, full.headers.vary);
+        assert.equal(head.body.length, 0);
+
+        const cached = await httpReq(srv.port, url, {
+          method: 'HEAD', headers: { ...headers, range, 'if-none-match': full.headers.etag },
+        });
+        assert.equal(cached.status, 304, 'Range must not change the selected validator');
+        assert.equal(cached.headers.etag, full.headers.etag);
+        assert.equal(cached.headers['content-range'], undefined);
+        assert.equal(cached.body.length, 0);
+      }
+    });
+  }
+
+  test('HEAD ignores Range while honoring cache validators and ignoring If-Range', async () => {
+    for (const url of ['/assets/audio/bgm.mp3', '/media/bgm']) {
+      const full = await httpReq(srv.port, url);
+      for (const condition of [
+        { 'if-none-match': full.headers.etag },
+        { 'if-modified-since': full.headers['last-modified'] },
+      ]) {
+        const cached = await httpReq(srv.port, url, {
+          method: 'HEAD', headers: { range: `bytes=${mp3.length}-`, ...condition },
+        });
+        assert.equal(cached.status, 304);
+        assert.equal(cached.headers['content-range'], undefined);
+        assert.equal(cached.body.length, 0);
+      }
+      for (const ifRange of [full.headers.etag, '"stale"']) {
+        const head = await httpReq(srv.port, url, {
+          method: 'HEAD', headers: { range: 'bytes=0-0', 'if-range': ifRange },
+        });
+        assert.equal(head.status, 200);
+        assert.equal(head.headers['content-length'], String(mp3.length));
+        assert.equal(head.headers['content-range'], undefined);
+        assert.equal(head.body.length, 0);
+      }
+    }
   });
 
   test('extension-less /media audio route (download managers sniff .mp3 URLs)', async () => {
@@ -391,6 +509,17 @@ describe('static http server', () => {
     assert.equal(acceptsGzip('*;q=0'), false);
     assert.equal(acceptsGzip('br'), false);
     assert.equal(acceptsGzip(undefined), false);
+    // brotli when named at least as high as gzip; `*` alone never picks it
+    assert.equal(pickEncoding('gzip, deflate, br, zstd'), 'br');
+    assert.equal(pickEncoding('gzip, deflate'), 'gzip');
+    assert.equal(pickEncoding('br;q=0, gzip'), 'gzip');
+    assert.equal(pickEncoding('br;q=0.5, gzip'), 'gzip');
+    assert.equal(pickEncoding('gzip;q=0.5, br'), 'br');
+    assert.equal(pickEncoding('br'), 'br');
+    assert.equal(pickEncoding('*'), 'gzip');
+    assert.equal(pickEncoding('*;q=0'), null);
+    assert.equal(pickEncoding('identity'), null);
+    assert.equal(pickEncoding(undefined), null);
   });
 });
 
@@ -451,7 +580,9 @@ describe('websocket lobby', () => {
     assert.notEqual(other.token, w.token);
 
     await expectError(c, { t: 'hello', name: '   ' }, ERR.BAD_MSG);
-    await expectError(c, { t: 'hello', name: 'x', version: 999 }, ERR.BAD_MSG);
+    // a wire number this build does not speak: refused at the handshake (the stale-page gate, DESIGN §8.2.1)
+    await expectError(c, { t: 'hello', name: 'x', version: PROTOCOL_VERSION + 997 }, ERR.BAD_MSG);
+    await expectError(c, { t: 'hello', name: 'x', version: PROTOCOL_VERSION - 1 }, ERR.BAD_MSG);
     await expectError(c, { t: 'hello', name: 'x'.repeat(13) }, ERR.BAD_MSG);
     // repeated hello updates the name, keeps identity
     const again = await c.hello('Renamed');
@@ -485,7 +616,9 @@ describe('websocket lobby', () => {
     await expectError(c, { t: 'room.join', code: 'AB CD' }, ERR.BAD_MSG);
     await expectError(c, { t: 'room.join', code: { $gt: '' } }, ERR.BAD_MSG);
     await expectError(c, { t: 'room.ready', ready: 'yes' }, ERR.BAD_MSG);
-    await expectError(c, { t: 'room.removeBot', seat: 9 }, ERR.BAD_MSG);
+    // A seat beyond the ceiling is still refused on the wire (`maxSeatsFrom(process.env)`, 20 by default — a seat
+    // inside that range but not in this connection's (empty) room answers NOT_IN_ROOM in the handler instead).
+    await expectError(c, { t: 'room.removeBot', seat: LOBBY_DEFAULTS.maxSeats + 1 }, ERR.BAD_MSG);
     await expectError(c, { t: 'g.buy', slot: -1 }, ERR.BAD_MSG);
     await expectError(c, { t: 'g.move', uid: 1, to: { area: 'moon' } }, ERR.BAD_MSG);
     await expectError(c, { t: 'ping', c: 'x' }, ERR.BAD_MSG);
@@ -510,7 +643,10 @@ describe('websocket lobby', () => {
     assert.equal(pong.t, 'pong');
   });
 
-  test('rate limit: bursts beyond 40 msg/s get RATE, connection survives, bucket refills', async () => {
+  test('rate limit: bursts beyond 40 msg/s get RATE, connection survives, bucket refills', async (t) => {
+    // Transport/compression scheduling must not refill a supposedly instantaneous burst.
+    let now = Date.now();
+    t.mock.method(srv.network, 'now', () => now);
     const c = await pool.player('Spammer');
     const N = 100;
     const rids = [];
@@ -520,28 +656,60 @@ describe('websocket lobby', () => {
     const pongs = replies.filter((m) => m.t === 'pong').length;
     const limited = replies.filter((m) => m.t === 'error' && m.code === ERR.RATE).length;
     assert.equal(pongs + limited, N);
-    assert.ok(pongs >= 39 && pongs <= 45, `pongs ${pongs}`); // hello used one token
-    assert.ok(limited >= 55, `limited ${limited}`);
+    assert.equal(pongs, 39); // hello used one of the 40 tokens
+    assert.equal(limited, 61);
     assert.ok(c.isOpen);
-    await delay(1100);
+    now += 24; // 40/s: less than one token
+    await expectError(c, { t: 'ping', c: 0 }, ERR.RATE);
+    now += 1;
     const ok = await c.request({ t: 'ping', c: 0 });
     assert.equal(ok.t, 'pong');
+    await expectError(c, { t: 'ping', c: 0 }, ERR.RATE);
+    now += 1100; // refill, capped at 40 tokens
+    for (let i = 0; i < 40; i++) assert.equal((await c.request({ t: 'ping', c: i })).t, 'pong');
+    await expectError(c, { t: 'ping', c: 0 }, ERR.RATE);
+    assert.ok(c.isOpen);
   });
 
-  test('flooding far beyond the limit closes the socket (1008)', async () => {
+  test('flooding far beyond the limit closes the socket (1008)', { timeout: 10000 }, async (t) => {
+    const now = Date.now();
+    t.mock.method(srv.network, 'now', () => now);
     const c = await pool.player('Flood');
-    for (let i = 0; i < 600; i++) c.send({ t: 'ping', c: i, rid: null });
+    // Keep one rate window and await replies instead of building a compressed send queue ahead of the close frame.
+    for (let i = 0; i < 39; i++) assert.equal((await c.request({ t: 'ping', c: i })).t, 'pong');
+    for (let i = 0; i < 400; i++) await expectError(c, { t: 'ping', c: i }, ERR.RATE);
+    assert.ok(c.isOpen, '400 drops do not close the socket');
+    c.send({ t: 'ping', c: 400, rid: null });
     const info = await c.closed;
     assert.equal(info.code, 1008);
+    assert.equal(info.reason, 'rate limit');
+  });
+
+  test('a create that names no cap gets the server ceiling (20 by default)', async () => {
+    // 业主裁令 2026-10-12: the default ceiling moved 4 → 20, and `room.state` says so (the cap differs from the
+    // official 4). A client that draws the frame pads to this number.
+    const wideHost = await pool.player('Wide');
+    const wide = await wideHost.request({ t: 'room.create', mode: 'coop', difficulty: 'HARD' });
+    assert.equal(wide.t, 'ok', JSON.stringify(wide));
+    const wideState = await wideHost.waitFor('room.state', (s) => s.hostId === wideHost.id);
+    assert.equal(wideState.seatCap, LOBBY_DEFAULTS.maxSeats, 'the frame carries the default ceiling');
+    assert.equal(LOBBY_DEFAULTS.maxSeats, 20, 'which is 20, not the official 4');
+    assert.equal(wideState.seats.length, LOBBY_DEFAULTS.maxSeats, 'the room really has 20 slots');
+    assert.deepEqual(wideState.seats[0], { seat: 0, playerId: wideHost.id, name: 'Wide', isBot: false, ready: false, connected: true });
+    assert.deepEqual(wideState.seats.slice(1), new Array(LOBBY_DEFAULTS.maxSeats - 1).fill(null));
   });
 
   test('create / join / leave', async () => {
     const host = await pool.player('Host');
+    // The official 4-seat room (an explicit pick), which is what these tests exercise: a create that names NOTHING
+    // would build a 20-seat room since 业主裁令 2026-10-12 (pinned by the test above).
     const st = await createRoom(host, 'coop', 'HARD');
     assert.match(st.code, CODE_RE);
     assert.equal(st.mode, 'coop');
     assert.equal(st.difficulty, 'HARD');
     assert.equal(st.inMatch, false);
+    // A 4-seat room carries NO `seatCap` key (it equals the official `MAX_SEATS`): that is the byte-for-byte promise.
+    assert.equal(Object.hasOwn(st, 'seatCap'), false, 'the official 4 hides the cap');
     assert.equal(st.seats.length, MAX_SEATS);
     assert.deepEqual(st.seats[0], { seat: 0, playerId: host.id, name: 'Host', isBot: false, ready: false, connected: true });
     assert.deepEqual(st.seats.slice(1), [null, null, null]);
@@ -1055,8 +1223,10 @@ describe('websocket lobby', () => {
       const a = await pool.player('Twin');
       const before = srv.registry.size;
       const b = await pool.connect();
-      b.send({ t: 'hello', name: 'Twin', token: a.token, version: 1 });
-      for (let k = 0; k < 5; k++) a.send({ t: 'hello', name: 'Ghost', version: 1 });
+      // the wire number this build speaks (`PROTOCOL_VERSION`), never a literal: a deliberate bump must not leave this
+      // suite handshaking with a stale page's number (which the server refuses — DESIGN §8.2.1)
+      b.send({ t: 'hello', name: 'Twin', token: a.token, version: PROTOCOL_VERSION });
+      for (let k = 0; k < 5; k++) a.send({ t: 'hello', name: 'Ghost', version: PROTOCOL_VERSION });
       a.send({ t: 'room.create', mode: 'coop', difficulty: 'NORMAL' });
       const info = await a.closed;
       assert.equal(info.code, 4001);
@@ -1110,6 +1280,80 @@ describe('websocket lobby', () => {
     assert.ok(h.rooms >= 1);
     assert.ok(h.sockets >= 1);
     assert.ok(h.sessions >= 1);
+  });
+
+  // --------------------------------------------------------------------------------------------------
+  // 房间目录（公开面）：GET /api/rooms —— 一个数，不是列表（业主裁令）
+  // --------------------------------------------------------------------------------------------------
+
+  test('GET /api/rooms: body is EXACTLY { publicRooms } — one integer, nothing else', async () => {
+    const r = await httpReq(srv.port, '/api/rooms');
+    assert.equal(r.status, 200);
+    assert.match(r.headers['content-type'], /^application\/json/);
+    assert.equal(r.headers['cache-control'], 'no-store', 'sendJson must be the one answering');
+    const body = JSON.parse(r.body.toString());
+    // 唯一整数字段。数 = 在册房间数，而 `rooms` Map 在 disposeRoom 时立刻 delete。
+    assert.deepEqual(body, { publicRooms: srv.lobby.rooms.size });
+    assert.deepEqual(Object.keys(body), ['publicRooms'], '公开面永远只有一个整数字段');
+    assert.ok(Number.isInteger(body.publicRooms));
+  });
+
+  test('GET /api/rooms follows the registry: +1 on create, -1 after the last member leaves', async () => {
+    const before = JSON.parse((await httpReq(srv.port, '/api/rooms')).body.toString()).publicRooms;
+    const host = await pool.player('RoomsHost');
+    const st = await createRoom(host);
+    assert.equal(srv.lobby.rooms.size, before + 1);
+    assert.equal(JSON.parse((await httpReq(srv.port, '/api/rooms')).body.toString()).publicRooms, before + 1);
+    // 离开 ⇒ disposeRoom ⇒ this.rooms.delete ⇒ 计数跟着回来（没有「已销毁但还在数里」的窗口）。
+    await expectOk(host, { t: 'room.leave' });
+    assert.equal(srv.lobby.getRoom(st.code), null);
+    assert.equal(JSON.parse((await httpReq(srv.port, '/api/rooms')).body.toString()).publicRooms, before);
+  });
+
+  test('PRIVACY SENTINEL: no room code and no host name can appear in the /api/rooms response', async () => {
+    // 房号是随机 4 字母 ⇒ 断言「该房号与房主名一个字节都不在响应里」是有效哨兵（哨兵出现就必然是真泄露）。
+    // 房主名必须在 NAME_MAX_LEN(12) 以内，否则 hello 先被 BAD_MSG 挡下、这条测试就测不到东西。
+    const SENTINEL = 'SentHost1234';
+    const host = await pool.player(SENTINEL);
+    const st = await createRoom(host);
+    const r = await httpReq(srv.port, '/api/rooms');
+    const text = r.body.toString();
+    assert.equal(text.includes(st.code), false, '房号不得出现在公开面');
+    assert.equal(text.includes(SENTINEL), false, '房主名不得出现在公开面');
+    // 放宽到「任何 4 字母房号形状」也不许有：响应里只该有一个数字。
+    assert.equal(/[A-Z]{4}/.test(text), false, `响应里不该有任何房号形状的串: ${text}`);
+    assert.deepEqual(JSON.parse(text), { publicRooms: srv.lobby.rooms.size });
+  });
+
+  test('HEAD /api/rooms: 200, same headers, no body', async () => {
+    const r = await httpReq(srv.port, '/api/rooms', { method: 'HEAD' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.length, 0, 'HEAD 无 body（sendJson 的既有行为）');
+  });
+
+  test('POST /api/rooms: 405 with Allow: GET, HEAD — the method gate runs first', async () => {
+    const r = await httpReq(srv.port, '/api/rooms', { method: 'POST' });
+    assert.equal(r.status, 405);
+    assert.equal(r.headers.allow, 'GET, HEAD');
+  });
+
+  test('roomCounts() and stats() are ONE traversal and ONE truth: rooms/publicRooms never diverge', async () => {
+    const c = await pool.player('SameTruth');
+    await createRoom(c);
+    const counts = srv.lobby.roomCounts();
+    const h = JSON.parse((await httpReq(srv.port, '/healthz')).body.toString());
+    // 今天 publicRooms 与 /healthz 的 rooms 恒等：引擎今天没有「公开 / 私有」这个属性（不预埋 inviteOnly）。
+    assert.equal(counts.publicRooms, counts.total);
+    assert.equal(counts.total, h.rooms, '/healthz.rooms 是运维口径的全部房间数');
+    assert.equal(JSON.parse((await httpReq(srv.port, '/api/rooms')).body.toString()).publicRooms, h.rooms);
+    // stats() 的座位计数来自同一次遍历（roomCounts(out) 的 out）：口径分叉会在这里变红。
+    const seats = {};
+    const again = srv.lobby.roomCounts(seats);
+    assert.equal(seats.humans, h.humans);
+    assert.equal(seats.bots, h.bots);
+    assert.equal(seats.spectators, h.spectators);
+    assert.equal(seats.matches, h.matches);
+    assert.equal(again.publicRooms, h.rooms);
   });
 });
 
@@ -1309,12 +1553,17 @@ describe('lobby timers and match interface', () => {
     assert.ok(cap.errors.some((e) => e.includes('intentional handler crash')));
   });
 
-  test('repeated hellos during a match coalesce into at most one match resync per window', async () => {
+  test('user Given a running match When sending repeated hellos Then resyncs coalesce within the time window', { timeout: 10000 }, async (t) => {
     const host = await pool.player('Host');
     await createRoom(host, 'solo', 'NORMAL');
     RecordingMatch.instances.length = 0;
     await expectOk(host, { t: 'room.start' });
     await host.waitFor('m.private');
+    // Real socket processing may cross the resync window on a busy runner.
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() });
+    const clock = srv.lobby.now;
+    srv.lobby.now = () => Date.now();
+    t.after(() => { srv.lobby.now = clock; });
     const m = RecordingMatch.instances[0];
     const resyncs = () => m.calls.filter((c) => c[0] === 'onReconnect').length;
     host.clearInbox();
@@ -1322,9 +1571,12 @@ describe('lobby timers and match interface', () => {
     for (let i = 0; i < 12; i++) await host.waitFor('room.state'); // the cheap part answers every hello
     assert.equal(resyncs(), 1, 'first repeated hello resyncs at once, the rest wait for the window');
     await host.waitFor('m.private');
+    t.mock.timers.tick(999);
+    assert.equal(resyncs(), 1, 'no deferred resync before the window ends');
+    t.mock.timers.tick(1);
     await host.waitFor('m.private', () => true, 1500); // one coalesced resync answers the other 11
     assert.equal(resyncs(), 2);
-    await delay(1100);
+    t.mock.timers.tick(1100);
     assert.equal(resyncs(), 2, 'nothing else was queued');
     // a (re)connect is never delayed
     await host.terminate();
@@ -1858,7 +2110,7 @@ describe('match stub (server/match/Match.js)', () => {
     assert.equal(mk({ data: {}, mode: 'solo', difficulty: 'FUNNY', modeId: 'mode_single_funny' }).m.lastRound, 9);
     assert.equal(mk({ data: undefined }).m.lastRound, 14);
     assert.equal(mk({ data: { config: { modes: { mode_multi_hard: { lastRound: 11 } } } } }).m.lastRound, 11);
-    const real = loadData(path.join(ROOT, 'data'), { log: { warn() {}, error() {} } });
+    const real = loadData(path.join(ROOT, 'data'), { workshopDir: null, log: { warn() {}, error() {} } });
     if (real.config?.modes) {
       assert.equal(mk({ data: real, mode: 'solo', difficulty: 'FUNNY', modeId: 'mode_single_funny' }).m.lastRound, 9);
       assert.equal(mk({ data: real }).m.lastRound, 14);
@@ -1906,10 +2158,11 @@ describe('platform units', () => {
       fs.writeFileSync(path.join(dir, 'chess.json'), JSON.stringify([{ id: 'x', stats: { hp: 1 } }]));
       fs.writeFileSync(path.join(dir, 'broken.json'), '{oops');
       fs.writeFileSync(path.join(dir, 'notes.txt'), 'ignored');
+      fs.writeFileSync(path.join(dir, 'local-fx.json'), JSON.stringify({ version: 1, format: 'fx-manifest', groups: {} }));
       const warnings = [];
       const errors = [];
-      const data = loadData(dir, { log: { warn: (m) => warnings.push(m), error: (m) => errors.push(m) } });
-      assert.deepEqual(Object.keys(data).sort(), ['chess', 'config']);
+      const data = loadData(dir, { workshopDir: null, log: { warn: (m) => warnings.push(m), error: (m) => errors.push(m) } });
+      assert.deepEqual(Object.keys(data).sort(), ['chess', 'config'], 'data/local-fx.json (the official effects\' file list, UNLOADED_DATA) is never loaded');
       assert.equal(data.config.modes.a.rounds[1], 2);
       assert.ok(Object.isFrozen(data));
       assert.ok(Object.isFrozen(data.config.modes.a.rounds));
@@ -1919,7 +2172,7 @@ describe('platform units', () => {
       assert.equal(errors.length, 1);
       assert.match(errors[0], /broken\.json/);
       assert.ok(warnings.some((w) => /missing data files/.test(w) && /bonds\.json/.test(w)));
-      const none = loadData(path.join(dir, 'does-not-exist'), { log: { warn() {}, error() {} } });
+      const none = loadData(path.join(dir, 'does-not-exist'), { workshopDir: null, log: { warn() {}, error() {} } });
       assert.deepEqual(Object.keys(none), []);
       assert.ok(Object.isFrozen(none));
     } finally {
@@ -1928,7 +2181,7 @@ describe('platform units', () => {
   });
 
   test('data index getters: own-property lookups only, null for unknown ids / missing files', () => {
-    const data = loadData('/nonexistent-dir', { log: { warn() {}, error() {} } });
+    const data = loadData('/nonexistent-dir', { workshopDir: null, log: { warn() {}, error() {} } });
     assert.equal(getChess('chess_char_1_01_a', data), null, 'missing file');
     const fake = Object.freeze({
       chess: { x_a: { chessId: 'x_a' }, n: 5 },
@@ -1949,7 +2202,7 @@ describe('platform units', () => {
     for (const fn of Object.values(INDEXED_FILES)) assert.equal(typeof dataModule[fn], 'function', fn);
 
     // real generated data (when present): every record of every id-keyed file resolves to itself
-    const real = loadData(path.join(ROOT, 'data'), { log: { warn() {}, error() {} } });
+    const real = loadData(path.join(ROOT, 'data'), { workshopDir: null, log: { warn() {}, error() {} } });
     let checked = 0;
     for (const [file, fn] of Object.entries(INDEXED_FILES)) {
       if (!real[file]) continue;

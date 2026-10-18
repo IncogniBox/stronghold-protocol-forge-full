@@ -16,7 +16,8 @@ import { resolveRoles, roleAnimationNames } from '../tools/assets/anim-roles.mjs
 import { normalizeAtlas, atlasInfo, parseAtlas } from '../tools/assets/atlas.mjs';
 import { pngSize, isCompletePng, isMp3, validate } from '../tools/assets/formats.mjs';
 import { encodeWoff2, decodeWoff2Tables, readSfnt, uintBase128 } from '../tools/assets/woff2.mjs';
-import { assetToPath, pickUnitSfx, indexAudio } from '../tools/assets/audio.mjs';
+import { assetToPath, pickUnitSfx, indexAudio, nativeVoiceDirs } from '../tools/assets/audio.mjs';
+import { tidyVoiceTrees } from '../tools/fetch-assets.mjs';
 import { mirrorUrl, safeName, encodePath } from '../tools/assets/sources.mjs';
 import { collectEnemyIds, skillIndicesByChar, buildPlan, GUIDE_PAGES, UI_EXTRAS } from '../tools/assets/plan.mjs';
 import { resolveTemplate, collectLeaves } from '../tools/assets/manifest.mjs';
@@ -443,10 +444,12 @@ describe('audio banks and plan id sets', () => {
     const r = resolveTemplate(tpl, { root: ROOT, spine: new Map([['k', { skel: '/assets/s.skel', atlas: '/assets/s.atlas', textures: [] }]]) });
     assert.deepEqual(Object.keys(r.value).sort(), ['keep', 'm']);
     assert.deepEqual(r.misses.sort(), ['a', 'b.c']);
+    assert.deepEqual(r.droppedLeaves, ['a', 'b.c'], 'a leaf no alternative of which is on disk is a dropped leaf');
     assert.equal(collectLeaves(tpl).length, 2);
     const ok = resolveTemplate({ p: { alts: [{ rel: 'nope.png', urls: ['x'] }, { rel: 'package.json', urls: ['y'] }] } }, { root: ROOT, spine: new Map() });
     assert.equal(ok.value.p, '/assets/package.json');
     assert.equal(ok.fallbacks.length, 1);
+    assert.deepEqual(ok.droppedLeaves, [], 'a fallback on disk is not a drop');
   });
 
   test('an array whose lines are all missing is dropped, with the entry it empties (a voice slot never downloaded)', () => {
@@ -462,6 +465,105 @@ describe('audio banks and plan id sets', () => {
     assert.deepEqual(r.value.voice, { b: { select: ['/assets/package.json'] } }, 'operator a has no line on disk: no entry at all');
     assert.deepEqual(r.value.empty, [], 'an array that was empty in the template stays');
     assert.deepEqual(r.misses.sort(), ['voice.a.place[0]', 'voice.a.select[0]', 'voice.a.select[1]', 'voice.b.select[0]']);
+    assert.deepEqual(r.droppedLeaves.sort(), r.misses.slice().sort(), 'every dropped line is a dropped leaf too');
+  });
+
+  test('own-language dubs are the CUSTOM voiceLangDict entries (collab LINKAGE is not)', () => {
+    const charword = {
+      voiceLangTypeDict: { CN_MANDARIN: { groupType: 'CN_MANDARIN' }, ITA: { groupType: 'CUSTOM' }, RUS: { groupType: 'CUSTOM' }, LINKAGE: { groupType: 'LINKAGE' } },
+      voiceLangDict: {
+        char_102_texas: { dict: { CN_MANDARIN: { wordkey: 'char_102_texas' }, ITA: { wordkey: 'char_102_texas_ITA' }, RUS: { wordkey: 'char_102_texas_rus' } } },
+        char_196_sunbr: { dict: { RUS: { wordkey: 'char_196_sunbr' } } },
+        char_1_collab: { dict: { LINKAGE: { wordkey: 'char_1_collab_link' } } },
+      },
+    };
+    assert.deepEqual([...nativeVoiceDirs(charword)], [
+      ['char_102_texas', { dir: 'char_102_texas_ita', type: 'ITA' }],
+      ['char_196_sunbr', { dir: 'char_196_sunbr', type: 'RUS' }],
+    ], 'the first CUSTOM wins; LINKAGE is not a dub');
+    assert.equal(nativeVoiceDirs(null).size, 0);
+    assert.equal(nativeVoiceDirs({}).size, 0);
+  });
+
+  test('tidyVoiceTrees drops empty dub trees and the type of a dub that did not land', () => {
+    const m = { audio: {
+      voice: { a: { place: '/x' } },
+      voiceEn: { a: { place: '/e' } }, voiceKr: {},
+      voiceNative: { a: { place: '/n' } }, voiceNativeLangType: { a: 'ITA', c: 'RUS' },
+    } };
+    tidyVoiceTrees(m);
+    assert.deepEqual(Object.keys(m.audio), ['voice', 'voiceEn', 'voiceNative', 'voiceNativeLangType'], 'an empty voiceKr goes');
+    assert.deepEqual(m.audio.voiceNativeLangType, { a: 'ITA' }, "c's dub has no line on disk: no type");
+    const plain = { audio: { voice: {} } };
+    tidyVoiceTrees(plain);
+    assert.deepEqual(plain, { audio: { voice: {} } }, 'a --no-optional-voice build gains no keys');
+    tidyVoiceTrees(null);
+    tidyVoiceTrees({});
+  });
+
+  test('plan.mjs plans EN / KR / own-language trees like voiceJp when optionalVoice is on', () => {
+    const charword = {
+      charWords: {
+        a: { charId: 'char_102_texas', wordKey: 'char_102_texas', placeType: 'BATTLE_SELECT', voiceId: 'CN_021', voiceIndex: 21, voiceAsset: 'char_102_texas/CN_021' },
+        b: { charId: 'char_263_skadi', wordKey: 'char_263_skadi', placeType: 'BATTLE_SELECT', voiceId: 'CN_021', voiceIndex: 21, voiceAsset: 'char_263_skadi/CN_021' },
+        c: { charId: 'char_999_out', wordKey: 'char_999_out', placeType: 'BATTLE_SELECT', voiceId: 'CN_021', voiceIndex: 21, voiceAsset: 'char_999_out/CN_021' },
+      },
+      voiceLangTypeDict: { ITA: { groupType: 'CUSTOM' }, RUS: { groupType: 'CUSTOM' } },
+      voiceLangDict: {
+        char_102_texas: { dict: { ITA: { wordkey: 'char_102_texas_ITA' } } },
+        char_999_out: { dict: { RUS: { wordkey: 'char_999_out' } } },
+      },
+    };
+    const extraOperators = { char_102_texas: { name: '德克萨斯', skills: [] }, char_263_skadi: { name: '斯卡蒂', skills: [] } };
+    const plan = (o) => buildPlan({ assets07: {}, ops03: {}, enemies05: {}, maps05: {}, audio: indexAudio({}), modelsData: {},
+      charword, extraOperators, ...o }).template.audio;
+    const a = plan({ optionalVoice: true });
+    assert.deepEqual(Object.keys(a), ['bgm', 'bossBgm', 'voice', 'voiceJp', 'voiceEn', 'voiceKr', 'voiceNative', 'voiceNativeLangType', 'sfx']);
+    assert.equal(a.voiceEn.char_102_texas.select.alts[0].rel, 'audio/voice/en/char_102_texas/cn_021.mp3');
+    assert.equal(a.voiceKr.char_263_skadi.select.alts[0].rel, 'audio/voice/kr/char_263_skadi/cn_021.mp3');
+    assert.equal(a.voiceNative.char_102_texas.select.alts[0].rel, 'audio/voice/native/char_102_texas_ita/cn_021.mp3');
+    assert.match(a.voiceNative.char_102_texas.select.alts[0].urls[0], /voice_custom\/char_102_texas_ita\/cn_021\.mp3$/);
+    assert.equal(a.voiceNative.char_263_skadi, undefined, 'no own-language dub: no entry');
+    assert.equal(a.voiceNative.char_999_out, undefined, 'not fielded: no tree');
+    assert.deepEqual(Object.getOwnPropertySymbols(a.voiceNativeLangType).map((s) => a.voiceNativeLangType[s]), [{ char_102_texas: 'ITA' }], 'a literal, and only a fielded operator who is in the voice tree');
+    assert.deepEqual(Object.keys(plan({})), ['bgm', 'bossBgm', 'voice', 'voiceJp', 'sfx'], 'optionalVoice defaults off');
+  });
+
+  // A unit's attack sound is a leaf like any other: when its file was never downloaded (or a checkout lost it) the whole
+  // key vanishes from data/assets.json and the client plays nothing — there is no fallback and no URL to retry. The
+  // resolution therefore reports it as a dropped leaf, which the run prints and --strict fails on
+  // (tools/fetch-assets.mjs; docs/ASSETS.md "A dropped leaf is reported, never silent").
+  test('move a resolved sound aside: the leaf leaves the manifest and is reported as dropped, never silently', async (t) => {
+    const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const root = await mkdtemp(join(tmpdir(), 'sp-leaf-drop-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const rel = 'audio/sfx/player/p_atk/p_atk_somechar_n.mp3';
+    const imp = 'audio/sfx/player/p_imp/p_imp_somechar_n.mp3';
+    const ui = 'audio/sfx/general/g_ui/g_ui_btn_h.mp3';
+    const leaf = (r) => ({ alts: [{ rel: r, urls: [`https://raw.githubusercontent.com/o/r/main/${r}`], kind: 'mp3' }] });
+    const tpl = { audio: { sfx: { units: { char_x: { attack: leaf(rel), hit: leaf(imp) } }, ui: { click: leaf(ui) } } } };
+    for (const r of [rel, imp, ui]) {
+      await mkdir(join(root, dirname(r)), { recursive: true });
+      await writeFile(join(root, r), 'ID3');
+    }
+    const before = resolveTemplate(tpl, { root, spine: new Map() });
+    assert.equal(JSON.stringify(before.value), JSON.stringify({
+      audio: {
+        sfx: {
+          units: { char_x: { attack: `/assets/${rel}`, hit: `/assets/${imp}` } },
+          ui: { click: `/assets/${ui}` },
+        },
+      },
+    }), 'every file on disk: the manifest is exactly the plan, byte for byte');
+    assert.deepEqual([before.misses, before.droppedLeaves, before.fallbacks], [[], [], []]);
+
+    await rm(join(root, rel)); // the download never happened / the file went missing
+    const after = resolveTemplate(tpl, { root, spine: new Map() });
+    assert.equal(Object.hasOwn(after.value.audio.sfx.units.char_x, 'attack'), false, 'the key is gone from the manifest');
+    assert.equal(after.value.audio.sfx.units.char_x.hit, `/assets/${imp}`, 'the roles whose file is on disk stay');
+    assert.deepEqual(after.droppedLeaves, ['audio.sfx.units.char_x.attack'], 'and the drop is reported, not silent');
+    assert.ok(after.misses.includes('audio.sfx.units.char_x.attack'), 'the wider miss list names it too');
   });
 });
 

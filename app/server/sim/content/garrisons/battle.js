@@ -1,4 +1,4 @@
-﻿// server/sim/content/garrisons/battle.js — IN_BATTLE 特质 (garrisons) of the operators on the field.
+// server/sim/content/garrisons/battle.js — IN_BATTLE 特质 (garrisons) of the operators on the field.
 //
 // Each operator carries `unit.def.raw.garrisonIds` (elite chess carry the `_b` garrisons); the IN_BATTLE ones are
 // dispatched here by their effectKey (bbStr.key for battle runes, else effectType — docs/DATA.md §4):
@@ -95,7 +95,7 @@ export function install(battle) {
   }
 
   // dynamic IN_BATTLE grants (莱伊 "复制身前干员的战斗中类效果", battleStart): register the copied trait on a unit
-  // after install has run (battle.rbAddGarrison — server/sim/mod 雷姆必拓).
+  // after install has run (battle.rbAddGarrison — 工坊包 workshop/rimbilliton 的战斗逻辑，`server.battle`).
   battle.rbAddGarrison = (unit, g) => {
     const it = add(unit, g);
     if (it) dispatch(battle, [it]);

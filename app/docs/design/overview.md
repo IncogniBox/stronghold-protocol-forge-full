@@ -94,7 +94,7 @@ server/
       index.js             installs all content into a Battle (kits, bonds, garrisons, items, bands, enemies, devices)
       kits/index.js        operator kit registry keyed by base chessId (guide: kits/README.md)
       kits/ops/*.js        one operator kit (skills + talents) per file, <chessId>-<codename>.js
-      kits/shared/*.js     helpers the kits share (shared/tier1.js: the general ones)
+      kits/shared/*.js     helpers the kits share (kits/shared/tier1.js: the general ones)
       tokens.js            summon/token definitions
       bonds.js             battle side of the 23 bonds
       garrisons.js         battle side (IN_BATTLE) garrison effect keys
@@ -125,7 +125,8 @@ public/
     ui/                    hud.js, bondStrip.js, bondPopup.js, shopBar.js, teamPanel.js, detailPanel.js,
                            tooltip.js, choiceOverlay.js, rewardOverlay.js, ticker.js, emotes.js, settings.js, toasts.js,
                            gameLogic.js (barrel; gameLogic/*.js placement, bonds, phases, shop, loadout)
-    render/                app.js (field view; app/*.js helpers), projection.js, tiles.js, units.js, spine.js, fx.js (effects; fx/*.js), interp.js, drag.js, pick.js, promote.js (API §9)
+    render/                app.js (field view; app/*.js helpers), projection.js, tiles.js, units.js, spine.js, fx.js (effects; fx/*.js), interp.js, drag.js, pick.js, promote.js (API §9);
+                           vfx/*.js (the official battle effects from the local client: interpreter, WebGL2 renderer, wiring; §9, §35)
   vendor/                  pixi, pixi-spine, preact, hooks, htm (copied from node_modules by tools/vendor.mjs)
   assets/                  downloaded art/audio (git-ignored), see docs/ASSETS.md
   fonts/                   self-hosted fonts

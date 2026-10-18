@@ -1,13 +1,15 @@
-// Release metadata: one version everywhere (package.json, package-lock.json, shared/constants.js APP_VERSION shown on
-// the title screen, the server banner and /healthz), the GPL-3.0-or-later licence (LICENSE, package.json, lockfile) and
-// the notice files the README and the release bundle point at.
+// Release metadata: one version everywhere (package.json, package-lock.json, shared/constants.js APP_VERSION = the fork
+// release; the version players actually see is the bundled upstream game's UPSTREAM_VERSION — the title screen, the boot
+// banner and /healthz, the owner's ruling of 2026-10-18), the GPL-3.0-or-later licence (LICENSE, package.json,
+// lockfile) and the notice files the README and the release bundle point at.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APP_VERSION, PROTOCOL_VERSION, DEV_BUILD } from '../shared/constants.js';
+import { APP_VERSION, UPSTREAM_VERSION, PROTOCOL_VERSION, DEV_BUILD } from '../shared/constants.js';
 import { isDevVersion } from '../tools/package.mjs';
+import { changelogText } from './helpers/changelog.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -21,33 +23,45 @@ test('one release version: package.json, package-lock.json and APP_VERSION', () 
   assert.equal(pkg.version, APP_VERSION);
   assert.equal(lock.version, APP_VERSION);
   assert.equal(lock.packages[''].version, APP_VERSION);
-  assert.equal(PROTOCOL_VERSION, 1, 'the wire protocol number is separate from the release version');
+  // the wire format number: 2 = m.public incremental frames (DESIGN §8.2.1 — an older page would read a delta's
+  // `players` list as the whole roster, so the handshake must refuse it; test/lobby.test.js pins that refusal)
+  assert.equal(PROTOCOL_VERSION, 2, 'the wire protocol number is separate from the release version');
   assert.equal(pkg.private, true, 'never published to npm');
 });
 
 test('CHANGELOG.md opens with the release version, and the README links it', () => {
   const log = read('CHANGELOG.md');
-  const first = log.match(/^## (\d+\.\d+\.\d+) — (\d{4}-\d{2}-\d{2})/m);
-  assert.ok(first, 'a "## x.y.z — date" heading');
+  // The newest section may carry the release tag's second half too (`## 0.15.0-0.2.4 — 2026-10-11`, the owner's
+  // decision for a release that moves the bundled upstream game), so only the first half is compared with APP_VERSION;
+  // older sections are plain `## x.y.z — date` and keep matching. The upstream half is checked by
+  // test/promptBaseline.test.js against docs/history/.
+  const first = log.match(/^## (\d+\.\d+\.\d+)(?:-\d+\.\d+\.\d+)? — (\d{4}-\d{2}-\d{2})/m);
+  assert.ok(first, 'a "## x.y.z — date" heading (the release tag may add a "-<upstream>" half)');
   if (DEV_BUILD) {
     // a dev build has no entry of its own yet: the newest one is the last release, older than the version in development
     const num = (v) => v.split(/[.-]/).slice(0, 3).map(Number);
     const [a, b] = [num(first[1]), num(APP_VERSION)];
     assert.ok(a[0] < b[0] || (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2]))), `the newest entry ${first[1]} precedes ${APP_VERSION}`);
   } else assert.equal(first[1], APP_VERSION, 'the newest entry is the current version');
-  assert.match(log, /^## 0\.1\.0 — 2026-10-02/m, 'the first public release stays listed');
+  // 0.1.0 moved into a volume when the log was split (2026-10-12): the assertion is "it is still listed at all",
+  // so read the top file plus every volume. `log` above stays the top file — the newest section has to be there.
+  assert.match(changelogText(ROOT), /^## 0\.1\.0 — 2026-10-02/m, 'the first public release stays listed (a volume counts)');
   const readme = read('README.md');
   assert.match(readme, /\[CHANGELOG\.md\]\(CHANGELOG\.md\)/);
   // shields.io escapes a '-' inside a badge field as '--'
   assert.match(readme, new RegExp(`badge/version-${APP_VERSION.replace(/-/g, '--').replace(/\./g, '\\.')}-`), 'the README badge');
 });
 
-test('the release version is what players see', () => {
-  assert.match(read('public/js/screens/title.js'), /v\$\{APP_VERSION\}/, 'title screen footer');
+test('the version players see: the title footer, the banner and /healthz all show the bundled upstream game', () => {
+  // 业主 2026-10-18：标题屏右下角那一格说的是「这是哪一版**游戏**」⇒ 显示**上游** `UPSTREAM_VERSION`（本检出打包的
+  // 那一版），不是本 fork 的发行号 —— 发行号会为「包兼容」之外的理由变动。服务器那一侧对外显示的也是同一件事：启动
+  // 横幅与 `/healthz` 的 `app` 从本刀起同样取 `UPSTREAM_VERSION`（业主裁令「对外显示的版本 = 打包的上游那一版」）。
+  assert.match(read('public/js/screens/title.js'), /v\$\{UPSTREAM_VERSION\}/, 'title screen footer = the upstream game version');
+  assert.match(read('public/js/screens/title.js'), /import \{[^}]*UPSTREAM_VERSION[^}]*\} from '\.\.\/\.\.\/\.\.\/shared\/constants\.js'/, '…and it reads the constant, not a literal');
   assert.ok(!/PROTOCOL v1/.test(read('public/js/screens/title.js')), 'no protocol number posing as a version');
   // the server's entry is server/index.js; the banner and /healthz live in server/http/ (boot.js, routes.js)
-  assert.match(read('server/http/boot.js'), /Stronghold Protocol: Alliance v\$\{APP_VERSION\}/, 'boot banner');
-  assert.match(read('server/http/routes.js'), /app: APP_VERSION/, '/healthz');
+  assert.match(read('server/http/boot.js'), /Stronghold Protocol: Alliance v\$\{UPSTREAM_VERSION\}/, 'boot banner = the upstream game version');
+  assert.match(read('server/http/routes.js'), /app: UPSTREAM_VERSION/, '/healthz app = the upstream game version');
 });
 
 test('the English title is the official one: Stronghold Protocol: Alliance (as in the reply to GitHub issue #38, which stays open)', () => {

@@ -2,7 +2,7 @@
 //
 // Handlers validate → mutate → recompute bonds → mark the private view dirty. They never throw on bad input; they
 // return `{ ok: true }` or `{ error: ERR.*, detail? }`. Rules (research 00-INDEX §3–§4, 01 A1, 04 §2):
-//   * Hand (整备区) 10 slots filled right→left, temp (临时整备区) 5 slots. A full hand refuses buys and reward picks —
+//   * Hand: 10 slots filled right-to-left; temp: an expandable queue with five visible slots. A full hand refuses buys and reward picks —
 //     also one that would complete a merge at once (PRTS 卫戍协议/帮助 §手牌区 "例如招募/购入等通常情况下会增加手牌的操作";
 //     GitHub #82) — and withdrawals, except one whose own summon stack frees a slot. Passive gains (merge results,
 //     grants, returned equipment) overflow into temp, and a free hand slot pulls them back in at once, right→left
@@ -26,7 +26,8 @@
 //     rerolls everything and the new slots stay frozen), level-up price = base − rounds elapsed (floor 0).
 //   * Merge: 3 normal copies (风丸 2) on board/hand/temp → 1 elite; equipment returns to the hand; a
 //     reward offer of 3 different free chess of tier min(level+1, 6) is queued (never one operator twice — user
-//     playtest #6 item 19; a short tier tops up from the tier below; pick 1, expires at prep end; an offer earned
+//     playtest #6 item 19; a short tier tops up from the tier below; the player's stocked 自选 of that tier joins,
+//     §32.23; pick 1, expires at prep end; an offer earned
 //     after the prep — SETTLE / Final Assault effects — is kept for the next prep). Where the elite goes (PRTS
 //     卫戍协议/帮助 "发送1名【精锐】状态的该干员至手牌区（若消耗已部署至作战区的干员，则发送至作战区对应位置）", user
 //     playtest #6 follow-up): when a consumed copy stood on the board, onto that copy's tile with its facing (of several,
@@ -39,7 +40,7 @@
 //   * Transformations (transformChess, 突变细胞 — PRTS 备注 "生效时，原干员销毁，获得一名高一阶的随机初始干员"): a destroy
 //     followed by a gain. The carrier leaves wherever it stands (a board tile is freed, the deploy count drops), its
 //     equipment — the cell included — returns to the hand first (overflow temp), then the new chess is gained like any
-//     other (acquireChess: hand, overflow temp, the no-room rule; a merge it completes puts the elite on a consumed
+//     other (acquireChess: hand, overflow temp queue; a merge it completes puts the elite on a consumed
 //     deployed copy's tile — never the carrier's —, else in the hand). Official footage: the tile is empty at the next
 //     prep and the new operator waits in the 整备区 (pointed out in PR #2).
 //   * Items: equip max 2 (a 3rd replaces the equipped item the player picks — g.equip replaceUid, the oldest when
@@ -61,8 +62,8 @@
 //     owner's facing); a swap with its owner is checked from the owner's new tile, and one an in-place re-orientation
 //     (or a promotion) leaves outside goes back onto its stack (recompute → _liftOutOfRange) [ASSUMED: kept when still
 //     inside]. A re-orientation that would leave such a summon with no stack and no free hand / temp slot is refused
-//     (HAND_FULL); elsewhere (a promotion, an owner moved with no room) it leaves the board and its stack comes back at
-//     the next round start (grantTokensFor) — no out-of-range placement reaches the battle.
+//     (HAND_FULL); elsewhere (a promotion, an owner moved with no room) it leaves the board and its stack joins
+//     the expandable temp queue — no out-of-range placement reaches the battle.
 //   * Facing (DESIGN §3, research 09 §1.2): every board piece has `dir` ∈ UP|RIGHT|DOWN|LEFT (server/sim/dir.js), set
 //     by g.move {…, dir} (absent ⇒ RIGHT) and kept across rounds. g.move onto the piece's OWN tile re-orients it in
 //     place; a swap keeps the occupant's dir; a piece put on the board by an effect (a merge elite taking a consumed
@@ -94,9 +95,10 @@
 //     player's data view: the slotted slots' ids (normal and elite) are the composed 自选 records, so the player's piece
 //     of a slot is the operator for every rule (name, class, position, bonds from its factions, no 特质, the pick's skill
 //     and module; tier, price, sell price and the 3 → elite merge are the slot's). Each slotted piece has its own stock
-//     (8 at tier 5, 5 at tier 6 [ASSUMED]; none when every bond of it is banned this match) and joins this player's shop
-//     rolls once the 调度中心 reaches the slot's level; it never enters the shared pool. battleInput carries `diy` (the
-//     pick), m.private exposes `diy` (and `diyBanned`), the scouting views draw the operator with its pick.
+//     (8 at tier 5, 5 at tier 6 [ASSUMED]; twice that in co-op, like the shared pool — GitHub #650; none when every bond
+//     of it is banned this match) and joins this player's shop rolls once the 调度中心 reaches the slot's level; it never
+//     enters the shared pool. battleInput carries `diy` (the pick), m.private exposes `diy` (and `diyBanned`), the
+//     scouting views draw the operator with its pick.
 //
 // Code layout: this file keeps the constructor (the per-player state fields); the methods live in
 // server/match/player/, one module per concern, and are installed on PlayerState.prototype below in a fixed order,
@@ -116,8 +118,12 @@
 //                 battleInput
 //   views.js      pieceView, effectsView, m.private (privateView)
 //   diy.js        自选编队: the picks (setDiy), the player's data view, the DIY stock (initDiyStock, poolOf), the shop's
-//                 DIY draws (diyRollEntries), the pick of a piece (diyPickOf)
+//                 DIY draws (diyRollEntries) and the reward / grant draws (diyStockEntries), the pick of a piece (diyPickOf)
 //   common.js     HAND_SIZE, TEMP_SIZE, MAX_OFFER_SLOTS, OK, fail
+//   rules.js      the 100-seat variant (design-level item A of 百卫补丁 v0.3, docs/PS100-MIGRATION.md §10-A): the
+//                 player's own pool (pool), the draw source (mainPool) and the UNIQUE copy dispatch point (poolOf) —
+//                 plus squad membership. Installed LAST, exactly as the patch does; with the switch off (`seatCap <=
+//                 MAX_SEATS`) both accessors hand back the very same `m.pool` object the code used before.
 
 import { FIELD } from './board.js';
 import { computeBonds } from './bondsMeta.js';
@@ -132,12 +138,14 @@ import { PlayerPrep } from './player/prep.js';
 import { PlayerRound } from './player/round.js';
 import { PlayerViews } from './player/views.js';
 import { PlayerDiy, DiyStock } from './player/diy.js';
+import { PlayerConflict } from './player/conflict.js';
 import { PlayerSupport } from './player/support.js';
+import { PlayerRules } from './player/rules.js';
 
 export class PlayerState {
   /**
    * @param {import('./Match.js').Match} m owning match
-   * @param {{ seat: number, playerId: string, name: string, isBot: boolean, connected: boolean, loadout?: any, notOwned?: any, diy?: any }} seat
+   * @param {{ seat: number, playerId: string, name: string, isBot: boolean, connected: boolean, loadout?: any, notOwned?: any, diy?: any, conflict?: any }} seat
    */
   constructor(m, seat) {
     this.m = m;
@@ -184,9 +192,25 @@ export class PlayerState {
     this._diyRecords = new Map();
     /** the copies of the slotted pieces (initDiyStock, once the match's bans are drawn) */
     this.diyStock = new DiyStock();
+    /**
+     * The 100-seat variant's per-player pool (design-level A, docs/PS100-MIGRATION.md §10-A), built lazily by
+     * PlayerRules.pool() the first time this player's copies are routed. `null` = not built; a ≤ MAX_SEATS match never
+     * builds one (poolOf hands back `m.pool`).
+     * @type {import('./pool.js').SharedPool|null}
+     */
+    this._ownPool = null;
     /** slotted slots without stock: every bond of the operator is switched off this match */
     this.diyBanned = Object.freeze([]);
     if (!this.isBot && seat.diy) this.setDiy(seat.diy);
+    /**
+     * 干员冲突兼容 (0.2.0 follow-up, 2026-10-16): `{ [chessId]: packId }` — 这一个玩家从 `data.workshopConflicts`
+     * 里挑的那几份记录（同一个 id 被两个包各贡献一份时的选择）。座位开局那一刻的那一份，再核一遍；冻结；{} = 全用
+     * 合并的赢家（bot 恒为 {}）。`setConflict` 把挑选过的记录叠进 `this.gd`（per-player 视图，见 player/conflict.js）。
+     */
+    this.conflict = Object.freeze({});
+    /** @type {Map<string, object>} conflicted chess id → the picked candidate record (setConflict) */
+    this._conflictRecords = new Map();
+    if (!this.isBot && seat.conflict) this.setConflict(seat.conflict);
     this.shop = { level: 1, upgradePrice: this.gd.upgradeBase(1) ?? 0, slots: [], frozen: false, freeRefreshes: 0 };
     /** reward offers queue (merge rewards, special refreshes): { tier, source, label, slots: [{ kind, id, price, sold }] } */
     this.offers = [];
@@ -211,6 +235,12 @@ export class PlayerState {
     this.pendingLayerGains = null;
     /** optional per-bond count bonus written by effects */
     this.bondCountBonus = {};
+    /**
+     * 本局被**摘除**的盟约（`Match.removedBondsSet`，`drawDisabledBonds` 的包策略产物）：这些盟约在这一局里不算作任何
+     * 棋子的盟约（bondsMeta.pieceBonds 过滤掉）—— 不计入归属与激活、不进战斗输入。`null` = 一个都没有。
+     * @type {Set<string>|null}
+     */
+    this.removedBonds = null;
     /** EffectRef list: { id, key, name, desc, iconKind, iconId, counter?, battle, params, data } */
     this.effects = [];
     /** active bounties: { id, card, roundsLeft, chooser } */
@@ -224,6 +254,11 @@ export class PlayerState {
     this.personalChoice = null;
     /** free-form counters for content (ctx.counter / setCounter) */
     this.counters = {};
+    /**
+     * 上一场战斗交给本次休整期的**通用标记**（`{ [key]: 标量 }`，战斗侧用 `@battle/setBattleMark` 写、休整期用
+     * `ctx.mark(key)` 读）。每场战斗结束时**整体替换**（`server/match/match/combat.js _finishCombat`）；没有就 null。
+     */
+    this.marks = null;
     /** per-round counters (reset at round start) */
     this.round = { refreshes: 0, buys: 0, sells: 0, spent: 0, gainedChess: 0, arts: 0 };
     this.deployCapBonus = 0;
@@ -237,6 +272,7 @@ export class PlayerState {
       unitStats: new Map(),
     };
     this.eliminatedRound = null;
+    this.creditedKills = 0;
     this.lpAtFinal = null;
     /** last combat result for this player (unite carry state, bounties) */
     this.lastResult = null;
@@ -252,7 +288,7 @@ export class PlayerState {
 }
 
 // the method modules, in this order (a name defined twice is an error, never a silent override)
-for (const part of [PlayerBasics, PlayerPieces, PlayerAcquire, PlayerEconomy, PlayerPlacement, PlayerItems, PlayerPrep, PlayerRound, PlayerViews, PlayerDiy, PlayerSupport]) {
+for (const part of [PlayerBasics, PlayerPieces, PlayerAcquire, PlayerEconomy, PlayerPlacement, PlayerItems, PlayerPrep, PlayerRound, PlayerViews, PlayerDiy, PlayerConflict, PlayerSupport, PlayerRules]) {
   for (const key of Reflect.ownKeys(part.prototype)) {
     if (key === 'constructor') continue;
     if (Object.prototype.hasOwnProperty.call(PlayerState.prototype, key)) throw new Error(`PlayerState.${String(key)} is defined twice`);

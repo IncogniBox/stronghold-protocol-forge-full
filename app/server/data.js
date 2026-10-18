@@ -21,6 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { forgetOfficialBounds, rememberOfficialBounds } from '../shared/plugins/officialBounds.js';
 import { loadWorkshop, WORKSHOP_DIR } from './workshop.js';
 import { applyWorkshop, workshopSummary } from '../shared/workshop.js';
 
@@ -55,8 +56,13 @@ export function deepFreeze(root) {
   return root;
 }
 
+/** data/*.json files the server never reads, so never loads: the official effects' file list (data/local-fx.json, written
+ * by tools/local-extract/fx.py, DESIGN **§35**（上游原文 `§33`，官方特效那一节）— ~1 MB the browser alone fetches,
+ * through its served view). */
+export const UNLOADED_DATA = Object.freeze(['local-fx.json']);
+
 /**
- * Read every `*.json` in `dir` into `{ [basename]: parsed }`, deep-frozen.
+ * Read every `*.json` in `dir` into `{ [basename]: parsed }`, deep-frozen (but UNLOADED_DATA).
  * Never throws: an unreadable directory yields `{}`; bad files are skipped with an error log.
  * @param {string} [dir] data directory (default ROOT/data)
  * @param {{ log?: { warn: Function, error: Function, info?: Function }, expected?: readonly string[],
@@ -70,7 +76,7 @@ export function loadData(dir = DATA_DIR, { log = console, expected = DATA_FILES,
   let names = [];
   try {
     names = fs.readdirSync(dir, { withFileTypes: true })
-      .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.json'))
+      .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.json') && !UNLOADED_DATA.includes(d.name.toLowerCase()))
       .map((d) => d.name)
       .sort();
   } catch (e) {
@@ -103,6 +109,10 @@ export function loadData(dir = DATA_DIR, { log = console, expected = DATA_FILES,
       for (const e of report.errors) log.warn?.(`[workshop] ${e.pack}: ${e.reason}`);
       // 干员没有模型 = 试玩里画成一张头像贴图（游戏自己不会报错，所以这行日志往往是唯一的线索）
       for (const l of report.looks || []) log.warn?.(`[workshop] ${l.pack}: ${l.reason}`);
+      // 特质授予的盟约写歪了 / 指向不存在的盟约（`trait.grantsBonds`，DESIGN §28.49）：与 `looks` 分开的一条
+      // **只读**点名通道。这一格没有它就会安静地什么都不做 —— 而「装了但没反应」正是这一层最坏的那种失败。
+      // 口径是**不拒包**（一条 typo 不该让整包装不上），所以这里只喊，不改数据。
+      for (const g of report.traitGrants || []) log.warn?.(`[workshop] ${g.pack}: ${g.code}: ${g.reason}`);
     }
   }
   return deepFreeze(out);
@@ -117,12 +127,35 @@ let singleton = null;
  * @returns {Readonly<Record<string, any>>}
  */
 export function getData({ dir = DATA_DIR, log = console, workshopDir = WORKSHOP_DIR, excludePacks = null } = {}) {
-  if (!singleton) singleton = loadData(dir, { log, workshopDir, excludePacks });
+  if (!singleton) {
+    singleton = loadData(dir, { log, workshopDir, excludePacks });
+    rememberOfficialBounds(singleton);
+  }
   return singleton;
 }
 
 /** Drop the singleton so the next getData() reloads (tests / hot reload). */
-export function resetData() { singleton = null; }
+export function resetData() {
+  singleton = null;
+  forgetOfficialBounds();
+}
+
+/**
+ * Make `data` the process-wide singleton (deep-frozen) — a match host worker (server/match/host/entry.js, DESIGN **§34**
+ * 上游原文 `§32` P1c) calls it with its content set's merged data before it imports the match: every module of that
+ * worker that reads getData() (the content modules' gameData(), builtinMeta, the sim's default DataSource) then sees the
+ * content set, never the vanilla files. The main process never calls it. The official-bounds cache
+ * (shared/plugins/officialBounds.js, filled by getData() from the vanilla files in the main process) is never filled
+ * from `data` (a plugin must not raise its own caps): the match host installs the content set's snapshot after this
+ * (entry.js), as its pages do (runner.js).
+ * @param {Record<string, any>} data
+ * @returns {Readonly<Record<string, any>>}
+ */
+export function setData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new TypeError('setData: a data object { <file>: record map } is required');
+  singleton = deepFreeze(data);
+  return singleton;
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Index getters

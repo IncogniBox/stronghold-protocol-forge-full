@@ -157,8 +157,50 @@ export function fillPlaceholders(src, values, formats = []) {
 }
 
 /**
+ * 同名装备（基础 `_a` / 进阶 `_b` 两个形态）合并成一句效果文本：两份描述的文字骨架相同（只有数字不同）时，
+ * 把每个位置的数字**相加**；骨架不同就退回用 `；` 连接各自原文。
+ * 源石辅助仪的「已继承的装备」按装备名合并显示时用它（同名装备的数值直接叠加，不按进阶前后分两条）。
+ * @param {Array<{ desc?: string, descRaw?: string }>} recs the same-named item records
+ * @returns {string} rich text (markup kept)
+ */
+export function mergeItemDescs(recs) {
+  const texts = (Array.isArray(recs) ? recs : []).filter(Boolean).map((r) => String(r.descRaw || r.desc || ''));
+  if (texts.length <= 1) return texts[0] || '';
+  const bones = texts.map((s) => s.split(/(\d+(?:\.\d+)?)/));
+  const bone = bones[0];
+  const same = bones.every((b) => b.length === bone.length && b.every((seg, i) => i % 2 === 1 || seg === bone[i]));
+  if (!same) return texts.join('；');
+  return bone.map((seg, i) => {
+    if (i % 2 === 0) return seg;
+    const sum = bones.reduce((a, b) => a + Number(b[i]), 0);
+    return String(Number(sum.toFixed(4)));
+  }).join('');
+}
+
+/**
+ * The description text of an ITEM with its runtime ratio filled in: an item declaring `params.inherit_ratio_per_layer`
+ * and using the `{0}` token in its text (源石辅助仪's 「当前继承效果加成比例：{0}%」) shows
+ * `params.inherit_ratio_per_layer` × the layers its own `params.ratio_bond` names (the same `1 + ratio × L` scale the
+ * battle applies). Any other item (or a caller without `layers`) gets the text unchanged, so an item without the token
+ * is never touched.
+ * @param {{ desc?: string, descRaw?: string, params?: any }|null} item
+ * @param {number|null} [layers] the layers of the bond the item's `params.ratio_bond` names
+ * @returns {string}
+ */
+export function itemDescText(item, layers = null) {
+  const src = item ? (item.descRaw || item.desc || '') : '';
+  const ratio = item && item.params && typeof item.params.inherit_ratio_per_layer === 'number' ? item.params.inherit_ratio_per_layer : null;
+  if (!src || ratio == null || !String(src).includes('{0}')) return src;
+  const L = Number.isFinite(Number(layers)) ? Math.max(0, Number(layers)) : 0;
+  const pct = L * ratio * 100;
+  const shown = Number.isInteger(pct) ? String(pct) : String(Number(pct.toFixed(1)));
+  return String(src).replace('{0}', shown);
+}
+
+/**
  * The bond's in-battle effect text with its layer-dependent numbers resolved (DATA.md §3:
- * `{i:fmt}` = `bb[base] + bb[perStack] × layers`).
+ * `{i:fmt}` = `bb[base] + bb[perStack] × layers`, plus `floor(layers / bb[perStep])` when the param declares
+ * `perStep` — 哥伦比亚's 「视为额外携带 N 件装备（每 50 层 +1）」).
  * @param {any} bond bonds.json record
  * @param {number} [layers]
  * @returns {string} rich text (markup kept)
@@ -175,10 +217,16 @@ export function formatBondEffect(bond, layers = 0) {
     if (!p || !Number.isInteger(p.index)) continue;
     const base = Number(bb[p.base]) || 0;
     const per = Number(bb[p.perStack]) || 0;
+    // `perStep`：每 `bb[perStep]` 层 **+1** —— 与 sim 那条 floor 同源（哥伦比亚「视为额外携带 N 件装备（每 50 层
+    // +1）」= `extra_carry + floor(层数 / extra_carry_per_layer)`，workshop/columbia/battle/main.mjs）。只按层数
+    // 递进、不乘比例的参数（`perStack: null`）走这一支；两条同时声明时相加。
+    const step = p.perStep != null ? Number(bb[p.perStep]) : 0;
+    const plus = Number.isFinite(step) && step > 0 ? Math.floor(L / step) : 0;
     // a layer-scaled chance (迅捷 / 不屈 base_prob + prob_per_stack, 奇迹 baseprob + prob) stops at 100 % like the sim's
     // min(1, …) (bonds/addon procChance, meta.js 奇迹) — the card read 124 % at 266 layers (GitHub #108)
     const chance = /prob/i.test(`${p.base}|${p.perStack}`);
-    values[p.index] = chance ? Math.max(0, Math.min(1, base + per * L)) : base + per * L;
+    const value = base + per * L + plus;
+    values[p.index] = chance ? Math.max(0, Math.min(1, value)) : value;
     formats[p.index] = p.format || '0';
   }
   return fillPlaceholders(src, values, formats);

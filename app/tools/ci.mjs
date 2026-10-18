@@ -9,7 +9,7 @@
 //
 // Steps, in the order of ci.yml (job `test`, then job `tooling`):
 //   setup      node tools/setup.mjs --check --no-local
-//   test       node --test
+//   test       node --test --import ./test/official-data.mjs
 //   smoke      the server on a free port on 127.0.0.1: GET /healthz, / (must contain <html) and /vendor/pixi.min.js,
 //              then node tools/doctor.mjs (its exit code is ignored, like `|| true` in ci.yml), then the server stops
 //   lint       eslint .                                   (npm run lint; warnings do not fail it)
@@ -52,7 +52,7 @@ export const SKIPPED_CI_STEPS = [
  */
 export const STEPS = [
   { id: 'setup', ci: { job: 'test', name: 'Setup check (no downloads)' }, describe: 'node tools/setup.mjs --check --no-local' },
-  { id: 'test', ci: { job: 'test', name: 'Unit & integration tests' }, describe: 'node --test' },
+  { id: 'test', ci: { job: 'test', name: 'Unit & integration tests' }, describe: 'node --test --test-concurrency=8 --import ./test/official-data.mjs' },
   { id: 'smoke', ci: { job: 'test', name: 'Server smoke test (boot, /healthz, index.html, doctor)' },
     describe: `server on a free port: GET ${SMOKE_PATHS.join(', ')}; node tools/doctor.mjs` },
   { id: 'lint', ci: { job: 'tooling', name: 'Lint (warnings allowed)' }, npm: 'lint', describe: 'eslint .' },
@@ -323,7 +323,7 @@ async function smoke(env) {
 function runStep(step, env) {
   switch (step.id) {
     case 'setup': return node(['tools/setup.mjs', '--check', '--no-local'], env);
-    case 'test': return node(['--test'], env);
+    case 'test': return node(['--test', '--test-concurrency=8', '--import', './test/official-data.mjs'], env);
     case 'smoke': return smoke(env);
     case 'lint': return node([binPath('eslint', 'eslint'), '.'], env);
     case 'imports': return node(['tools/check-imports.mjs'], env);

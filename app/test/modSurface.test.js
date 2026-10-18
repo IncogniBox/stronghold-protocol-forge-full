@@ -21,6 +21,44 @@ import * as simDir from '../server/sim/dir.js';
 import * as targeting from '../server/sim/targeting.js';
 import * as constants from '../server/sim/constants.js';
 import { validateKit, kitErrors } from '../shared/kitAuthoring.js';
+import * as workshopSchema from '../shared/workshop.js';
+import * as kitImports from '../shared/kitImports.js';
+import * as extensions from '../public/js/ui/extensions.js';
+import * as packForms from '../shared/packForms.js';
+// 本批新增的锚点模块（§28.31 / §28.32）：指标快照、动态只读端点的判据、以及 boot 快照的白名单。
+import * as hostMetrics from '../server/hostMetrics.js';
+import * as routeMount from '../server/http/routeMount.js';
+import * as modModules from '../server/modModules.js';
+// §28.59（绑定票据）：这一格的两半 —— **签票的工厂**与**进程级单例** —— 都住在 `server/bindTickets.js`，
+// 锚点写清 `module: 'bindTickets'`，这里把它登记进 `ANCHOR_MODULES` 让守卫认识它（与 `enabled` / `callBudget`
+// 同一条做法：判据与它自己的模块在一起）。
+import * as bindTicketsModule from '../server/bindTickets.js';
+// 第 5 刀（§28.40）：素材加载源的**排序面**。它不是 `pack.json` 里的一格，而是面板模块的一个导出，所以锚点只能
+// 落在引擎自己那一端的模块上 —— 与 `extensions`（`client.panels.me` 用）同一条做法。
+import * as sources from '../public/js/resources/sources.js';
+// §28.58（账号面）：`ctx.cloud` 那一格的全部内容就是一张**闭白名单**（`CLOUD_PREF_KEYS`）加三个拒绝码，三样都住在
+// `public/js/ui/cloudPrefs.js`。与 `sources.js` / `enabled` 同一条做法：表与它自己的判据在一起，锚点写清
+// `module: 'cloudPrefs'`，这里把它登记进 `ANCHOR_MODULES` 让守卫认识它。
+import * as cloudPrefs from '../public/js/ui/cloudPrefs.js';
+// 第 4 刀（§28.43）：行为开关的**闭枚举表**。它与口径表（`shared/variants.js`）同一个形状，但它是「一个包可以
+// 写哪几个开关 / 哪几个选项」的那张表 —— 写错的名字被 `BEHAVIOUR_UNKNOWN_SWITCH` 点名整包拒，所以它必须被锚住，
+// 与 `FORM_TABLES` / `ASSETS_MIRROR_FIELDS` 同一条纪律。
+import * as behaviour from '../shared/behaviour.js';
+// `enabled` 一格住在自己的模块里（与 `behaviour` / `packForms` 同一条做法：判据与它自己的解析器在一起），
+// 所以锚点写清 `module: 'enabled'`，这里把它登记进 `ANCHOR_MODULES` 让守卫认识它。
+import * as enabledModule from '../shared/enabled.js';
+// 调用预算（§28.52）：常量、闭集与那个「两端同规则」的记账规则只有一份，住在 `shared/callBudget.js`。
+import * as callBudgetModule from '../shared/callBudget.js';
+import * as pool from '../server/match/pool.js';
+import * as economy from '../server/match/player/economy.js';
+import * as platform from '../server/match/match/platform.js';
+import * as morph from '../shared/morph.js';
+// 第 8 刀第四格 `unequip` 的读取点住在这里（`server/match/player/items.js`，模块层纯函数 `unequipAllowed`）。
+import * as items from '../server/match/player/items.js';
+import {
+  MOD_SURFACE, MOD_SURFACE_IDS, MOD_SURFACE_FROZEN, surfaceLedgerIssues,
+} from '../shared/modSurface.js';
+import { MOD_API_VERSION } from '../shared/constants.js';
 
 const load = (f) => JSON.parse(readFileSync(new URL(`../data/${f}.json`, import.meta.url), 'utf8'));
 const BACKUPS = load('backups');
@@ -226,5 +264,139 @@ test('活体 Battle 上的运行时成员与事件名：社区 kit 直接调的�
     const hooked = b.on(ev, () => {});
     assert.ok(hooked === undefined || hooked === b || typeof hooked === 'object',
       `battle.on('${ev}') 的返回值形状变了（社区 kit 忽略返回值，但不能抛错）`);
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------
+// 五、**工坊包**能依赖的表面清单（`shared/modSurface.js` + docs/MOD-SURFACE.md）。
+//
+// 与上面四条的分工：那些钉的是**就地补丁式** mod 依赖的通用名；这五条钉的是**声明层 ABI** —— 引擎会被上游移植整段
+// 改写（lobby / match / screens 都换过），中间层不能靠「没人会动它」活着。业主 2026-10-10 的问题原话：
+// 「如果改动引擎，我们的中间层可能又被覆盖，那怎么办呢」——答案就是这几条断言。
+// ---------------------------------------------------------------------------------------------------
+const WORKSHOP_MD = readFileSync(new URL('../docs/MOD-SURFACE.md', import.meta.url), 'utf8');
+const MOD_LAYER_MD = readFileSync(new URL('../docs/design/mod-layer.md', import.meta.url), 'utf8');
+
+/** 锚点符号住在哪个模块。默认是 schema（`shared/workshop.js`）；kit import 面住 `shared/kitImports.js`；
+ *  客户端那一格（`ctx.me` / 宿主键）住 `public/js/ui/extensions.js`（引擎自己那一端的契约表）。 */
+const ANCHOR_MODULES = { schema: workshopSchema, kitImports, extensions, packForms, hostMetrics, routeMount, modModules, sources, cloudPrefs, behaviour, enabled: enabledModule, callBudget: callBudgetModule, pool, economy, platform, morph, items, bindTickets: bindTicketsModule };
+
+test('表面清单：每一条的锚点符号都还在它声明的模块里，成员一个不少', () => {
+  assert.ok(MOD_SURFACE.length > 0, '表面清单不能是空的');
+  for (const s of MOD_SURFACE) {
+    for (const a of s.anchors) {
+const mod = ANCHOR_MODULES[a.module || 'schema'];
+      assert.ok(mod, `表面 "${s.id}" 的锚点声明的模块 "${a.module}" 不在 ANCHOR_MODULES 里（守卫不认识它）`);
+      assert.ok(a.symbol in mod,
+        `表面 "${s.id}" 锚在 ${a.symbol} 上，但 ${a.module || 'shared/workshop.js'} 不再导出这个名字（改名/挪走 = 打断所有用它的包）`);
+      if (a.members) {
+        const list = mod[a.symbol];
+        for (const m of a.members) {
+          assert.ok(Array.isArray(list) ? list.includes(m) : m in list,
+            `表面 "${s.id}"：${a.symbol} 里不再有 "${m}" —— 这一格没了，包写下的声明会被 ${a.symbol === 'SERVER_MEMBERS' ? 'SERVER_UNKNOWN_FIELD' : '未知字段'} 拒掉`);
+        }
+      }
+    }
+  }
+});
+
+test('表面清单：实现文件、测试文件、设计稿小节、本文档的那一行都还在', () => {
+  for (const s of MOD_SURFACE) {
+    for (const f of s.files) {
+      assert.ok(existsSync(new URL(`../${f}`, import.meta.url)), `表面 "${s.id}" 的实现文件 ${f} 不在了`);
+    }
+    for (const t of s.tests) {
+      const u = new URL(`../${t}`, import.meta.url);
+      assert.ok(existsSync(u), `表面 "${s.id}" 的测试文件 ${t} 不在了（没有测试钉的表面，等于没有表面）`);
+      assert.match(readFileSync(u, 'utf8'), /test\(/, `表面 "${s.id}" 的 ${t} 里一条 test() 都没有`);
+    }
+    assert.ok(MOD_LAYER_MD.includes(s.spec.slice(1)),
+      `表面 "${s.id}" 指向设计稿 ${s.spec}，但 docs/design/mod-layer.md 里没有这一节`);
+    assert.ok(WORKSHOP_MD.includes(`\`${s.id}\``),
+      `表面 "${s.id}" 没有写进 docs/MOD-SURFACE.md（表与文档必须同时有一行）`);
+  }
+});
+
+test('表面清单：引擎里每一个「包可声明的名单」都被某条表面引用（加了一格却没进清单也红）', () => {
+  // 这份名单本身也要是真实导出 —— 否则它自己会烂掉，而它正是「新加的格子有没有被漏掉」的判据。
+  // 名单按「符号 + 它在哪个模块」列，和锚点同一套写法：一半在 schema（shared/workshop.js），
+  // 一半在 import 面（shared/kitImports.js，kit 与战斗/房间载荷共用的白名单前缀）。
+  const SURFACE_LISTS = [
+    ['PACK_FIELDS', 'schema'], ['WORKSHOP_CONTENT_FILES', 'schema'], ['UNIT_REQUIRED_FIELDS', 'schema'],
+    // 形态通道的三张名单（DESIGN §28.29）：表名 / 形态名形状 / `roles` 的角色键。它们都是「一个包可以写哪几个
+    // 键」的那一类，所以与 `SKIN_FIELDS` / `ART_TABLES` 同一条：必须被某一格表面锚住。
+    ['FORM_TABLES', 'packForms'], ['FORM_KIND_RE', 'packForms'], ['FORM_ROLE_KEYS', 'packForms'],
+    // 时装的字段清单：与 `ART_TABLES` 同一个理由 —— 它是「一个包可以写哪几个键」的那张表，
+    // 而写错的名字会被点名拒绝（SKIN_UNKNOWN_FIELD），所以它必须被某一格表面锚住。
+    ['SKIN_FIELDS', 'schema'],
+    ['OVERRIDE_ENTRY_RE', 'schema'], ['WORKSHOP_MEDIA_PREFIX', 'schema'], ['WORKSHOP_PANEL_PREFIX', 'schema'],
+    ['ART_TABLES', 'schema'],
+    ['CLIENT_PANEL_SLOTS', 'schema'], ['CLIENT_PANEL_REPEATABLE', 'schema'],
+    ['CLIENT_PANEL_DATA_TABLES', 'schema'], ['CLIENT_REQUIRES', 'schema'],
+    ['CLIENT_WRAP_COMPONENTS', 'schema'], ['CLIENT_WRAP_MODES', 'schema'],
+    ['SERVER_MEMBERS', 'schema'], ['SERVER_MODULE_USES', 'schema'], ['META_KEY_CLASSES', 'schema'],
+    ['ROUTE_CACHE_POLICIES', 'schema'], ['ASSETS_SERVER_POLICIES', 'schema'],
+    ['ASSETS_VERIFY_ALGORITHMS', 'schema'], ['PACK_ID_RE', 'schema'],
+    ['KIT_IMPORT_PREFIXES', 'kitImports'], ['KIT_IMPORT_FILES', 'kitImports'],
+    ['BATTLE_IMPORT_PREFIXES', 'kitImports'], ['ROOM_IMPORT_PREFIXES', 'kitImports'],
+    // 本批新增的三张「包可声明的名单」+ 两张判据表：与上面同一条纪律 —— 新加一格必须同时进表面清单与
+    // docs/MOD-SURFACE.md。`TRANSPORT_FIELDS` 是 `pack.json.server.transport` 的字段闭集，
+    // `VOICE_CDN_FIELDS` / `VOICE_CDN_AUDIO_EXTS` 是 `{ url, sha256, file }` 那条通道的字段闭集与扩展名白名单，
+    // `RESERVED_ROUTE_PREFIXES` / `DYNAMIC_ROUTE_CACHE_POLICIES` 是动态端点那两条判据，
+    // `HOST_METRICS_FIELDS` / `BOOT_CONFIG_ENV_KEYS` 是包能读到的东西的两个闭集。
+    ['TRANSPORT_FIELDS', 'schema'], ['VOICE_CDN_FIELDS', 'schema'], ['VOICE_CDN_AUDIO_EXTS', 'schema'],
+    // 第 5 刀（§28.40）：镜像条目的字段闭集 —— 与 `VOICE_CDN_FIELDS` 同一类（写错的名字被
+    // `ASSETS_MIRROR_UNKNOWN_FIELD` 点名拒绝），所以它必须被某一格表面锚住。
+    ['ASSETS_MIRROR_FIELDS', 'schema'],
+    // 第 4 刀（§28.43）：行为开关的闭枚举表 —— 与 `FORM_TABLES` / `ASSETS_MIRROR_FIELDS` 同一类（写错的开关名被
+    // `BEHAVIOUR_UNKNOWN_SWITCH` 点名拒绝），所以它必须被某一格表面锚住。它住在自己的模块里（不是 schema），
+    // 与 `packForms` 同一条做法：表与它自己的解析器在一起，锚点写清 `module`。
+    ['BEHAVIOUR_SWITCHES', 'behaviour'],
+    // §28.46：目标引擎的两条名单 —— 与 `PACK_FIELDS` / `CLIENT_PANEL_SLOTS` 同一类（写错的值被
+    // `PACK_TARGET_UNKNOWN` 点名拒绝），所以两条都必须被 `target` 那一格锚住。
+    ['PACK_TARGETS', 'schema'], ['STARDUST_TARGET_FIELDS', 'schema'],
+    ['HOST_METRICS_FIELDS', 'hostMetrics'], ['BOOT_CONFIG_ENV_KEYS', 'modModules'],
+    ['RESERVED_ROUTE_PREFIXES', 'routeMount'], ['DYNAMIC_ROUTE_CACHE_POLICIES', 'routeMount'],
+  ];
+  const anchored = new Set(MOD_SURFACE.flatMap((s) => s.anchors.map((a) => `${a.module || 'schema'}:${a.symbol}`)));
+  for (const [sym, mod] of SURFACE_LISTS) {
+    assert.ok(sym in ANCHOR_MODULES[mod], `判据列了 ${mod}:${sym}，但它不是那个模块的导出（判据自己烂了）`);
+    assert.ok(anchored.has(`${mod}:${sym}`),
+      `${mod}:${sym} 是「包可声明的一格」，但没有一条表面锚在它上面 —— 新加一格必须同时进 shared/modSurface.js 与 docs/MOD-SURFACE.md`);
+  }
+});
+
+test('表面清单：一个世代里不许悄悄拿掉一格（账本的失败分支自己也被测）', () => {
+  assert.deepEqual(surfaceLedgerIssues(MOD_SURFACE_IDS, MOD_API_VERSION), [], '今天的表必须满足今天世代的冻结账本');
+  assert.ok(MOD_SURFACE_FROZEN[String(MOD_API_VERSION)],
+    `没有世代 ${MOD_API_VERSION} 的冻结账本：这一代没有任何防删保护`);
+  // 账本必须是**手抄的字面量**，不能是 MOD_SURFACE 自己派生出来的那份数组。是同一个对象的话，
+  // `surfaceLedgerIssues` 的 `have.has(id)` 永远成立 —— 这个守卫在真实代码路径上恒真，只能靠下面那行
+  // 合成输入才「红」一次，也就是一个装饰品（比没有守卫更坏：它让人以为有保护）。
+  assert.notEqual(MOD_SURFACE_FROZEN[String(MOD_API_VERSION)], MOD_SURFACE_IDS,
+    '冻结账本与 MOD_SURFACE_IDS 是同一个数组对象 ⇒ 删掉一格时账本跟着一起少一格，守卫永远不会红');
+  // 失败分支：少一格必须被点名。只验「今天是对的」的守卫，和没有守卫是一回事。
+  const missing = MOD_SURFACE_IDS.filter((id) => id !== 'server.battle');
+  const issues = surfaceLedgerIssues(missing, MOD_API_VERSION);
+  assert.equal(issues.length, 1, '少一格必须正好报一条');
+  assert.match(issues[0], /server\.battle/, '报的必须是少掉的那一格');
+  assert.match(issues[0], /MOD_API_VERSION/, '理由里必须说清「删格要抬世代并写迁移」');
+  // 没登记过的世代要明说自己没有账本，而不是默默通过。
+  assert.match(surfaceLedgerIssues(MOD_SURFACE_IDS, 999)[0] ?? '', /没有任何防删保护|冻结账本/);
+});
+
+test('表面清单：一行的字段齐、id 不重复、层次合法', () => {
+  const seen = new Set();
+  for (const s of MOD_SURFACE) {
+    assert.match(s.id, /^[a-z][A-Za-z0-9._]*$/, `表面 id "${s.id}" 形状不对（会被文档与守卫当成键用）`);
+    assert.ok(!seen.has(s.id), `表面 id 重复：${s.id}`);
+    seen.add(s.id);
+    assert.ok(['A', 'B', 'C'].includes(s.layer), `表面 "${s.id}" 的 layer 必须是 A/B/C`);
+    assert.ok(s.decl && s.decl.length > 0, `表面 "${s.id}" 没有写声明路径`);
+    assert.ok(Array.isArray(s.requires) && s.requires.length > 0,
+      `表面 "${s.id}" 没写 requires —— 「这一格不是白给的」必须落在纸上`);
+    assert.ok(Array.isArray(s.files) && s.files.length > 0, `表面 "${s.id}" 没有实现文件`);
+    assert.ok(Array.isArray(s.tests) && s.tests.length > 0, `表面 "${s.id}" 没有钉它的测试`);
+    assert.match(s.spec, /^§28\.\d+$/, `表面 "${s.id}" 的 spec 要写成 §28.NN`);
   }
 });

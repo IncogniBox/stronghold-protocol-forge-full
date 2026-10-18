@@ -130,10 +130,19 @@ describe('mod identity: entering a modded room needs the client to confirm the c
     assert.equal(validateC2S({ t: 'room.join', code: 'ABCD', mods: digest }), null);
     assert.equal(validateC2S({ t: 'room.join', code: 'ABCD', mods: 'nope' }), 'bad field mods');
     assert.equal(validateC2S({ t: 'room.join', code: 'ABCD', mods: 42 }), 'bad field mods');
-    assert.deepEqual(C2S['room.join'].$optional, ['mods']);
+    // W7（DESIGN §28.53）：`room.join` 多一格**可选**的 `consent` —— 进一个声明了模组集合的房间要每名真人明确同意。
+    // 它**不是** `modIds` 那一类（加入者仍不许提集合）：`consent` 说的是「我同意跑**这一房声明的那一份字节**」，
+    // 一个布尔，改不了集合。与 `mods` 并列而不是合并，因为那是两种表态（握手 vs 表态）。
+    assert.deepEqual(C2S['room.join'].$optional, ['mods', 'consent']);
+    assert.equal(validateC2S({ t: 'room.join', code: 'ABCD', consent: true }), null, '同意这一格收 true');
+    assert.equal(validateC2S({ t: 'room.join', code: 'ABCD', consent: null }), null, '显式 null = 没同意，形状层收');
+    assert.equal(validateC2S({ t: 'room.join', code: 'ABCD', consent: 'yes' }), 'bad field consent', '只有 true 算同意');
     // W-A (DESIGN §28.9): `room.create` gained `modIds` — the packs a ROOM declares, a subset of what this server
     // loaded. `room.join` deliberately did not: a room set is the host's to declare, never a joiner's.
-    assert.deepEqual(C2S['room.create'].$optional, ['mods', 'modIds']);
+    // 房内聊天（docs/META.md §1.8）又加了 `chatMode`：同样是**房主建的那个房间**的属性，不是加入者的。
+    // 本房座位上限 (业主裁决 B5, docs/META.md §1.9) 再加 `seatCap`：房主选的座位数，同样是房主这一侧的。
+    // 开发者模式（工坊包 dev-ext 的「全量模拟」）再加 `dev` / `stage`：房主建的那个房间直接进战斗 / 强制打哪张图。
+    assert.deepEqual(C2S['room.create'].$optional, ['mods', 'modIds', 'chatMode', 'seatCap', 'dev', 'stage']);
   });
 });
 

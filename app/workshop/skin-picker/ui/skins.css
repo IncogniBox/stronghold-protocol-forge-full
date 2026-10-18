@@ -1,0 +1,104 @@
+/* 时装切换面板（工坊包 skin-picker）—— 挂在 `screen.loadout.card`（干员调配 的详情卡 .lo-dhead）。
+ *
+ * 定位：宿主 `.mod-host` 是 `display: contents`（public/css/components.css:1078），注册点造的 `.mod-panel` 于是
+ * 会成为 `.lo-dhead`（display: grid）的一个 grid item —— 直接放着会给卡片多出一行。所以这里把 `.mod-panel` 本身
+ * 绝对定位到卡片右上角（`position: absolute` 把它挪出 grid，不占行），面板内容用它的静态流。
+ * `.lo-dhead` 是 `position: relative`（与 `.lo-dhead__reset` 同一个锚点系统），红圈处 = `恢复默认` 下方一点。
+ * 引擎对「组件内的宿主」默认关掉了点击（`.mod-host[data-mod-slot] > .mod-panel { pointer-events: none }`，
+ * 与本规则同权重、真身在 components.css，本表注入在 `<head>` 末尾 ⇒ 后到者胜），所以这里显式打开。 */
+
+.lo-dhead .mod-host > .mod-panel {
+  position: absolute;
+  /* `恢复默认` 是 `position: absolute; top: .12rem`、高约 .48rem ⇒ 它的下沿在 .6rem；这里从 .7rem 起，
+     与它拉开一段距离（否则两个按钮相叠、点击被它截获）。z-index 再抬一层，双保险。 */
+  top: .7rem;
+  right: .12rem;
+  z-index: 4;
+  pointer-events: auto;
+}
+
+/* 对局里的干员详情面板（ui/detailPanel.js 的 `.dpanel`，宿主 `screen.loadout.detail`）—— 若某天也挂到这里，
+   锚到面板右上角（`.dpanel__close` 是 .08rem 起、.38rem 见方，故从 .56rem 起）。 */
+.dpanel > .mod-host > .mod-panel { position: absolute; top: .56rem; right: .28rem; z-index: 4; pointer-events: auto; }
+
+/* 自选编队那一屏（`screen.diy.card`，宿主在 `.diy-slot__idrow` 里、干员名字与职业的右边）：面板留在静态流里（就是
+   名字那一行的末尾），`flex: none` 让它别被名字挤扁；`position: relative` 让浮层锚到**面板自己**身上（否则它会落到
+   卡片的角落）。引擎对「组件内的宿主」默认关掉了点击（同一条 components.css 规则），这里照 `.lo-dhead` 那一段的
+   做法显式打开。 */
+.diy-slot .mod-host > .mod-panel { position: relative; flex: none; z-index: 4; pointer-events: auto; }
+
+.sp-skins {
+  z-index: 3;
+  font-size: calc(.14 * var(--t));
+}
+
+.sp-skins__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .05rem;
+  height: .3rem;
+  padding: 0 .12rem;
+  background: var(--bg-glass);
+  color: var(--text-hi);
+  border: 1px solid var(--line-2);
+  clip-path: polygon(0 0, calc(100% - .08rem) 0, 100% .08rem, 100% 100%, .08rem 100%, 0 calc(100% - .08rem));
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sp-skins__btn::after { content: '▾'; color: var(--gold); font-size: .82em; }
+.sp-skins__btn:hover { border-color: var(--line-3); color: #fff; }
+.sp-skins__btn.is-open { border-color: var(--gold); color: #fff; }
+
+.sp-skins__pop {
+  position: absolute;
+  top: calc(100% + .06rem);
+  right: 0;
+  width: 2.6rem;
+  max-height: 3.4rem;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .04rem;
+  padding: .06rem;
+  background: var(--bg-1);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 .12rem .3rem rgba(0, 0, 0, .5);
+}
+
+.sp-skins__pop[hidden] { display: none; }
+
+.sp-skins__tile {
+  display: flex;
+  align-items: center;
+  gap: .08rem;
+  width: 100%;
+  padding: .05rem;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-2);
+  border: 1px solid transparent;
+  color: var(--text-md);
+}
+
+.sp-skins__tile:hover { border-color: var(--line-3); color: var(--text-hi); }
+.sp-skins__tile.is-on { border-color: var(--gold); color: var(--text-hi); background: var(--gold-a20); }
+.sp-skins__tile.is-off { opacity: .45; cursor: not-allowed; }
+
+.sp-skins__art {
+  flex: none;
+  width: .52rem;
+  height: .52rem;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--bg-3);
+}
+
+.sp-skins__art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.sp-skins__text { display: flex; flex-direction: column; gap: .01rem; min-width: 0; }
+.sp-skins__name { font-size: calc(.15 * var(--t)); font-weight: 600; }
+.sp-skins__group { color: var(--text-lo); font-size: calc(.12 * var(--t)); letter-spacing: .04em; }
+.sp-skins__badge { margin-left: auto; flex: none; color: var(--gold); font-size: calc(.12 * var(--t)); }
+.sp-skins__badge.is-off { color: var(--text-dim); }

@@ -9,14 +9,24 @@
 // client now gets with a teammate's units (prep scouting UnitInfo, the battle's UnitInfo).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { makeMatch, give, giveItem, DATA, legalTileFor } from './harness.js';
+import { loadData } from '../../server/data.js';
 import { unitBonds, isMember } from '../../server/sim/content/support/index.js';
 import { unitInfo } from '../../server/sim/snapshot.js';
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const quiet = { info() {}, warn() {}, error() {}, debug() {}, log() {} };
 const ISO = 'chess_item_6_09_e_a';
 const ISO_B = 'chess_item_6_09_e_b';
 const HAMMER = 'chess_item_1_01_e_a';
-const GRANTS = Object.values(DATA.items).filter((r) => r.giveBondId).map((r) => r.id).sort();
+/**
+ * 官方那 18 件（9 件 × 普通 / 精锐）**在这里数**，不是从合并后的 `DATA` 里数：本机装的工坊包
+ * （多索雷斯 / 雷姆必拓）也带来带 `giveBondId` 的装备，合并后的 DATA 会比官方的 36 多几条 ——
+ * 这一节钉的是官方那一份（`workshopDir: null` = 不叠加任何包）。
+ */
+const OFFICIAL_ITEMS = loadData(join(ROOT, 'data'), { log: quiet, workshopDir: null }).items;
 
 /** A target chess outside `bond` (and not 调和: its +1 would blur the count). */
 const outsider = (bond) => Object.values(DATA.chess).find((c) => c.visible && !c.isGolden && c.tier <= 2 && !c.bonds.includes(bond) && !c.bonds.includes('maniShip')).chessId;
@@ -73,7 +83,7 @@ test('缪尔赛思 hands out 变形同构体 on purchase (garrison_76), the boug
 });
 
 test('every pairing (18 bond items × normal / golden, both 变形同构体): the wearer counts in prep, in the views, in the battle input and in the real battle', () => {
-  const grants = Object.values(DATA.items).filter((r) => r.giveBondId);
+  const grants = Object.values(OFFICIAL_ITEMS).filter((r) => r.giveBondId);
   assert.equal(grants.length, 36);
   assert.equal(new Set(grants.map((r) => r.giveBondId)).size, 14, '14 bonds have a bond item (the official talent\'s list)');
   for (const r of grants) {
@@ -108,11 +118,14 @@ test('bench vs board, half pairs, two 变形同构体, the equip order, distinct
   // half pairs grant nothing
   wearer(h, 'p_0', target, [HAMMER]);
   assert.equal(count(ps, bond), 0, 'the bond item alone');
+  // A normal plus its golden occupy 3 of the tier-VI cap. The lone copy is a separate match so the pair can sit at that cap.
+  const alone = prep({ fake: true });
+  wearer(alone, 'p_0', target, [ISO]);
+  assert.equal(count(alone.ps('p_0'), bond), 0, '变形同构体 alone');
   const h2 = prep({ fake: true });
-  wearer(h2, 'p_0', target, [ISO]);
   const other = Object.values(DATA.chess).find((c) => c.visible && !c.isGolden && c.tier <= 2 && !c.bonds.includes(bond) && c.chessId !== target).chessId;
   wearer(h2, 'p_0', other, [ISO, ISO_B]);
-  assert.equal(count(h2.ps('p_0'), bond), 0, '变形同构体 alone / two of them');
+  assert.equal(count(h2.ps('p_0'), bond), 0, 'two of them');
   // order: 变形同构体 first
   const h3 = prep({ fake: true });
   const w = wearer(h3, 'p_0', target, [ISO, HAMMER], { board: false });
@@ -136,7 +149,7 @@ test('bench vs board, half pairs, two 变形同构体, the equip order, distinct
   const h5 = prep({ fake: true });
   wearer(h5, 'p_0', members(bond)[0], [ISO, HAMMER]);
   assert.equal(count(h5.ps('p_0'), bond), 1);
-  for (const x of [h, h2, h3, h4, h5]) x.invariants();
+  for (const x of [h, alone, h2, h3, h4, h5]) x.invariants();
 });
 
 test('a teammate\'s views: m.public counts the wearer; the scouting UnitInfo and the battle\'s UnitInfo carry the items', () => {

@@ -52,22 +52,38 @@
 // left as they are; fonts are not rebuilt — the manifest keeps its current
 // `fonts`).
 //
+// Three transport knobs, all opt-in (a run without them behaves exactly as
+// before, byte for byte):
+//   --asset-base=<url>  download the files from another host that mirrors the
+//                       raw.githubusercontent.com layout (a CDN). --index-base
+//                       does the same for the three upstream indexes; the two are
+//                       independent. A malformed URL is refused by name, never
+//                       silently ignored.
+//   --index-ttl=<hours> treat a cached index older than this as stale and
+//                       re-download it; without it a parsable cache is used
+//                       however old it is.
+//   --cache-dir=<dir>   where .cache lives (the ledger, the report, the spine
+//                       cache, the indexes); default .cache.
+// An interrupted download resumes: the body streams into a stable `<file>.part`
+// that the next run continues from with `Range` (when the source honours it), and
+// the ledger records a sha256 that an existing file is checked against.
+//
 // Usage: node tools/fetch-assets.mjs [--concurrency=16] [--force] [--offline]
 //                                    [--dry-run] [--refresh-index] [--prune]
 //                                    [--allow-shrink] [--add-only] [--strict]
-//                                    [--local-spines] [--help]
+//                                    [--local-spines] [--no-optional-voice] [--help]
 
 import { readFile, writeFile, mkdir, rename, readdir, unlink } from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Downloader } from './assets/downloader.mjs';
+import { Downloader, PART_SUFFIX } from './assets/downloader.mjs';
 import { restartForEnvProxy } from './assets/env-proxy.mjs';
 import { MirrorPolicy, selectDownloadSource, validateSource } from './assets/network.mjs';
-import { normalizeProxyPrefix } from './assets/sources.mjs';
+import { normalizeProxyPrefix, normalizeAssetBase, baseIsUntrusted, baseWarnings } from './assets/sources.mjs';
 import { loadIndexes } from './assets/cache.mjs';
 import { indexAudio, VOICE_DIRS } from './assets/audio.mjs';
-import { buildPlan } from './assets/plan.mjs';
+import { buildPlan, VOICE_OPTIONAL_TREES } from './assets/plan.mjs';
 import {
   processModels, findLocalEnemyModels, findLocalTokenModels, localSpineMeta, loadLocalSpines, LOCAL_ENEMY_SPINES_FILE,
   LOCAL_TOKEN_SPINES_FILE, LOCAL_ENEMY_SPINE_DIR, LOCAL_TOKEN_SPINE_DIR,
@@ -75,13 +91,18 @@ import {
 import { collectLeaves, downloadLeaves, resolveTemplate, totalBytes, contentHash, droppedEntries, MANIFEST_VERSION } from './assets/manifest.mjs';
 import { fontJobs, buildFonts } from './assets/fonts.mjs';
 import { skelParserAvailable } from './assets/skel.mjs';
+import { statsTemplateJobs } from './assets/stats-template.mjs';
+import { SourceVerifier } from './assets/source-verifier.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ASSETS = join(ROOT, 'public', 'assets');
 const FONTS = join(ROOT, 'public', 'fonts');
-const CACHE = join(ROOT, '.cache');
+const DEFAULT_CACHE_DIR = '.cache';
 const MANIFEST = join(ROOT, 'data', 'assets.json');
-const REPORT = join(CACHE, 'assets-report.json');
+/** Where the run's cache lives; `` main() `` replaces it from --cache-dir / SP_CACHE_DIR (default: `.cache`). */
+let CACHE = join(ROOT, DEFAULT_CACHE_DIR);
+/** The last run's report; `` main() `` replaces it together with CACHE. */
+let REPORT = join(CACHE, 'assets-report.json');
 /**
  * The local-client model overlays (spineLocal): the committed metadata file, where extract.py writes the models (under
  * public/assets), how to find them, and the file's `about` line.
@@ -103,6 +124,8 @@ const HELP = `Usage: node tools/fetch-assets.mjs [options]
   --concurrency=N   parallel downloads (default 16)
   --asset-source=M  direct (default) or mirror (opt-in; no public-IP lookup)
   --force           re-download files even when present
+  --source-snapshot=PATH verify raw bytes against pinned Git trees in a JSON snapshot
+                    (incompatible with --offline / --add-only / --local-spines)
   --offline         no network: post-process what is on disk and rebuild data/assets.json
   --dry-run         print the plan and exit
   --refresh-index   re-download the audio_data.json / charword_table.json / models_data.json indexes
@@ -114,6 +137,9 @@ const HELP = `Usage: node tools/fetch-assets.mjs [options]
                     audio.voiceJp (upstream 0.2.2's 日本語 tree) is planned as well and is always the JP dub.
   --voice-all       plan every official voice slot, including the prep-only lines no battle plays
                     (干员报到 / 编入队伍 / 任命队长; 360 files / 19.3 MB more per run — off by default)
+  --optional-voice  also plan upstream 0.3.0's extra dub trees beside audio.voiceLangs: audio.voiceEn / voiceKr /
+                    voiceNative (the operator's own-language dub) and audio.voiceNativeLangType. Off by default
+                    (--no-optional-voice is accepted for an upstream command line and means the same "off")
   --prune           delete files under public/assets that the manifest no longer references
                     (public/assets/local/** of tools/local-extract is never deleted); implies --allow-shrink
   --allow-shrink    write data/assets.json even when it loses entries the current one has
@@ -126,12 +152,25 @@ const HELP = `Usage: node tools/fetch-assets.mjs [options]
   --local-spines    rewrite ${LOCAL_ENEMY_SPINES_FILE} and ${LOCAL_TOKEN_SPINES_FILE} from the
                     enemy and token models extracted by tools/local-extract/extract.py
                     (public/assets/local/spine/enemy/, public/assets/local/spine/token/)
+  --asset-base=URL  download the files from another host that mirrors the
+                    raw.githubusercontent.com layout (a CDN): the host/base is replaced, the
+                    repository path is kept. Unset = the default sources, exactly as before
+                    (SP_ASSET_BASE)
+  --index-base=URL  the same for the three upstream indexes only (audio_data.json,
+                    charword_table.json, models_data.json); independent of --asset-base
+                    (SP_INDEX_BASE)
+  --index-ttl=H     re-download a cached index older than H hours. Unset = never: a parsable
+                    cache is used however old it is (SP_INDEX_TTL)
+  --cache-dir=DIR   where the cache lives (ledger, report, spine cache, indexes). Relative paths
+                    are from the repository root; default ${DEFAULT_CACHE_DIR} (SP_CACHE_DIR)
   --help            this text
 Environment: SP_ASSET_SOURCE sets the default source; SP_GITHUB_PROXY sets the
 HTTPS mirror prefix (default https://gh-proxy.com/; empty disables the proxy);
 SP_ASSETS_STRICT=1 is the same as --strict (CI / packaging builds).
 Mirror attempts have an 8 s response header timeout; response body has a separate idle timeout. Stops for this run after 3 consecutive
-failures. Only explicitly enabled GitHub downloads use the third-party proxy.`;
+failures. Only explicitly enabled GitHub downloads use the third-party proxy.
+An interrupted download resumes from its <file>.part (a source that does not honour
+Range is safely re-downloaded whole); .part files are never pruned.`;
 
 /**
  * True for the usual truthy spellings of a boolean environment variable (`1`, `true`, `yes`, `on`); empty, `0`,
@@ -145,18 +184,23 @@ function envFlag(value) {
 
 /**
  * Parse CLI flags.
+ *
+ * The four transport knobs (`--asset-base`, `--index-base`, `--index-ttl`, `--cache-dir`) are opt-in and default to
+ * today's behaviour; a supplied base URL is validated here, so `--asset-base=https:/cdn` is refused by name instead of
+ * being ignored silently. `parseArgs` never touches the network (tests import it).
  * @param {string[]} argv
- * @returns {{concurrency:number, force:boolean, offline:boolean, dryRun:boolean, refreshIndex:boolean, prune:boolean, allowShrink:boolean, strict:boolean, addOnly:boolean, localSpines:boolean, voiceLang:string, voiceLangs:string[], voiceAll:boolean, help:boolean, source:string}}
+ * @returns {{concurrency:number, force:boolean, offline:boolean, dryRun:boolean, refreshIndex:boolean, prune:boolean, allowShrink:boolean, strict:boolean, addOnly:boolean, localSpines:boolean, voiceLang:string, voiceLangs:string[], voiceAll:boolean, optionalVoice:boolean, help:boolean, source:string, assetBase:string, indexBase:string, indexTtl:number, cacheDir:string}}
  */
 export function parseArgs(argv) {
   // `jp` is the default dub since 0.9.0 (the released bundle ships Japanese; shared/constants.js DEFAULT_VOICE_LANG):
   // a plain `npm run setup` must plan the same default the committed manifest names, or the two disagree.
   // `strict` 是上游 0.2.3 新增的（PR #421）：把「清单里有、磁盘上没有」的条目从警告升成退出码 1。
-  const o = { concurrency: 16, force: false, offline: false, dryRun: false, refreshIndex: false, prune: false, allowShrink: false, strict: envFlag(process.env.SP_ASSETS_STRICT), addOnly: false, localSpines: false, voiceLang: 'jp', voiceLangs: [], voiceAll: false, help: false, source: process.env.SP_ASSET_SOURCE || 'direct' };
+  const o = { concurrency: 16, force: false, offline: false, dryRun: false, refreshIndex: false, prune: false, allowShrink: false, strict: envFlag(process.env.SP_ASSETS_STRICT), addOnly: false, localSpines: false, voiceLang: 'jp', voiceLangs: [], voiceAll: false, optionalVoice: false, help: false, source: process.env.SP_ASSET_SOURCE || 'direct', assetBase: normalizeAssetBase(process.env.SP_ASSET_BASE, 'SP_ASSET_BASE'), indexBase: normalizeAssetBase(process.env.SP_INDEX_BASE, 'SP_INDEX_BASE'), indexTtl: parseTtl(process.env.SP_INDEX_TTL, 'SP_INDEX_TTL'), cacheDir: process.env.SP_CACHE_DIR || DEFAULT_CACHE_DIR, sourceSnapshot: '' };
   for (const a of argv) {
     const [k, v] = a.split('=');
     if (k === '--concurrency') o.concurrency = Math.max(1, Math.min(64, parseInt(v, 10) || 16));
     else if (k === '--asset-source') o.source = v;
+    else if (k === '--source-snapshot') { if (!v) throw new Error('--source-snapshot requires a path'); o.sourceSnapshot = a.slice(k.length + 1); }
     else if (k === '--force') o.force = true;
     else if (k === '--offline') o.offline = true;
     else if (k === '--dry-run') o.dryRun = true;
@@ -166,6 +210,13 @@ export function parseArgs(argv) {
     else if (k === '--strict') o.strict = true;
     else if (k === '--add-only') o.addOnly = true;
     else if (k === '--local-spines') o.localSpines = true;
+    else if (k === '--asset-base') o.assetBase = normalizeAssetBase(v, '--asset-base');
+    else if (k === '--index-base') o.indexBase = normalizeAssetBase(v, '--index-base');
+    else if (k === '--index-ttl') o.indexTtl = parseTtl(v, '--index-ttl');
+    else if (k === '--cache-dir') {
+      if (!v) throw new Error(`--cache-dir needs a directory (default ${DEFAULT_CACHE_DIR})`);
+      o.cacheDir = v;
+    }
     else if (k === '--voice-lang') { if (!VOICE_DIRS[v]) throw new Error(`unknown --voice-lang ${v} (cn | jp | en | kr)`); o.voiceLang = v; }
     else if (k === '--voice-langs') {
       const list = String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -174,12 +225,53 @@ export function parseArgs(argv) {
       o.voiceLangs = [...new Set(list)];
     }
     else if (k === '--voice-all') o.voiceAll = true;
+    // upstream 0.3.0's extra dub trees (plan.mjs optionalVoice → audio.voiceEn / voiceKr / voiceNative). Off by default:
+    // our manifest is the `voiceLangs` one, and turning these on adds the four dub trees to it (~180 MB on disk). The
+    // upstream spelling is accepted too, so a command line written against upstream reads the same and means "off".
+    else if (k === '--optional-voice') o.optionalVoice = true;
+    else if (k === '--no-optional-voice') o.optionalVoice = false;
     else if (k === '--help' || k === '-h') o.help = true;
     else throw new Error(`unknown option ${a}\n${HELP}`);
   }
   if (o.addOnly && (o.prune || o.force)) throw new Error(`--add-only never deletes or rewrites files: not with --prune / --force\n${HELP}`);
+  if (o.sourceSnapshot && (o.offline || o.addOnly || o.localSpines)) throw new Error('--source-snapshot is incompatible with --offline / --add-only / --local-spines');
+  // An untrusted base (a plaintext mirror on the network) must not combine with a flag that shrinks the committed
+  // manifest: --prune deletes files and implies --allow-shrink, so untrusted bytes would be allowed to cost every other
+  // install the entries of data/assets.json. HTTPS or a loopback source keeps both flags available.
+  if (!o.help) {
+    for (const [flag, base] of [['--asset-base', o.assetBase], ['--index-base', o.indexBase]]) {
+      if (!base || !baseIsUntrusted(base)) continue;
+      if (o.prune) throw new Error(`untrusted ${flag} ${base} never prunes: --prune deletes files and rewrites data/assets.json from an unverified source`);
+      if (o.allowShrink) throw new Error(`untrusted ${flag} ${base} never shrinks the manifest: an unverified source must not drop entries every other install has`);
+    }
+  }
   if (!o.help) validateSource(o.source);
   return o;
+}
+
+/**
+ * Hours for `--index-ttl` / `SP_INDEX_TTL`. `0` and an unset variable both mean "never re-download on age" (today's
+ * behaviour); a negative or non-numeric value is refused by name rather than silently treated as 0.
+ * @param {string|undefined} value
+ * @param {string} flag
+ * @returns {number}
+ */
+export function parseTtl(value, flag = '--index-ttl') {
+  if (value === undefined || value === null || String(value).trim() === '') return 0;
+  const n = Number(String(value).trim());
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${flag} needs a non-negative number of hours: ${value}`);
+  return n;
+}
+
+/**
+ * The cache directory of this run: `--cache-dir` / `SP_CACHE_DIR`, relative to the repository root (an absolute path is
+ * used as it is), `.cache` by default.
+ * @param {string} dir
+ * @returns {string} absolute path
+ */
+export function resolveCacheDir(dir) {
+  const d = String(dir || DEFAULT_CACHE_DIR);
+  return isAbsolute(d) ? resolve(d) : resolve(ROOT, d);
 }
 
 export function resolveProxyPrefix(source, offline = false, value = process.env.SP_GITHUB_PROXY) {
@@ -269,7 +361,9 @@ export function runExitCode({ requiredMisses = 0, droppedLeaves = 0, strict = fa
 
 /**
  * Files under public/assets the manifest does not reference (`--prune` deletes them). public/assets/local/** belongs to
- * tools/local-extract (data/local-assets.json) and is never an orphan: --prune used to delete all of it. Compared without
+ * tools/local-extract (data/local-assets.json) and is never an orphan: --prune used to delete all of it. An in-progress
+ * download (`<file>.part`, the resume point of an interrupted run) is never an orphan either: --prune would otherwise
+ * delete the bytes the next run continues from. Compared without
  * case: on Windows / macOS a listed path and a file whose name differs only in case are one file (module/WAH-Y.png on
  * disk serves the listed module/wah-y.png), which --prune must not delete.
  * @param {string[]} onDisk forward-slash paths relative to public/assets
@@ -277,7 +371,7 @@ export function runExitCode({ requiredMisses = 0, droppedLeaves = 0, strict = fa
  */
 export function orphanFiles(onDisk, referenced) {
   const listed = new Set([...referenced].map((r) => r.toLowerCase()));
-  return onDisk.filter((r) => !listed.has(r.toLowerCase()) && !r.startsWith('local/'));
+  return onDisk.filter((r) => !listed.has(r.toLowerCase()) && !r.startsWith('local/') && !r.endsWith(PART_SUFFIX));
 }
 
 const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
@@ -314,6 +408,21 @@ function tidyManifest(m) {
     for (const [sid, iconId] of Object.entries(m.skillsById)) if (!m.skills?.[iconId]) delete m.skillsById[sid];
   }
   for (const c of Object.values(m.chars || {})) if (c.spine && !Object.keys(c.spine).length) delete c.spine;
+}
+
+/**
+ * The extra dub trees (plan.mjs VOICE_OPTIONAL_TREES), resolved against the disk: a tree with no line on disk is
+ * dropped, and `audio.voiceNativeLangType` keeps only the operators whose own-language dub landed.
+ * @param {any} m resolved manifest body (mutated)
+ */
+export function tidyVoiceTrees(m) {
+  const a = m?.audio;
+  if (!a || typeof a !== 'object') return;
+  for (const key of Object.keys(VOICE_OPTIONAL_TREES)) if (a[key] && !Object.keys(a[key]).length) delete a[key];
+  if (a.voiceNativeLangType) {
+    for (const id of Object.keys(a.voiceNativeLangType)) if (!a.voiceNative?.[id]) delete a.voiceNativeLangType[id];
+    if (!Object.keys(a.voiceNativeLangType).length) delete a.voiceNativeLangType;
+  }
 }
 
 function countStats(m, bytes, files) {
@@ -392,7 +501,16 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) { log(HELP); return 0; }
   const t0 = Date.now();
+  // --cache-dir / SP_CACHE_DIR: the ledger, the report, the spine cache and the indexes all move together.
+  CACHE = resolveCacheDir(opts.cacheDir);
+  REPORT = join(CACHE, 'assets-report.json');
   log(`[assets] root ${ROOT}`);
+  if (CACHE !== join(ROOT, DEFAULT_CACHE_DIR)) log(`[cache] dir ${CACHE}`);
+  if (opts.assetBase) log(`[network] 文件下载地址改用 ${opts.assetBase}（--asset-base）`);
+  if (opts.indexBase) log(`[cache] 索引下载地址改用 ${opts.indexBase}（--index-base）`);
+  // A plaintext base on a real network host says what it means; a loopback one is a local test source and stays quiet.
+  for (const w of [...baseWarnings(opts.assetBase, '--asset-base'), ...baseWarnings(opts.indexBase, '--index-base')]) log(w);
+  if (opts.indexTtl > 0) log(`[cache] 索引新鲜度 ${opts.indexTtl} h（--index-ttl）：更旧的缓存会重新下载`);
   if (!skelParserAvailable()) throw new Error('@pixi-spine/runtime-3.8 not found — run `npm install` first');
 
   const [assets07, ops03, enemies05, maps05] = await Promise.all([
@@ -402,10 +520,11 @@ async function main() {
     readJson('docs/research/05-maps.json'),
   ]);
   const proxyPrefix = resolveProxyPrefix(opts.source, opts.offline);
-  const source = await selectDownloadSource({ mode: opts.source, offline: opts.offline, proxyPrefix, log });
-  const mirrorPolicy = new MirrorPolicy({ source, proxyPrefix, log });
-  const network = { source, proxyPrefix, mirrorPolicy };
-  const { audioData, modelsData, charword } = await loadIndexes(ROOT, { refresh: opts.refreshIndex && !opts.offline, offline: opts.offline, log, ...network });
+  const verifier = opts.sourceSnapshot ? new SourceVerifier(JSON.parse(await readFile(opts.sourceSnapshot, 'utf8'))) : undefined;
+  const source = await selectDownloadSource({ mode: opts.source, offline: opts.offline, proxyPrefix, log, verified: !!verifier });
+  const mirrorPolicy = new MirrorPolicy({ source, proxyPrefix, assetBase: opts.assetBase, log });
+  const network = { source, proxyPrefix, mirrorPolicy, verifier };
+  const { audioData, modelsData, charword } = await loadIndexes(ROOT, { refresh: opts.refreshIndex && !opts.offline, offline: opts.offline, ttlHours: opts.indexTtl, indexBase: opts.indexBase, cacheDir: CACHE, log, ...network });
   const audio = indexAudio(audioData);
   // The game data built by tools/build-data.mjs (when present) may reference more
   // spawnable enemies/tokens than research lists (e.g. 机变 enemy swaps): cover them too.
@@ -416,11 +535,14 @@ async function main() {
   for (const b of Object.values(dataBosses || {})) if (b?.enemyKey && typeof b.handbookId === 'string') extraHandbook[b.enemyKey] = b.handbookId;
   const localEnemySpines = await syncLocalSpines(opts, 'enemy');
   const localTokenSpines = await syncLocalSpines(opts, 'token');
+  const statsTemplate = await statsTemplateJobs(ROOT, { offline: opts.offline || opts.dryRun, log });
   const plan = buildPlan({
     assets07, ops03, enemies05, maps05, audio, modelsData, charword, voiceLang: opts.voiceLang,
     voiceLangs: opts.voiceLangs,
     // default: only the slots a battle can play (plan.mjs VOICE_BATTLE_SLOTS); --voice-all takes the whole official set
     voiceSlots: opts.voiceAll ? null : undefined,
+    // --optional-voice: plan upstream's extra dub trees beside our `voiceLangs` model (off by default: see parseArgs)
+    optionalVoice: opts.optionalVoice,
     extraEnemyIds: Object.keys(dataEnemies || {}),
     extraTokenIds: [...Object.keys(dataTokens || {}), ...extras.tokenIds],
     extraHandbook,
@@ -428,6 +550,7 @@ async function main() {
     localTokenSpines,
     extraOperators: extras.extraOperators,
     moduleTypes: extras.moduleTypes,
+    statsTemplate,
   });
   const leaves = collectLeaves(plan.template);
   log(`[plan] ${leaves.length} files + ${plan.models.size} Spine models ` +
@@ -456,14 +579,19 @@ async function main() {
 
   // Fonts (--add-only: not rebuilt — public/fonts may be another checkout's; the manifest keeps its current entry)
   let fontErrors = [];
+  let acceptedFonts;
   if (!opts.offline && !opts.addOnly) {
     const fdl = new Downloader({ root: FONTS, ledgerPath: join(CACHE, 'fonts-ledger.json'), concurrency: 4, force: opts.force, log, ...network });
     await fdl.loadLedger();
     await fdl.run(fontJobs(), 'fonts');
+    acceptedFonts = fdl.accepted;
     dl.totals.bytesDownloaded += fdl.totals.bytesDownloaded;
     for (const k of ['ok', 'skip', 'miss', 'error']) dl.totals[k] += fdl.totals[k];
   }
-  const fonts = opts.addOnly ? { files: {}, errors: [] } : await buildFonts(FONTS, log);
+  const fonts = opts.addOnly ? { files: {}, errors: [] } : await buildFonts(FONTS, log, {
+    verified: !!verifier,
+    ...(verifier ? { available: (rel) => acceptedFonts.has(rel) } : null),
+  });
   fontErrors = fonts.errors;
 
   // Spine
@@ -473,13 +601,24 @@ async function main() {
   });
 
   // Manifest
-  const resolved = resolveTemplate(plan.template, { root: ASSETS, spine: spine.entries, sourceOf: (rel) => dl.ledger.files[rel]?.url });
+  const resolved = resolveTemplate(plan.template, {
+    root: ASSETS, spine: spine.entries, assetBase: opts.assetBase, sourceOf: (rel) => dl.ledger.files[rel]?.url,
+    // A verified run publishes only what it verified. Bytes kept on disk from an earlier revision — or kept because the
+    // snapshot API was down — stay as a retry, never as a URL the client is served (manifest.mjs `available`). Without a
+    // snapshot every file on disk is published, exactly as before: `dl.accepted` is only consulted under a verifier.
+    ...(verifier ? { available: (rel) => dl.accepted.has(rel) } : null),
+  });
   const body = resolved.value;
   tidyManifest(body);
+  // --optional-voice: drop a dub tree that resolved to nothing, and a voiceNativeLangType whose operator lost its tree
+  // (a no-op without the flag: the keys are absent, so there is nothing to tidy).
+  tidyVoiceTrees(body);
   const fontFaces = {};
   for (const [name, f] of Object.entries(fonts.files)) fontFaces[name] = f;
   body.fonts = opts.addOnly && current?.fonts ? current.fonts
-    : existsSync(join(FONTS, 'fonts.css')) ? { css: '/fonts/fonts.css', faces: fontFaces } : { faces: fontFaces };
+    // A verified run publishes the stylesheet only when it just built one out of verified originals (`fonts.css` is the
+    // content buildFonts returned above); unverified keeps today's rule exactly — the file on disk decides.
+    : (verifier ? fonts.css : existsSync(join(FONTS, 'fonts.css'))) ? { css: '/fonts/fonts.css', faces: fontFaces } : { faces: fontFaces };
   const bytes = totalBytes(ASSETS, resolved.files);
   const manifest = {
     version: MANIFEST_VERSION,
@@ -492,7 +631,7 @@ async function main() {
   if (guard.write) await writeJsonAtomic(MANIFEST, manifest);
 
   // Orphans: files on disk that the manifest does not reference (e.g. after a mapping change).
-  const orphans = orphanFiles(await listFiles(ASSETS), resolved.files);
+  const orphans = orphanFiles(await listFiles(ASSETS), new Set([...resolved.files, ...dl.preserved]));
   if (opts.prune) for (const r of orphans) { try { await unlink(join(ASSETS, r)); } catch { /* ignore */ } }
 
   const charIds = Object.keys(assets07.operators || {});
@@ -516,6 +655,9 @@ async function main() {
     manifestWritten: guard.write,
     droppedEntries: guard.dropped, // entries of the previous data/assets.json the rebuilt one lacks
     notes: plan.notes,
+    // Where this run actually read from: a CDN base must be visible in the report, so a later reader can tell what a
+    // public/assets tree was built from (empty strings = the default sources).
+    sources: { assetBase: opts.assetBase, indexBase: opts.indexBase, cacheDir: relative(ROOT, CACHE), indexTtlHours: opts.indexTtl, untrustedBase: baseIsUntrusted(opts.assetBase) || baseIsUntrusted(opts.indexBase) },
   };
   await writeJsonAtomic(REPORT, report, 1);
 
@@ -534,6 +676,9 @@ async function main() {
     `${Object.keys(s.voiceLangs || {}).length ? ` (+${Object.entries(s.voiceLangs).map(([l, n]) => `${l} ${n}`).join(', ')})` : ''}` +
     `${s.voiceJpChars ? ` · JP dub (audio.voiceJp): ${s.voiceJpChars} charIds` : ''}`);
   log(`fonts: ${Object.values(fonts.files).map((f) => f.woff2 || f.original).join(', ') || 'none'}`);
+  if (opts.assetBase || opts.indexBase) {
+    log(`sources             : files ${opts.assetBase || 'default'} · indexes ${opts.indexBase || 'default'} · cache ${relative(ROOT, CACHE)}`);
+  }
   if (resolved.fallbacks.length) { log(`fallbacks used (${resolved.fallbacks.length}):`); for (const f of resolved.fallbacks.slice(0, 20)) log(`  ${f}`); }
   if (downloadErrors.length) log(`download errors (${downloadErrors.length}, re-run to retry): ${downloadErrors.slice(0, 10).join(', ')}`);
   log(leafDropSummary(droppedLeaves));
@@ -558,6 +703,7 @@ async function main() {
     log(strictLeafDropError(droppedLeaves));
     log('  a plain run downloads them again (--refresh-index if the upstream index lost them); without --strict / SP_ASSETS_STRICT this is only a warning');
   }
+  if (verifier && (dl.totals.error || fontErrors.length || downloadErrors.length)) return 1;
   return runExitCode({ requiredMisses: required.length, droppedLeaves: droppedLeaves.length, strict: opts.strict, manifestWritten: guard.write });
 }
 

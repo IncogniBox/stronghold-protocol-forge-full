@@ -99,6 +99,8 @@
 .dtag-diy { font-size: calc(.13 * var(--t)); font-weight: 700; padding: .01rem .08rem; letter-spacing: .08em; background: var(--mint-500); color: var(--text-on-mint); }
 .dtag-standin { font-size: calc(.13 * var(--t)); font-weight: 700; padding: .01rem .08rem; letter-spacing: .08em; background: var(--ice); color: var(--ice-900); }
 .dtag-kind { border: 1px solid var(--line-2); color: var(--text-lo); font-weight: 500; }
+/* 第 7 段（行为开关 `morphPairing: "plus"`）: 变形同构体不占装备位，它那一行的标签（ui/detailPanel.js ItemRow）。 */
+.dtag-slotless { font-size: calc(.13 * var(--t)); font-weight: 700; padding: .01rem .08rem; letter-spacing: .08em; background: var(--bg-4); color: var(--text-md); border: 1px solid var(--line-2); }
 .drank { font-size: calc(.13 * var(--t)); font-weight: 700; padding: .01rem .08rem; }
 .drank--normal { background: var(--bg-4); color: var(--text-md); }
 .drank--elite { background: var(--gold-2); color: #1d1400; }
@@ -210,6 +212,11 @@
 .ditem__text { display: flex; flex-direction: column; gap: .02rem; min-width: 0; }
 .ditem__text b { font-size: calc(.15 * var(--t)); }
 .ditem__desc { font-size: calc(.13 * var(--t)); line-height: 1.55; color: var(--text-lo); }
+/* 源石辅助仪 (哥伦比亚 mod): the items it inherited from the carrier's other equipment (their own effect text) */
+.ditem__inherit { display: flex; flex-direction: column; gap: .02rem; padding-left: .06rem; border-left: 2px solid var(--line-3); }
+.ditem__inherit-h { font-size: calc(.12 * var(--t)); color: var(--text-dim); }
+.ditem__inherit-i { font-size: calc(.12 * var(--t)); line-height: 1.5; color: var(--text-lo); }
+.ditem__inherit-i b { font-size: calc(.12 * var(--t)); color: var(--text); }
 .dempty { font-size: calc(.14 * var(--t)); }
 .dhint { display: flex; align-items: flex-start; gap: .06rem; font-size: calc(.14 * var(--t)); color: var(--text-lo); line-height: 1.6; }
 .dhint .icon { width: .16rem; height: .16rem; margin-top: .03rem; flex: none; }
@@ -688,3 +695,50 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .eqr__hint { margin: .04rem 0 0; text-align: center; font-size: calc(.15 * var(--t)); color: var(--text-lo); min-height: .24rem; }
 .eqr__hint b { color: var(--text-hi); }
 .eqr__ok-icon { width: .2rem; height: .2rem; margin-right: .06rem; vertical-align: -.03rem; filter: brightness(0) invert(1); }
+
+/* 局内开发者面板（「全量模拟」专属，ui/devPanel.js）：左侧把手 → 展开占左栏 */
+.devpanel__handle { position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 26; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 28px; padding: 12px 0; border: 1px solid rgba(120, 220, 170, .45); border-left: 0; border-radius: 0 7px 7px 0; background: rgba(8, 20, 16, .84); color: #9ff0c8; font: inherit; font-size: 11px; cursor: pointer; }
+.devpanel__handle:hover { background: rgba(16, 40, 30, .94); }
+.devpanel__handle span { writing-mode: vertical-rl; letter-spacing: .12em; }
+.devpanel { position: fixed; left: 0; top: 76px; bottom: 128px; z-index: 26; width: min(330px, 34vw); display: flex; flex-direction: column; border: 1px solid rgba(120, 220, 170, .4); border-left: 0; border-radius: 0 8px 8px 0; background: rgba(8, 16, 14, .95); color: #dfeee8; font: 12px/1.5 'Segoe UI', system-ui, sans-serif; }
+.devpanel__head { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-bottom: 1px solid rgba(120, 220, 170, .25); color: #7fe0b0; }
+.devpanel__close { border: 0; background: transparent; color: #9ff0c8; cursor: pointer; padding: 2px; }
+.devpanel__tabs { display: flex; flex-wrap: wrap; gap: 3px; padding: 6px 8px; border-bottom: 1px solid rgba(120, 220, 170, .2); }
+.devpanel__tab { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 4px; background: rgba(255, 255, 255, .03); color: inherit; font: inherit; cursor: pointer; }
+.devpanel__tab.is-on { border-color: #7fe0b0; background: rgba(120, 220, 170, .16); color: #cfe; }
+.devpanel__body { flex: 1; overflow: auto; padding: 8px; }
+.devpanel__col { display: flex; flex-direction: column; gap: 8px; }
+.devpanel__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 5px; }
+/* 搜索栏（策略 / 敌人 / 干员三页共用，ui/devPanel.js SearchBox）：放大镜 + 输入框，长度跟着面板走 */
+.devpanel__search { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 5px; background: rgba(0, 0, 0, .35); }
+.devpanel__search svg { flex: none; width: 13px; height: 13px; color: #7fe0b0; }
+.devpanel__search-input { flex: 1; min-width: 0; border: 0; background: transparent; color: inherit; font: inherit; outline: none; }
+.devpanel__search-input::placeholder { color: #6d857c; }
+.devpanel__cell { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 5px; background: rgba(255, 255, 255, .03); color: inherit; font: inherit; font-size: 11px; cursor: pointer; text-align: center; }
+.devpanel__cell:hover { border-color: #7fe0b0; }
+.devpanel__cell.is-on { border-color: #7fe0b0; background: rgba(120, 220, 170, .14); }
+.devpanel__cell span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+/* 敌人 / 干员的修改页：**单独一扇窗**，固定在展开页**右边**（不再排在长列表下面 —— 列表很长时它会滚出视野，
+   看起来就是「点了没反应」）。position: fixed 会逃出 .devpanel__body 的滚动容器（沿途没有 transform / filter）。 */
+.devpanel__detail { position: fixed; left: calc(min(330px, 34vw) + 8px); top: 76px; z-index: 27; width: min(300px, 30vw); max-height: calc(100vh - 210px); overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid rgba(120, 220, 170, .45); border-radius: 8px; background: rgba(8, 16, 14, .96); box-shadow: 0 6px 24px rgba(0, 0, 0, .5); }
+.devpanel__id { color: #7f9a90; font-size: 11px; }
+.devpanel__form { display: flex; flex-direction: column; gap: 5px; }
+.devpanel__group { display: flex; align-items: flex-end; gap: 6px; }
+.devpanel__group > .devpanel__row { flex: 1; }
+.devpanel__row { display: flex; flex-direction: column; gap: 2px; }
+.devpanel__lab { color: #9fb7ad; font-size: 11px; }
+.devpanel__hint { margin-left: 4px; color: #6d857c; font-style: normal; }
+.devpanel__num, .devpanel__sel { width: 100%; padding: 3px 6px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 4px; background: rgba(0, 0, 0, .35); color: inherit; font: inherit; }
+.devpanel__go { flex: none; padding: 4px 10px; border: 1px solid #7fe0b0; border-radius: 4px; background: rgba(120, 220, 170, .14); color: #cfe; font: inherit; cursor: pointer; }
+.devpanel__go:disabled { opacity: .4; cursor: default; }
+.devpanel__go--wide { width: 100%; }
+.devpanel__tip { margin: 0; color: #7f9a90; }
+
+.devpanel__detail-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+
+/* 局内顶栏：开发者模式（「全量模拟」）的绿色模式牌，替代难度牌（ui/hud.js） */
+.gtop__mode-dev { display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid #7fe0b0; border-radius: 4px; background: rgba(120, 220, 170, .16); color: #bff5dd; font-weight: 600; letter-spacing: .04em; white-space: nowrap; }
+
+.devpanel__go.is-on { background: rgba(120, 220, 170, .34); border-color: #bff5dd; }
+.devpanel__armed { margin: 0; color: #bff5dd; font-weight: 600; }
+

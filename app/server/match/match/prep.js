@@ -22,13 +22,42 @@ export class MatchPrep {
       this.dispatch(ps, 'onPrepStart', { round: this.round });
       ps.recompute();
     }
-    // solo / single-human matches: untimed (soloUntimed); co-op: the round's prepTime
-    const secs = this.soloUntimed ? null : this.gd.prepTime(this.round);
-    this.setDeadline(secs, () => this.prepDeadline());
+    // A co-op room waits for every alive seat's Ready (maybeEndPrep), so a human able to press it must have a
+    // deadline — otherwise that human's silence stalls the match forever (docs/PS100-MIGRATION.md §5, the
+    // 「1 真人 + N AI」 room: `prepFallbackGuard`). `soloUntimed` still governs the OTHER phases (INFO_CHECK,
+    // BAND_DRAFT, SP_DRAFT and the silent presentation steps); here the guard only hands that lone human the co-op
+    // prep timer it was missing.
+    //
+    // The round's own prepTime decides 0 vs a deadline, exactly as before: a round that declares `prepTime: null`
+    // means UNTIMED and stays untimed (the config is the authority on whether this round is timed at all — the
+    // zero-delay ordering of `verification-slices.test.js` depends on it). The `infoCheck` 25 s guard is used ONLY
+    // for the lone-human room, and never to time a round the data leaves untimed for anyone else.
+    this.setDeadline(this.prepDeadlineSeconds(), () => this.prepDeadline());
     let i = 0;
     for (const ps of alive) if (ps.botControlled) this.scheduleBotPrep(ps, i++);
     this.markPublic();
     this.maybeEndPrep();
+  }
+
+  /**
+   * Seconds of this round's prep deadline (null = untimed). The SINGLE definition of the rule, so the prep and the
+   * `attachAudit` check can never drift apart:
+   *
+   *   * solo (and any room with no seat able to press Ready) → null: nobody waits on anybody, and there is no Ready
+   *     gate that could stall;
+   *   * the round declares a `prepTime` → that value (today's behaviour, unchanged);
+   *   * the round declares none, but this is the lone-human co-op room (`prepFallbackGuard`) → the official
+   *     `timers.infoCheck` guard, so that human's silence can never stall the match (docs/PS100-MIGRATION.md §5);
+   *   * otherwise → null: the data left this round untimed and it stays untimed.
+   *
+   * @returns {number|null}
+   */
+  prepDeadlineSeconds() {
+    // SOLO only — NOT `soloUntimed`, which is also true for the lone-human co-op room this whole guard exists for.
+    if (this.isSolo) return null;
+    const declared = this.gd.prepTime(this.round);
+    if (declared != null) return declared;
+    return this.prepFallbackGuard ? this.gd.timer('infoCheck') : null;
   }
 
   /**
@@ -39,6 +68,12 @@ export class MatchPrep {
    * layout, temp, Ready). The step generators run the same actions in the same order as the one-shot routine (same
    * rng draws, same decisions); in virtual time (botSliceMs unbounded) each stage runs at once. The prep ending first
    * (deadline) or a newer schedule for the seat drops the job (a step never leaves a transient board behind).
+   * A rehearsal offered to the host's browser (botRehearsalDelegate, DESIGN §14 — AI teammates only) is not stepped
+   * here: the job stays `pending` until MatchRehearsal accepts the host's pick (`done`, the layout ready to apply) or
+   * takes it over, and only a takeover runs `job.run` — the server's slices, never a second simulation of what the host
+   * already ran; a pick accepted before this driver subscribed to the job is applied just the same (`job.done`). Either
+   * outcome is applied once the generator that offered the task has finished — it still places the default layout after
+   * the delegation — which is why the continuation is installed here and not with the frame.
    */
   scheduleBotPrep(ps, i = 0) {
     const round = this.round;
@@ -51,7 +86,7 @@ export class MatchPrep {
       const t0 = now();
       let r = null;
       try {
-        do r = gen.next(); while (!r.done && !(bounded && now() - t0 >= this.botSliceMs));
+        do r = gen.next(); while (!r.done && !(bounded && now() - t0 >= this.botSliceMs)); // loop-cap: generator and the bot time slice
       } catch (e) {
         this.reportError(`bot ${ps.playerId}${label}`, e);
         then(null);
@@ -73,20 +108,47 @@ export class MatchPrep {
       if (!gen) { ready(); return; }
       drive(gen, '', ready);
     };
+    /** The layout the finished job chose is applied in a callback of its own (bounded slices end one stage per call). */
+    const finish = (job) => {
+      if (bounded) this.later(0, () => { if (valid()) end(job); });
+      else end(job);
+    };
+    /** The rehearsal's slices, once the job simulates locally (nobody answered, or the server took it over). */
+    const runJob = (job) => {
+      const slice = () => {
+        if (!valid()) return;
+        let done = true;
+        try { done = job.run(this.botSliceMs); } catch (e) { this.reportError(`bot ${ps.playerId} rehearsal`, e); }
+        if (done) finish(job);
+        else this.later(0, slice);
+      };
+      // bounded slices start in a callback of their own (the economy + default layout above already used this one)
+      if (bounded) this.later(0, slice);
+      else slice();
+    };
     this.later(this.scaled(DELAYS.BOT_ACTION + i * DELAYS.BOT_STAGGER), () => {
       if (!valid()) return;
-      drive(botPrepBeginSteps(this, ps), '', (job) => {
+      drive(botPrepBeginSteps(this, ps, { delegate: this.botRehearsalDelegate }), '', (job) => {
         if (!job) { end(null); return; }
-        const slice = () => {
-          if (!valid()) return;
-          let done = true;
-          try { done = job.run(this.botSliceMs); } catch (e) { this.reportError(`bot ${ps.playerId} rehearsal`, e); }
-          if (done) { if (bounded) this.later(0, () => { if (valid()) end(job); }); else end(job); }
-          else this.later(0, slice);
-        };
-        // bounded slices start in a callback of their own (the economy + default layout above already used this one)
-        if (bounded) this.later(0, slice);
-        else slice();
+        // A job is finished when it has nothing left to simulate: the server's own run over the candidates, or — with a
+        // delegated one — the host's pick, which MatchRehearsal accepts as soon as it arrives, possibly while the
+        // generator above was still placing the default layout (its `done` is already true here). Either way the layout
+        // is ready: it is applied, never simulated again, and a later local run cannot overwrite the accepted pick.
+        if (job.done) { finish(job); return; }
+        // delegated and unanswered: MatchRehearsal calls back here — `done`, the pick already in `job.best`, nothing
+        // left to simulate — or after the server took the job over, whose own slices follow; never once the prep ended.
+        // The continuation is installed here rather than when the frame went out: the generator that offered the task
+        // still places the default layout after the delegation returns (`applyPlanSteps`), so an outcome applied earlier
+        // would set the seat Ready and drop those steps — an answer that arrived in the meantime is the `done` above.
+        if (job.pending) {
+          job.onSettled = () => {
+            if (!valid()) return;
+            if (job.done) finish(job);
+            else { job.takeOver(); runJob(job); }
+          };
+          return;
+        }
+        runJob(job);
       });
     });
   }
@@ -124,12 +186,15 @@ export class MatchPrep {
 
   endPrep() {
     if (this.phase !== PHASE.PREP) return;
+    // rehearsals still waiting for a host's answer die with the prep: their bots place the default layout, a late answer
+    // is ignored (Match._takeOverRehearsal / MatchRehearsal) and nothing of them runs after the phase ended
+    this._cancelRehearsal();
     this.setDeadline(0);
     const alive = this.alivePlayers();
     for (const ps of alive) this.dispatch(ps, 'onPrepEnd', { round: this.round });
     for (const ps of alive) ps.endPrep();
     const r = this.round;
-    if (r === this.gd.bossRound) {
+    if (r === this.gd.bossRound || r === this.devBossRound) {
       this.hiddenLayerSum = alive.reduce((s, p) => s + p.activatedLayers(), 0);
       this.startFinalAssault(false);
     } else if (r === this.gd.hiddenRound) {

@@ -30,11 +30,26 @@
 // This module turns that list into mounts. Three properties are load-bearing:
 //
 //   * THE BOUNDARY IS WHAT IS NOT PASSED IN (DESIGN §28.8). A panel's factory gets a frozen object with exactly
-//     `{ id, pack, slot, order, gate, log, host, session, net }`:
+//     `{ id, pack, slot, order, gate, log, host, session, net, cloud }`:
 //       - `host` is a plain element the registry owns — the pack may fill it, nothing else;
-//       - `session.setPreload({ required, ready })` is the ONLY store write a panel gets (the entry gate, 缺口 3);
+//       - `session.setPreload({ required, ready })` is the entry gate (缺口 3), and §28.58 turns the same facade's
+//         identity cell on: `session.setName(rawName)` writes `me.name` + `session.entered` through the very chain the
+//         title screen uses (`sanitizeModName` + `commitName`). Two store writes, no store handle;
 //       - `net.{ on, sendResourceMessage }` is the ONLY network access (缺口 4: the resource challenge arrives before
 //         `hello`, so `send()` would drop the message — `sendResourceMessage` goes through `_sendRaw`).
+//         Since §28.24 / §28.25 the same facade carries two **readings** that originate no frame and drive no behaviour:
+//         `net.status()` (the connection snapshot `public/js/net.js` already publishes as its `'status'` event) and
+//         `net.welcome()` (the `welcome` frame the client already received). Both are frozen copies and both are `null`
+//         when there is nothing to report — a panel may draw the wrong thing, never compute the wrong thing.
+//         §28.32 adds `net.transport()` on the same terms (the socket parameters only the server knows: the browser's
+//         `WebSocket` API exposes no `Sec-WebSocket-Extensions`) and §28.31 adds two cells on the OTHER two facades:
+//         `me.voice` (`{ global, byChar }`, the voice-dub reading — a panel cannot see the settings store) and
+//         `session.setVoiceLang(charId, lang)`, the ONE setting cell a panel may write (closed enum `VOICE_LANGS`,
+//         local-only, playback-time — see `VOICE_CHAR_ID_RE` for the boundary in full).
+//         §28.58 adds the OTHER opening: `cloud.read()` / `cloud.apply(patch)`, a CLOSED whitelist over the seven
+//         `sp.pref.` keys the engine itself already persists (`CLOUD_PREF_KEYS`, see `public/js/ui/cloudPrefs.js`).
+//         It touches preferences only — never `match` / `room` / `me` — which is why the design note calls it the one
+//         opening in the "a panel gets no store" boundary.
 //     There is no store handle, no store slice, no engine and no match state, so a C module can be wrong in the
 //     rendering sense and cannot be wrong in the result sense.
 //   * A DECLARATION THAT CANNOT BE USED IS NAMED, never silently skipped: an unknown slot, a URL outside the
@@ -48,12 +63,23 @@
 // the browser half is the opt-in `SP_E2E=1` path, see docs/WORKSHOP.md §4.4 for the same standing gap).
 
 import { t } from '../../../shared/i18n.js';
-import { validateC2S } from '../../../shared/protocol.js';
+import { C2S, validateC2S } from '../../../shared/protocol.js';
 // 立绘解析链的**唯一 hook**（皮肤层第 1 步）：核心只认识「有一个函数可能回答这个 id」，不认识「皮肤」。
-import { setAppearanceLookup, clearAppearanceLookup } from './portraitChain.js';
+import { setAppearanceLookup, clearAppearanceLookup, mergeOwnAppearance } from './portraitChain.js';
+// 素材加载源的**排序面**（DESIGN §28.40）：与外观提供者逐字同构的一条注册链 —— 一个提供者、最多一个、点名拒绝。
+// 这个模块没有依赖（不 import common.js/bundle.js），所以面板这条路不因为多了它而变重。
+import { setSourceOrder, clearSourceOrder } from '../resources/sources.js';
 // 引擎已经定义好的服务端→客户端类型（`shared/protocol.js S2C`）。**不在这里抄一份**：抄一份就是第二个会漂的真相，
 // 而漂的方向是「一个面板订阅了一个引擎其实不会发的名字」—— 那正是这一层到处在拒绝的形态。
 import { S2C } from '../../../shared/protocol.js';
+import { NAME_MAX_LEN } from '../../../shared/constants.js';
+import { identity } from '../net.js';
+import { selectRoute, loadPref, savePref } from '../store.js';
+import { h, Fragment, render as preactRender } from '../../vendor/preact.module.js';
+// 配音词表（`shared/constants.js VOICE_LANGS`，编辑器 / CLI / 工坊校验器都读它）。**不在这里抄一份**：抄一份
+// 就是第二个会漂的真相，而漂的方向是「面板写了一个引擎不认识的配音」—— 那正是这一层到处在拒绝的形态。
+// 这个模块是纯数据，所以 `extensions.js` 仍然能在 Node 里整套跑（`test/modClientPanels.test.js` 就是这么跑的）。
+import { VOICE_LANGS } from '../../../shared/constants.js';
 // 组件级改写（DESIGN §28.19）：引擎的具名组件注册表。**只有包真的声明了 `wraps` 才会走到它**——
 // 没有任何包声明时 `setComponentWraps` 一次都不会被调用，链表是空的，组件里的那一次查找之后就是引擎今天那份实现。
 import { MOD_COMPONENT_IDS, MOD_WRAP_MODES, setComponentWraps, clearComponentWraps, wrappedComponentIds } from './modComponents.js';
@@ -63,9 +89,15 @@ const S2C_TYPES = new Set(S2C);
 
 /**
  * The mount points (DESIGN §28.8). The first four are 0.11.0's **overlays** — the registry creates their container on
- * demand and `public/css/components.css` fixes them. The last five live **inside components the engine already renders**
- * (the owner's ruling of 2026-10-10): the component renders `[data-mod-slot="…"]` and the panel fills it, which is how a
- * pack marks a shop card, adds a gesture to the bond strip or inserts a section into 操作员详情.
+ * demand and `public/css/components.css` fixes them. The last twelve live **inside components the engine already
+ * renders** (the owner's ruling of 2026-10-10): the component renders `[data-mod-slot="…"]` and the panel fills it,
+ * which is how a pack marks a shop card, adds a gesture to the bond strip, inserts a section into 操作员详情, hangs a
+ * block in the room screen's aside (`screen.room.aside`, 房间屏的旁栏), takes the entry line under the title card's
+ * 开始 button (`screen.title.entry`, the 起名页, rendered by `screens/title.js`), or fills the tail of the statistics
+ * screen's personal-information column (`screen.stats.profile`, the 统计页, rendered by `screens/stats.js`).
+ *
+ * `screen.loadout.card` is the 干员调配 screen's own detail card (`screens/loadout.js` `Detail`, `.lo-dhead`) — a
+ * different host from `screen.loadout.detail` (the in-match operator card, `ui/detailPanel.js`).
  *
  * Kept here as its own table because importing `shared/workshop.js` would pull the whole pack schema into the page; a
  * test pins the two tables together, the same way `test/kitImports.test.js` pins the import map to the whitelist.
@@ -73,16 +105,24 @@ const S2C_TYPES = new Set(S2C);
 export const MOD_PANEL_SLOTS = Object.freeze([
   'root.overlays', 'root.guide', 'screen.game.aside', 'screen.result.footer',
   'screen.game.shopCard', 'screen.game.bondStrip', 'screen.game.hud', 'screen.game.overlay',
-  'screen.loadout.detail',
+  'screen.loadout.detail', 'screen.loadout.card', 'screen.diy.card', 'screen.room.aside',
+  'screen.lobby.aside', 'screen.room.chat', 'screen.title.entry', 'screen.stats.profile',
 ]);
 
 /**
- * Hosts the engine renders MORE THAN ONCE (one container per shop card). A panel declaring one of these mounts into
- * **every** match and learns which one it is through `ctx.hostKey` — that is what makes "a mark on each card" possible
- * without handing the pack the store (DESIGN §28.8's boundary). `shared/workshop.js CLIENT_PANEL_REPEATABLE` is the
- * other copy; a test pins them together.
+ * Hosts the engine renders MORE THAN ONCE (one container per shop card, one per filled 自选编队 card). A panel declaring
+ * one of these mounts into **every** such host and learns which one it is through `ctx.hostKey` — that is what makes
+ * "a mark on each card" possible without handing the pack the store (DESIGN §28.8's boundary).
+ * `shared/workshop.js CLIENT_PANEL_REPEATABLE` is the other copy; a test pins them together.
  */
-export const MOD_PANEL_REPEATABLE = Object.freeze(['screen.game.shopCard']);
+export const MOD_PANEL_REPEATABLE = Object.freeze(['screen.game.shopCard', 'screen.diy.card']);
+/**
+ * 整屏能替换的**路由闭枚举**：镜像形状层的 `CLIENT_SCREEN_ROUTES`（DESIGN §28.55）。
+ * 为什么必须只有四条：`selectRoute` 与 `main.js` 的 `SCREENS` 都只到这四个值，结算与干员调配是路由**内部**的
+ * 视图 —— 多写一条就是永远不会命中的死格子。两份名单由 `test/modClientScreens.test.mjs` 钉在一起，
+ * 各说各话就是第二个会漂的真相。
+ */
+export const MOD_SCREEN_ROUTES = Object.freeze(['title', 'lobby', 'room', 'game']);
 
 /** The URL prefix a panel module is served under: `shared/workshop.js WORKSHOP_PANEL_PREFIX` (pinned by a test). */
 export const MOD_PANEL_PREFIX = '/workshop-panels/';
@@ -92,6 +132,11 @@ export const MOD_PANEL_REQUIRES = Object.freeze(['serviceWorker', 'cacheStorage'
 
 /** The selector of a slot container: an existing one wins, otherwise the registry creates it (see `browserSlotHost`). */
 export const slotSelector = (slot) => `[data-mod-slot="${slot}"]`;
+/**
+ * **任意**槽位容器（`[data-mod-slot]`，不管槽位名是什么）—— DOM 观察器判定「这次变更与槽位宿主有没有关系」用的
+ * 那一条选择器。`Element.matches` / `querySelector` 都吃它。
+ */
+const SLOT_SELECTOR = '[data-mod-slot]';
 
 /**
  * 引擎**按需创建**容器的宿主：0.11.0 的四个浮层。其余宿主由组件自己渲染 `[data-mod-slot]`，注册点只查不造 ——
@@ -103,26 +148,93 @@ export const MOD_PANEL_CREATED = Object.freeze(['root.overlays', 'root.guide', '
  * **面板偏好**的容量上限（`ctx.session.setPref` / `getPref`）与「面板能主动发的引擎消息」闭枚举。
  *
  * 两处都是**刻意的摩擦**：
- *   * 偏好只收短标量 —— 让它成为第二个数据库是它最可能的变坏方式；
- *   * `PANEL_SEND_TYPES` 只列**展示**类的引擎消息。面板能改对局状态的那一天，就是这一层失效的那一天；
- *     所以加一条要同时改这张表、那条消息的 C2S 形状、以及一条测试。
+ *   * 偏好只收短标量 —— 让它成为第二个数据库是它最可能变坏的方式；
+ *   * `PANEL_SEND_TYPES` 只列**展示 / 用户动作**类的引擎消息（面板能改对局状态的那一天，就是这一层失效的那一天），
+ *     所以加一条要同时改这张表、那条消息的 C2S 形状、以及一条测试。今天三条：
+ *     `room.appearance`（只改别人看到的外观）、`room.mods`（房主改本房间装载的包集合 —— 改的是**装载面**、不是战果）、
+ *     以及 `room.chat`（**用户动作**：往房内聊天里说一句 —— 它与玩家自己点「发送」走的是**同一条** C2S，
+ *     房内**任何**成员都能发，它改变的是**别人读到的话**、不是这一局的任何数值；能不能说仍由服务端按 `chatMode` /
+ *     旁观者身份裁决，客户端这一层只保证「面板发得出去」而不放行改状态的消息）。
  */
 export const PREFS_MAX_KEY = 64;
 export const PREFS_MAX_VALUE = 512;
-export const PANEL_SEND_TYPES = Object.freeze(['room.appearance']);
+export const PANEL_SEND_TYPES = Object.freeze(['room.appearance', 'room.mods', 'room.chat']);
 
 /**
- * 面板偏好表（模块级、内存里）。
+ * **面板能写设置的那一格**（`ctx.session.setVoiceLang(charId, lang)`，业主裁决 2026-10-11：「能优化就优化，
+ * 但要守边界」）。这一格开了一个**新类**：在此之前 `session.setPreload` 只能写 store 里两个入口闸门标志，
+ * 面板**从来**改不了玩家自己的设置。所以边界写在这里，一条都不含糊：
  *
- * **为什么必须在内存里**：`public/js/ui/extensions.js` 在**服务端测试里也被 import**（注册点的用例跑在 Node 下），
- * 而 `localStorage` 在那里不存在 —— 一处在模块顶层碰 `localStorage` 的代码会让那一整组用例炸掉。
+ *   * **只有这一个写口**，只写设置库里的 `voiceLangByChar`（逐干员的配音覆盖）**一格**：其它设置（音量、
+ *     静音、画质、文字大小、快捷键、工坊外观开关）面板连**读**都读不到（`ctx.me.voice` 只给配音那两格），
+ *     更一个都写不了；
+ *   * **只影响这一台机器**：配音语言在**播放时**解析（`public/js/audio.js:1020` / `:1026` 读注入的
+ *     `voiceLangOf`，它最终走 `ui/gameLogic/settings.js voiceLangFor`，缺档回退「覆盖 → 全局 → 默认」），
+ *     整个写口是纯 localStorage 偏好 —— 不发帧、不落对局、**改动不了任何人的战果**；
+ *   * **闭枚举**：值只收 `VOICE_LANGS`（`shared/constants.js`，cn / jp / en / kr）里的成员，或 `''` / `null`
+ *     （= 清掉这一格的覆盖，回到跟随全局）。别的值一律**拒绝并点名**，绝不静默丢弃；`VOICE_LANGS` 本身
+ *     一个字也不许改（它不从属于面板）。
+ *
+ * 干员 id 的形状：`sanitizeVoiceLangByChar` 只收 `/^char_[A-Za-z0-9_]{1,64}$/` 的键。这里**必须**先判一次
+ * ——否则一个形状不对的 id 会被那个清洗器**静默丢掉**，而面板会以为写成功了。两处判据由
+ * `test/modClientSettings.test.js` 钉在一起（这个文件与别处同形：`THEME_VAR_RE` 也是这么钉的）。
+ */
+export const VOICE_CHAR_ID_RE = /^char_[A-Za-z0-9_]{1,64}$/;
+
+/**
+ * **这一批新增的两格的拒绝码**（DESIGN §28.58，账号面：`ctx.session.setName` 与 `ctx.cloud`）—— 导出成常量，
+ * 好让 `shared/modSurface.js` 把这条契约**锚在真名字上**：一条只活在注释里的清单，被一次重构顺手删掉时不会有
+ * 任何测试红（这正是那份清单存在的理由）。
+ *   * `CLIENT_SESSION_BAD_NAME` / `CLIENT_SESSION_NAME_UNAVAILABLE`：`ctx.session.setName(rawName)` 的两个出口；
+ *   * `CLIENT_CLOUD_UNAVAILABLE`：`ctx.cloud` 那一格**拿不到**时唯一的码（没注入这一页的云配置面，或注入的那
+ *     一半抛了）—— 「拿不到就是拿不到」，与 `ctx.me.voice` / `ctx.battle.damage()` 同一条纪律。
+ * 云配置那一格自己的三个码（未知类别 / 危险键 / 坏值）住在 `public/js/ui/cloudPrefs.js`：判据在那边，
+ * 码也跟着判据走（锚点写 `module: 'cloudPrefs'`）。
+ */
+export const CLIENT_SESSION_BAD_NAME = 'CLIENT_SESSION_BAD_NAME';
+export const CLIENT_SESSION_NAME_UNAVAILABLE = 'CLIENT_SESSION_NAME_UNAVAILABLE';
+export const CLIENT_CLOUD_UNAVAILABLE = 'CLIENT_CLOUD_UNAVAILABLE';
+
+/**
+ * 昵称清洗：**逐字**就是 `screenActions.enter` 那一段（§28.55）：剥掉 C0 控制码、DEL 与 C1 控制码，`trim()`，
+ * 再 `slice(0, NAME_MAX_LEN)`。`#` 与零宽字符的合法性归服务端判（前端不是鉴权边界，见 docs/WORKSHOP.md）。
+ *
+ * ⚠ 这一条字符类是从**来源分支**上修回来的：那边把控制码写成 caret 记法的**字面文本**（`^@-^_`），源码里没有真控制
+ * 字符 ⇒ 字符类变成 U+005E 到 U+0040 的反向区间，整个模块连 `node --check` 都过不去。这里按显然的意图写成显式转义
+ * （同文件的 `isPanelId` 也有同一处 caret 记法，**未吸收** —— 保留我方正确的 `[\s\u0000-\u001f]`）。
+ *
+ * 抽成一个函数是为了让 `screenActions.enter` 与 `ctx.session.setName` 走**同一段**字节 —— 两份抄写的清洗器
+ * 早晚会漂，而漂的方向是「同一台机器上两个入口对同一个昵称给出两种结果」。
+ * @param {any} rawName @returns {string}
+ */
+const sanitizeModName = (rawName) => String(rawName ?? '').replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim().slice(0, NAME_MAX_LEN);
+
+/**
+ * 面板偏好表（模块级；**落盘**，`store.js loadPref` / `savePref` 的 `sp.pref.panel.<键>`）。
+ *
+ * **为什么落盘**：这是玩家自己的选择（皮肤的「我选了哪一套」就是其中一格，`workshop/skin-picker` 写的就是它），
+ * 而它必须活过**一次页面重载**：内存里那份重载后是空的，于是面板自己显示的选择会退回默认 —— 引擎那一侧即使
+ * 记住了渲染用的选择，同一个控件上也会出现「画面是新时装、按钮写着默认」。与载入的四个 loadout 切片
+ * （`ui/loadoutSync.js`）同一条纪律。`Map` 仍然是**进程内的缓存**，读一次就不再碰 localStorage。
+ *
+ * **为什么不在模块顶层碰 `localStorage`**：本文件在**服务端测试里也被 import**（注册点的用例跑在 Node 下），而
+ * `localStorage` 在那里不存在。`store.js` 的 `loadPref` / `savePref` 正是为这件事写的（可选链 + try/catch，读写
+ * 失败静默回退），所以读写都**只在调用时**发生 —— 顶层仍然一个字节都不碰。
+ *
  * 键按 `<包 id>/<面板写的键>` 前缀分区：两个包用同一个键名不会互相覆盖（否则是**跨包串味**，最难查的那种）。
  * @type {Map<string, any>}
  */
 const prefs = new Map();
-const setPref = (k, v) => { prefs.set(k, v); };
-const getPref = (k) => prefs.get(k);
-/** 清空（测试用；`dispose()` 不收，因为偏好本来就该活过界面）。 */
+const prefKey = (k) => `panel.${k}`;
+const setPref = (k, v) => { prefs.set(k, v); savePref(prefKey(k), v === undefined ? null : v); };
+const getPref = (k) => {
+  if (!prefs.has(k)) {
+    const stored = loadPref(prefKey(k), null);
+    if (stored !== null) prefs.set(k, stored);
+  }
+  return prefs.get(k);
+};
+/** 清空（测试用；`dispose()` 不收，因为偏好本来就该活过界面）。落盘的那一份留着 —— 下次开机照旧读回来。 */
 export const clearPanelPrefs = () => { prefs.clear(); };
 
 /**
@@ -166,6 +278,29 @@ export function readonlySnapshot(value) {
     for (const [k, v] of Object.entries(value)) copy[k] = readonlySnapshot(v);
   }
   return Object.freeze(copy);
+}
+
+const SCREEN_PRIVATE_KEYS = new Set(['token', 'accesstoken', 'refreshtoken', 'sessiontoken', 'playertoken',
+  'auth', 'authorization', 'password', 'secret', 'credential', 'credentials', 'csrf', 'csrftoken']);
+function screenSafeCopy(value, seen = new WeakSet()) {
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) return null;
+  seen.add(value);
+  const copy = Array.isArray(value) ? [] : {};
+  if (Array.isArray(value)) {
+    for (const item of value) copy.push(screenSafeCopy(item, seen));
+  } else {
+    for (const [key, item] of Object.entries(value)) {
+      const normalized = key.replace(/[-_]/g, '').toLowerCase();
+      if (SCREEN_PRIVATE_KEYS.has(normalized)) continue;
+      copy[key] = screenSafeCopy(item, seen);
+    }
+  }
+  seen.delete(value);
+  return copy;
+}
+function screenSnapshot(value) {
+  return value === undefined ? undefined : readonlySnapshot(screenSafeCopy(value));
 }
 
 /** 组件已经渲染出来的全部该宿主的容器（可重复宿主会有多个）；浏览器里是 `querySelectorAll`。 */
@@ -272,14 +407,18 @@ const isPanelId = (v) => typeof v === 'string' && v.length > 0 && v.length <= 64
  *
  * @param {{
  *   store: { get: () => any, subscribe: (fn: Function) => Function, patch: (key: string, value: object) => void },
- *   net?: { on: Function, sendResourceMessage: Function } | null,
+ *   net?: { on: Function, sendResourceMessage: Function, snapshot?: Function } | null,
  *   log?: { info?: Function, warn?: Function, error?: Function } | null,
  *   notify?: (text: string, kind?: string) => void,
  *   importModule?: (url: string) => Promise<any>,
  *   slotHost?: (slot: string) => any,
  *   createElement?: (tag: string) => any,
  *   env?: Record<string, boolean>,
+ *   settings?: { get: () => any, setVoiceLang: (charId: string, lang: string) => boolean } | null,
+ *   battle?: { damage: () => any } | null,
+ *   cloud?: { read: (deps?: any) => any, apply: (patch: any, deps?: any) => any } | null,
  *   onWrapsChanged?: (links: number) => void,
+ *   onAppearanceChanged?: () => void,
  * }} deps
  * @returns {{ apply: (list: any) => { accepted: number },
  *   mounted: () => string[], wrapped: () => string[], refusals: () => Array<{ code: string, detail: string }>, dispose: () => void }}
@@ -295,19 +434,66 @@ export function createPanelRegistry(deps) {
     || ((tag) => (globalThis.document ? globalThis.document.createElement(tag) : null));
   const env = deps.env || browserEnv();
   const styleHost = deps.styleHost || browserStyleHost;
+  const screenHost = deps.screenHost || (() => globalThis.document && (globalThis.document.body || globalThis.document.documentElement));
+  const screenRoot = deps.screenRoot || (() => globalThis.document && globalThis.document.documentElement);
+  const renderView = typeof deps.renderView === 'function' ? deps.renderView : ((vnode, el) => preactRender(vnode, el));
+  const screenIdentity = deps.identity || identity;
   const themeHost = deps.themeHost || browserThemeHost;
   const slotHosts = deps.slotHosts || browserSlotHosts;
   /** 客户端数据层（`public/js/data.js`）。注入而不是 import：那是浏览器模块（fetch / location），
    *  extensions.js 必须能在 Node 里整套跑（`test/modClientPanels.test.js` 就是这么跑的）。 */
   const dataApi = deps.data || null;
+  /**
+   * **设置库的注入面**（业主裁决 2026-10-11 的第二个件）：`{ get, setVoiceLang }`。
+   *
+   * 为什么是注入而不是 import：设置库住在 `public/js/ui/settings.js`，而那个模块拖进 Preact、音频管理器、
+   * 数据层与语言包 —— 这里是**能在 Node 下整套跑**的一层，不能因为一格读数把整条界面链拖进来（`data` 那一格
+   * 是同一条理由）。注入的两样都来自引擎自己那一份真相：
+   *   * `get()` → `settingsStore.get()`（`ctx.me.voice` 的唯一来源）；
+   *   * `setVoiceLang(charId, lang)` → `ui/settings.js setVoiceLangByChar`（**唯一一个**面板能写的设置格，
+   *     它只改 `voiceLangByChar` 并走那条既有 sanitize + savePref 的路径）。
+   * 没有注入时两格都**拿不到就是 `null` / 点名拒绝**，不抛、不编造（见 `ctx.me.voice` 与
+   * `ctx.session.setVoiceLang`）。
+   */
+  const settingsApi = deps.settings || null;
+  /**
+   * **战斗运行时的注入面**（业主裁决 2026-10-11 的第二批：`ctx.battle.damage()`，DESIGN §28.38）：注入的是
+   * **一个函数**（`battleRunner.damage`），不是 runner 句柄 —— 与 `settings` / `data` 同一条理由：这个文件必须能在
+   * Node 下整套跑，而 `public/js/battle/runner.js` 拖进 `/sim/` 加载器、渲染帧调度与 `net`/`store` 单例。
+   *
+   * 「不传什么就是边界」在这里同样成立：面板拿到的是**一次读一份的冻结副本**，没有 `step`、没有 `Battle`、
+   * 没有 `_entries`，也没有 `stats()` 那种运行时可写面。没有注入时那一格**拿不到就是 `null`**（一行日志，见
+   * `noteBattleGap`），不抛、不编造。
+   */
+  const battleApi = deps.battle || null;
+  /**
+   * **云配置同步的注入面**（DESIGN §28.58，账号面的第二格）：`{ read, apply }`。
+   *
+   * `main.js` 给的就是 `public/js/ui/cloudPrefs.js` 的**两个函数**（读的是引擎自己那条 `sp.pref.*` 落盘路径，
+   * 白名单与判据都住在那个模块里）—— 不是 store 句柄、不是 localStorage：与 `settings` / `battle` / `data`
+   * 逐字同一条理由（这个文件必须能在 Node 下整套跑，而那一层不该把 `store.js` 的偏好读写再抄一遍）。
+   *
+   * 没有注入时两格都**拿不到**：`ctx.cloud.read()` 是 `null`、`ctx.cloud.apply()` 是 `false`，各点名
+   * `CLIENT_CLOUD_UNAVAILABLE` 一次 —— 「拿不到就是拿不到」，不抛、不编造。
+   */
+  const cloudApi = deps.cloud || null;
   /** 组件级改写注册成功之后的**重画回调**（DESIGN §28.19）：链是渲染期生效的，注册完成之后已经画出来的那一帧
    *  必须重画一次（`main.js` 重新 `render` 同一个 `<App/>`）。没有包声明 `wraps` 时它一次都不会被调用。 */
   const onWrapsChanged = typeof deps.onWrapsChanged === 'function' ? deps.onWrapsChanged : () => {};
+  /** 换装（皮肤层）落地之后的**重画回调**：面板选中一套时装、引擎把它并进本机选择之后调用一次（`main.js` 重新
+   *  `render` 同一个 `<App/>`）。没有包发 `room.appearance` 时它一次都不会被调用 —— 页面上不多一次渲染。 */
+  const onAppearanceChanged = typeof deps.onAppearanceChanged === 'function' ? deps.onAppearanceChanged : () => {};
   /** 表名 → 冻结快照（首次读时造一次，之后共享；没声明过的表根本走不到这里）。 */
   const dataSnapshots = new Map();
 
   /** @type {Array<any>} */
   let panels = [];
+  /** 整屏声明与面板走**同一份** `welcome.modPanels` 线表：服务端只多给一个 `kind: 'screen'`，
+   *  不新开通道、不加 wire 字段 —— 老客户端读到未知 kind 会点名拒绝，而不是静默挂错。 */
+  let screens = [];
+  let activeScreen = null;
+  let screenBaseStyleEl = null;
+  const screenSubscriptions = new Map();
   /** panel key -> { rec, host, unmount } while mounted (or being mounted). Repeatable hosts key by
    *  `<panel>#<hostKey>` — one entry per container the panel mounted into. */
   const mounted = new Map();
@@ -327,6 +513,25 @@ export function createPanelRegistry(deps) {
   const themePrevious = new Map();
   /** 面板订阅包通道（`net.on('<通道>')`）拿到的退订函数：`dispose` 要一并撤掉。 */
   const channelOffs = [];
+  /**
+   * 引擎自己那一份 `welcome` 快照（DESIGN §28.24 / §28.25，面板 `ctx.net.welcome()` 的**唯一**来源）。
+   *
+   * 引擎本来就在订阅 `welcome`（`main.js` 的 `onWelcome` / 面板清单 / 资源声明 / 主题），这里只是把**同一条**帧
+   * 的只读深拷贝留下最后一份：`null` = 这一页还没收到过任何一帧（干净安装、标题屏、握手被拒都算）。
+   * 面板由**同一条** welcome 装载，注册点自己的订阅在 `apply()` 之前就注册好了，所以这一帧它收得到 ——
+   * 但这仍然**不保证**首帧可见（订阅者顺序、服务端重发都不由面板决定）：拿不到就是 `null`，不编造。
+   * @type {any}
+   */
+  let welcomeSnapshot = null;
+  /**
+   * `ctx.net.transport()` 那一格**为什么拿不到**已经报过的原因（每种原因只记一行）。
+   *
+   * 「不许静默失败」在这里的正确形状是**一次一行**，不是每次读一行：面板可能每秒问一次，而
+   * 「这台服务器没有那一格字段」是一个**安装事实**（不是故障）—— 每帧刷屏的日志和没有日志一样没用。
+   * 没收到 `welcome` 时**不记**：那是「还没到时候」（标题屏、握手中），不是缺字段。
+   * @type {Set<string>}
+   */
+  const transportGapsLogged = new Set();
   /** panel key -> 它注册成功的 wraps 链接（模块每个面板只 import 一次）。 */
   const wrapLinks = new Map();
   /** panel key -> 这个模块导出过 `mount` / `default` 吗（**只改写**的模块没有，也不该因此被点名拒绝）。 */
@@ -338,11 +543,62 @@ export function createPanelRegistry(deps) {
   let flushing = false;
   let dirty = false;
   let disposed = false;
+  /**
+   * 那一份 `welcome` 快照的订阅退订函数（`dispose` 要一并撤掉 —— 注入过一次的东西必须能收回来）。
+   *
+   * **为什么在构造时就订阅，而不是等某个面板读第一格时再订阅**：`main.js` 在收到 `welcome` 的那一次回调里才
+   * `apply()` 面板清单（`:341`），所以「读第一格时再订阅」注定**永远**追不上任何一帧 —— 连重连的那一帧都追不上。
+   * 注册点本来就活在这一层订阅里（它与 `modPanels` / `assets` / `theme` 是同一个订阅者的邻居），先订阅一格
+   * 读面不新增任何**帧**、任何请求、任何 DOM：只是在别人已经在处理的那条帧上留一份只读副本。
+   * @type {Function|null}
+   */
+  let unsubscribeWelcome = null;
 
   /** One named refusal: reported to the console and collected for the caller (a test, a diagnostic report). */
   function refuse(code, detail) {
     rejected.push({ code, detail });
     log?.error?.(`[mod-panels] ${code}: ${detail}`);
+  }
+
+  /**
+   * `ctx.net.transport()` 拿不到读数时的那**一行**日志（每种原因一次，见 `transportGapsLogged` 的注释）。
+   *
+   * 走注册点的 `log`（`main.js` 接的是页面控制台）：面板的 `ctx.log` 是按包分区的，而「这格字段这台服务器
+   * 根本没有」是一个**引擎级**的事实，该在页面控制台上说一次，而不是在每个读它的包的日志里各说一次。
+   * @param {string} reason @param {string} detail
+   */
+  function noteTransportGap(reason, detail) {
+    if (transportGapsLogged.has(reason)) return;
+    transportGapsLogged.add(reason);
+    log?.warn?.(`[mod-panels] CLIENT_TRANSPORT_UNAVAILABLE (${reason}): ${detail}`);
+  }
+
+  /**
+   * `ctx.battle.damage()`（DESIGN §28.38）拿不到读数时的那**一行**日志，每种原因一次（`transportGapsLogged`
+   * 的同一条规矩、同一个理由：面板每秒可能读一次，「这一格没接上」是一个**引擎级安装事实**，刷屏的日志与没有日志
+   * 一样没用）。走注册点的 `log`，不走进面板自己的 `ctx.log` —— 那是按包分区的，而这件事只发生一次。
+   *
+   * **没有正在跑的战斗时不记**（`without-battle` 那条路根本走不到这里）：那是一个**正常状态**（准备期、结算期、
+   * 刚开局），不是一个缺件。日志留给三种真的「接不上」：门面没被注入、`damage()` 抛了、返回值不成形。
+   * @type {Set<string>}
+   */
+  const battleGapsLogged = new Set();
+  /** @param {string} reason @param {string} detail */
+  function noteBattleGap(reason, detail) {
+    if (battleGapsLogged.has(reason)) return;
+    battleGapsLogged.add(reason);
+    log?.warn?.(`[mod-panels] CLIENT_BATTLE_UNAVAILABLE (${reason}): ${detail}`);
+  }
+
+  // 引擎自己那一份 `welcome` 快照（DESIGN §28.24 / §28.25）。`net.on` 不在（Node 用例、注入面极小的宿主）时什么都不做：
+  // 那一格读面就是 `null`，面板照样装得上。
+  if (net && typeof net.on === 'function') {
+    try {
+      const off = net.on('welcome', (msg) => { welcomeSnapshot = readonlySnapshot(msg ?? null); });
+      if (typeof off === 'function') unsubscribeWelcome = off;
+    } catch (err) {
+      log?.error?.('[mod-panels] could not subscribe to `welcome` for ctx.net.welcome()', err);
+    }
   }
 
   /** The wire entry, re-judged here: the client is a second reader of the same declaration (the server was the first). */
@@ -353,7 +609,17 @@ export function createPanelRegistry(deps) {
     if (!isPanelId(id)) { refuse('CLIENT_BAD_PANEL_ID', `panel id ${JSON.stringify(id)} is not a usable id`); return null; }
     if (typeof pack !== 'string' || !pack) { refuse('CLIENT_BAD_PANEL_ID', `panel "${id}" has no pack id`); return null; }
     const key = `${pack}/${id}`;
-    if (!MOD_PANEL_SLOTS.includes(raw.slot)) {
+    const isScreen = raw.kind === 'screen';
+    if (raw.kind !== undefined && !isScreen) {
+      refuse('CLIENT_BAD_DECL_KIND', `declaration "${key}" has unknown kind ${JSON.stringify(raw.kind)}`);
+      return null;
+    }
+    if (isScreen) {
+      if (!MOD_SCREEN_ROUTES.includes(raw.route)) {
+        refuse('CLIENT_BAD_SCREEN_ROUTE', `screen "${key}" declares route ${JSON.stringify(raw.route)} — not one of ${MOD_SCREEN_ROUTES.join(', ')}`);
+        return null;
+      }
+    } else if (!MOD_PANEL_SLOTS.includes(raw.slot)) {
       refuse('CLIENT_BAD_PANEL_SLOT', `panel "${key}" declares slot ${JSON.stringify(raw.slot)} — not one of ${MOD_PANEL_SLOTS.join(', ')}`);
       return null;
     }
@@ -425,7 +691,8 @@ export function createPanelRegistry(deps) {
       }
     }
     return {
-      key, id, pack, slot: raw.slot, url,
+      key, id, pack, slot: isScreen ? 'root.overlays' : raw.slot, url,
+      ...(isScreen ? { kind: 'screen', screenRoute: raw.route } : {}),
       wraps,
       order: Number.isInteger(raw.order) ? raw.order : 0,
       gate: typeof raw.gate === 'string' && raw.gate ? raw.gate : null,
@@ -445,6 +712,13 @@ export function createPanelRegistry(deps) {
    */
   let appearanceProvider = null;
   let appearanceRefused = false;
+
+  /**
+   * 已经注册的**素材加载源**提供者（`<包>/<面板id>`）或 null；`sourcesRefused` 记「有人想注册但被拒」。
+   * 与上面那一对逐条同构，理由见 `registerSources`。见 DESIGN §28.40。
+   */
+  let sourcesProvider = null;
+  let sourcesRefused = false;
 
   /**
    * 一个模块导出了 `appearance(ctx)` 时，把它接进解析链。
@@ -485,6 +759,53 @@ export function createPanelRegistry(deps) {
   }
 
   /**
+   * **素材加载源**的提供者（`sources(ctx)`，DESIGN §28.40）—— 与 `registerAppearance` **逐条同构**，因为它们是同一
+   * 张表面的两半：`pack.json.assets.mirrors[]` 说「哪些镜像被允许」，这个提供者只说「先试哪一条」。
+   *
+   * 四条性质，逐条照抄外观那条（差异只有一处，写在最后）：
+   *   * **顺序**：import 之后、`mount` 之前 —— 一条只提供加载源、不挂界面的模块也该生效（与「只提供外观」同族）；
+   *   * **最多一个**：后注册者被点名拒绝（`CLIENT_SOURCES_TAKEN`）——「哪台主机先说话」不许取决于 import 顺序；
+   *   * **失败一律点名**：抛错 `CLIENT_SOURCES_THREW`、没有 `order` 成员 `CLIENT_SOURCES_BAD_SHAPE`；
+   *   * **不导出 `sources` 时不是失败**（返回 `true`）：那是「这个面板不管加载源」，是绝大多数面板。
+   *
+   * **唯一的差异**：这里收的**不是一个能被调用的值，而是一个函数**。外观那条收到的是 `lookup`，因为链每一帧要拿它
+   * 回答一次「这个干员画哪一张」；加载源这条一次导入只问一次「先试哪一条」，所以注册的是一个纯函数，由
+   * `resources/sources.js orderDeclared()` 在**导入那一刻**调用，并且**只接受已声明 id 的排列/子集** ——
+   * 一个主机名或 URL 在那里被拒（`CLIENT_SOURCES_BAD_ORDER`）。于是「包能改加载源」与「包不能指定任意主机」这两句话
+   * 同时成立，而后者是**结构性**的：这个注册面没有位置写下任何地址。
+   * @param {any} rec @param {any} mod
+   * @returns {boolean} 是否成功建立（没有导出 `sources` 时返回 true：那是「这个面板不提供加载源」）
+   */
+  function registerSources(rec, mod) {
+    const fn = mod && typeof mod.sources === 'function' ? mod.sources : null;
+    if (!fn) return true;
+    if (sourcesProvider) {
+      sourcesRefused = true;
+      refuse('CLIENT_SOURCES_TAKEN', `panel "${rec.key}" exports sources(ctx) but "${sourcesProvider}" already provides one — at most ONE load-source provider may be active (which mirror speaks first must not depend on import order)`);
+      return false;
+    }
+    let provided;
+    try {
+      // `ctx` 与面板同一份（同一个边界：没有 store / match / battle）
+      provided = fn(panelContext(rec, null, null));
+    } catch (err) {
+      refuse('CLIENT_SOURCES_THREW', `panel "${rec.key}" threw in sources(ctx): ${err && err.message ? err.message : String(err)}`);
+      return false;
+    }
+    const order = provided && typeof provided.order === 'function' ? provided.order : null;
+    if (!order) {
+      refuse('CLIENT_SOURCES_BAD_SHAPE', `panel "${rec.key}" sources(ctx) must return { order(mirrors) } (got ${provided === null ? 'null' : typeof provided}) — the mirrors themselves are declared in pack.json, never here`);
+      return false;
+    }
+    if (!setSourceOrder(order, rec.key)) {
+      refuse('CLIENT_SOURCES_TAKEN', `panel "${rec.key}" could not register its load-source provider`);
+      return false;
+    }
+    sourcesProvider = rec.key;
+    return true;
+  }
+
+  /**
    * The frozen surface one panel module is called with (see the header: what is NOT here is the point).
    *
    * `extra` is how a **component rewrite** (DESIGN §28.19) gets its two additions on top of the very same object:
@@ -493,14 +814,35 @@ export function createPanelRegistry(deps) {
    * added, and there is still no store, no engine and no match state).
    */
   function panelContext(rec, host, hostKey = null, extra = null) {
+    const declarationPath = rec.kind === 'screen' ? 'client.screens' : 'client.panels';
     const scoped = Object.freeze({
       info: (...a) => log?.info?.(`[mod ${rec.key}]`, ...a),
       warn: (...a) => log?.warn?.(`[mod ${rec.key}]`, ...a),
       error: (...a) => log?.error?.(`[mod ${rec.key}]`, ...a),
     });
+    /**
+     * 身份边界的可用性：`saveName` / `setEntered` / `net.setName` 三件都齐才算「落得下去」。`screenActions.enter`
+     * 与 `ctx.session.setName` **共用这一份判据**（两处各写一遍，早晚会漂成「一个入口能进、另一个不能」）。
+     */
+    const nameBoundaryReady = () => !!(screenIdentity && typeof screenIdentity.saveName === 'function'
+      && typeof screenIdentity.setEntered === 'function' && net && typeof net.setName === 'function');
+    /**
+     * 把**已经判过（非空）**的昵称落进引擎 —— 与 `screens/title.js enterSession` 逐字同一条链：落盘身份、
+     * 置「已进入」、把 `me.name` 与 `session.entered` 摊开写进 store、把名字交给 `net`（下一次 hello 用它）。
+     * @param {string} name
+     */
+    const commitName = (name) => {
+      screenIdentity.saveName(name);
+      screenIdentity.setEntered(true);
+      store.set((state) => ({ me: { ...state.me, name }, session: { ...state.session, entered: true } }));
+      net.setName(name);
+    };
     const session = Object.freeze({
       /**
-       * The entry gate (缺口 3): the two `session` flags `selectRoute` reads. The ONLY store write a panel gets.
+       * The entry gate (缺口 3): the two `session` flags `selectRoute` reads.
+       *
+       * 在此之前这是面板拿到的**唯一**一格 store 写口；§28.58 起同一格门面上多了 `setName`（它写的是 `me.name`
+       * 与 `session.entered` 那一对「我是谁」的位 —— 仍然**读不到 store 句柄**，写口仍然只有这两个）。
        * @param {{ required?: boolean, ready?: boolean }} state
        * @returns {boolean} whether anything was written
        */
@@ -511,6 +853,38 @@ export function createPanelRegistry(deps) {
         if (state && typeof state.ready === 'boolean') patch.preloadReady = state.ready;
         if (!Object.keys(patch).length) return false;
         store.patch('session', patch);
+        return true;
+      },
+      /**
+       * **给自己的游戏名换一个**（DESIGN §28.58，账号面的第一格）：面板今天只会 `setPreload` / `setPref` /
+       * `setVoiceLang` / `send`，**改不动自己的游戏名** —— 而「账号登录之后把游戏名落成账号名」正是一个真实账号
+       * 系统必须做的事（引擎的 `net.setName` 不对外，`ctx.net` 那个门面上没有它）。
+       *
+       * 这一格**只是把整屏早就有的那条入口带给面板**：清洗规则与落地路径都**逐字复用**同一个文件的
+       * `screenActions.enter`（`screens/title.js enterSession` 是同一条链）—— 剥控制码 → `trim()` →
+       * `slice(0, NAME_MAX_LEN)`，然后 `saveName` + `setEntered(true)` + 摊开写 store + `net.setName`。
+       * 于是「面板设的名字」与「玩家在标题屏敲的名字」在引擎里是**同一件事**，不存在第二种昵称语义。
+       *
+       * 边界（与其余几格同形：拿不到就点名，不静默、不抛）：
+       *   * 清洗之后为空 ⇒ `CLIENT_SESSION_BAD_NAME` + `false`；
+       *   * 身份边界不齐（Node 用例、极小宿主：没有 `screenIdentity` 或 `net.setName`）⇒
+       *     `CLIENT_SESSION_NAME_UNAVAILABLE` + `false`（**不抛**）。
+       *
+       * 它**不**放行任何别的 store 写口：写进去的只有 `me.name` 与 `session.entered`（后者是为了让改名这件事在
+       * `selectRoute` 眼里与「进入游戏」一致），store 里别的键一个都不碰；没有 `match` / `room` 的写权限。
+       * @param {any} rawName @returns {boolean} 是否写入
+       */
+      setName(rawName) {
+        const name = sanitizeModName(rawName);
+        if (!name) {
+          refuse(CLIENT_SESSION_BAD_NAME, `panel "${rec.key}" setName(...) — the name is empty after stripping control codes and surrounding spaces (the same rule the title screen applies)`);
+          return false;
+        }
+        if (!nameBoundaryReady()) {
+          refuse(CLIENT_SESSION_NAME_UNAVAILABLE, `panel "${rec.key}" setName(...) — the session boundary is unavailable on this page (no identity store / no net.setName), so the write is refused by name instead of silently doing nothing`);
+          return false;
+        }
+        commitName(name);
         return true;
       },
       /**
@@ -550,10 +924,59 @@ export function createPanelRegistry(deps) {
         return v === undefined ? dflt : v;
       },
       /**
+       * **设置库里唯一一格面板能写的东西**：某个干员的配音语言（业主裁决 2026-10-11「能优化就优化，但要守边界」）。
+       *
+       * 面板今天读得到这台机器用哪套配音（`ctx.me.voice`），但改不了它 —— 而「这个干员的语音我想听另一种」
+       * 正是干员详情里那个切换口做的事。所以给一格**受限**写口，形状与 `setPreload` 同族（成功/失败用布尔回答），
+       * 边界见模块顶部 `VOICE_CHAR_ID_RE` 的注释，三条：
+       *   * 只写 `voiceLangByChar` 的**这一格**，其它设置一个字节都不动；
+       *   * 值只收 `VOICE_LANGS` 的成员，或 `''` / `null`（清掉覆盖 ⇒ 回到跟随全局）；
+       *   * 纯本地偏好：播放时解析，发不出帧、改不了对局 —— 「面板可以画错、但不能算错」在这里就是
+       *     「面板可以让你多听一句别的配音，但不能多打一点伤害」。
+       *
+       * **越界一律 `false` 并点名**（`CLIENT_VOICE_*`），不静默：一个被丢掉的写入如果只是「没反应」，
+       * 作者会以为是引擎的 bug；`undefined`（忘了传第二个参数）也**不是**清空 —— 清空要写明 `''` 或 `null`。
+       * @param {string} charId 干员 id（形状见 `VOICE_CHAR_ID_RE`，与 `sanitizeVoiceLangByChar` 同一判据）
+       * @param {'cn'|'jp'|'en'|'kr'|''|null} lang 配音语言，或空值 = 清除这一格的覆盖
+       * @returns {boolean} 是否写入
+       */
+      setVoiceLang(charId, lang) {
+        if (typeof charId !== 'string' || !VOICE_CHAR_ID_RE.test(charId)) {
+          refuse('CLIENT_VOICE_BAD_CHAR', `panel "${rec.key}" setVoiceLang(${JSON.stringify(typeof charId === 'string' ? charId.slice(0, 40) : charId)}, …) — an operator id must be "char_" + 1..64 of A-Za-z0-9_ (the same shape a per-operator voice-override key may have)`);
+          return false;
+        }
+        const clear = lang === '' || lang === null;
+        if (!clear && !VOICE_LANGS.includes(lang)) {
+          refuse('CLIENT_VOICE_BAD_LANG', `panel "${rec.key}" setVoiceLang("${charId}", ${JSON.stringify(lang)}) — the dub must be one of ${VOICE_LANGS.join(', ')}, or "" / null to clear this operator's override. That is the whole list: a panel cannot invent a dub, and an omitted argument is not a clear (write "" instead)`);
+          return false;
+        }
+        if (!settingsApi || typeof settingsApi.setVoiceLang !== 'function') {
+          refuse('CLIENT_VOICE_NO_SETTINGS', `panel "${rec.key}" setVoiceLang("${charId}", …) — this page injected no settings store, so the write is refused by name instead of silently doing nothing`);
+          return false;
+        }
+        /** @type {boolean} */
+        let ok;
+        try { ok = settingsApi.setVoiceLang(charId, clear ? '' : lang) === true; } catch (err) {
+          refuse('CLIENT_VOICE_WRITE_FAILED', `panel "${rec.key}" setVoiceLang("${charId}") threw in the settings store: ${err && err.message ? err.message : String(err)}`);
+          return false;
+        }
+        if (!ok) {
+          // 到这里说明两边的判据都过了、而设置库自己没写：它那一层还有一条上限（`VOICE_OVERRIDE_MAX`，400 个
+          // 干员）—— 一个**只有引擎知道**的边界，所以在这里点名，而不是让面板以为写成功了。
+          refuse('CLIENT_VOICE_REFUSED', `panel "${rec.key}" setVoiceLang("${charId}", ${JSON.stringify(lang)}) was refused by the settings store (the per-operator override table has a size limit of its own; nothing was written)`);
+          return false;
+        }
+        return true;
+      },
+      /**
        * **发一条引擎消息**（业主裁决：面板要能主动做一件对房内可见的事，例如换装广播）。
        *
-       * 白名单是**闭枚举** `PANEL_SEND_TYPES`，不是「想发什么发什么」：面板能改的是**展示**，
-       * 所以今天只有 `room.appearance`（它只改别人看到的外观、不碰战果）。加一条要同时改这张表、
+       * 白名单是**闭枚举** `PANEL_SEND_TYPES`，不是「想发什么发什么」：面板能改的是**展示 / 用户动作**，
+       * 所以今天三条：`room.appearance`（只改别人看到的外观、不碰战果）与 `room.mods`（房主改本房间装载的
+       * 工坊包集合 —— 它改的是**装载面**、不是战果，服务端另有三道点名闸门把守：非房主 `NOT_HOST`、已开局、
+       * 任一真人 `ready` ⇒ `MOD_SET_LOCKED`），以及 `room.chat`（**用户动作**：往房内聊天里说一句 —— 与玩家自己
+       * 点「发送」是同一条 C2S，改的是**别人读到的话**、不是这一局的任何数值；能不能说仍由服务端按 `chatMode` /
+       * 旁观者身份裁决）。加一条要同时改这张表、
        * 它的 C2S 形状与一条测试 —— 这是有意的摩擦（一个面板能改对局状态的那一天，就是这一层失效的那一天）。
        *
        * 形状由 `shared/protocol.js` 再判一遍（客户端是**第一个**读者，服务端是最后的）：这里先判一次
@@ -567,14 +990,25 @@ export function createPanelRegistry(deps) {
           return false;
         }
         if (!net || typeof net.send !== 'function') return false;
-        const msg = { t: type, ...(fields && typeof fields === 'object' ? fields : {}) };
+        let out = fields && typeof fields === 'object' ? fields : {};
+        // 换装（皮肤层）：面板发的是**增量** `{ [charId]: { skinId } | { avatar } | null }`（`null` = 移除这一位）。
+        // 引擎把它并进本机选择（`portraitChain.mergeOwnAppearance`）、补齐成**完整**的 picks 表再上线 ——
+        // 线上 `picks` 是**整体替换**，发一份残缺的会把别的干员一起抹掉。合并成功之后触发一次重画：
+        // 立绘 / 头像（本机）与同房的人看到的因此是同一份。
+        if (type === 'room.appearance' && out.picks && typeof out.picks === 'object') {
+          out = { ...out, picks: mergeOwnAppearance(out.picks) };
+        }
+        const msg = { t: type, ...out };
         // 客户端先判一次形状（与服务端同一份判据）：判不过就**不发**，并点名 —— 发出去只会换回一个 error 帧
         const bad = typeof validateC2S === 'function' ? validateC2S(msg) : null;
         if (bad) {
           refuse('CLIENT_SEND_BAD_SHAPE', `panel "${rec.key}" send("${type}") has a bad shape: ${bad}`);
           return false;
         }
-        return net.send(msg);
+        if (type === 'room.appearance') onAppearanceChanged();
+        // `net.send(type, fields)` —— 引擎的发送口收「类型 + 字段」两个参数（`public/js/net.js`：它自己拼 `t`）。
+        // 传一整个 `{ t, … }` 对象会把类型变成 `[object Object]`，被 net 当场拒收（`unknown type [object Object]`）。
+        return net.send(type, out);
       },
     });
     // 只读会话态的取数：每次读都重新取一次 store（面板挂上之后**不重挂**，一次性的值会变陈旧 —— 与
@@ -622,10 +1056,50 @@ export function createPanelRegistry(deps) {
      * **边界仍然由「不传什么」保证**：只有这几样标量/浅快照 —— **没有** store 句柄、没有 match / battle 对象、
      * 没有 battleRunner、没有 audio。面板**读得到、改不动、也算不了**。
      */
+    /**
+     * **配音读数**（`ctx.me.voice`，业主裁决 2026-10-11）：`{ global, byChar }`，与 `readMe()` 同形 ——
+     * **每次读都重新取一次设置库**，返回一份新的冻结对象。
+     *
+     * 为什么面板答不出来：设置库住在**另一个** store（`public/js/ui/settings.js:50` 的 `settingsStore`，
+     * 与 `ctx.me` 读的那个 `public/js/store.js` 不是同一个），而注入面里没有 store 句柄 —— 面板拿不到
+     * 「这台机器现在用哪套配音」，也推不出逐干员的覆盖。
+     *
+     * 形状与只读语义：
+     *   * `global`：全局配音（`settings.voiceLang`），永远是 `VOICE_LANGS` 的成员；设置库没注入 / 不成形时整格是 `null`；
+     *   * `byChar`：逐干员覆盖的**冻结浅拷贝**（缺档 = 不在这里，不是 `null`）—— 连同 `global` 就是完整的
+     *     「覆盖 → 全局」链，而链的最后一档（默认配音）由 `sanitizeSettings` 保证不会露出来：store 里的
+     *     `voiceLang` 一定是 `VOICE_LANGS` 的成员，所以 `byChar[charId] ?? global` 就是引擎播放时用的那个语言。
+     *     这里对 store 里的值**再判一次**（第二个读者）：形状不是 `char_…` 的键、不在 `VOICE_LANGS` 里的值一律
+     *     不进快照 —— 面板照它画出来的东西不该与音频管理器播放的不一致。
+     *
+     * 它是**读数**：改它 `TypeError`，引擎之后的选择变化不会回溯进**已经发出去**的那一份（每次读都是新的）。
+     * @returns {{ global: string|null, byChar: Record<string, string> }|null}
+     */
+    const readVoice = () => {
+      /** @type {any} */
+      let s;
+      try { s = settingsApi && typeof settingsApi.get === 'function' ? settingsApi.get() : null; } catch { return null; }
+      if (!s || typeof s !== 'object') return null;
+      /** @type {Record<string, string>} */
+      const byChar = {};
+      const raw = s.voiceLangByChar;
+      if (raw && typeof raw === 'object') {
+        for (const [k, v] of Object.entries(raw)) if (VOICE_CHAR_ID_RE.test(k) && VOICE_LANGS.includes(v)) byChar[k] = v;
+      }
+      return Object.freeze({
+        global: VOICE_LANGS.includes(s.voiceLang) ? s.voiceLang : null,
+        byChar: Object.freeze(byChar),
+      });
+    };
     const meFacade = Object.freeze({
       get playerId() { return readMe().playerId; },
       get name() { return readMe().name; },
       get room() { return readMe().room; },
+      /**
+       * 配音读数（见 `readVoice`）。**不**放进 `snapshot()`：那三个格来自**一次** `store.get()`（「一次取全」
+       * 才不撕裂），而这一格来自另一个 store —— 混进去会让「一次读」这句话变成两个来源的假话。
+       */
+      get voice() { return readVoice(); },
       /** 一次取全（一次 `store.get()`，三样一致）：面板要同时用两个以上的读数时用它，避免三次分别取出现撕裂。 */
       snapshot: readMe,
     });
@@ -642,7 +1116,7 @@ export function createPanelRegistry(deps) {
         if (typeof type !== 'string' || typeof fn !== 'function') return () => {};
         if (S2C_TYPES.has(type)) return net && typeof net.on === 'function' ? net.on(type, fn) : () => {};
         if (!rec.messages.includes(type)) {
-          refuse('CLIENT_CHANNEL_UNDECLARED', `panel "${rec.key}" subscribes to "${type}" without declaring it — add it to client.panels["${rec.id}"].messages (declared: ${rec.messages.join(', ') || 'none'}), or use an engine message type`);
+          refuse('CLIENT_CHANNEL_UNDECLARED', `panel "${rec.key}" subscribes to "${type}" without declaring it — add it to ${declarationPath}["${rec.id}"].messages (declared: ${rec.messages.join(', ') || 'none'}), or use an engine message type`);
           return () => {};
         }
         if (!net || typeof net.on !== 'function') return () => {};
@@ -664,13 +1138,213 @@ export function createPanelRegistry(deps) {
       send(channel, data) {
         if (typeof channel !== 'string' || !channel) return false;
         if (!rec.messages.includes(channel)) {
-          refuse('CLIENT_CHANNEL_UNDECLARED', `panel "${rec.key}" sends on "${channel}" without declaring it — add it to client.panels["${rec.id}"].messages (declared: ${rec.messages.join(', ') || 'none'})`);
+          refuse('CLIENT_CHANNEL_UNDECLARED', `panel "${rec.key}" sends on "${channel}" without declaring it — add it to ${declarationPath}["${rec.id}"].messages (declared: ${rec.messages.join(', ') || 'none'})`);
           return false;
         }
         if (!net || typeof net.send !== 'function') return false;
-        return net.send({ t: 'pack.msg', pack: rec.pack, channel, ...(data === undefined ? {} : { data }) });
+        // `net.send(type, fields)` —— 发送口收「类型 + 字段」两个参数，`t` 由它自己拼（`public/js/net.js`）。
+        // 传一整个 `{ t, … }` 对象会把类型变成一个对象、被 net 当场拒收（`unknown type [object Object]`）——
+        // 与上面 `session.send` 同一个坑，这里曾经踩进去（假 net 的单参数签名把用例糊过去了）。
+        return net.send('pack.msg', { pack: rec.pack, channel, ...(data === undefined ? {} : { data }) });
       },
       sendResourceMessage: (msg) => (net && typeof net.sendResourceMessage === 'function' ? net.sendResourceMessage(msg) : false),
+      /**
+       * **连接读数**（DESIGN §28.24 / §28.25，业主裁决「引擎补两格只读读面」）：引擎自己已经握着的那份连接状态的**只读快照**。
+       *
+       * 来源是 `public/js/net.js` 的 `Net.snapshot()`（`'status'` 事件携带的就是它）——**同一条事实**，不是第二份推断：
+       * 连接 / 重连 / 延迟 / 最后一次错误只有引擎答得出来，面板拿不到 `WebSocket`、拿不到心跳往返。
+       *
+       * 形状（键与 `Net.status` 的取值一字不差）：
+       * ```
+       * { status: 'idle'|'connecting'|'connected'|'handshaking'|'online'|'reconnecting'|'closed',
+       *   attempt: number, retryAt: number, ping: number|null,
+       *   lastError: { code: string, text: string } | null }
+       * ```
+       * 只读语义：**每次调用都是一份新的、冻结的副本**，只带上面这五个键（`playerId` 等引擎内部字段不外传）；
+       * 改它不影响引擎的状态，引擎之后的状态变化也不会污染**已经发出去**的那一份。
+       *
+       * 拿不到时返回 `null`，**不抛、不编造**：注入的 `net` 没有 `snapshot()`（Node 用例、极小的宿主），
+       * 或它的返回值不是一个带字符串 `status` 的对象。没有读数就是没有读数 —— 面板该画空态。
+       *
+       * 这是一格**读数**，不是一条通道：它不新增协议消息、不发任何帧、不改变引擎行为。
+       * @returns {{ status: string, attempt: number, retryAt: number, ping: number|null, lastError: { code: string, text: string }|null }|null}
+       */
+      status() {
+        if (!net || typeof net.snapshot !== 'function') return null;
+        let snap;
+        try { snap = net.snapshot(); } catch { return null; }
+        if (!snap || typeof snap !== 'object' || typeof snap.status !== 'string') return null;
+        const err = snap.lastError && typeof snap.lastError === 'object'
+          ? Object.freeze({
+            code: typeof snap.lastError.code === 'string' ? snap.lastError.code : null,
+            text: typeof snap.lastError.text === 'string' ? snap.lastError.text : null,
+          })
+          : null;
+        return Object.freeze({
+          status: snap.status,
+          attempt: Number.isFinite(snap.attempt) ? snap.attempt : 0,
+          retryAt: Number.isFinite(snap.retryAt) ? snap.retryAt : 0,
+          ping: Number.isFinite(snap.ping) ? snap.ping : null,
+          lastError: err,
+        });
+      },
+      /**
+       * **服务器身份读数**（DESIGN §28.24 / §28.25）：客户端**已经收到的那一帧 `welcome`** 的只读快照
+       * （`shared/protocol.js` S2C 的 `welcome`，服务端 `server/net.js:713` 组装）。
+       *
+       * 与 `ctx.net.on('welcome', fn)` 是**同一份事实**，只是不必再等一帧：面板由同一条 welcome 装载，
+       * 自己订阅的那一份首帧大概率赶不上（包侧 README 记过这一点），而注册点本来就在这条帧上。
+       *
+       * 只读语义：**冻结的深拷贝**（与 `ctx.data.get()` 同一个 `readonlySnapshot`），面板改不动它，
+       * 引擎之后收到的帧也不会污染**已经发出去**的那一份。帧里的字段原样保留（`playerId` / `name` / `token` /
+       * `serverNow` / `version` / 可选的 `mods` / `modPanels` / `modAssets` / `modTheme` / `maxSeats` …）——
+       * 它是引擎已经发给页面的那一份，不裁剪、不改名、不补默认值。
+       *
+       * 拿不到时返回 `null`，**不抛、不编造**：这一页还没收到过任何一帧 `welcome`（标题屏、握手被拒、干净安装）。
+       * 它也不触发任何新请求：读的就是引擎已经收到的那一份。
+       * @returns {any|null}
+       */
+      welcome() {
+        return welcomeSnapshot;
+      },
+      /**
+       * **传输层读数**（DESIGN §28.32，业主裁决 2026-10-11 的「动态挂点」那一批）：这一条 WebSocket 连接实际跑在
+       * 什么参数上 —— 压缩开关与参数、单帧上限、压缩阈值。
+       *
+       * **为什么只能由服务端给**：浏览器侧的 `WebSocket` API **不暴露** `Sec-WebSocket-Extensions`（也没有
+       * `maxPayload`），所以面板（以及引擎自己）都推不出来 —— 而这正是 `permessage-deflate` 那种会让
+       * 「帧大小 / 延迟 / CPU」三件事一起变的配置最容易被误判的地方。服务端知道它自己启动时用的参数，于是在
+       * `welcome` 里带一格**只读**字段；这一格读的就是那一帧（与 `ctx.net.welcome()` 同一条事实、同一份快照）。
+       *
+       * 形状（服务端那一格的四个键，逐个复判；键名与 `shared/protocol.js` 的 `welcome` 注释一致）：
+       * ```
+       * { deflate: boolean|null, params: string|null, maxPayload: number, threshold: number|null }
+       * ```
+       * `deflate` / `params` / `threshold` 读不到就是 `null`（不是 `false` / `''` / `0`：「不知道」与「关着」
+       * 是两件事）；`maxPayload` 是必填的那一格，不成形（不是有限非负数）就**整格 `null`** —— 半个读数比
+       * 没有读数更容易被算错。
+       *
+       * 拿不到时返回 `null`，**不抛、不编造**，并**记一行**（注册点的 `log` = 页面控制台，每种原因只记一次）：
+       *   * 这一页还没收到过任何 `welcome`（标题屏、握手被拒）—— 这是「还没到时候」，**不记**；
+       *   * 收到的 `welcome` 里**没有** `transport`（老服务器 / 未装服务端那一格的部署）—— 记一行，
+       *     并如实说明「待服务端补字段」，**不自己造一个默认值**（一个凭空来的 `maxPayload: 65536` 比
+       *     `null` 危险得多：面板会照它去解释为什么帧被拒）。
+       *
+       * 这是一格**读数**：不新增协议消息、不发任何帧、不改变引擎行为（与 `status()` / `welcome()` 同一条判据，
+       * `test/modClientNetReads.test.js` 的四个出口计数器一并管着它）。
+       * @returns {{ deflate: boolean|null, params: string|null, maxPayload: number, threshold: number|null }|null}
+       */
+      transport() {
+        if (!welcomeSnapshot) return null;
+        const raw = welcomeSnapshot.transport;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+          noteTransportGap('absent', 'the `welcome` frame this page received carries no `transport` field — returning null (the server side of this cell, `pack.json.server.transport`, is not installed on this deployment; nothing is invented here)');
+          return null;
+        }
+        const maxPayload = raw.maxPayload;
+        if (!Number.isFinite(maxPayload) || maxPayload < 0) {
+          noteTransportGap('bad-max', `the \`welcome.transport.maxPayload\` this page received is not a finite number ≥ 0 (${JSON.stringify(maxPayload)}) — the whole reading is null rather than half a reading`);
+          return null;
+        }
+        return Object.freeze({
+          deflate: typeof raw.deflate === 'boolean' ? raw.deflate : null,
+          params: typeof raw.params === 'string' ? raw.params : null,
+          maxPayload,
+          threshold: Number.isFinite(raw.threshold) ? raw.threshold : null,
+        });
+      },
+    });
+    /**
+     * **战斗读数**（DESIGN §28.38，业主裁决 2026-10-11 的第二批）：这一场战斗的**逐单位伤害累计**，连同一个
+     * **时间基准**，让包自己算 DPS（「伤害看板」点名的那一格）。
+     *
+     * **为什么引擎必须给**：默认路径下战斗在这台机器上跑（`public/js/battle/runner.js`），伤害元组走 runner
+     * **自己的** listener map，**根本不进 `net`** ⇒ 面板订阅不到（§28.30 已查明）。而伤害数字早在模拟里算好了：
+     * `server/sim/damage.js:424` 每次命中写 `source.stats.dmg`，`:371` 写 `battle._pp(ownerId).damageDealt`，
+     * `:352` 写 `bossDamage`。这一格就是**把已经在那儿的数字取出来**，不是第二份账。
+     *
+     * **形状**（一次读一份新的、冻结的副本；`dmg` / `bossDmg` / `kills` / `heal` 取整，与结果页 `compactResult`
+     * 同一口径）：
+     * ```
+     * { battleId, fieldId, kind, authoritative, own, gt, t0,
+     *   players: [{ playerId, dmg, bossDmg, kills, heal }],
+     *   units:   [{ id, uid, defId, ownerId, kind, dmg, kills, heal }] }
+     * ```
+     * `gt` 是**战斗内秒**（`Battle.time`），`t0` 恒为 0（一局一场）⇒ `dps = dmg / (gt - t0)`。`uid` 是这块棋在那个
+     * 玩家棋盘上的 id（与 `ctx.me` 的名单、`battleRunner.unitIdOf()` 同一个号）—— 面板对名单要用它。`players[]` 里
+     * 的 `dmg` 已经含 `bossDmg`（与 `m.result` 的 `stats.dmgDealt` 同一口径），所以「总伤」与「领袖伤害」都在这一格，
+     * 作者不必再拼 `m.result` + `b.pool` 两个面。
+     *
+     * **只给本场**：读的就是**屏上这一场**（与 `battleRunner.unitStats()` 同一语义）。**队友那几场不在这一格里**，
+     * 正在准备的下一场也不在；一次战斗只有一个 `battleId`。面板要的是**全队总伤**时请走 `m.result`
+     * （`players[].stats.dmgDealt`，那是服务端按每个玩家累出来的全队口径）。
+     *
+     * 只读语义：**每次调用都是一份新的、冻结到第二层的副本**（嵌套对象与数组逐个冻上）—— 面板写它当场 `TypeError`，
+     * 引擎之后的新伤害也不会回溯进**已经发出去**的那一份。
+     *
+     * **这里不用 `readonlySnapshot`，是有意的**：那个函数的底图缓存是**按源对象**缓存的（`snapshotCache`），而这一格
+     * 每次读都造一个**新对象** ⇒ 用它等于每次读往缓存里塞一个新键，一局几千次读就把缓存撑爆。它适用的场合是
+     * 「每次读拿到同一个源对象」（`ctx.data.get()` 那几张表）。
+     *
+     * 拿不到时返回 `null`，**不抛、不编造** —— 而且**绝不**让这一格把别的东西带崩，所以四条出口分开写：
+     *   * 没注入 `battle`（Node 用例、极小的宿主）⇒ `null` + 一行；
+     *   * `damage()` 抛了 ⇒ `null` + 一行；
+     *   * 返回值不是一个对象 ⇒ `null` + 一行（半个读数比没有更危险）；
+     *   * 引擎说「这一场拿不到」（`null`：没有正在跑的战斗、战斗还没建好）⇒ `null`，**不记日志**（正常状态，不是缺件）。
+     *
+     * 它是一格**读数**，不是一条通道：不新增协议消息、不发任何帧、不改变战斗行为（判据见 `test/modClientBattleReads.test.js`）。
+     * @returns {{ battleId: string, fieldId: string|null, kind: string, authoritative: boolean, own: boolean,
+     *   gt: number, t0: number, players: ReadonlyArray<object>, units: ReadonlyArray<object> }|null}
+     */
+    const battleFacade = Object.freeze({
+      damage() {
+        if (!battleApi || typeof battleApi.damage !== 'function') {
+          noteBattleGap('absent', 'no battle runtime is injected into this registry — returning null (main.js passes `battle: battleRunner`; a Node harness or a minimal host passes nothing, and nothing is invented here)');
+          return null;
+        }
+        let snap;
+        try { snap = battleApi.damage(); } catch (err) {
+          noteBattleGap('threw', `the injected battle runtime threw in damage(): ${err && err.message ? err.message : String(err)}`);
+          return null;
+        }
+        if (snap === null || snap === undefined) return null;   // 正常状态：这一场没有可读的战斗
+        if (typeof snap !== 'object' || Array.isArray(snap)) {
+          noteBattleGap('bad-shape', `damage() returned ${Array.isArray(snap) ? 'an array' : typeof snap} instead of an object — the whole reading is null rather than half a reading`);
+          return null;
+        }
+        const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+        // 冻结到第二层：面板手里的每一格都改不动（`readonlySnapshot` 不适用，见上）
+        const units = [];
+        for (const u of Array.isArray(snap.units) ? snap.units : []) {
+          if (!u || typeof u !== 'object') continue;
+          units.push(Object.freeze({
+            id: Number.isInteger(u.id) ? u.id : null,
+            uid: Number.isInteger(u.uid) ? u.uid : null,
+            defId: typeof u.defId === 'string' ? u.defId : null,
+            ownerId: typeof u.ownerId === 'string' ? u.ownerId : null,
+            kind: typeof u.kind === 'string' ? u.kind : null,
+            dmg: num(u.dmg), kills: num(u.kills), heal: num(u.heal),
+          }));
+        }
+        const players = [];
+        for (const p of Array.isArray(snap.players) ? snap.players : []) {
+          if (!p || typeof p !== 'object' || typeof p.playerId !== 'string') continue;
+          players.push(Object.freeze({
+            playerId: p.playerId, dmg: num(p.dmg), bossDmg: num(p.bossDmg), kills: num(p.kills), heal: num(p.heal),
+          }));
+        }
+        return Object.freeze({
+          battleId: typeof snap.battleId === 'string' ? snap.battleId : null,
+          fieldId: typeof snap.fieldId === 'string' ? snap.fieldId : null,
+          kind: typeof snap.kind === 'string' ? snap.kind : null,
+          authoritative: !!snap.authoritative,
+          own: !!snap.own,
+          gt: num(snap.gt),
+          t0: num(snap.t0),
+          players: Object.freeze(players),
+          units: Object.freeze(units),
+        });
+      },
     });
     /**
      * 数据口（业主裁决 2026-10-10）：面板**只读**的那几张表。
@@ -679,6 +1353,123 @@ export function createPanelRegistry(deps) {
      * 与别处的拒绝同一个出口：控制台一行 + `refusals()`）。不抛异常是有意的：一个包多读一行不该让整个界面消失，
      * 但这件事必须看得见 —— 「静默拿到 undefined」才是要消灭的那一种。
      */
+    const screenFacade = rec.kind === 'screen' ? Object.freeze({
+      route: rec.screenRoute,
+      currentRoute: () => selectRoute(store.get()),
+      active: () => !!activeScreen && activeScreen.rec.key === rec.key && !activeScreen.closed
+        && selectRoute(store.get()) === rec.screenRoute,
+      snapshot: () => screenSnapshot(store.get()),
+      subscribe(fn) {
+        if (typeof fn !== 'function' || disposed || !activeScreen || activeScreen.rec.key !== rec.key || activeScreen.closed) return () => {};
+        let released = false;
+        let off = null;
+        const release = () => {
+          if (released) return;
+          released = true;
+          if (typeof off === 'function') {
+            try { off(); } catch (err) { log?.warn?.(`[mod-screen] ${rec.key} unsubscribe failed`, err); }
+          }
+          const entries = screenSubscriptions.get(rec.key);
+          if (entries) { entries.delete(release); if (!entries.size) screenSubscriptions.delete(rec.key); }
+        };
+        try {
+          off = store.subscribe(() => {
+            if (disposed || released || !activeScreen || activeScreen.rec.key !== rec.key || activeScreen.closed
+              || selectRoute(store.get()) !== rec.screenRoute) return;
+            try { fn(screenSnapshot(store.get())); }
+            catch (err) { refuse('CLIENT_SCREEN_SUBSCRIBER_THREW', `screen "${rec.key}" subscriber threw: ${err && err.message ? err.message : String(err)}`); }
+          });
+          if (typeof off === 'function') {
+            if (!screenSubscriptions.has(rec.key)) screenSubscriptions.set(rec.key, new Set());
+            screenSubscriptions.get(rec.key).add(release);
+          }
+        } catch (err) {
+          refuse('CLIENT_SCREEN_SUBSCRIBE_FAILED', `screen "${rec.key}" could not subscribe: ${err && err.message ? err.message : String(err)}`);
+          return () => {};
+        }
+        return release;
+      },
+    }) : null;
+    const screenNet = rec.kind === 'screen' ? Object.freeze({
+      on(type, fn) {
+        if (typeof fn !== 'function') return () => {};
+        const unsub = netFacade.on(type, (...args) => fn(...args.map((value) => screenSnapshot(value))));
+        if (typeof unsub !== 'function') return () => {};
+        let released = false;
+        const release = () => {
+          if (released) return;
+          released = true;
+          try { unsub(); } catch (err) { log?.warn?.(`[mod-screen] ${rec.key} message unsubscribe failed`, err); }
+          const entries = screenSubscriptions.get(rec.key);
+          if (entries) { entries.delete(release); if (!entries.size) screenSubscriptions.delete(rec.key); }
+        };
+        if (!screenSubscriptions.has(rec.key)) screenSubscriptions.set(rec.key, new Set());
+        screenSubscriptions.get(rec.key).add(release);
+        return release;
+      },
+      send: (...args) => netFacade.send(...args),
+      sendResourceMessage: (...args) => netFacade.sendResourceMessage(...args),
+      status: () => screenSnapshot(netFacade.status()),
+      welcome: () => screenSnapshot(netFacade.welcome()),
+      transport: () => screenSnapshot(netFacade.transport()),
+    }) : null;
+    const screenActions = rec.kind === 'screen' ? Object.freeze({
+      request(type, fields = {}) {
+        const reject = (code, detail) => {
+          refuse(code, `screen "${rec.key}" ${detail}`);
+          return Promise.reject(new Error(code));
+        };
+        if (!activeScreen || activeScreen.rec.key !== rec.key || activeScreen.closed || selectRoute(store.get()) !== rec.screenRoute) {
+          return reject('CLIENT_SCREEN_ACTION_INACTIVE', 'tried a request while inactive');
+        }
+        const allowedPrefix = ['room.', 'g.', 'support.', 'loadout.', 'records.'];
+        if (typeof type !== 'string' || !allowedPrefix.some((prefix) => type.startsWith(prefix))
+          || !Object.prototype.hasOwnProperty.call(C2S, type)) {
+          return reject('CLIENT_SCREEN_ACTION_NOT_ALLOWED', `message type ${JSON.stringify(type)} is not in the screen action allowlist`);
+        }
+        if (!isPlainObj(fields)) return reject('CLIENT_SCREEN_ACTION_BAD_FIELDS', 'request fields must be a plain object');
+        for (const key of Object.keys(fields)) {
+          const normalized = key.replace(/[-_]/g, '').toLowerCase();
+          if (key === 't' || key === 'rid' || SCREEN_PRIVATE_KEYS.has(normalized)) {
+            return reject('CLIENT_SCREEN_ACTION_BAD_FIELDS', `request attempted to supply reserved field "${key}"`);
+          }
+        }
+        const bad = validateC2S({ t: type, ...fields });
+        if (bad) return reject('CLIENT_SCREEN_ACTION_BAD_SHAPE', `request "${type}" failed the shared C2S validator: ${bad}`);
+        if (!net || typeof net.request !== 'function') return reject('CLIENT_SCREEN_ACTION_NO_NET', 'the host did not provide request()');
+        try { return net.request(type, { ...fields }); }
+        catch (err) { return reject('CLIENT_SCREEN_ACTION_FAILED', `request "${type}" failed: ${err && err.message ? err.message : String(err)}`); }
+      },
+      enter(rawName) {
+        if (rec.screenRoute !== 'title' || !activeScreen || activeScreen.rec.key !== rec.key || activeScreen.closed) {
+          refuse('CLIENT_SCREEN_ENTER_NOT_ALLOWED', `screen "${rec.key}" may enter only on the active title route`);
+          return false;
+        }
+        // 清洗与落地都走 `sanitizeModName` / `commitName`（§28.58 起与 `ctx.session.setName` **共用同一段字节**）：
+        // 剥掉 C0 控制码、DEL 与 C1 控制码，`trim()`，再按上限切片。`#` 与零宽字符的合法性归服务端判。
+        const name = sanitizeModName(rawName);
+        if (!name) { refuse('CLIENT_SCREEN_ENTER_BAD_NAME', `screen "${rec.key}" tried to enter with an empty nickname`); return false; }
+        if (!nameBoundaryReady()) {
+          refuse('CLIENT_SCREEN_ENTER_UNAVAILABLE', `screen "${rec.key}" cannot enter: the session boundary is unavailable`);
+          return false;
+        }
+        commitName(name);
+        return true;
+      },
+    }) : null;
+    const screenUi = rec.kind === 'screen' ? Object.freeze({
+      h, Fragment,
+      render(vnode) {
+        if (!host || !activeScreen || activeScreen.rec.key !== rec.key || activeScreen.closed) return false;
+        try { renderView(vnode, host); return true; }
+        catch (err) { refuse('CLIENT_SCREEN_RENDER_FAILED', `screen "${rec.key}" render failed: ${err && err.message ? err.message : String(err)}`); return false; }
+      },
+      clear() {
+        if (!host) return false;
+        try { renderView(null, host); return true; }
+        catch (err) { refuse('CLIENT_SCREEN_RENDER_FAILED', `screen "${rec.key}" clear failed: ${err && err.message ? err.message : String(err)}`); return false; }
+      },
+    }) : null;
     const dataFacade = Object.freeze({
       /**
        * 一张表的**只读快照**（冻结的深拷贝；同一个包多次调用拿到同一份），或 `null`。
@@ -688,7 +1479,7 @@ export function createPanelRegistry(deps) {
       get(name) {
         if (typeof name !== 'string' || !name) return null;
         if (!rec.data.includes(name)) {
-          refuse('CLIENT_DATA_UNDECLARED', `panel "${rec.key}" reads the data table "${name}" without declaring it — add it to client.panels["${rec.id}"].data (declared: ${rec.data.join(', ') || 'none'})`);
+          refuse('CLIENT_DATA_UNDECLARED', `panel "${rec.key}" reads the data table "${name}" without declaring it — add it to ${declarationPath}["${rec.id}"].data (declared: ${rec.data.join(', ') || 'none'})`);
           return null;
         }
         if (!dataSnapshots.has(name)) {
@@ -701,12 +1492,75 @@ export function createPanelRegistry(deps) {
       /** 这个面板声明过、可以读的表名（只读）。 */
       tables: () => [...rec.data],
     });
+    /**
+     * **云配置同步**（DESIGN §28.58，账号面的第二格）：面板今天在自己的偏好之外拿不到这台机器的引擎偏好。
+     * 一个真实账号系统要在登录之后把云端那一份**落成本机的那一份**（并让这一页读到新值），而面板够不到
+     * `sp.pref.*`（注入面里没有 localStorage、没有 store）—— 所以引擎给一格**闭白名单**的读写口。
+     *
+     * 为什么这一格必须窄：它是设计稿里「面板拿不到 store」（§28.8）那条边界**唯一**的开口，所以开口的形状
+     * 写在纸上、也写进 `public/js/ui/cloudPrefs.js`：
+     *   * 只有引擎自己已经落盘的那**七个**偏好键（`CLOUD_PREF_KEYS`：settings / loadout / ownership / diy /
+     *     conflict / appearance / lang）；别的名字**点名**拒绝**整次**调用；
+     *   * `read()` 是**一次取全**的冻结快照（缺档 = `null`），`apply(patch)` 校验全过才整份写入，然后**只安排
+     *     一次**重载（那几份内存副本是单例，不重载看不见新值）；
+     *   * **对局状态一个字都不许动**：`match` / `room` / `me` 这一格碰不到（它就是几个偏好键 —— 面板能画错、
+     *     不能算错，在这里就是「能改自己的偏好、不能改这一局」）。
+     *
+     * 注入的是**两个函数**（`main.js` 给的就是 `cloudPrefs` 的 `read` / `apply`），不是 store 句柄 —— 与
+     * `deps.settings` / `deps.battle` / `deps.data` 同一条理由：这个文件必须能在 Node 下整套跑，而
+     * `main.js` 那一侧要接上真实的 `sp.pref.*`。`apply` 的拒绝码由**注册点**收集（`cloudPrefs` 不认识注册点），
+     * 所以门面把 `refuse` 当第二个参数交给它 —— 拒绝码只有一处出口，与其余几格逐字一致。
+     *
+     * **没有注入时两格都拿不到**：`read()` 是 `null`、`apply()` 是 `false`，各点名 `CLIENT_CLOUD_UNAVAILABLE`
+     * 一次，**不抛、不编造**（与 `ctx.me.voice` / `ctx.battle.damage()` 同一条纪律：一个 Node 宿主或极小宿主
+     * 没有这一格，就是没有这一格）。
+     */
+    const cloudFacade = Object.freeze({
+      /**
+       * 一次取全的偏好快照，或 `null`（这一页没有这一格）。
+       * @returns {{ settings: any, loadout: any, ownership: any, diy: any, conflict: any, appearance: any, lang: any }|null}
+       */
+      read() {
+        if (!cloudApi || typeof cloudApi.read !== 'function') {
+          refuse(CLIENT_CLOUD_UNAVAILABLE, `panel "${rec.key}" cloud.read() — this page injected no cloud preference surface, so the reading is null instead of invented (main.js passes \`cloud: { read, apply }\`; a Node harness or a minimal host passes nothing)`);
+          return null;
+        }
+        let snap;
+        try { snap = cloudApi.read(); } catch (err) {
+          refuse(CLIENT_CLOUD_UNAVAILABLE, `panel "${rec.key}" cloud.read() — the injected cloud preference surface threw: ${err && err.message ? err.message : String(err)} (nothing is invented here)`);
+          return null;
+        }
+        return snap && typeof snap === 'object' ? snap : null;
+      },
+      /**
+       * 把一份 patch 写进那七个偏好键，或 `false`（被拒 / 这一页没有这一格）。
+       * 返回值与拒绝码由 `cloudPrefs.applyCloudPrefs` 定，这里只负责把 `refuse` 递下去、并且**不抛**。
+       * @param {any} patch
+       * @returns {{ applied: string[], reload: boolean }|false}
+       */
+      apply(patch) {
+        if (!cloudApi || typeof cloudApi.apply !== 'function') {
+          refuse(CLIENT_CLOUD_UNAVAILABLE, `panel "${rec.key}" cloud.apply(...) — this page injected no cloud preference surface, so the write is refused by name instead of silently doing nothing`);
+          return false;
+        }
+        try { return cloudApi.apply(patch, { refuse }); }
+        catch (err) {
+          refuse(CLIENT_CLOUD_UNAVAILABLE, `panel "${rec.key}" cloud.apply(...) — the injected cloud preference surface threw: ${err && err.message ? err.message : String(err)} (nothing was written by this cell)`);
+          return false;
+        }
+      },
+    });
     return Object.freeze({
       id: rec.id, pack: rec.pack, slot: rec.slot, order: rec.order, gate: rec.gate,
-      host, hostKey, session, net: netFacade, data: dataFacade, log: scoped,
+      host, hostKey, session, net: screenNet || netFacade, data: dataFacade, log: scoped,
+      // 整屏模块拿到的是 screen / actions / ui 三面显式门面；普通面板的契约一字未动。
+      // 为什么整屏**没有** battle：它能替换掉对局屏，给它战斗读数就是让它同时握住「怎么画」与「算出来是什么」。
+      ...(rec.kind === 'screen' ? { screen: screenFacade, actions: screenActions, ui: screenUi } : { battle: battleFacade }),
       // 只读会话态（`playerId` / `name` / `room` 快照）：面板答不出来的那几件事实，由引擎告知。
       // 它是**活的只读读数**（每次读取当前 store），没有 store 句柄、没有 match / battle / runner / audio。
       me: meFacade,
+      // 云配置同步（§28.58）：闭白名单的偏好读写口 —— 只碰偏好，**match / room / me 一个字都不动**。
+      cloud: cloudFacade,
       ...(extra || {}),
     });
   }
@@ -730,8 +1584,26 @@ export function createPanelRegistry(deps) {
     return el && typeof el.appendChild === 'function' ? [{ el, key: null }] : [];
   }
 
-  /** 这次挂载的键：可重复宿主按容器自己的键区分（不可重复的就是面板键本身）。 */
-  function mountKeyOf(rec, key) { return key === null || key === undefined ? rec.key : `${rec.key}#${key}`; }
+  /**
+   * 这次挂载的键。**只有可重复宿主**（`MOD_PANEL_REPEATABLE`，每张商店卡一个）才把容器自己的键算进身份 ——
+   * 面板要挂进**每一个**，`ctx.hostKey` 告诉它自己是哪一份。不可重复的槽位一个面板就够：宿主上的
+   * `data-mod-slot-key` 是**这个槽位此刻是谁**（干员详情卡会随着选中的干员变），不是「又一个容器」。
+   * 把它算进身份 ⇒ 换一次干员就叠一层面板，而宿主元素被框架复用，底下那些永远等不到「消失」这个信号。
+   */
+  function mountKeyOf(rec, key) {
+    if (!MOD_PANEL_REPEATABLE.includes(rec.slot)) return rec.key;
+    return key === null || key === undefined ? rec.key : `${rec.key}#${key}`;
+  }
+
+  /** 收掉一次挂载：先叫它的 `unmount`（坏 mod 的异常不外溢），再把宿主里那个 `div` 从 DOM 里拿走。 */
+  function unmountMount(mk, entry) {
+    try { if (typeof entry?.unmount === 'function') entry.unmount(); }
+    catch (err) { log?.error?.(`[mod-panels] ${mk} unmount failed`, err); }
+    const el = entry && entry.host;
+    if (el) { if (typeof el.remove === 'function') el.remove(); else el.parentNode?.removeChild?.(el); }
+    hosts.delete(mk);
+    mounted.delete(mk);
+  }
 
   /** 容器里那个属于这次挂载的 `div`（一个容器一次，缓存）。 */
   function ensureHost(rec, container, mk) {
@@ -786,6 +1658,173 @@ export function createPanelRegistry(deps) {
     return true;
   }
 
+  function removeStyleList(els) {
+    for (const el of els || []) {
+      if (el && typeof el.remove === 'function') {
+        try { el.remove(); } catch { /* best effort */ }
+      }
+      const at = styleEls.indexOf(el);
+      if (at >= 0) styleEls.splice(at, 1);
+    }
+  }
+
+  function installScreenBaseStyle() {
+    if (screenBaseStyleEl) return true;
+    const parent = styleHost();
+    if (!parent || typeof parent.appendChild !== 'function') return false;
+    const el = createElement('style');
+    if (!el) return false;
+    el.setAttribute?.('data-mod-screen-compat', 'true');
+    el.textContent = 'html[data-mod-screen-active="true"] .app-root > .screen:not(.crash) { display: none !important; }';
+    parent.appendChild(el);
+    screenBaseStyleEl = el;
+    return true;
+  }
+
+  function restoreRootAttr(root, name, before) {
+    if (!root || typeof root.setAttribute !== 'function') return;
+    if (before === null || before === undefined) {
+      if (typeof root.removeAttribute === 'function') root.removeAttribute(name);
+      else root.setAttribute(name, '');
+    } else root.setAttribute(name, before);
+  }
+
+  function unmountScreenEntry(entry) {
+    if (!entry || entry.closed) return;
+    entry.closed = true;
+    const ownsActive = activeScreen === entry;
+    if (typeof entry.cleanup === 'function' && !entry.cleanupCalled) {
+      entry.cleanupCalled = true;
+      try {
+        const result = entry.cleanup();
+        if (result && typeof result.then === 'function') result.catch((err) => log?.error?.(`[mod-screen] ${entry.rec.key} async unmount failed`, err));
+      } catch (err) { log?.error?.(`[mod-screen] ${entry.rec.key} unmount failed`, err); }
+    }
+    if (entry.host) {
+      try { renderView(null, entry.host); } catch (err) { log?.warn?.(`[mod-screen] ${entry.rec.key} render cleanup failed`, err); }
+    }
+    const subscriptions = screenSubscriptions.get(entry.rec.key);
+    if (subscriptions) for (const off of [...subscriptions]) off();
+    screenSubscriptions.delete(entry.rec.key);
+    if (entry.hidden) {
+      const root = entry.root;
+      const stillOwnsAttrs = root && typeof root.getAttribute === 'function'
+        && root.getAttribute('data-mod-screen-active') === 'true'
+        && root.getAttribute('data-mod-screen-route') === entry.rec.screenRoute;
+      if (stillOwnsAttrs) {
+        restoreRootAttr(root, 'data-mod-screen-active', entry.rootBeforeActive);
+        restoreRootAttr(root, 'data-mod-screen-route', entry.rootBeforeRoute);
+      }
+    }
+    if (entry.host && typeof entry.host.remove === 'function') {
+      try { entry.host.remove(); } catch { /* best effort */ }
+    }
+    removeStyleList(entry.styleEls);
+    styled.delete(entry.rec.key);
+    const current = mounted.get(entry.rec.key);
+    if (current && current.screenEntry === entry) mounted.delete(entry.rec.key);
+    if (ownsActive) {
+      activeScreen = null;
+      if (screenBaseStyleEl && typeof screenBaseStyleEl.remove === 'function') {
+        try { screenBaseStyleEl.remove(); } catch { /* best effort */ }
+      }
+      screenBaseStyleEl = null;
+    }
+  }
+
+  function screenFailure(rec, entry, code, detail) {
+    blockedPanels.add(rec.key);
+    refuse(code, `screen "${rec.key}" ${detail}`);
+    if (entry) unmountScreenEntry(entry);
+  }
+
+  async function syncActiveScreen() {
+    if (disposed) return;
+    const route = selectRoute(store.get());
+    const desired = screens.find((rec) => rec.screenRoute === route && !blockedPanels.has(rec.key)) || null;
+    if (activeScreen && (!desired || activeScreen.rec.key !== desired.rec.key || activeScreen.rec.url !== desired.rec.url
+      || activeScreen.rec.screenRoute !== route)) {
+      unmountScreenEntry(activeScreen);
+    }
+    if (!desired || activeScreen) return;
+    const parent = screenHost();
+    const root = screenRoot();
+    if (!parent || typeof parent.appendChild !== 'function' || !root || typeof root.setAttribute !== 'function') {
+      screenFailure(desired, null, 'CLIENT_SCREEN_NO_HOST', 'cannot replace a route because no screen host/root is available');
+      return;
+    }
+    const entry = {
+      rec: desired, route, host: null, root, hidden: false, closed: false,
+      cleanup: null, cleanupCalled: false, styleEls: [],
+      rootBeforeActive: typeof root.getAttribute === 'function' ? root.getAttribute('data-mod-screen-active') : null,
+      rootBeforeRoute: typeof root.getAttribute === 'function' ? root.getAttribute('data-mod-screen-route') : null,
+    };
+    activeScreen = entry;
+    const styleStart = styleEls.length;
+    if (!injectStylesOnce(desired)) {
+      entry.styleEls = styleEls.slice(styleStart);
+      screenFailure(desired, entry, 'CLIENT_SCREEN_STYLE_FAILED', 'could not inject its declared stylesheets; native screen remains visible');
+      return;
+    }
+    entry.styleEls = styleEls.slice(styleStart);
+    if (!installScreenBaseStyle()) {
+      screenFailure(desired, entry, 'CLIENT_SCREEN_STYLE_HOST', 'cannot install the native-screen fallback style');
+      return;
+    }
+    const host = createElement('div');
+    if (!host) {
+      screenFailure(desired, entry, 'CLIENT_SCREEN_NO_HOST', 'could not create the full-screen host; native screen remains visible');
+      return;
+    }
+    entry.host = host;
+    host.className = 'mod-screen-host';
+    host.setAttribute?.('data-mod-screen-host', desired.screenRoute);
+    host.setAttribute?.('data-mod-screen-pack', desired.pack);
+    host.setAttribute?.('data-mod-screen-id', desired.id);
+    if (!host.style) host.style = {};
+    Object.assign(host.style, {
+      position: 'fixed', inset: '0', zIndex: '2147483000', overflow: 'auto',
+      background: 'var(--screen-background, #080d12)', visibility: 'hidden',
+    });
+    parent.appendChild(host);
+    let module;
+    try { module = await importModule(desired.url); }
+    catch (err) {
+      screenFailure(desired, entry, 'CLIENT_SCREEN_IMPORT_FAILED', `could not import ${desired.url}: ${err && err.message ? err.message : String(err)}; native screen remains visible`);
+      return;
+    }
+    const mountScreen = module && (typeof module.mountScreen === 'function'
+      ? module.mountScreen : (typeof module.default === 'function' ? module.default : null));
+    if (!mountScreen) {
+      screenFailure(desired, entry, 'CLIENT_SCREEN_NO_MOUNT', 'module must export mountScreen(ctx) or a default function; native screen remains visible');
+      return;
+    }
+    let result;
+    try { result = await mountScreen(panelContext(desired, host, null)); }
+    catch (err) {
+      screenFailure(desired, entry, 'CLIENT_SCREEN_MOUNT_FAILED', `mountScreen(ctx) threw: ${err && err.message ? err.message : String(err)}; native screen remains visible`);
+      return;
+    }
+    entry.cleanup = typeof result === 'function' ? result
+      : result && typeof result.unmount === 'function' ? () => result.unmount() : null;
+    if (entry.closed || disposed || activeScreen !== entry || selectRoute(store.get()) !== desired.screenRoute) {
+      if (entry.cleanup && !entry.cleanupCalled) {
+        entry.cleanupCalled = true;
+        try {
+          const result2 = entry.cleanup();
+          if (result2 && typeof result2.then === 'function') result2.catch((err) => log?.error?.(`[mod-screen] ${desired.key} stale cleanup failed`, err));
+        } catch (err) { log?.error?.(`[mod-screen] ${desired.key} stale cleanup failed`, err); }
+      }
+      unmountScreenEntry(entry);
+      return;
+    }
+    root.setAttribute('data-mod-screen-active', 'true');
+    root.setAttribute('data-mod-screen-route', desired.screenRoute);
+    entry.hidden = true;
+    host.style.visibility = 'visible';
+    mounted.set(desired.key, { rec: desired, host, unmount: () => unmountScreenEntry(entry), key: null, screenEntry: entry });
+  }
+
   async function mountOne(rec, host, mk, hostKey) {
     // 声明了 `wraps` 的面板已经为它的链 import 过这个模块了：同一个 URL 只 import 一次（模块对象直接复用）。
     let mod = wrapModules.get(rec.key);
@@ -801,13 +1840,17 @@ export function createPanelRegistry(deps) {
     }
     // 外观提供者（皮肤层第 2 步）：**在 mount 之前**接进解析链，否则首帧画原版、下一帧才跳过去。
     // 它不依赖宿主是否渲染出来，所以放在 factory 判定之前 —— 一个只提供外观、不挂任何界面的模块也该生效。
-    registerAppearance(rec, mod);
+    // 同一个面板重挂（宿主换了身份）时不重复注册：提供者本来就只有一个，第二次只会得到一个假的「已被占用」。
+    if (appearanceProvider !== rec.key) registerAppearance(rec, mod);
+    // 素材加载源提供者（§28.40）：同一条理由、同一个位置 —— 「先试哪一条镜像」要在**第一次导入之前**就位，
+    // 否则第一次导入走的是声明顺序、第二次才按玩家选的来（同一件事两个结果）；重挂时同样不重复注册。
+    if (sourcesProvider !== rec.key) registerSources(rec, mod);
     const factory = mod && typeof mod.mount === 'function' ? mod.mount
       : (mod && typeof mod.default === 'function' ? mod.default : null);
     if (!factory) {
-      // 一个**只提供外观**的模块（导出 `appearance` 而没有 `mount`）不是错误：它已经完成了它要做的事。
-      // 其余情况仍旧点名（`CLIENT_PANEL_NO_MOUNT`）—— 声明了要挂却挂不上，必须响亮。
-      if (appearanceProvider === rec.key) return false;
+      // 一个**只提供外观 / 只提供加载源**的模块（导出 `appearance` / `sources` 而没有 `mount`）不是错误：它已经
+      // 完成了它要做的事。其余情况仍旧点名（`CLIENT_PANEL_NO_MOUNT`）—— 声明了要挂却挂不上，必须响亮。
+      if (appearanceProvider === rec.key || sourcesProvider === rec.key) return false;
       mounted.delete(mk);
       blocked.add(mk);
       refuse('CLIENT_PANEL_NO_MOUNT', `panel "${rec.key}" (${rec.url}) must export mount(ctx) (or default-export that function)`);
@@ -930,13 +1973,40 @@ export function createPanelRegistry(deps) {
         for (const { el, key } of targets) {
           if (disposed) return;
           const mk = mountKeyOf(rec, key);
-          if (mounted.has(mk) || blocked.has(mk)) continue;
+          const had = mounted.get(mk);
+          if (had) {
+            // 宿主**脱离了文档**：上一屏（上一局 / 上一次渲染）的那一份宿主被框架整棵移除了，而注册点收不到通知。
+            // 可重复宿主最需要这一条 —— 同一张商店卡在下一局会算出**同一个**挂载键，不重挂就
+            // 永远画在已经不在页面上的旧 DOM 里。`isConnected === false` 才是脱离（Node 下的假元素没有这个属性，
+            // 一律当作还连着）。
+            //
+            // 宿主**换了元素**同样是脱离（业主反馈 2026-10-14）：框架重建了那个容器 —— 干员调配的详情卡一收
+            // 一开就是一个新的 `[data-mod-slot="screen.loadout.card"]`，而 `isConnected` 只回答「它自己在不在
+            // 文档里」，不回答「它是不是**这一帧这个**容器里那一份」。收一开之后旧的那一份挂在一个已经不在
+            // 页面上的旧容器里，面板于是**整块消失**且没人知道为什么。父子关系只在 `el` 是真 DOM 且连着时才比，
+            // Node 用例的假元素那一档行为与从前逐字相同。
+            const hostGone = !had.host || had.host.isConnected === false
+              || (el.isConnected === true && had.host.parentNode !== el);
+            if (hostGone) {
+              unmountMount(mk, had);
+            } else if (MOD_PANEL_REPEATABLE.includes(rec.slot) || had.key === key) {
+              continue;
+            } else {
+              // 不可重复的槽位里宿主换了身份（干员详情卡换了一个干员）：收掉旧的、这一帧重挂一份 —— 新身份要有新面板，
+              // 而宿主元素是被框架**复用**的（只是 `data-mod-slot-key` 变了），所以这里必须自己认出来。
+              unmountMount(mk, had);
+            }
+          }
+          if (blocked.has(mk)) continue;
           const host = ensureHost(rec, el, mk);
           if (!host) continue;
           mounted.set(mk, { rec, host, unmount: null, key });
           await mountOne(rec, host, mk, key);
         }
       }
+      // 整屏的路由对账排在**所有**普通面板判完之后：任何一步失败都保住宿主原生界面，
+      // 而不是先遮住原生界面再发现包挂不上（那会留下一块白屏，正是这一格要消灭的失败方向）。
+      await syncActiveScreen();
       // 链在**所有**面板都判过之后重建一次：`panels` 的次序就是链的次序，没声明 wraps 时这里什么都不做。
       syncWrapChains();
     } finally {
@@ -945,10 +2015,88 @@ export function createPanelRegistry(deps) {
     }
   }
 
+  /**
+   * **宿主由组件渲染时的那条盲区**（业主反馈 2026-10-14：「时装切换换个干员再回来就没了」；以及「账号界面要并进
+   * 统计页」时暴露的同一类缺口）。
+   *
+   * `[data-mod-slot]` 容器是**界面**画出来的，而它出现 / 消失 / 换身份**不一定**改主 store —— 干员调配那一屏的
+   * 选中干员住在 `loadoutStore`（`ui/loadoutSync.js`），统计页整屏由它自己的 `statsStore`（`screens/stats.js`）开关，
+   * 而本注册点订阅的只有主 store。于是「刚刚渲染出来的宿主」**没人发现**（包的面板永远挂不上，正是业主遇到的
+   * 「账号界面并不进统计页」），「已经挂上的那一份」又和它的宿主一起离开文档，而 `mounted` 里那一条还等着「下一次
+   * 碰巧的 store 变化」—— 玩家看到的就是那块界面**没了**（面板没有报错，也没有拒绝）。
+   *
+   * 补的是**同一条 flush**：观察 DOM 里**与槽位宿主有关**的信号，安排「一帧一次」的 flush。与 store 订阅并列而非
+   * 替代 —— 两条路喂的是同一套判据（`hostTargets` 与上面那份「陈旧宿主」检查）。
+   *
+   * **为什么不盯全部变化**（这一条是它能上生产的关键）：界面每帧都在改 DOM（对局里每帧的文字 / 属性更新、列表
+   * 重排），而一次未经过滤的 `MutationObserver` 回调会把 `flush()`（它要重扫**全部**面板的宿主）变成第二个每帧
+   * 调度器 —— 每帧几十上百次重扫换来的收益是**零**（那些变化里一个槽位宿主都没有）。所以回调里只认两类信号：
+   *   * **增删**：某个被加入 / 移除的元素**自己**匹配 `[data-mod-slot]`，或它的**子树里**含一个（宿主「刚刚出现」
+   *     就是这一档）；
+   *   * **身份**：一个**本身就是** `[data-mod-slot]` 的宿主上，`data-mod-slot-key` 变了（干员详情卡换了一个干员
+   *     就是这一档 —— 元素被框架**复用**，既没被加入也没被移除，只换了身份；不看它就永远画着上一个干员，那正是
+   *     这条观察最早要修的那个现象）。这一条靠 `attributeFilter` **只收这一个属性名**：别的一切属性更新连回调都
+   *     不会到，也就谈不上触发。
+   * 重复触发的 flush 由既有的 `flushing` / `dirty` 逻辑吸收。没有 `<body>` / 没有 `MutationObserver`（Node 用例、
+   * 极简宿主）时这一条根本不存在，行为与从前逐字相同；没有 `apply()` 过任何面板时也不建这个观察者
+   * （「没有包声明就没有成本」是同一条纪律）。
+   */
+  let domObserver = null;
+  let domFlushQueued = false;
+  /** 一个节点（或它的子树）里有没有 `[data-mod-slot]` 宿主 —— 只有元素节点可能匹配（文本节点直接跳过）。 */
+  function subtreeHasSlot(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (typeof node.matches === 'function' && node.matches(SLOT_SELECTOR)) return true;
+    return typeof node.querySelector === 'function' && !!node.querySelector(SLOT_SELECTOR);
+  }
+  /** 这一批变更里有没有「与槽位宿主有关」的信号（其它任何变化都不算 —— 见上面那段「为什么不盯全部变化」）。 */
+  function hasSlotSignal(records) {
+    for (const rec of records || []) {
+      // 身份变了：**只有**目标本身就是宿主的那一条才算（`attributeFilter` 已经把它限成 `data-mod-slot-key`）。
+      if (rec.type === 'attributes') {
+        const el = rec.target;
+        if (el && typeof el.matches === 'function' && el.matches(SLOT_SELECTOR)) return true;
+        continue;
+      }
+      for (const node of rec.addedNodes || []) if (subtreeHasSlot(node)) return true;
+      for (const node of rec.removedNodes || []) if (subtreeHasSlot(node)) return true;
+    }
+    return false;
+  }
+  function onDomChanged(records) {
+    // **异常绝不外溢**：这个回调可能在 rAF 之外、在任何 try/catch 之外被调用，里面任何错都只记一行日志，
+    // 不影响游戏。
+    try {
+      if (domFlushQueued || disposed || !panels.length) return;
+      if (!hasSlotSignal(records)) return;
+    } catch (err) {
+      log?.error?.('[mod-panels] dom observer callback failed', err);
+      return;
+    }
+    domFlushQueued = true;
+    const run = () => { domFlushQueued = false; void flush(); };
+    // 一帧一次：DOM 观察是「可能有事」的信号，不是「每秒来六十遍」的调度器。`rAF` 缺席（老宿主）时退回一个宏任务。
+    if (typeof globalThis.requestAnimationFrame === 'function') globalThis.requestAnimationFrame(run);
+    else setTimeout(run, 16);
+  }
+  /** 有面板要伺候时才观察（`subscribe()` 里那一次）。 */
+  function observeDom() {
+    if (domObserver || disposed) return;
+    const doc = globalThis.document;
+    const Observer = globalThis.MutationObserver;
+    const target = doc && (doc.body || doc.documentElement);
+    if (!target || typeof Observer !== 'function') return;
+    domObserver = new Observer(onDomChanged);
+    // 子节点增删（`childList` + `subtree`）＋ 宿主自己的身份键；**滤镜在回调里**（`hasSlotSignal`），所以
+    // 「别的元素加删 / 别的属性更新」一个都触发不了。
+    domObserver.observe(target, { childList: true, subtree: true, attributes: true, attributeFilter: [SLOT_KEY_ATTR] });
+  }
+
   function subscribe() {
     if (subscribed || disposed) return;
     subscribed = true;
     unsubscribe = store.subscribe(() => { void flush(); });
+    observeDom();
   }
 
   return {
@@ -967,10 +2115,22 @@ export function createPanelRegistry(deps) {
         const rec = normalize(raw);
         if (rec && !incoming.some((p) => p.key === rec.key)) incoming.push(rec);
       }
-      panels = incoming.sort(comparePanels);
-      if (panels.length) subscribe();
+      const ordered = incoming.sort(comparePanels);
+      panels = ordered.filter((rec) => rec.kind !== 'screen');
+      screens = [];
+      const routeOwners = new Map();
+      for (const rec of ordered.filter((item) => item.kind === 'screen')) {
+        const owner = routeOwners.get(rec.screenRoute);
+        if (owner) {
+          refuse('CLIENT_SCREEN_ROUTE_CONFLICT', `screen route "${rec.screenRoute}" is already owned by "${owner.key}"; "${rec.key}" lost the deterministic order/pack-id/id tie-break`);
+          continue;
+        }
+        routeOwners.set(rec.screenRoute, rec);
+        screens.push(rec);
+      }
+      if (panels.length || screens.length) subscribe();
       void flush();
-      return { accepted: panels.length };
+      return { accepted: panels.length + screens.length };
     },
     /** The panel keys currently mounted (test / diagnostic surface). */
     mounted: () => [...mounted.keys()].sort(),
@@ -983,11 +2143,15 @@ export function createPanelRegistry(deps) {
      * `appearance(ctx)`，返回 `{ lookup(kind, charId, id), list(charId) }`。它在模块 import 之后、`mount` 之前被调用，
      * 拿到的 `ctx` 与面板同一份（所以它同样没有 store / match / battle）。
      *
+     * **`kind` 是 `'portrait'` / `'avatar'`**：链按这一条 kind 各问一次、只取这一条 kind 的字段，所以立绘与
+     * 头像在提供者这一层就是两件可分开回答的事（偏好按 kind 分开记也是提供者自己的事）。步骤 4 那个
+     * `opts.lookup` 是**另一条口**（历史形状，第一参数恒为 `'chars'`），两者不是同一个问题。
+     *
      * 三条性质，每条都有理由：
      *   * **进程内最多一个提供者**：后注册者被**点名拒绝**（`CLIENT_APPEARANCE_TAKEN`）—— 「谁提供外观」不能有歧义，
      *     否则同一个干员的立绘取决于两个 mod 的加载次序；
      *   * **注册进解析链的唯一 hook**（`portraitChain.setAppearanceLookup`）：链本身不认识「皮肤」，
-     *     它只知道「有一个函数可能回答这个 id」；
+     *     它只知道「有一个函数可能回答这个 (kind, charId, id)」；
      *   * **没有提供者时链与今天逐字相同**（`currentAppearanceLookup()` 返回 `undefined`）。
      *
      * 为什么放在面板模块上而不是另开一个「mod 清单」：客户端能加载的代码只有**服务端声明过的那几条**
@@ -996,6 +2160,19 @@ export function createPanelRegistry(deps) {
      * @returns {{ providedBy: string|null, refused: boolean }}
      */
     appearance: () => ({ providedBy: appearanceProvider, refused: appearanceRefused }),
+    /**
+     * 素材加载源的提供者（`sources(ctx)`，DESIGN §28.40）。三条与 `appearance` 逐字相同：
+     *   * **进程内最多一个**：后注册者被**点名拒绝**（`CLIENT_SOURCES_TAKEN`）——「哪台主机先说话」不能有歧义；
+     *   * **注册进排序面的唯一 hook**（`resources/sources.js setSourceOrder`）：那个模块认识「一个函数」，**不**
+     *     认识「有哪些主机」—— 主机只在 `pack.json.assets.mirrors[]`，且每一条都在装载期与包内容器摘要比对过；
+     *   * **没有提供者时导入路径与今天逐字相同**（`orderDeclared` 不调用任何东西，按声明顺序；一个没声明
+     *     `mirrors` 的包连这一步都不到）。
+     *
+     * 与 `appearance` 唯一的不同写在 `registerSources` 里：这里注册的是**函数**而不是一张查找表，因为「先试哪一条」
+     * 一次导入只问一次，而不是每一帧问一次。
+     * @returns {{ providedBy: string|null, refused: boolean }}
+     */
+    sources: () => ({ providedBy: sourcesProvider, refused: sourcesRefused }),
     /**
      * 包写的主题变量（`welcome.modTheme`, 业主裁决 2026-10-10）：写 CSS 自定义属性，**加法**语义 —— 只写这几个名字，
      * 不动任何规则、不替换任何样式表。原值记下来，`dispose()` 时按名字恢复。
@@ -1025,16 +2202,24 @@ export function createPanelRegistry(deps) {
     /** Unmount every panel and stop following the store. */
     dispose() {
       if (disposed) return;
+      if (activeScreen) unmountScreenEntry(activeScreen);
       disposed = true;
       for (const [key, entry] of mounted) {
         if (typeof entry.unmount !== 'function') continue;
         try { entry.unmount(); } catch (err) { log?.error?.(`[mod-panels] ${key} unmount failed`, err); }
       }
       mounted.clear();
+      screens = [];
+      for (const subscriptions of screenSubscriptions.values()) for (const off of [...subscriptions]) off();
+      screenSubscriptions.clear();
       // 外观提供者随注册点一起收回：链回到「没有 hook」那条路径（与今天逐字相同），而不是留着一个指向
       // 已经拆掉的模块的函数 —— 那会让立绘继续解析到一套已经没人管的素材上。
       clearAppearanceLookup();
       appearanceProvider = null;
+      // 加载源提供者同一条理由：排序面回到「没有 hook」那条路径，而不是留着一个指向已经拆掉的模块的函数 ——
+      // 那会让下一次导入按一个没人再维护的顺序去试镜像。
+      clearSourceOrder();
+      sourcesProvider = null;
       for (const [, el] of hosts) {
         if (el && typeof el.remove === 'function') el.remove();
       }
@@ -1054,6 +2239,12 @@ export function createPanelRegistry(deps) {
         try { off(); } catch (err) { log?.error?.('[mod-panels] channel unsubscribe failed', err); }
       }
       channelOffs.length = 0;
+      // 引擎自己那一份 `welcome` 快照的订阅：与包通道的退订同一个出口（注入过一次的东西必须能收回来）。
+      if (typeof unsubscribeWelcome === 'function') {
+        try { unsubscribeWelcome(); } catch (err) { log?.error?.('[mod-panels] welcome unsubscribe failed', err); }
+      }
+      unsubscribeWelcome = null;
+      welcomeSnapshot = null;
       for (const el of styleEls) {
         if (el && typeof el.remove === 'function') el.remove();
       }
@@ -1066,6 +2257,12 @@ export function createPanelRegistry(deps) {
       if (typeof unsubscribe === 'function') unsubscribe();
       unsubscribe = null;
       subscribed = false;
+      // 宿主观察者与 store 订阅同一个出口拆掉：注入过一次的东西必须能收回来（`disconnect` 之后不再有 flush）。
+      if (domObserver) {
+        try { domObserver.disconnect(); } catch (err) { log?.error?.('[mod-panels] dom observer disconnect failed', err); }
+      }
+      domObserver = null;
+      domFlushQueued = false;
     },
   };
 }

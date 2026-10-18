@@ -15,7 +15,6 @@ import {
   rangeGridBox, shortcutFor, sanitizeSettings, DEFAULT_SETTINGS, normalizeResult, cycleField, fieldLabel, homeFieldId,
   activeBubbles, sortedPlayers, tileKey, prepCapsuleLabel, prepCamera, dropFailureReason, terrainInfo,
 } from '../../public/js/ui/gameLogic.js';
-import { pairPlayers } from '../../server/match/finalAssault.js';
 import { PHASE, GEO, DEFAULT_VOICE_LANG } from '../../shared/constants.js';
 import { setLang, setMessages } from '../../shared/i18n.js';
 
@@ -723,8 +722,33 @@ describe('keyboard & settings', () => {
   test('sanitizeSettings', () => {
     assert.deepEqual(sanitizeSettings(null), { ...DEFAULT_SETTINGS });
     assert.deepEqual(sanitizeSettings({ bgm: 3, sfx: -1, voice: 2, muted: 'yes', damageNumbers: false, quality: 'ultra' }),
-      { bgm: 1, sfx: 0, voice: 1, muted: false, damageNumbers: false, quality: 'high', keys: { ...DEFAULT_SETTINGS.keys }, voiceLang: DEFAULT_VOICE_LANG, voiceLangByChar: {} },
+      { bgm: 1, sfx: 0, voice: 1, muted: false, damageNumbers: false, officialDamageNumbers: false, ammoCount: false, combatMetrics: false, mysticEnergy: false, workshopSkins: true, workshopSources: true, quality: 'high', officialFx: 'auto', frameRate: 60, textSize: 'sm', keys: { ...DEFAULT_SETTINGS.keys }, voiceLang: DEFAULT_VOICE_LANG, voiceNative: false, voiceLangByChar: {} },
       'a saved profile without `keys` (before 0.2.0) gets the default key map (test/ui/feedback5-hotkeys.test.js)');
+    // 工坊外观 (workshopSkins): a boolean, default ON, and only a real boolean survives — a hand-edited
+    // localStorage must not turn the gate into something the chain reads as "off" by accident.
+    assert.equal(DEFAULT_SETTINGS.workshopSkins, true, 'default on: an installed outfit that does nothing is worse');
+    assert.equal(sanitizeSettings({ bgm: 0.5 }).workshopSkins, true, 'a profile saved before the setting existed');
+    assert.equal(sanitizeSettings({ workshopSkins: false }).workshopSkins, false, 'explicitly off survives (the hard acceptance point)');
+    for (const bad of ['yes', 'false', 0, 1, null, {}]) {
+      assert.equal(sanitizeSettings({ workshopSkins: bad }).workshopSkins, true, `junk ${JSON.stringify(bad)} falls back to the default`);
+    }
+    // 工坊素材源 (workshopSources, DESIGN §28.40): the same three properties, for the same reason — a hand-edited
+    // localStorage must not turn the mirror gate into something `resources/sources.js` reads as "off" by accident.
+    assert.equal(DEFAULT_SETTINGS.workshopSources, true, 'default on: a declared mirror that is never used is worse');
+    assert.equal(sanitizeSettings({ bgm: 0.5 }).workshopSources, true, 'a profile saved before the setting existed');
+    assert.equal(sanitizeSettings({ workshopSources: false }).workshopSources, false, 'explicitly off survives (the one-click rollback)');
+    for (const bad of ['yes', 'false', 0, 1, null, {}]) {
+      assert.equal(sanitizeSettings({ workshopSources: bad }).workshopSources, true, `junk ${JSON.stringify(bad)} falls back to the default`);
+    }
+    // 帧率 (render/framePacer.js, performance proposal §1): a wanted 30 / 60 / 120 pictures a second, or 0 = 跟随屏幕
+    // (no lock). A profile saved before the setting existed gets 60 — the official client's default — and anything else,
+    // e.g. a hand-edited localStorage, falls back to it as well.
+    assert.equal(DEFAULT_SETTINGS.frameRate, 60, 'default 60: the official client defaults to it (FRAME_RATES)');
+    assert.equal(sanitizeSettings({ bgm: 0.5 }).frameRate, 60, 'a profile saved before the setting existed');
+    for (const ok of [30, 60, 120, 0]) assert.equal(sanitizeSettings({ frameRate: ok }).frameRate, ok, `accepted ${ok}`);
+    for (const bad of ['60', 'fast', 45, -1, null, {}]) {
+      assert.equal(sanitizeSettings({ frameRate: bad }).frameRate, 60, `junk ${JSON.stringify(bad)} falls back to the default`);
+    }
     // 配音语言 (v0.7.1): a profile saved before it existed falls back to 默认配音 (DEFAULT_VOICE_LANG) and no per-operator overrides
     assert.equal(sanitizeSettings({ bgm: 0.5 }).voiceLang, DEFAULT_VOICE_LANG);
     assert.deepEqual(sanitizeSettings({ bgm: 0.5 }).voiceLangByChar, {});
@@ -738,6 +762,18 @@ describe('keyboard & settings', () => {
     assert.equal(sanitizeSettings({ voiceLang: 'jp' }).voiceLang, 'jp');
     assert.equal(sanitizeSettings({ voiceLang: 'en' }).voiceLang, 'en');
     for (const bad of ['JP', 'ja', 1, null, 'nope']) assert.equal(sanitizeSettings({ voiceLang: bad }).voiceLang, DEFAULT_VOICE_LANG, String(bad));
+    // 0.3.0 opens the remaining dubs: en / kr are real dubs of VOICE_LANGS, so they now round-trip (only junk falls back).
+    assert.equal(sanitizeSettings({ voiceLang: 'kr' }).voiceLang, 'kr');
+    // 本土语言 (voiceNative): a boolean master switch, off by default — only a real boolean survives (same shape as combatMetrics).
+    assert.equal(DEFAULT_SETTINGS.voiceNative, false, 'the 本土语言 switch is off unless the player turns it on');
+    assert.equal(sanitizeSettings({ bgm: 0.5 }).voiceNative, false, 'a profile saved before the switch stays off');
+    assert.equal(sanitizeSettings({ voiceNative: true }).voiceNative, true);
+    assert.equal(sanitizeSettings({ voiceNative: 'yes' }).voiceNative, false, 'a non-boolean stays off');
+    // 官方特效 (0.3.0): 'auto' by default (完整 on a desktop, 精简 on a touch device); every OFFICIAL_FX_MODES value round-trips.
+    assert.equal(DEFAULT_SETTINGS.officialFx, 'auto');
+    assert.equal(sanitizeSettings({ bgm: 0.5 }).officialFx, 'auto', 'a profile saved before 官方特效 gets the default');
+    for (const v of ['off', 'lite', 'full', 'auto']) assert.equal(sanitizeSettings({ officialFx: v }).officialFx, v, `accepted ${v}`);
+    assert.equal(sanitizeSettings({ officialFx: 'ultra' }).officialFx, 'auto', 'an unknown value falls back to the default');
     assert.equal(sanitizeSettings({ bgm: 0.333 }).bgm, 0.33);
     assert.equal(sanitizeSettings({ quality: 'low' }).quality, 'low');
   });
@@ -772,16 +808,16 @@ describe('prepCamera (research 09 §1.2: the Final Assault prep on the own half 
     assert.equal(prepCamera(null, 'a').kind, 'prep');
     assert.equal(prepCamera({ round: 14, bossRound: null, hiddenRound: null, players: [] }, 'a').kind, 'prep');
   });
-  test('boss / hidden round prep: bossPrep on the side of the server pairing (alive players by seat, two by two)', () => {
+  test('older servers without bossPairs keep the legacy seat-order prep camera fallback', () => {
     const players = [pl('d', 3), pl('a', 0), pl('c', 2), pl('b', 1)];
     for (const round of [14, 15]) {
       const sides = Object.fromEntries(players.map((p) => [p.playerId, prepCamera(pub(round, players), p.playerId)]));
       assert.deepEqual(Object.fromEntries(Object.entries(sides).map(([k, v]) => [k, `${v.kind}:${v.opts.side}`])),
         { a: 'bossPrep:L', b: 'bossPrep:R', c: 'bossPrep:L', d: 'bossPrep:R' });
     }
-    // somebody left (eliminated): the pairs close up exactly like the server's (Match._quit re-plans the boss waves)
+    // Legacy servers closed the ordered pairs up when somebody left; new servers publish bossPairs explicitly.
     const left = [pl('a', 0), pl('b', 1, false), pl('c', 2), pl('d', 3)];
-    const groups = pairPlayers(left.filter((p) => p.alive).map((p) => ({ ...p })));
+    const groups = [[left[0], left[2]], [left[3]]];
     for (const g of groups) g.forEach((p, j) => assert.equal(prepCamera(pub(14, left), p.playerId).opts.side, j === 1 ? 'R' : 'L', p.playerId));
     assert.equal(prepCamera(pub(14, left), 'c').opts.side, 'R', 'c moves up to the right half');
     assert.equal(prepCamera(pub(14, left), 'b').kind, 'prep', 'an eliminated player has no half');

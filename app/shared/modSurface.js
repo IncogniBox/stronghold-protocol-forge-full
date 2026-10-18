@@ -53,6 +53,34 @@ export const MOD_SURFACE = Object.freeze([
     spec: '§28.13',
   },
   {
+    id: 'traits.grantsBonds',
+    layer: 'A',
+    // 一格「记录里的字段」（与 `content` / `overrides` 同一层，但不是一条新的 `pack.json` 声明）：一条 chess 记录
+    // 的 `trait.grantsBonds` 写什么，谁算哪个盟约的成员就跟着变 —— 而成员资格决定 count / tier / 层数，
+    // 所以这一格**改对局结果**，必须像 `behaviour` 那样有具名读取点、锚点、测试与一节文档。
+    decl: '<file>.json 的一条 chess 记录：`trait.grantsBonds = ["<bondId>", …]`',
+    // 三个锚点各钉一半：**键名**（`TRAIT_GRANT_KEY`）、**这一格唯一的判据**（`grantedBondsByTrait`）、以及
+    // **成员资格的合并本体**（`memberBonds`）。三处读取点调的是后两个，改名 = 打断所有声明这一格的包。
+    anchors: [
+      { symbol: 'TRAIT_GRANT_KEY', module: 'morph' },
+      { symbol: 'grantedBondsByTrait', module: 'morph' },
+      { symbol: 'memberBonds', module: 'morph' },
+    ],
+    requires: [
+      '`bondId` 必须是**这台机器上真的有的**盟约 id（`bonds.json`，含别的已装包加进去的）：不存在的 id 会被**点名**（启动日志 `report.traitGrants` + `npm run workshop:validate` 的 `TRAIT_GRANT_UNKNOWN_BOND`），并且**永远进不了计数**（读取点的 `hasBond` 挡掉）；引擎**不拒包**',
+      '形状写歪同样点名，一个都不许静默：不是数组 / 数组里有非空字符串以外的东西 ⇒ `TRAIT_GRANT_BAD_SHAPE`，空数组 ⇒ `TRAIT_GRANT_EMPTY`（静默降级正是这一格要修的老毛病）',
+      '**不写这一格 ⇒ 逐字节不变**（特质今天完全不参与计数）：官方 266 条记录一条都没有它，`test/golden/*.json` 不需要 `golden:update`',
+      '判据只有一份：`shared/morph.js` 的 `grantedBondsByTrait`；成员资格的**合并**也只有一份（`memberBonds`）—— prep 的 `bondsMeta.pieceBonds`、战斗的 `support/index.js unitBonds`、客户端的 `gameLogic/bonds.js`（`pieceBondIds` 与 `bondMembers` 两处读者）都调它',
+      '`trait` 必须是**记录上的对象**：sim 里读 `def.raw.trait`，**不是** `def.trait`（那是投影出来的文本字符串，没有子键）',
+    ],
+    files: [
+      'shared/morph.js', 'shared/workshop.js', 'shared/chessAuthoring.js', 'server/data.js',
+      'server/match/bondsMeta.js', 'server/sim/content/support/index.js', 'public/js/ui/gameLogic/bonds.js',
+    ],
+    tests: ['test/traitGrants.test.js'],
+    spec: '§28.49',
+  },
+  {
     id: 'overrides',
     layer: 'A',
     decl: 'pack.json.overrides[] = "<文件>:<id>"',
@@ -91,6 +119,22 @@ export const MOD_SURFACE = Object.freeze([
     files: ['shared/workshop.js', 'server/workshop.js', 'server/modCatalog.js'],
     tests: ['test/workshopBondIcons.test.js', 'test/workshopItemIcons.test.js', 'test/workshopArt.test.js'],
     spec: '§28.13',
+  },
+  {
+    id: 'skins',
+    layer: 'A',
+    decl: 'pack.json.skins[] = { id, charId, name, series?, desc?, art?, voices? } + 包内素材',
+    // 三处锚点各钉一半：**字段闭集**（写错的名字点名拒绝，SKIN_FIELDS）、**顶层声明**（PACK_FIELDS 里有
+    // `skins`，否则这个键会被 PACK_UNKNOWN_FIELD 拒掉）、以及**落点**（合并进 `assets.skins` 的那一条）。
+    anchors: [{ symbol: 'SKIN_FIELDS' }, { symbol: 'PACK_FIELDS', members: ['skins'] }, { symbol: 'SKIN_ID_RE' }],
+    requires: [
+      '`art` 与 `art.chars` 同形（复用同一套解析器：路径必须包内相对、spine 要齐 skel + atlas）—— 引擎不认识「皮肤」，这里只判形状',
+      '**数据**在包声明里，**行为**（哪一套生效）在一个注册了的外观提供者里（`client.panels[].appearance`）',
+      '一个进程最多一个外观提供者，且玩家可以用设置里的「工坊外观」把它整个关掉 ⇒ 关掉时解析链与不装包逐字相同',
+    ],
+    files: ['shared/workshop.js', 'server/workshop.js', 'public/js/ui/portraitChain.js', 'public/js/ui/extensions.js'],
+    tests: ['test/workshopSkins.test.js', 'test/ui/portraitChain.test.js', 'test/lobby-appearance.test.js'],
+    spec: '§28.28',
   },
   {
     id: 'notices',
@@ -136,12 +180,101 @@ export const MOD_SURFACE = Object.freeze([
   {
     id: 'server.modules',
     layer: 'B',
-    decl: 'pack.json.server.modules = { module, uses[] }',
-    anchors: [{ symbol: 'SERVER_MEMBERS', members: ['modules'] }, { symbol: 'SERVER_MODULE_USES' }],
-    requires: ['只允许 uses 里那几个生命周期钩子', '源码过静态确定性扫描（无 process / require / eval）'],
-    files: ['shared/workshop.js', 'server/modModules.js', 'shared/kitAuthoring.js'],
-    tests: ['test/packServerModules.test.js', 'test/packServerModulesWire.test.js'],
+    decl: 'pack.json.server.modules = { module, uses[], channels? }',
+    anchors: [
+      { symbol: 'SERVER_MEMBERS', members: ['modules'] },
+      { symbol: 'SERVER_MODULE_USES' },
+      { symbol: 'MAX_SERVER_MODULE_CHANNELS' },
+    ],
+    requires: [
+      '只允许 uses 里那几个生命周期钩子（闭枚举；加一格不抬世代）',
+      '源码过静态确定性扫描（无 process / globalThis / require / eval）—— **这一条从 2026-10-11 起真的实现了**：' +
+        '`server/modModules.js serverModuleSourceIssues` 在 `import()` **之前**跑 `stripComments` + `mentionsIdentifier`，' +
+        '取 `SERVER_CODE_FORBIDDEN_GLOBALS`（与 server.meta / battle / room 三处**同一张共享表、同一段名单**）。' +
+        '`globalThis` 那一格 2026-10-13 **回归**：它曾被拿掉，为保住那个拿 `globalThis` 与同进程测试通信的合法模块；' +
+        '那个用例现在走**引擎显式注入**的 `host.io`（包声明 `write: true`，目录限定在 `<状态目录>/mod/<包id>/`），' +
+        '于是这一格没有留下的理由 —— 开着它时 `globalThis.process` 绕得过 `process` 那一格。' +
+        '与那三处逐字同一句免责：这是**启发式，不是沙箱**（把名字拼成两段绕得过），兜底的是内容哈希与' +
+        '「只给 uses 里声明过的那几样」。' +
+        'kit 那一段（时钟 / 随机 / DOM / 计时器）**刻意不取**：这一层的挂载点都在对局之外跑，要读进程信息请用 host.metrics',
+      // 这一格唯一的**网络触发点**：`uses` 含 `matchClass`（⇒ 必须 `combat: true`）的包，其 MatchClass 子类上的
+      // `handlePackMsg(playerId, msg)` 会在 `pack.msg` 限流之后、转发之前被调到一次；返回 `true` /
+      // `{ consumed: true }` = 已消费（不再转发），其余返回值与抛错都按未消费继续转发。
+      '`matchClass` 子类上的 `handlePackMsg(playerId, msg)` 是唯一一条由消息驱动的调用点（见 DESIGN §28.14）',
+      // 接收通道声明面（DESIGN §28.23）：`channels` 是**可选**的模块字段，但一旦声明就有四条硬判据 ——
+      // 名字与面板那半边**共用一份判据**（`PACK_CHANNEL_RE`）、每条还必须被本包某个面板的 `messages` 声明过
+      //（`MODULES_UNKNOWN_CHANNEL`，否则客户端根本发不出来），且该模块必须挂 `matchClass`（没有接收人就不许声明）。
+      '`channels`（接收通道，§28.23）的每个名字要同时被本包的 `client.panels[].messages` 声明过，且该模块必须挂 `matchClass` —— 投递进对局 = 改得了结果，所以整包仍须 `combat: true`；发送者身份由平台从会话与座位解析（客户端载荷里自称的 from / seat 不作数）',
+      '`uses` 里含 `metrics` / `route` 的两格改不了对局（一个是只读标量快照，一个是只读 GET），所以都**不**要求 `combat: true`（§28.34 / §28.35）',
+      '`healthz` 与 `onBoot` 的读数口径见 §28.37：`/healthz` 的 `ok` 恒 true、恒 200（「不 ok 时 503」做不到，如实写在那一节）',
+    ],
+    files: ['shared/workshop.js', 'server/modModules.js', 'server/hostMetrics.js', 'server/http/routeMount.js', 'server/lobby.js', 'shared/kitAuthoring.js'],
+    tests: ['test/packServerModules.test.js', 'test/packServerModulesWire.test.js', 'test/packMatchMsg.test.js', 'test/packServerSurface.test.js', 'test/modMatchChannels.test.mjs'],
     spec: '§28.14',
+  },
+  {
+    id: 'server.transport',
+    layer: 'B',
+    decl: 'pack.json.server.transport = { deflate, threshold?, level?, memLevel?, concurrencyLimit?, … }',
+    anchors: [{ symbol: 'TRANSPORT_FIELDS' }, { symbol: 'SERVER_MEMBERS', members: ['transport'] }],
+    requires: [
+      '**只是声明**：包永远不能注入服务端代码去改 `wss`（业主裁决「声明式足够就不做」）—— 那是进程启动选项写权限',
+      '`deflate` 必填（没有开关的块什么都没说）；其余字段是闭集 + 上下界（`TRANSPORT_BOUNDS`）',
+      '进程级：`perMessageDeflate` 是 `WebSocketServer` 的构造选项。多包声明时包 id 小的赢，其余点名；生效值进启动日志',
+      '`welcome.transport` 报的是**生效值**（`{ deflate, params, maxPayload, threshold }`），不是声明值；`MOD_API_VERSION` 不动（加法）',
+    ],
+    files: ['shared/workshop.js', 'server/index.js', 'server/http/websocket.js', 'server/lobby.js'],
+    tests: ['test/packServerSurface.test.js'],
+    spec: '§28.33',
+  },
+  {
+    id: 'server.modules.metrics',
+    layer: 'B',
+    decl: 'server.modules[].uses 含 "metrics" ⇒ `host.metrics()`',
+    anchors: [{ symbol: 'HOST_METRICS_FIELDS', module: 'hostMetrics' }, { symbol: 'BOOT_CONFIG_ENV_KEYS', module: 'modModules' }],
+    requires: [
+      '**是值不是句柄**：深冻结的标量对象（`uptimeSec` / `rss` / `heapUsed` / `elu` / `loopP*` / `sampleAgeMs` / `state`），没有 `process`、没有直方图、没有定时器、没有函数',
+      '惰性启用：直方图与采样定时器只在真有包声明 `metrics` 时才建（没装的进程开销为零）',
+      '样本过期 ⇒ `loopP*` 一律 `null` + `state: "stale"` + 点名 warn 一次（既不静默空白，也不报旧值）',
+      '`onBoot` 的回调收到一份**深冻结只读配置快照** `{ port, host, stateDir, env }`；`env` 只带 `BOOT_CONFIG_ENV_KEYS` 白名单。**包只能观察不能设值**，也永远不能**声明**启动变量',
+      '没声明就抛 `MODULE_USE_UNDECLARED`（不是 `undefined`）',
+    ],
+    files: ['server/hostMetrics.js', 'server/modModules.js', 'server/index.js'],
+    tests: ['test/packServerSurface.test.js'],
+    spec: '§28.34',
+  },
+  {
+    id: 'server.modules.route',
+    layer: 'B',
+    decl: 'server.modules[].uses 含 "route" ⇒ `host.route(path, fn, { cache? }?)`',
+    anchors: [{ symbol: 'RESERVED_ROUTE_PREFIXES', module: 'routeMount' }, { symbol: 'DYNAMIC_ROUTE_CACHE_POLICIES', module: 'routeMount' }],
+    requires: [
+      '路径必须在 `/mod/<包id>/…` 里（命名空间里有包 id ⇒ 冲突与顶掉核心路径在结构上不可能），并且再判一遍核心保留路径表',
+      '只有 GET / HEAD；缓存只有 `no-store` / `no-cache`（没有 `public`）；响应体有上限（64 KB）',
+      '回调必须**同步**返回 JSON 可序列化的值（`Promise` 点名拒绝并回 500 —— 单进程事件循环，这一格不做每请求隔离）',
+      '认证口径与引擎其余 HTTP 面逐字一致：**没有认证**，所以 `host.route` 不是私有通道（要私有数据落 `host.io`）',
+      '静态 `pack.json.routes` 通道仍然按「声明过的路径就是声明过的路径」行事；保留路径表本批只施加在动态通道上（§28.35 记了这条不对称）',
+    ],
+    files: ['server/http/routeMount.js', 'server/http/static.js', 'server/modModules.js', 'server/index.js'],
+    tests: ['test/packServerSurface.test.js'],
+    spec: '§28.35',
+  },
+  {
+    id: 'media.voices.cdn',
+    layer: 'A',
+    decl: 'pack.json.voices / voiceLangs 里的 `{ url, sha256, file }` 条目（作者自备 CDN）',
+    anchors: [{ symbol: 'VOICE_CDN_FIELDS' }, { symbol: 'VOICE_CDN_AUDIO_EXTS' }],
+    requires: [
+      '**协议只认 `https:`**（`http:` / `data:` / `file:` / 协议相对 / URL 里带凭据一律拒）',
+      '`sha256` 是作者声明的内容摘要：取回来的字节必须对上，对不上就**不落盘、不服务**',
+      '**绝不内置任何官方语音地址、也绝不新增下载路由**：主机名只来自 `pack.json`，取回来的字节由**既有**的 `/workshop-assets/` 送出',
+      '**不放宽 `VOICE_LANG_*`**，也不加任何便于拿官方语音的通道',
+      '失败要响亮：逐条点名 warn + 那条台词从客户端读的语音表里摘掉（回落默认配音，而不是留一条永远 404 的静音）',
+      '声明了 CDN 条目就必须写 `license`；CDN 条目不需要 `assets/` 文件夹，包内路径的既有规则一字未动',
+    ],
+    files: ['shared/workshop.js', 'server/voiceCdn.js', 'server/http/static.js', 'server/index.js'],
+    tests: ['test/packServerSurface.test.js'],
+    spec: '§28.36',
   },
   {
     id: 'server.battle',
@@ -168,24 +301,304 @@ export const MOD_SURFACE = Object.freeze([
     spec: '§28.20',
   },
   {
+    id: 'server.room.hold',
+    layer: 'B',
+    decl: 'pack.json.server.room.hold = true ⇒ room.canHold(fn)',
+    anchors: [{ symbol: 'ROOM_FIELDS', members: ['hold'] }, { symbol: 'SERVER_MEMBERS', members: ['room'] }],
+    requires: [
+      '**这一格是 §28.20 那条「房间钩子不是 combat 闸门」的唯一例外**：它能决定「空席的房间还留不留」= 能决定一局会不会被回收，'
+        + '所以按 §28.14 / §28.54 同一条**能力判据**要求包声明 `combat: true`（`ROOM_HOLD_NEEDS_COMBAT`）。同一格里的观察面成员照旧不受闸门',
+      '申请必须显式：`hold` 没写成 `true` 就调 `room.canHold(fn)` ⇒ `ROOM_HOLD_UNDECLARED` 点名并返回 false（不是静默收下）。'
+        + '`hold` **只在写出来时**才进归一化清单 ⇒ 没用它的那些包摘要逐字节不变，写了就进摘要（§28.2：同一份房间摘要必须对应同一份回收语义）',
+      '包只决定**留不留**，宿主决定**留多久**：`ROOM_HOLD_MAX_MS`（15 分钟，**具名常量不是魔法数**）是宿主侧硬时限，谓词返回的 `until` 越界一律夹回来。'
+        + '多包语义 OR、时限取最早那一票，到点重新判一次；谓词抛异常 ⇒ 这一票作废 + `ROOM_HOOK_THREW` 点名，别的包照算',
+      '裁决表按**房间码**存，`disposeRoom` 里与定时器一起 `releaseRoomHolds(code)` 收回（房间码会被复用，留着条目 = 让下一个同码房间继承上一个的裁决，与 §28.20 对钩子表同一条理由）。定时器 `unref()`：等重连的房间不该把进程吊住',
+      '⚠ 回收那句话住在 `server/lobby.js`，改法必须是**最小替换**：两处 `disposeRoom(room, \'empty\')` ⇒ `reapEmptyRoom(room)`，**没有包申请时它逐字就是原来那一行**；`disposeRoom` 只多了「清定时器 + 收回裁决表」。房间留在 `this.rooms` 里、不广播新事件 ⇒ 留置期间房间对客户端的形状一字未动',
+      '不新增 `C2S` 意图、不动 `PROTOCOL_VERSION` / `MOD_API_VERSION`、不进模拟 ⇒ 不需要 `golden:update`',
+    ],
+    files: ['shared/workshop.js', 'server/roomPack.js', 'server/lobby.js'],
+    tests: ['test/modRoomHold.test.mjs', 'test/modSurface.test.js'],
+    // ⚠️ 节号以我方为准（上游）：它在下游 fork 里是 §28.55，我方按**能力**排到现有最大号之后。
+    spec: '§28.57',
+  },
+  {
+    id: 'callBudget',
+    layer: 'B',
+    // 与 `variants` / `behaviour` **同一形状、不同一档**：包声明的是**一个上限**（`{ max? }`），不是数值、不是路径、
+    // 更不是「改成几」。它不是闸门（那是 `combat`）而是**预算** —— 一个诚实声明了 `combat: true` 的包可以把整局
+    // 拖住，而闸门回答不了「它能被调多少次」。业主口径 §4b 的「并存沙箱档」：**module 档保留现状**，沙箱档新增
+    // 运行时保护，所以预算**按档启用**（声明过才建账，没声明一行都不多跑）。
+    decl: 'pack.json.callBudget = { max? }',
+    anchors: [
+      { symbol: 'CALL_BUDGET_FIELDS', module: 'callBudget' },
+      // 缺省值只有一份，而且它是这一格里**唯一会被两端各读一遍**的那个数字（第 `max` 次放行、第 `max + 1` 次
+      // 回滚），所以必须锚住它 —— 改名或改值都是打断「两端同规则」。
+      { symbol: 'PACK_CALL_BUDGET_DEFAULT', module: 'callBudget' },
+      { symbol: 'PACK_FIELDS', members: ['callBudget'] },
+    ],
+    requires: [
+      '闭枚举 + 只许收紧不许放宽：`max ≤ PACK_CALL_BUDGET_DEFAULT`（8000），调高是 `CALL_BUDGET_TOO_HIGH` 点名拒绝 —— 一个能把上限调高的声明等于没有上限',
+      '**不是闸门、也不要求 `combat: true`**：与 `variants` / `behaviour` 的 `*_NEEDS_COMBAT` 的区别是**方向** —— 那两格授予能力，这一格**只收紧**，它永远不能让一个包更有能力',
+      '**必须进内容摘要**（`identifyPack` 的 `canonicalJson(pack)`）；**不声明 ⇒ 归一化清单里不长这个键**（无条件补一个 `{ max: 8000 }` 会让所有已发布包的哈希全变，§28.2）',
+      '**不是贡献项**：只带 `callBudget` 的包照旧 `EMPTY_PACK`',
+      '**两端确定性**：计数与回滚只有一份实现（`server/sim/battle/hooks.js`，它在 Node 与浏览器里是同一段字节），常量与规则只有一份（`shared/callBudget.js`）；预算这条路径里**不许有端特有分支**',
+      '**`kits/*.js` 的逐单位回调也归账**：注册点在 `server/sim/battle/players.js` `_setupUnit` 的 `_safe(…, pack)`（不是 `setupUnitKit` 里那次构造调用），归属按**对象身份**记（`WeakMap`），与 `install(battle)` 那一半落进同一本账',
+      '**探测不进建房路径**：判决在装载期一次，`server/battlePack.js`（`server.battle` 那一半）与 `server/workshop.js loadWorkshopKits`（`kits/` 那一半，只带 `kits/` 的包也建账）读同一个 `effectivePackCallBudget`，浏览器从**同一份模块清单**上读同一个数字（不自己算、不新造 wire 字段）；`server/lobby.js` 里没有这一格',
+    ],
+    files: [
+      'shared/callBudget.js', 'shared/workshop.js', 'shared/modSurface.js', 'server/battlePack.js',
+      'server/sim/Battle.js', 'server/sim/battle/hooks.js', 'server/sim/buffs.js', 'server/sim/battle/status.js',
+      'server/sim/content/index.js', 'public/js/battle/runner.js',
+    ],
+    tests: ['test/callBudget.test.js', 'test/packBattle.test.js'],
+    spec: '§28.52',
+  },
+  {
     id: 'routes',
     layer: 'B',
     decl: 'pack.json.routes = [{ path, cache }]',
     anchors: [{ symbol: 'ROUTE_CACHE_POLICIES' }, { symbol: 'PACK_FIELDS', members: ['routes'] }],
-    requires: ['路径与缓存策略都要在允许集合内（没有「包自己发明的缓存语义」）'],
-    files: ['shared/workshop.js', 'server/http/routes.js', 'server/http/mods.js'],
-    tests: ['test/modRoutes.test.js'],
+    requires: [
+      '路径与缓存策略都要在允许集合内（没有「包自己发明的缓存语义」）',
+      '撞核心只丢**那一条声明**、不拒包，并响亮点名；判据是 `coreRouteShadow`（真文件 / 常量端点才算撞），'
+        + '作者侧 `tools/workshop-validate.mjs` 读同一张表（撞 ⇒ error，落在命名空间但今天没文件 ⇒ warning），不许另抄一份',
+    ],
+    files: ['shared/workshop.js', 'server/http/routes.js', 'server/http/mods.js', 'server/http/workshop.js',
+      'server/http/routeMount.js', 'tools/workshop-validate.mjs'],
+    tests: ['test/modRoutes.test.js', 'test/workshopValidateRoutes.test.js'],
     spec: '§28.13',
+  },
+  {
+    id: 'matchKinds',
+    layer: 'B',
+    decl: 'pack.json.matchKinds = [{ id, seats?: { min, max }, label? }]',
+    anchors: [
+      { symbol: 'PACK_FIELDS', members: ['matchKinds'] },
+      // ⚠️ 符号名是**单数** `KIND`（以 `shared/workshop.js` 的导出实名为准）：这里登记的符号名与那边必须逐字
+      // 对上，拼错就是一条永远对不上的登记。
+      { symbol: 'MATCH_KIND_FIELDS' },
+      { symbol: 'MATCH_KIND_ID_RE' },
+      { symbol: 'MAX_PACK_MATCH_KINDS' },
+      { symbol: 'MATCH_KIND_SEATS_MAX' },
+    ],
+    requires: [
+      '必须有接收人：本包至少要有一个 `server.modules` 条目挂 `matchClass`，否则 `MATCHKINDS_NEED_MATCH_CLASS` 点名拒'
+        + '（形状照 §28.23 的 `MODULES_CHANNELS_NEED_MATCH`）；`combat: true` **不在这一格重复判** —— §28.14 那条已经'
+        + '先拦下「有包装器却不肯认 combat」，再写一遍就是永远不会命中的死格子',
+      '只在写出来时才进归一化结果（同 `variants` / `behaviour` / `callBudget`）：`identifyPack` 哈希的就是这份清单，'
+        + '给所有包都加 `matchKinds: []` 会改掉**每一个已发布包**的摘要；而它必须进摘要 —— 这一格决定「这一局由谁算什么」'
+        + '（§28.2），两份只差种类声明的包共用摘要就是摘要闸门放行两种玩法',
+      '管理器**不认玩法名**：`host.matchKinds()` 交出深度冻结的只读数据，判定住在包装器自己的构造里。`MatchClass` 是'
+        + '进程级一次性的包装（`server/index.js`），所以包装器命中才换、否则**必须原样把 Base 交回**',
+      '有界：每包 ≤4 种、座位 1..12、`label` ≤60 且是作者可见文本（不经 `t()` ⇒ **不占 i18n 词条**，与 §28.15 那条'
+        + '「给作者读的说明不进语言包」同口径）；种类 id 与包通道**共用一套字符集**',
+      '清单按 id 排序后进摘要（不按书写顺序）：两份只差书写顺序的声明必须是同一份字节 —— 否则书写顺序就能改摘要，'
+        + '那等于摘要闸门可以被绕过',
+      '不新增 `C2S` 意图、不动 `PROTOCOL_VERSION` / `MOD_API_VERSION`：加一格字段不抬版本',
+    ],
+    files: ['shared/workshop.js', 'server/modModules.js'],
+    tests: ['test/modMatchKinds.test.mjs', 'test/packBehaviour.test.js', 'test/modSurface.test.js'],
+    // ⚠️ 节号以我方为准（上游）：它在下游 fork 里是 §28.52，与我方既有的 §28.52（`callBudget`）撞号，
+    // 所以排到我方现有最大号之后。改号按能力归一，别处引用一并跟着改。
+    spec: '§28.54',
+  },
+  {
+    id: 'server.modules.lane',
+    layer: 'B',
+    decl: 'server.modules[].uses 含 "lane" ⇒ host.lane(onUpgrade)，配 lane = { path, summary? }',
+    // 锚在**闭枚举那一格**上（`members: ['lane']`）：这一格的全部内容就是「`SERVER_MODULE_USES` 多了 `lane`」
+    // —— 闭枚举里少一个成员，包写下的 `uses: ["lane"]` 就会被 `MODULES_BAD_USES` 拒掉。
+    anchors: [{ symbol: 'SERVER_MODULE_USES', members: ['lane'] }, { symbol: 'MAX_SERVER_MODULES' }],
+    requires: [
+      '包**不**因此获得监听套接字、新端口、定时器或子进程：改的是「谁能登记一条 lane」，`onUpgrade(req, socket, head, ctx)` 的签名与 §28.44 那张表的行逐字相同（外加 `ctx.lane` 这条行自己的 `{ id, path, summary }`），准入 / 背压 / 心跳透传 / 消息顺序 / 按名字记日志全部沿用宿主那一侧',
+      '路径按声明**同步认领**（`server/modLanes.js claimPackLane`，在 import 之前），处理器 import 完成后才挂（`host.lane(fn)`）—— 因为宿主在 `server/index.js:432` 就快照那张表，晚一步的路径会变成「包合法、表里没这行」的哑格子。没挂上就升级 ⇒ `ctx.reject(503)` + 按名字点名；认领失败（坏语法 / 抢 `/ws` / 撞别人的路径 / 一模块两条 / 表满）⇒ 整包在装载期被拒并点名',
+      '判据只有一份：路径语法与保留名直接调 `server/http/wsLanes.js` 的 `isLanePath` / `LANE_RESERVED` / `MAX_WS_LANES`，形状层**不抄第二遍**；形状层只管命名空间（必须在 `/mod-ws/<本包id>` 之下，`MODULES_LANE_BAD_NAMESPACE`）。限额是宿主的表预算，所以 lane 的闭字段只有 `{ path, summary? }`',
+      '四条互拒：`lane` 无 `uses:[lane]` ⇒ `MODULES_LANE_UNDECLARED`；有 `uses:[lane]` 无路径 ⇒ `MODULES_LANE_NEEDS_PATH`；坏路径 / 空白 summary / 未知字段 ⇒ `MODULES_LANE_BAD_PATH` / `MODULES_LANE_BAD_SUMMARY` / `MODULES_BAD_LANE`。**只在声明时**才进归一化清单 ⇒ 没用的包摘要逐字节不变，用了就进摘要（同一份房间摘要必须对应同一份会被连上的路径，§28.2）',
+      '入口是 `server/modServer.js`（把 `packLaneTable()` 交给 `startServer({ wsLanes })`），**不改 `server/index.js`** —— 那是本体拥有的路径，而 `index.js` 已经有 `opts.wsLanes` 这个现成入口，能不改就不改（越本体路径要走 `.github/overlay.json` 的 `bodyPaths` 受控例外登记）；不认 lane 的部署照旧 `node server/index.js`，行为与字节都不变',
+    ],
+    files: ['shared/workshop.js', 'server/modModules.js', 'server/modLanes.js', 'server/modServer.js', 'server/http/wsLanes.js', 'server/http/websocket.js'],
+    tests: ['test/modPackLane.test.mjs', 'test/wsLanes.test.js'],
+    // ⚠️ 节号以我方为准（上游）：它在下游 fork 里是 §28.54，我方按**能力**排到现有最大号之后。
+    // ⚠️ 来源分支的 `shared/workshop.js` 里有**四处**把它错标成 §28.53（那是 `client.screens` 的号），
+    // 合并时按能力归一到 §28.56，不做机械的号段平移。
+    spec: '§28.56',
+  },
+  {
+    id: 'server.modules.tickets',
+    layer: 'B',
+    decl: 'server.modules[].uses 含 "tickets" ⇒ host.tickets.verify(ticket, { consume? })',
+    // 锚点写**真实导出符号**：`server/bindTickets.js` 的工厂与进程级单例（后者才是 `net.js` 签 / `modModules.js`
+    // 验共用的那一份），外加闭枚举里那一格本身 —— 少一格成员，包写下的 `uses: ["tickets"]` 就会被
+    // `MODULES_BAD_USES` 拒掉。
+    anchors: [
+      { symbol: 'createBindTickets', module: 'bindTickets' },
+      { symbol: 'bindTickets', module: 'bindTickets' },
+      { symbol: 'SERVER_MODULE_USES', members: ['tickets'] },
+    ],
+    requires: [
+      '**密钥永不外泄**：包拿到的只是一个**函数**（`verify`），不是 secret —— 它因此**能验、不能签**。「谁是 x」只有游戏核心能说（`server/bindTickets.js` 的 `mint` 只被 `server/net.js` 调），把密钥交出去就等于人人可签',
+      '**一票一用、短命**：票据活 120 秒（`ttlMs` 缺省）、`consume: true` 时把 `jti` 记进一个有界集合（`maxConsumed` 缺省 4096，FIFO 淘汰最旧），同票再来即拒 —— 否则一张被截获的票能在有效期内反复绑定',
+      '失效**不抛**、一律 `{ ok: false, reason }`：形状 / 签名（`timingSafeEqual`，长度先判）/ 过期 / 已消费各是一个 reason；一个抛出来的验证函数会把「格式坏」变成拒绝服务',
+      '**每进程一份、不落盘**：`secret` 缺省 `randomBytes(32)`，进程重启即作废（重启前签出的票全部失效）—— 票据只活 120 秒，落盘换不到什么，却要多守一份密钥材料',
+      '挂载点是 `welcome.bindTicket`（`server/net.js`，**每一条发 welcome 的路**都现签：首次 / 改名后的重发 / resync），`shared/protocol.js` 的 S2C 那一行同步登记 ⇒ **加性可选字段，`PROTOCOL_VERSION` 不动**（先例 `records.mine` / `hello.auth`）',
+      '没声明 `tickets` 就抛 `MODULE_USE_UNDECLARED`（不是 `undefined`）；不要求 `combat: true`（它改不了对局，也改不了谁是谁：认证的是核心签的那张一次性的票）',
+    ],
+    files: ['server/bindTickets.js', 'server/net.js', 'server/modModules.js', 'shared/workshop.js', 'shared/protocol.js'],
+    tests: ['test/bindTickets.test.mjs'],
+    spec: '§28.59',
   },
   {
     id: 'assets',
     layer: 'B',
-    decl: 'pack.json.assets = { container, algorithm, digest, file, server }',
-    anchors: [{ symbol: 'ASSETS_SERVER_POLICIES' }, { symbol: 'ASSETS_VERIFY_ALGORITHMS' }],
-    requires: ['装载期核对声明的摘要（对不上就不服务）', 'server: serve | cache-only 二选一'],
-    files: ['shared/workshop.js', 'server/workshop.js', 'server/http/static.js'],
-    tests: ['test/modAssets.test.js', 'test/packAssets.test.js', 'test/workshopAssets.test.js'],
+    decl: 'pack.json.assets = { container, manifest, serverPolicy?, verify?, mirrors? }',
+    anchors: [
+      { symbol: 'ASSETS_SERVER_POLICIES' }, { symbol: 'ASSETS_VERIFY_ALGORITHMS' },
+      // 作者自备 CDN 的镜像（§28.40）：字段闭集与两条形态判据。与 `VOICE_CDN_FIELDS` 同一类 —— 它们是「一个包
+      // 可以写哪几个键」的那张表，写错的名字被点名拒绝（`ASSETS_MIRROR_UNKNOWN_FIELD`），所以必须被锚住。
+      { symbol: 'ASSETS_MIRROR_FIELDS' }, { symbol: 'ASSETS_MIRROR_MAX' }, { symbol: 'ASSETS_MIRROR_ID_RE' },
+    ],
+    requires: [
+      '装载期核对声明的摘要（对不上就不服务）',
+      'server: serve | cache-only 二选一',
+      '`mirrors[]` **只镜像本包自己的容器**：`base` 必须是绝对 https、`sha256` 必须等于装载期从包内文件算出的容器摘要，对不上的那条**停用**并点名（不拒包）—— 服务端不为这条通道发一次网络请求',
+    ],
+    files: ['shared/workshop.js', 'server/workshop.js', 'server/http/static.js', 'server/http/workshop.js', 'public/js/resources/host.js'],
+    tests: ['test/modAssets.test.js', 'test/packAssets.test.js', 'test/workshopAssets.test.js', 'test/modAssetsMirrors.test.js'],
     spec: '§28.13',
+  },
+  {
+    id: 'behaviour',
+    layer: 'B',
+    // 与 `variants`（§28.39）是**同一形状、不同一张表**：包声明的是「哪一格开关、哪一档」，不是「改成几」、
+    // 更不是「改哪个文件」。第 4 刀落这一格时表是**空的**（通道 + 守卫本身）；第 8 刀起表里有实现好的格
+    // （`shopBias` / `prepLoadout` / `morphPairing`），随后 `unequip` 也带着自己的读取点落了进来，
+    // `diyPoolOverlap`（第 5 格）同样 —— 今天 **5 格**，每一格都带**引擎侧的读取点** —— 所以这里锚的是
+    // **表、顶层键，以及这五格的读取点**：表里加一格必须同时进本清单、进 docs/MOD-SURFACE.md，并补一节文档。
+    // ⚠️ `diyPoolOverlap` 的读取点（`stripPackOperators`）是**按包读取**的（逐个包读它自己的 `pack.behaviour`，
+    // **刻意不走** `mergeBehaviourDecls`，理由见 §28.43.1 与 `docs/WORKSHOP.md` §1.23 该格那一段）——
+    // 所以它的锚点只有这一个符号，没有「合并规则」那一半。
+    decl: 'pack.json.behaviour = [{ switch, option?, name?, desc? }]',
+    anchors: [
+      { symbol: 'BEHAVIOUR_SWITCHES', module: 'behaviour' },
+      { symbol: 'PACK_FIELDS', members: ['behaviour'] },
+      // 表里每一格的引擎侧读取点（第 8 刀起；表里再加一格 ⇒ 照这个形状再加一个可锚的符号）
+      { symbol: 'bondBiasPreference', module: 'pool' },
+      { symbol: 'bondBiasBonds', module: 'economy' },
+      { symbol: 'LOADOUT_PHASES', module: 'platform' },
+      { symbol: 'loadoutPhasesFor', module: 'platform' },
+      { symbol: 'MORPH_PAIRING_OPTIONS', module: 'morph' },
+      { symbol: 'grantedBondsByMorph', module: 'morph' },
+      // 第 7 段：`morphPairing` 的**装备位语义**那半条（同一格开关）。判据收成一个策略对象，六个读取点都读它：
+      // 服务端 `player/items.js` / `player/acquire.js` / `bot.js` / `invariants.js`，客户端
+      // `ui/detailPanel.js` 与 `ui/gameLogic/placement.js`。这四个符号是那一格的可锚面。
+      { symbol: 'morphSlotPolicy', module: 'morph' },
+      { symbol: 'matchSlotPolicy', module: 'morph' },
+      { symbol: 'OFFICIAL_SLOT_POLICY', module: 'morph' },
+      { symbol: 'PLUS_SLOT_POLICY', module: 'morph' },
+      { symbol: 'equipSlotsUsed', module: 'morph' },
+      { symbol: 'unequipAllowed', module: 'items' },
+      // 第 5 格（`diyPoolOverlap`）：读取点与**维护者总开关**是同一个函数（`{ apply: true }` 是今天的口径，
+      // 包级声明是第二条通道，两条落到同一个动作上）。它在 `shared/workshop.js` —— 而这张锚点表给
+      // `shared/workshop.js` 起的名字是 `schema`（`test/modSurface.test.js` 的 `ANCHOR_MODULES`：
+      // `schema: workshopSchema`），所以这里写 `module: 'schema'`，**不新造 `'workshop'` 键**：
+      // 一个模块只许有一个名字，多一个别名就是第二份真相。
+      { symbol: 'stripPackOperators', module: 'schema' },
+    ],
+    requires: [
+      '闭枚举：开关名与选项名都只许取 `BEHAVIOUR_SWITCHES` 里有的（`BEHAVIOUR_UNKNOWN_SWITCH` / `BEHAVIOUR_UNKNOWN_OPTION`，整包拒，不是忽略）',
+      '**包里没有数值、也没有路径**：动作（`{ kind, value }`）由引擎构造，`value` 只来自那一格或引擎常量 —— 这一格**永远**不是一条数值 / 文件覆盖通道（那是安装器，`docs/WORKSHOP.md` §1.1）',
+      '**不是贡献项**：一个只带 `behaviour` 的包照旧 `EMPTY_PACK`（与 `variants` / `support` / `playtest` 同一条）',
+      '必须 `combat: true`（第五条硬闸门 `BEHAVIOUR_NEEDS_COMBAT`）：一格的入场券本就是「它改一条规则」⇒ 必须进房间摘要闸门与 golden 语料',
+      '不声明 ⇒ 归一化清单里**不长出这个键**（无条件写 `behaviour: []` 会让所有已发布包的内容哈希改变，§28.2）；**必须**进包身份哈希（`server/workshop.js` 的 `canonicalJson(pack)`），**不进** `modDigest`（只哈希 `[id, hash]`）',
+      '加一格的门槛：**那一格必须已经在引擎里有实现点**（比 `VARIANT_AXES` 的加轴纪律更严）—— 本版那 5 格就是按这条落的，每一格都有一处具名读取点与一个测试文件',
+    ],
+    files: ['shared/workshop.js', 'shared/behaviour.js', 'shared/morph.js', 'server/index.js', 'server/match/pool.js', 'server/match/player/economy.js', 'server/match/match/platform.js', 'server/match/player/items.js'],
+    tests: ['test/packBehaviour.test.js', 'test/shopBias.test.js', 'test/prepLoadout.test.js', 'test/morphPairing.test.js', 'test/unequip.test.js', 'test/diyPoolOverlap.test.js'],
+    spec: '§28.43',
+  },
+  {
+    id: 'target',
+    layer: 'A',
+    // 与 `content` / `notices` 同一类：一个**清单字段**，不是执行面。它的特殊性在值指向**另一个宿主**：
+    // `stardust` 的包本引擎只认识、不装载（`server/workshop.js` 的 `foreign`），所以它既不是贡献项，也不进
+    // 数据叠加层。这一格的判据是「闭枚举 + 闭集例外」—— `PACK_TARGETS` 与 `STARDUST_TARGET_FIELDS` 各是一条名单，
+    // 加一格必须同时进本清单与 docs/MOD-SURFACE.md。
+    decl: 'pack.json.target = "forge" | "stardust"',
+    anchors: [
+      { symbol: 'PACK_TARGETS' },
+      { symbol: 'STARDUST_TARGET_FIELDS' },
+      { symbol: 'PACK_FIELDS', members: ['target'] },
+    ],
+    requires: [
+      '闭枚举：只许 `PACK_TARGETS` 里有的（`PACK_TARGET_UNKNOWN`，整包拒，不是忽略）',
+      '缺省 `forge`；不写 ⇒ 归一化清单里**不长出这个键**（无条件写会让所有已发布包的内容哈希改变，§28.2）',
+      '`stardust` 是**声明型包**：本引擎认识、不装载、不进数据叠加层，启动日志一行具名（`server/workshop.js` 的 `foreign`）',
+      '`stardust` 目标额外放行 `STARDUST_TARGET_FIELDS`，以及**声明过的能力自己认领的字段**（`STARDUST_CAPABILITY_FIELDS`）；`forge` 一个都不放行',
+      '`stardust` 的包不受 `EMPTY_PACK` 约束（它没有 Forge 贡献项是正常形态）',
+    ],
+    files: ['shared/workshop.js', 'server/workshop.js'],
+    tests: ['test/modTarget.test.mjs'],
+    spec: '§28.46',
+  },
+  {
+    id: 'dependencies',
+    layer: 'A',
+    // 与 `content` / `notices` 同一类：一个**清单字段**（形状在 `shared/workshop.js` 判）。它的特殊性在
+    // **语义只在装载期成立** —— 「缺不缺这个依赖」要等本机真的装了哪些包才知道，所以这一格的判据分两半：
+    // 形状在这一层（`parseModRefsDecl`），跨包裁决在加载器那一步（`adjudicatePackGraph`，§28.48）。
+    decl: 'pack.json.dependencies[] = { id, range? }',
+    anchors: [{ symbol: 'PACK_FIELDS', members: ['dependencies'] }],
+    requires: [
+      '`id` 必须是**另一个工坊包**的 id（`PACK_ID_RE` 同一套字符集；`DEPENDENCIES_BAD_ID` 整包拒，绝不留到装载期拼路径）',
+      '`range` 是那个包 `version` 的区间（`shared/packs.js` 的同一套语法，缺省 = 任意版本；`DEPENDENCIES_BAD_RANGE`）',
+      '逐字重复的条目去重并按 (id, range) 排序；同一个 id 配两个 range ⇒ `DEPENDENCIES_CONFLICTING_RANGES` 整包拒（不许猜作者的意思）',
+      '**语义在装载期裁决**（`adjudicatePackGraph`）：缺失 / 版本不合 / 级联 / 循环 ⇒ 依赖方被拒，全部具名（`server/index.js` 一行启动日志）',
+      '**不是贡献项**：只声明依赖的包照旧 `EMPTY_PACK`（`notContributions` 逐字点名它）',
+      '不声明 ⇒ 归一化清单里不长这个键（无条件写会让所有已发布包的内容哈希改变，§28.2）',
+    ],
+    files: ['shared/workshop.js', 'server/workshop.js', 'server/index.js'],
+    tests: ['test/modDependencies.test.mjs'],
+    spec: '§28.48',
+  },
+  {
+    id: 'conflicts',
+    layer: 'A',
+    // 与 `dependencies` 同一条通道的**反向**声明：不是「我要谁」，而是「我不要谁」。两者共用同一个形状解析器、
+    // 同一个装载期裁决，差别只在裁决方向（互斥时 **id 大的那个**被拒）。
+    decl: 'pack.json.conflicts[] = { id, range? }',
+    anchors: [{ symbol: 'PACK_FIELDS', members: ['conflicts'] }],
+    requires: [
+      '形状与错误码同 `dependencies`（`CONFLICTS_` 前缀：`BAD_SHAPE` / `BAD_ENTRY` / `UNKNOWN_FIELD` / `BAD_ID` / `BAD_RANGE` / `CONFLICTING_RANGES`）',
+      '**包 id 大的那个被拒**（与既有裁决「同 id 抢占按包 id 排序」同一条确定性来源）；双方都声明时同一条边只裁决一次',
+      '带 `range` 时只有**区间匹配**才互斥（依赖包没写 `version` 时视为满足，见 §28.48）',
+      '**不是贡献项**：只声明互斥的包照旧 `EMPTY_PACK`',
+      '不声明 ⇒ 归一化清单里不长这个键（§28.2）',
+    ],
+    files: ['shared/workshop.js', 'server/workshop.js', 'server/index.js'],
+    tests: ['test/modDependencies.test.mjs'],
+    spec: '§28.48',
+  },
+  {
+    id: 'enabled',
+    layer: 'B',
+    // 装好 ≠ 生效（§28.50）。与 `variants` / `behaviour` 同一形状：包声明的是**一个布尔**，不是数值、不是路径。
+    // 补的缺口是「留着这个包、但现在不要它生效」在今天没有表达方式 —— 只能删目录，而删目录与停用是两件事。
+    decl: 'pack.json.enabled = true | false',
+    anchors: [
+      { symbol: 'PACK_FIELDS', members: ['enabled'] },
+      { symbol: 'ENABLED_BAD_SHAPE', module: 'enabled' },
+    ],
+    requires: [
+      '**只有布尔**：`"false"` / `0` / `null` 一律 `ENABLED_BAD_SHAPE` 整包拒 —— 一个被 JS 真值表放行的假布尔是静默失效',
+      '**缺省 = 引擎今天的行为**：不写 `enabled` 的包与今天逐字相同；写了 `true` 同样逐字相同',
+      '**不是贡献项**：只带 `"enabled": true` 的包照旧 `EMPTY_PACK`（与 `variants` / `playtest` 同一条）',
+      '`false` 的包**不进入**已加载集合，进 `loadWorkshop` 的 `errors`（`ENABLED_FALSE`）—— 跳过必须响亮，一个静默消失的包更难查',
+      '不声明 / 写 `true` ⇒ 归一化清单里**不长出这个键**（否则所有已发布包的内容哈希改变，§28.2）；写 `false` **必须**进包身份哈希（它做的与缺席不是同一件事）',
+      '**不是热更新**：装载期读一次，改它要重启（DESIGN §28.4 的「No hot reload」不受影响）',
+    ],
+    files: ['shared/workshop.js', 'shared/enabled.js', 'server/workshop.js'],
+    tests: ['test/packEnabled.test.js'],
+    spec: '§28.50',
   },
   // ------------------------------------------------------------------ C 层：客户端界面
   {
@@ -193,10 +606,25 @@ export const MOD_SURFACE = Object.freeze([
     layer: 'C',
     decl: 'pack.json.client.panels[] = { id, slot, module, order, gate }',
     anchors: [{ symbol: 'CLIENT_PANEL_SLOTS' }, { symbol: 'CLIENT_PANEL_REPEATABLE' }],
-    requires: ['slot 必须是引擎渲染得出的宿主（九个之一）', '一个声明用不了就点名丢掉整个面板，不挂半个'],
+    requires: ['slot 必须是引擎渲染得出的宿主（十六个之一）', '一个声明用不了就点名丢掉整个面板，不挂半个'],
     files: ['shared/workshop.js', 'server/workshop.js', 'server/http/workshop.js', 'public/js/ui/extensions.js'],
     tests: ['test/modClientPanels.test.js', 'test/modClientHosts.test.js'],
     spec: '§28.8',
+  },
+  {
+    id: 'client.screens',
+    layer: 'C',
+    decl: 'pack.json.client.screens[] = { id, route, module, order?, styles?, data?, messages? }',
+    anchors: [{ symbol: 'CLIENT_SCREEN_ROUTES' }, { symbol: 'CLIENT_SCREEN_FIELDS' }],
+    requires: [
+      'route 是**闭枚举且只有引擎真的有的四条**（`title` / `lobby` / `room` / `game`）：`selectRoute`（`public/js/store.js`）与 `main.js` 的 `SCREENS` 都只到这四个值，结算与干员调配是路由**内部**的视图 —— 多写一条就是永远不会命中的死格子（`test/modClientScreens.test.mjs` 把两份名单钉在一起）',
+      '`module` / `styles` / `data` / `messages` 与面板**共用同一批判据**（同一条装载期文件判据、同一批数据表闭枚举、同一套通道名形状）；`id` 与面板共用一个包内命名空间，一个包同一条路由只能有一份',
+      '屏模块与样式表的源码字节进 `identifyPack`（不算进去，两份不同的整屏就能共用同一个摘要，而那份摘要声称「同一份界面」）；没声明 `screens` 的包摘要逐字节不变',
+      '失败方向是**宿主原生界面保持可见**：样式装不上 / import 失败 / 没导出 `mountScreen` / `mountScreen` 抛错，四种都点名并把该 key 拉黑，不做「白屏但看起来成功了」；卸载对称，路由所有权按 `order / pack / id` 确定性裁决',
+    ],
+    files: ['shared/workshop.js', 'server/workshop.js', 'server/http/workshop.js', 'public/js/ui/extensions.js'],
+    tests: ['test/modClientScreens.test.mjs', 'test/modClientPanels.test.js'],
+    spec: '§28.55',
   },
   {
     id: 'client.panels.me',
@@ -298,6 +726,127 @@ export const MOD_SURFACE = Object.freeze([
     tests: ['test/modClientHosts.test.js'],
     spec: '§28.13',
   },
+  {
+    id: 'client.sources',
+    layer: 'C',
+    decl: '（无声明：面板模块导出 `sources(ctx)`；地址只在 `pack.json.assets.mirrors[]`）',
+    // 与 `client.panels.me` 同一条做法：这一格**不是** `pack.json` 里的一条声明（它是模块的一个导出，与
+    // `appearance(ctx)` 同族），所以锚在**引擎自己那一端的真相**上 —— 排序面那个模块的具名导出。
+    anchors: [
+      { symbol: 'orderDeclared', module: 'sources' },
+      { symbol: 'setSourceOrder', module: 'sources' },
+      { symbol: 'setSourcesEnabled', module: 'sources' },
+    ],
+    requires: [
+      '**结构上不可能引入主机名**：`sources(ctx)` 只回**已声明 id 的排列/子集**，喂主机名 / URL ⇒ `CLIENT_SOURCES_BAD_ORDER`，整条顺序作废、回落声明顺序',
+      '进程内最多一个提供者（`CLIENT_SOURCES_TAKEN`）；一个只导出 `sources` 而不 `mount` 的面板不是错',
+      '玩家设置里的「工坊素材源」关掉 ⇒ 导入路径与「没有这一格」逐字相同（这是那个包把加载源改坏时的一键回退）',
+      '导入次序是硬性的：**先核整包 sha256**（必须 `checked && ok`）⇒ 再走既有逐文件 SHA-1[0:12]；任何一步不过就换下一条，全都不行则回落包内那条 `/workshop-resources/…` URL 并**点名**（不静默、不空白）',
+    ],
+    files: ['public/js/resources/sources.js', 'public/js/resources/host.js', 'public/js/ui/extensions.js', 'public/js/ui/settings.js'],
+    tests: ['test/modAssetsMirrors.test.js', 'test/modClientPanels.test.js'],
+    spec: '§28.40',
+  },
+  {
+    id: 'forms',
+    layer: 'C',
+    decl: 'pack.json.forms = { chars|enemies|tokens: { "<spine id>": { "<形态名>": { change?, end?, leave?, next?, roles } } } }',
+    anchors: [
+      // 锚点住在 `shared/packForms.js`（形态通道的统一入口），不是 `schema` —— 三张名单都在那里，
+      // 所以 `module` 必须写出来，否则守卫会去 `shared/workshop.js` 找一个不存在的导出。
+      { symbol: 'FORM_TABLES', module: 'packForms' },
+      { symbol: 'FORM_KIND_RE', module: 'packForms' },
+      { symbol: 'FORM_ROLE_KEYS', module: 'packForms' },
+      { symbol: 'PACK_FIELDS', members: ['forms'] },
+    ],
+    requires: [
+      '第一方 `FORMS` 优先：与第一方同名的形态在形状层就被 `FORMS_FIRST_PARTY_OVERLAP` 拒掉（宁可拒绝，不要静默丢掉）',
+      '`roles` 的键必须是 `FORM_ROLE_KEYS` 里的，clip 名必须是非空字符串（或 `{ begin, loop, end }`）',
+      '`next` 必须指向同一个 spine id 上已声明的形态（第一方或本包），否则 `FORMS_NEXT_UNKNOWN`',
+      '包只做增量：合并结果里第一方的条目一个字节不变（`shared/packForms.js formsFor`）',
+    ],
+    files: ['shared/workshop.js', 'shared/packForms.js', 'shared/formNames.js', 'public/js/render/units.js', 'public/js/render/app.js', 'public/js/assets.js'],
+    tests: ['test/packForms.test.js'],
+    spec: '§28.29',
+  },
+  {
+    id: 'fx.silentPhases',
+    layer: 'C',
+    decl: 'pack.json.fx = { silentPhases: ["<phase kind>", …] }',
+    anchors: [{ symbol: 'PACK_FIELDS', members: ['fx'] }],
+    requires: [
+      '并集：第一方那两个（`bombed` / `warning`）永远静默，包只能**加**，取消不了',
+      '每一项必须是非空字符串（`FX_BAD_SILENT_PHASE`）；未知字段点名拒绝（`FX_UNKNOWN_FIELD`）',
+      '落点是 `assets.silentPhases`，`fxSpec` 在每一个特效上同步查它',
+    ],
+    files: ['shared/workshop.js', 'public/js/assets.js', 'public/js/render/fx/kinds.js'],
+    tests: ['test/packForms.test.js'],
+    spec: '§28.29',
+  },
+  {
+    id: 'client.panels.setName',
+    layer: 'C',
+    // 与 `client.panels.me` 同一条做法：这一格**不是** `pack.json` 里的一条声明，而是引擎**总是**给的一个写口
+    // （`ctx.session.setName(rawName)`），所以锚在**引擎自己那一端的真相**上 —— 那两个拒绝码是具名导出
+    // （`test/modSurface.test.js` 的锚点守卫 import 真模块再逐条查），改名/删掉就是打断这条契约。
+    decl: '（无声明：`ctx.session.setName(rawName)` 是引擎**总是**给的那一格身份写口）',
+    anchors: [
+      { symbol: 'CLIENT_SESSION_BAD_NAME', module: 'extensions' },
+      { symbol: 'CLIENT_SESSION_NAME_UNAVAILABLE', module: 'extensions' },
+    ],
+    requires: [
+      '清洗规则**逐字**是 `screenActions.enter` 那一段（`sanitizeModName`：剥 C0/DEL/C1 控制码 → `trim()` → ' +
+        '`slice(0, NAME_MAX_LEN)`），与标题屏（`screens/title.js enterSession`）走**同一段字节** —— ' +
+        '「面板设的名字」与「玩家在标题屏敲的名字」在引擎里是同一件事，没有第二种昵称语义',
+      '落地路径也只有一条（`commitName`）：`screenIdentity.saveName` + `setEntered(true)` + 摊开写 store 的 ' +
+        '`me.name` / `session.entered` + `net.setName`。**不**给面板 store 句柄，也不放行任何别的 store 键',
+      '失败一律**点名 + `false`**（不抛、不静默）：清洗后为空 ⇒ `CLIENT_SESSION_BAD_NAME`；身份边界不齐' +
+        '（Node 用例 / 极小宿主：没有 `screenIdentity` 或 `net.setName`）⇒ `CLIENT_SESSION_NAME_UNAVAILABLE`',
+      '`screenActions.enter` 的既有行为/拒绝码/返回值**逐字不变**（它只是改叫那两个共用函数）—— 那条路径' +
+        '（`CLIENT_SCREEN_ENTER_*`）一个码都不许漂',
+      '不新增 DOM、不新增请求、不新增全局：没有包读这一格时，页面与从前逐字节相同',
+    ],
+    files: ['public/js/ui/extensions.js', 'public/js/store.js', 'public/js/net.js'],
+    tests: ['test/modClientCloud.test.mjs'],
+    spec: '§28.58',
+  },
+  {
+    id: 'client.cloud',
+    layer: 'C',
+    // 设计稿里「面板拿不到 store」那条边界（§28.8）的**唯一开口**，所以它的形状必须落在纸上并被锚住：
+    // 闭白名单（`CLOUD_PREF_KEYS`）与三个拒绝码都是 `public/js/ui/cloudPrefs.js` 的具名导出，门面自己那一个
+    // （`CLIENT_CLOUD_UNAVAILABLE`）住在 `extensions.js`。
+    decl: '（无声明：`ctx.cloud.read()` / `ctx.cloud.apply(patch)` 是引擎**总是**给的那一格偏好读写口）',
+    anchors: [
+      { symbol: 'CLOUD_PREF_KEYS', module: 'cloudPrefs', members: ['settings', 'loadout', 'ownership', 'diy', 'conflict', 'appearance', 'lang'] },
+      { symbol: 'CLIENT_CLOUD_UNKNOWN_CATEGORY', module: 'cloudPrefs' },
+      { symbol: 'CLIENT_CLOUD_BAD_KEY', module: 'cloudPrefs' },
+      { symbol: 'CLIENT_CLOUD_BAD_VALUE', module: 'cloudPrefs' },
+      { symbol: 'CLIENT_CLOUD_UNAVAILABLE', module: 'extensions' },
+    ],
+    requires: [
+      '**闭白名单**：只有引擎自己已经落盘的那七个 `sp.pref.` 键（`settings` / `loadout` / `ownership` / `diy` / ' +
+        '`conflict` / `appearance` / `lang`，各自的键常量在 `ui/settings.js`、`ui/loadoutModel.js`、' +
+        '`ui/ownershipModel.js`、`ui/diyModel.js`、`ui/conflictModel.js`、`main.js` 的 `OWN_APPEARANCE_PREF`、' +
+        '`ui/lang.js`）。别的名字 ⇒ `CLIENT_CLOUD_UNKNOWN_CATEGORY` **整次拒绝**（不静默丢弃）',
+      '**危险键递归拒绝**：`__proto__` / `constructor` / `prototype` 在任何一层 ⇒ `CLIENT_CLOUD_BAD_KEY`',
+      '**值有界**：必须 JSON 可序列化（函数 / `undefined` / `Symbol` / `BigInt` / 非有限数 / 类实例一律拒 —— ' +
+        '`JSON.stringify` 会把其中几种静默丢掉）、序列化后 ≤ 128 KiB（`CLOUD_PATCH_MAX_BYTES`）、嵌套 ≤ 8 层' +
+        '（`CLOUD_PATCH_MAX_DEPTH`）⇒ 越界 `CLIENT_CLOUD_BAD_VALUE`',
+      '`read()` 是**一次取全**的冻结快照（缺档 = `null`，读失败 = 那一格 `null`，不抛）；`apply(patch)` 校验' +
+        '**全过**才整份写入（按 `CLOUD_PREF_KEYS` 顺序 ⇒ 结果字节确定），然后**只安排一次**重载' +
+        '（`globalThis.location?.reload?.()`；`location` 不存在时跳过，模块顶层一个字节都不碰）—— 空 patch ⇒ ' +
+        '`{ applied: [], reload: false }`',
+      '**只碰偏好，不碰对局状态**：`match` / `room` / `me` 一个字都不许动（读写走的是 `store.js` 既有的 ' +
+        '`loadPref` / `savePref`，不新开路径、不新开 localStorage 用法）',
+      '没有注入 `deps.cloud` 时两格都**拿不到**：`read()` ⇒ `null`、`apply()` ⇒ `false`，各点名 ' +
+        '`CLIENT_CLOUD_UNAVAILABLE` 一次 —— 不抛、不编造（与 `ctx.me.voice` / `ctx.battle.damage()` 同一条纪律）',
+      '不新增 DOM、不新增请求、不新增全局：没有包读这一格时，页面与从前逐字节相同',
+    ],
+    files: ['public/js/ui/cloudPrefs.js', 'public/js/ui/extensions.js', 'public/js/main.js', 'public/js/store.js'],
+    tests: ['test/modClientCloud.test.mjs'],
+    spec: '§28.58',
+  },
   // ------------------------------------------------------------------ 发行：房间集合与对齐
   {
     id: 'mods.catalog',
@@ -305,8 +854,11 @@ export const MOD_SURFACE = Object.freeze([
     decl: '客户端 mod 目录与房间声明（welcome.modPanels / room modIds）',
     anchors: [{ symbol: 'PACK_ID_RE' }],
     requires: ['房间声明了 modIds 时，只有它点名的包参与（W-B）', '两端的字节要能对齐（W-D：摘要一致才开局）'],
-    files: ['server/modCatalog.js', 'server/roomAssets.js', 'public/js/mods/store.js', 'public/js/mods/align.js', 'public/js/mods/sync.js'],
-    tests: ['test/modCatalog.test.js', 'test/modAlign.test.js', 'test/roomModSet.test.js'],
+    // `server/packFiles.js` 加进来是业主裁决 B（§28.2）的直接后果：**一个枚举器**同时产出身份哈希的文件清单与
+    // 客户端下载清单，两份清单漂移 = 干净客户端下不到「被声明模块 import 的那个文件」。所以它也是这一格的一部分
+    // —— 改名或挪走就是打断「摘要 = 下载清单 = 会被执行/读到的文件」这条契约。
+    files: ['server/modCatalog.js', 'server/packFiles.js', 'server/roomAssets.js', 'public/js/mods/store.js', 'public/js/mods/align.js', 'public/js/mods/sync.js'],
+    tests: ['test/modCatalog.test.js', 'test/packFileSet.test.js', 'test/modAlign.test.js', 'test/roomModSet.test.js'],
     spec: '§28.16',
   },
 ]);
@@ -322,10 +874,24 @@ export const MOD_SURFACE_IDS = Object.freeze(MOD_SURFACE.map((s) => s.id));
  *
  * 加一格不改这里（增量不需要新世代）；删一格而世代数字没抬，就是这里红。抬世代时把当世代那份抄下来、写成新的
  * 键，并在 docs/MOD-SURFACE.md 写明「哪一格被谁取代、老包怎么迁移」。
+ *
+ * **这个列表是逐字抄下来的字面量，不是 `MOD_SURFACE.map(...)` 的别名** —— 这一点是这个守卫存在的全部理由。
+ * 曾经它写的是 `1: MOD_SURFACE_IDS`，而那是一个**恒真的守卫**：`MOD_SURFACE_IDS` 就是 `MOD_SURFACE` 自己派生的
+ * 数组，所以账本与被检查的今天那份表**永远是同一个对象**（`MOD_SURFACE_FROZEN[1] === MOD_SURFACE_IDS` 为
+ * `true`），`surfaceLedgerIssues` 里的 `have.has(id)` 也就永远成立 —— 从表里删掉一格时，账本跟着一起少一格，
+ * 守卫一声不响。失败分支只被 `test/modSurface.test.js` 的**合成输入**覆盖过，真实代码路径从来没有红过。
+ * 装饰性守卫比没有守卫更坏：它让人以为有保护。所以这里改成字面量（第二个真相，代价是抬世代时要手抄一遍，
+ * 而那正是「冻结」两个字的含义）。
  * @type {Readonly<Record<string, readonly string[]>>}
  */
 export const MOD_SURFACE_FROZEN = Object.freeze({
-  1: MOD_SURFACE_IDS,
+  1: Object.freeze([
+    'content', 'overrides', 'units.operators', 'media.voices', 'media.icons', 'skins', 'notices', 'i18n',
+    'server.preDispatch', 'server.meta', 'server.modules', 'server.battle', 'server.room', 'routes', 'assets',
+    'client.panels', 'client.panels.me', 'client.panels.wraps', 'kits.relativeImports', 'client.panels.styles',
+    'client.theme', 'client.panels.data', 'client.panels.messages', 'client.requires',
+    'forms', 'fx.silentPhases', 'mods.catalog',
+  ]),
 });
 
 /**

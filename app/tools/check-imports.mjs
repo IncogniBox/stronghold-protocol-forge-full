@@ -2,7 +2,8 @@
 //
 // server/sim is served to the browser, so it must not import the match, the lobby, the HTTP entry,
 // the net layer, public/, or any Node builtin. server/match must not import public/ or that net layer.
-// server/data.js is allowed (the Node loader reaches it on purpose).
+// server/data.js is allowed (the Node loader reaches it on purpose) — and so is that loader's own `node:*` imports:
+// `server/sim/nodeData.js` is the one file every Node API is kept in, and the browser never loads it.
 //
 // Default exit code is 0 even when violations are listed. --strict exits 1 when any are listed.
 // Usage: node tools/check-imports.mjs [--strict] [--root <dir>]
@@ -213,7 +214,13 @@ export function classify(spec, fromFile, area) {
     if (resolved === 'server/index.js') return { code: 'sim-entry', resolved };
     if (isHttp(spec, resolved)) return { code: 'sim-http', resolved };
     if (resolved === 'public' || resolved.startsWith('public/')) return { code: 'sim-client', resolved };
-    if (escaped || isBuiltin(spec)) return { code: 'sim-node', resolved };
+    if (escaped || isBuiltin(spec)) {
+      // 唯一的例外：`server/sim/nodeData.js` **就是**「把 Node API 关在这一个文件里」的那一个（DESIGN §14）：
+      // 浏览器从不加载它（simdata.js 只在 Node 下动态 import 它），所以它的 `node:*` 记成 note 而不是 violation。
+      // `escaped`（越界到 sim 之外）不在豁免内 —— 那仍是 violation。
+      if (!escaped && isBuiltin(spec) && fromFile === 'server/sim/nodeData.js') return { note: true, resolved };
+      return { code: 'sim-node', resolved };
+    }
     if (resolved === 'server/data.js') return { note: true, resolved };
     return null;
   }

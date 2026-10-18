@@ -7,6 +7,7 @@
 import { unitStatsEntry } from '../../../shared/protocol.js';
 import { PHASE, ERR, EMOTES, EMOTE_COOLDOWN_MS, GEO } from '../../../shared/constants.js';
 import { deriveSeed } from '../../sim/rng.js';
+import { layoutOf } from '../../../shared/layout.js';
 import { OK, fail } from './common.js';
 import { onHumanEmote } from '../botEmotes.js';
 
@@ -34,6 +35,10 @@ export class MatchIntents {
       case 'g.equip': return ps.equip(msg.itemUid, msg.targetUid, msg.replaceUid ?? null);
       case 'g.art': return ps.useArt(msg.itemUid, msg.row, msg.col, msg.dir);
       case 'g.destroy': return ps.destroy(msg.uid);
+      // 装备拆卸（行为开关 `unequip: "allow"`，DESIGN §28.43.1）：把一件已装备的装备退回手牌 / 临时整备区。
+      // 缺省档下 `PlayerState.unequip` 回的就是 `destroy` 那句 `'equipped items are locked'` ⇒ 这一行在缺省档与
+      // 「意图不存在」**行为等价**。
+      case 'g.unequip': return ps.unequip(msg.itemUid);
       case 'g.reward': return ps.pickReward(msg.idx);
       case 'g.choice': return msg.choiceId !== undefined
         ? this.pickPersonalChoice(ps, msg.idx, msg.choiceId)
@@ -47,9 +52,170 @@ export class MatchIntents {
       // the stats the board's units start their next battle with (the detail card in prep, user playtest #4 item 7)
       case 'g.unitStats': return this.unitStats(ps, msg.seq ?? null);
       case 'g.leave': this.onLeave(ps.playerId); return OK;
+      // dev 通道：本地调试 / 开发者面板（仅 SP_DEV=1 或本局 Match.dev；见 shared/protocol.js 'g.dev'）
+      case 'g.dev': return this.devEdit(ps, msg);
+      // the client could not merge an incremental m.public frame and asks for the full one again
+      // (DESIGN §8.2 "incremental frame", the self-healing ask; shared/protocol.js 'g.publicFull')
+      case 'g.publicFull': return this.resendPublic(ps.playerId);
       case 'b.progress': return this._onProgress(ps, msg);
       case 'b.result': return this._onResult(ps, msg);
+      // the host's answer to a delegated bot layout rehearsal (DESIGN §14): a report, never an error — an unknown,
+      // expired or foreign task is ignored (MatchRehearsal._onRehearsalResult)
+      case 'b.rehearsalResult': this._onRehearsalResult(ps, msg); return OK;
       default: return fail(ERR.BAD_MSG);
+    }
+  }
+
+  /**
+   * `g.dev` — 本地调试 / **开发者面板**指令（本 Forge 发行版自加，非上游协议）。两种门禁：
+   *   * `process.env.SP_DEV === '1'`：只认旧形状 `{ funds }`（浏览器控制台 `__SP__.net.send('g.dev', { funds: 1000 })`）；
+   *   * `this.dev === true`（「全量模拟」对局）：认 action 化形状（`shared/protocol.js DEV_ACTIONS`）。
+   * 其它情况一律 `BAD_MSG`（默认关闭；**切勿**在对外 / 公网服务器上开启 —— 任何连上来的客户端都能因此改这一局）。
+   */
+  devEdit(ps, msg) {
+    const devMatch = this.dev === true;
+    const legacy = process.env.SP_DEV === '1';
+    if (!devMatch && !legacy) return fail(ERR.BAD_MSG, 'dev channel disabled');
+    if (!ps.alive) return fail(ERR.ELIMINATED);
+    const action = msg.action ?? 'funds';
+    // 旧形状（浏览器控制台）：`{ funds }` —— SP_DEV 与 dev 对局都认
+    if (action === 'funds' || (!devMatch && msg.funds !== undefined)) {
+      if (!Number.isInteger(msg.funds) || msg.funds === 0) return fail(ERR.BAD_TARGET, 'bad funds');
+      const delta = ps.addFunds(msg.funds, { reason: 'dev' });
+      // English by design: a dev-only line stays out of the i18n catalogue (test/i18n.test.js requires every Chinese
+      // user-facing literal to be a wrapped msgid in public/i18n/en.js).
+      this.toast(ps, 'info', `[DEV] funds ${delta >= 0 ? '+' : ''}${delta} -> ${ps.funds}`);
+      return OK;
+    }
+    if (!devMatch) return fail(ERR.BAD_MSG, 'dev channel disabled (this match is not a dev match)');
+    switch (action) {
+      case 'lp': {
+        if (!Number.isInteger(msg.lp)) return fail(ERR.BAD_TARGET, 'bad lp');
+        ps.lp = Math.max(0, Math.min(99, msg.lp));
+        ps.dirty();
+        this.markPublic();
+        return OK;
+      }
+      case 'shopLevel': {
+        if (!Number.isInteger(msg.shopLevel)) return fail(ERR.BAD_TARGET, 'bad shopLevel');
+        ps.shop.level = Math.max(1, Math.min(this.gd.maxShopLevel, msg.shopLevel));
+        ps.rollShop();
+        return OK;
+      }
+      case 'shopSlots': {
+        if (!Number.isInteger(msg.chessSlots) && !Number.isInteger(msg.itemSlots)) return fail(ERR.BAD_TARGET, 'bad shopSlots');
+        const lvl = String(ps.shop.level);
+        const cur = { ...(this.gd.shopSlotOverride || {}) };
+        cur[lvl] = {
+          ...(cur[lvl] || {}),
+          ...(Number.isInteger(msg.chessSlots) ? { chess: msg.chessSlots } : {}),
+          ...(Number.isInteger(msg.itemSlots) ? { item: msg.itemSlots } : {}),
+        };
+        this.gd.shopSlotOverride = cur;
+        ps.rollShop();
+        return OK;
+      }
+      case 'layers': {
+        if (typeof msg.bondId !== 'string' || !Number.isInteger(msg.layers)) return fail(ERR.BAD_TARGET, 'bad layers');
+        ps.addLayers(msg.bondId, msg.layers, { reason: 'dev' });
+        this.markPublic();
+        return OK;
+      }
+      case 'band': {
+        if (typeof msg.bandId !== 'string' || !this.gd.bandAllowed(msg.bandId)) return fail(ERR.BAD_TARGET, 'bad bandId');
+        ps.bandId = msg.bandId;
+        ps.recompute();
+        this.markPublic();
+        return OK;
+      }
+      case 'item': {
+        if (typeof msg.itemId !== 'string' || !this.gd.item(msg.itemId)) return fail(ERR.BAD_TARGET, 'bad itemId');
+        if (!ps.acquireItem(msg.itemId, { source: 'dev', requirePool: false })) return fail(ERR.BAD_TARGET, 'item not granted (bench full)');
+        return OK;
+      }
+      case 'grantChess': {
+        if (typeof msg.chessId !== 'string' || !this.gd.chess(msg.chessId)) return fail(ERR.BAD_TARGET, 'bad chessId');
+        const piece = ps.acquireChess(msg.chessId, { source: 'dev', fromPool: false });
+        if (!piece) return fail(ERR.BAD_TARGET, 'operator not granted (bench full)');
+        // 数值覆盖随这个棋子进战斗（`piece.meta.data.devExt` → `u.pieceData`，由 dev-ext 包的服务端战斗逻辑读它挂 mods）
+        if (msg.overrides && typeof msg.overrides === 'object' && Object.keys(msg.overrides).length) {
+          if (!piece.meta) piece.meta = {};
+          piece.meta.data = { ...(piece.meta.data || {}), devExt: msg.overrides };
+          ps.dirty();
+        }
+        return OK;
+      }
+      case 'spawnEnemy': {
+        if (typeof msg.enemyKey !== 'string' || !this.gd.enemy(msg.enemyKey)) return fail(ERR.BAD_TARGET, 'bad enemyKey');
+        const count = Number.isInteger(msg.count) && msg.count > 0 ? msg.count : 1;
+        // 路线：本回合波次表自带的那几条（试验场的地图设计器里画的就是它们）。多次添加按顺序轮着走 ——
+        // 优先用面板显式给的 `routeIndex`（形状层已判 0..7），否则取「下一条路线」（0、1、2… 循环）。
+        const routes = Array.isArray(this.wave && this.wave.routes) ? this.wave.routes : [];
+        const routeIndex = Number.isInteger(msg.routeIndex) || !routes.length
+          ? Math.max(0, Math.min(routes.length ? routes.length - 1 : 0, msg.routeIndex ?? 0))
+          : this.devExtraEnemies.length % routes.length;
+        this.devExtraEnemies.push({ enemyKey: msg.enemyKey, time: 0, count, interval: 2, routeIndex });
+        if (msg.overrides && typeof msg.overrides === 'object') this.devEnemyOverrides[msg.enemyKey] = msg.overrides;
+        this.markPrivate(ps);
+        return OK;
+      }
+      case 'enemyOverride': {
+        if (typeof msg.enemyKey !== 'string' || !this.gd.enemy(msg.enemyKey)) return fail(ERR.BAD_TARGET, 'bad enemyKey');
+        if (msg.overrides && typeof msg.overrides === 'object') this.devEnemyOverrides[msg.enemyKey] = msg.overrides;
+        this.markPrivate(ps);
+        return OK;
+      }
+      // 场景相关：换这一局的地图（**立刻**生效：地图与部署区都跟着换）
+      case 'stage': {
+        if (typeof msg.stageId !== 'string' || !this.gd.stage(msg.stageId)) return fail(ERR.BAD_TARGET, 'bad stageId');
+        this.stageId = msg.stageId;
+        this.stage = this.gd.stage(msg.stageId);
+        this.layout = layoutOf(this.stage);
+        // 部署图是按当时那张图算出来的：换了图必须让它重算（与编辑器 SP_STAGE 那条覆盖同一步）
+        for (const p of this.players.values()) { p.invalidateDeployMap?.(); p.recompute?.(); }
+        this.markPublic();
+        // 重新发一次自己的场地帧：客户端照新的 stageId 重画地图（只影响 prep 视图，不改本回合的出怪表）
+        for (const p of this.players.values()) {
+          if (!p.alive) continue;
+          try { this._sendField?.(p.playerId, `n:${p.playerId}`); } catch { /* the prep view is best-effort */ }
+        }
+        return OK;
+      }
+      // 场景相关：下一回合打**普通**还是**首领**（`phases.js startRound` 消费这个一次性开关）
+      case 'roundKind': {
+        if (msg.kind !== 'normal' && msg.kind !== 'boss') return fail(ERR.BAD_TARGET, 'bad kind');
+        this.devRoundKind = msg.kind;
+        this.markPublic(); // 让面板看到「已武装」（m.public.devNextKind）
+        this.toast(ps, 'info', `[DEV] next round: ${msg.kind}`);
+        return OK;
+      }
+      // 场景相关：替换首领场景正中的首领（本场最终攻势 / 隐秘核心的领袖），并可选地改它的数值
+      case 'boss': {
+        if (typeof msg.bossId !== 'string' || !this.gd.boss(msg.bossId)) return fail(ERR.BAD_TARGET, 'bad bossId');
+        this.bossId = msg.bossId;
+        // 隐秘核心那一场用的是**另一只**领袖（hiddenBossId）：本回合就是核心回合时一并替换
+        if (this.round === this.gd.hiddenRound && this.gd.hiddenRound !== this.gd.bossRound) this.hiddenBossId = msg.bossId;
+        if (msg.overrides && typeof msg.overrides === 'object') {
+          this.devBossOverrides[msg.bossId] = msg.overrides;
+          // 血条（共享血量池）立刻跟着改；领袖单位的 atk/def/res 由这一场的 `enemyOverrides` 在开战时生效
+          const st = msg.overrides.stats && typeof msg.overrides.stats === 'object' ? msg.overrides.stats : null;
+          if (st && Number.isFinite(st.maxHp) && this.bossPool) {
+            this.bossPool.maxHp = Math.max(1, Math.round(st.maxHp));
+            if (this.bossPool.hp > this.bossPool.maxHp) this.bossPool.hp = this.bossPool.maxHp;
+            this._broadcastPool(true);
+          }
+        }
+        // 本回合已经是首领回合（官方或已被强制）：立刻按新首领重排配对与波次；否则作用于下一场首领战
+        const r = this.round;
+        if (r === this.gd.bossRound || r === this.devBossRound) {
+          this._planBossWaves();
+          this.markPublic();
+          for (const p of this.players.values()) this.markPrivate(p);
+        }
+        this.toast(ps, 'info', `[DEV] boss: ${msg.bossId}`);
+        return OK;
+      }
+      default: return fail(ERR.BAD_MSG, 'unknown dev action');
     }
   }
 

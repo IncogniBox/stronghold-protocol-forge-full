@@ -37,7 +37,8 @@ import { moduleTypeIconUrl } from '../public/js/ui/assetUrls.js';
 import { validateC2S } from '../shared/protocol.js';
 import { ERR, PHASE, VOICE_LANGS, DEFAULT_VOICE_LANG } from '../shared/constants.js';
 import { PROJECTILE_SPEEDS, BOOMERANG_RETURN_SPEED, ELEMENT, ELEMENT_ORDER, DOWN_STATE, BLOCK_RADIUS, FORCED_EXIT, ASPD_MIN, BOSS_POOL_MIN_HP, AUTO_OP_COOLDOWN, ALLY_COLLIDER_RADIUS } from '../server/sim/constants.js';
-import { SKILL_SUMMON_START_DEPLOY, BOND_LAYER_CAP, BOSS_HIT_LIMIT, layerGainRoom } from '../shared/constants.js';
+import { SKILL_SUMMON_START_DEPLOY, BOND_LAYER_CAP, BOSS_HIT_LIMIT, bossHitLimitFrom, layerGainRoom } from '../shared/constants.js';
+import { BEHAVIOUR_SWITCHES } from '../shared/behaviour.js';
 import * as SIM_CONST from '../server/sim/constants.js';
 import { MULTI_ROUND_BOUNTY_BATTLES } from '../server/match/choices.js';
 import { SELF_BOUND, PART_TRANSFER, BLADE_TRANSFER, DRONE_LINK_BASE } from '../server/sim/content/bosses.js';
@@ -51,6 +52,7 @@ import { RETRY_DELAYS_MS } from '../public/js/data.js';
 import { DATA, makeMatch } from './match/harness.js';
 import { KIT_FILES } from '../server/sim/content/kits/index.js';
 import { designText } from './helpers/designDocs.js';
+import { changelogText } from './helpers/changelog.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const doc = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -70,6 +72,8 @@ const SIM = doc('docs/SIM.md');
 const README = doc('README.md');
 const DEPLOY = doc('docs/DEPLOY.md');
 const PLAYING = doc('docs/PLAYING.md');
+/** 更新记录作为一份文本（顶层 + 各分卷）：0.1.1 / 0.2.2 那几节在 2026-10-12 分卷后住在 docs/changelog/。 */
+const CHANGELOG = changelogText(ROOT);
 /** The table row of DATA.md whose first cell is `key` (backticked), or ''. */
 const dataRow = (key, from = 0) => {
   const i = DATA_MD.indexOf(`| \`${key}\` |`, from);
@@ -323,11 +327,11 @@ test('user playtest #4 (DESIGN §18): picking by tile, timers, 机变 two taps, 
   assert.match(META, /solo \/ single human untimed/);
   assert.match(PLAYING, /只有你一名玩家/);
   // #4 one countdown: BAND_TURN_SECONDS per turn (code = data = docs)
-  assert.equal(BAND_TURN_SECONDS, 30);
+  assert.equal(BAND_TURN_SECONDS, 50);
   assert.equal(DATA.config.timers.bandTurn, BAND_TURN_SECONDS);
-  assert.match(DESIGN, /`BAND_TURN_SECONDS` 30 s per turn = m\.public\.deadline/);
-  assert.match(META, /`Match\.BAND_TURN_SECONDS` 30/);
-  assert.match(PLAYING, /\*\*每人 30 秒\*\*/);
+  assert.match(DESIGN, /`BAND_TURN_SECONDS` 50 s per turn = m\.public\.deadline/);
+  assert.match(META, /`Match\.BAND_TURN_SECONDS` 50/);
+  assert.match(PLAYING, /\*\*每人 50 秒\*\*/);
   assert.ok(!/12 s\/turn/.test(DESIGN) && !/`bandTurn` 12/.test(META) && !/每人 12 秒/.test(PLAYING), 'the old 12 s turn is gone');
   assert.match(META, /`ev\.preview` true/, 'META: onBattleStart handlers must not change the match for the stats preview');
   // #2 机变 two taps
@@ -348,7 +352,7 @@ test('user playtest #4 (DESIGN §18): picking by tile, timers, 机变 two taps, 
   const special = DATA.items.chess_item_4_09_e_a;
   assert.ok(special.shopExcluded && special.shopExcludedBy, '灼燃维式重锤 is never sold');
   assert.match(dataRow('shopExcluded`, `shopExcludedBy'), /isShopItem/);
-  assert.match(PLAYING, /突变细胞只来自昆图斯的策略/);
+  assert.match(PLAYING, /突变细胞来自昆图斯的策略，也会出现在凯瑟琳【定向投放】里（调度中心仍不出售）/);
   // (#11 revisited by user playtest #6: the drone is a hand piece again, still only on the field when her skill fires)
   assert.equal(DATA.tokens.token_10000_silent_healrb.placeable, true, '赫默\'s drone is a hand piece (user playtest #6)');
   assert.match(dataRow('displayType`, `placeable'), /manually deployable summon/);
@@ -484,7 +488,7 @@ test('user playtest #6 (DESIGN §20): summons, skill triggers, blocking, push fo
   assert.equal(ASPD_MIN, 20);
   assert.match(sec(5), /`aspd = clamp\(100 \+ Σaspd \+ base-100, 20, 600\)`/);
   assert.match(sec(5), /isolated \(孤立: no friendly selector picks it/);
-  assert.match(sec(5), /`battle\.push\(e, force, \{ from, dir, fixed, fixedAngle, inward, effect \}\)`/);
+  assert.match(sec(5), /`battle\.push\(e, force, \{ from, dir, fixed, fixedAngle, inward, effect, keepDir \}\)`/);
   assert.match(sec(19), /锏 S3 归于宁静 \(added by §20\.3\)/);
   // #5: the boss pool floor and the verdict (code = §5.5 = §14 = §6.1)
   assert.equal(BOSS_POOL_MIN_HP, 1);
@@ -584,6 +588,14 @@ test('playtest6b follow-up (DESIGN §20.10–§20.13): leader HP, 直接乘算, 
   for (const [name, src] of [['Match', matchText()], ['PlayerState', playerText()]]) assert.ok(!/layerRoom\b/.test(src), `${name}: no layerRoom`);
   // 限伤: official constant, not an overflow — no doc keeps the boss-HP branch's "fixed-point overflow, not modelled"
   assert.equal(BOSS_HIT_LIMIT, 300000);
+  // …and it stays the DEFAULT when a deployment overrides it (百卫补丁 v0.3 移植, docs/PS100-MIGRATION.md §5):
+  // `bossHitLimitFrom` is the pure parser, an unset environment yields undefined = "keep BOSS_HIT_LIMIT", and only a
+  // deliberate `SP_BOSS_HIT_LIMIT` moves the rail. This STRENGTHENS the line above (which it leaves untouched): it
+  // pins the 300000 as the default AND pins the documented 0 / Infinity = off semantics of its override.
+  assert.equal(bossHitLimitFrom({}), undefined, 'no override ⇒ the official 300000 stands');
+  assert.equal(bossHitLimitFrom({ SP_BOSS_HIT_LIMIT: '0' }), Infinity, '0 = off, as the constant documents');
+  assert.equal(bossHitLimitFrom({ SP_BOSS_HIT_LIMIT: 'infinity' }), Infinity);
+  assert.equal(bossHitLimitFrom({ SP_BOSS_HIT_LIMIT: 'junk' }), undefined, 'junk falls back to the official default');
   for (const [name, text] of [['BALANCE', BALANCE], ['DATA', DATA_MD], ['PLAYING', PLAYING], ['SIM', SIM], ['META', META], ['research 02', R02], ['DESIGN', DESIGN]]) {
     assert.ok(!/reads as the engine's fixed-point overflow|is \[inference\] and is not modelled|Not modelled: the largest damage/.test(text), `${name}: 限伤 is not called an unmodelled overflow`);
     assert.ok(!/BOND_LAYER_CAP`?\)? ?\[ASSUMED\]|999 \[ASSUMED\]|awaiting the user's confirmation/.test(text), `${name}: the 999 cap is official, not [ASSUMED]`);
@@ -767,7 +779,7 @@ test('batch 6 after 0.1.0 (DESIGN §21.21–§21.25): the hammer per deployment,
   assert.match(doc('docs/ASSETS.md'), /\| `--allow-shrink` \|/);
   assert.match(DATA_MD, /unless `--allow-shrink` \(or `--prune`\) is passed/);
   // CHANGELOG 0.1.1 credits both pull requests
-  const log = doc('CHANGELOG.md');
+  const log = CHANGELOG;
   assert.match(log, /共 32 条，其中 4 条核实后不是问题/);
   assert.match(log, /PR #2 指出/);
   assert.match(log, /PR #7 指出/);
@@ -813,7 +825,7 @@ test('batch 6 QA residuals (DESIGN §21.21–§21.25): the lock per deployment f
   assert.match(DESIGN, /Equipped items run from a snapshot — the owned chess and each holder's items as that step begins \(every \[holder, item\] pair, taken before the first item runs\)/);
   assert.match(sub(25), /every \[holder, item\] pair is now taken before the first item runs/);
   // CHANGELOG 0.1.1
-  const log = doc('CHANGELOG.md');
+  const log = CHANGELOG;
   assert.match(log, /被击倒再部署或被 M3茧甲、埃芒加德复活后又能锁血/);
   assert.match(log, /娜仁图亚策略下萨尔贡干员借给周围干员的坚固维式重锤同样每次部署锁血一次/);
   assert.match(log, /卢西恩、锏不会再因为身边只有起飞的蒂比就放出打不到人的范围技能/);
@@ -875,7 +887,7 @@ test('the deliberate trigger deviation (DESIGN §21.29): six 重装 skills DEFAU
   assert.match(DATA_MD, /a deliberate deviation, `tools\/build-data\.mjs TRIGGER_DEVIATIONS`, DESIGN §21\.29/);
   assert.match(SIM, /the six of DESIGN §21\.29/);
   assert.match(PLAYING, /深巡、雷蛇的二技能，号角的二、三技能，灰毫的一、二技能按玩家反馈改为攻击范围内有敌人时就释放/);
-  assert.match(doc('CHANGELOG.md'), /深巡、雷蛇的二技能，号角的二、三技能，灰毫的一、二技能改为攻击范围内有敌人时就释放/);
+  assert.match(CHANGELOG, /深巡、雷蛇的二技能，号角的二、三技能，灰毫的一、二技能改为攻击范围内有敌人时就释放/);
 });
 
 test('干员战斗语音 (DESIGN §21.30): the manifest data, the official priorities, and only a tap\'s 选中干员 speaks outside battle', async () => {
@@ -967,4 +979,105 @@ test('干员战斗语音 (DESIGN §21.30): the manifest data, the official prior
   assert.match(panel, /const selectKey = voice && detail\?\.type === 'chess'/);
   assert.match(game, /voice=\$\{true\}/);
   assert.match(game, /audio\.voice\(charId, resultVoiceSlot\(/);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 「说法与代码脱钩」这一类：文档里对**代码当前状态**的一句断言，没有任何门禁会看它是否还成立。
+// 第一例是 `BEHAVIOUR_SWITCHES`（2026-10-12：同一句「今天这张表是空的」住在 6 份文档里，而 worktree 那一刀
+// 把四格开关落了进去 ⇒ 合并后会同时存在「表里有格」与「表是空的」两种说法）。
+// 判据**只钉这一个具体断言**（不做「所有文档陈述都校验」那种做不到的事），并且**不许自己变成空转**：
+// 表真的为空时，至少有一处还得这么说（照 test/promptBaseline.test.js「匹配不到就永远绿」那条先例）。
+
+/**
+ * 「今天 / 本版 `BEHAVIOUR_SWITCHES` 是空的」这一族说法住在哪几份**当前状态**文档里：`[文件, 窄正则]`。
+ * 正则只认**现在时**的措辞（`今天` / `本版` / `0 格`），历史叙述不会被误伤 —— 下面那条自证逐条钉住这一点。
+ *
+ * **故意不列两处**：`CHANGELOG.md`（0.16.0 节里第 4 刀那句「本版那张表是空的 —— 这是交付物本身」是**按时间
+ * 叙述**，紧接的第 8 刀小节自己写着「按这条落了前三格，见下」⇒ 管它就是误伤）；**源码注释**（`shared/workshop.js`
+ * 与 `shared/modSurface.js` 里各有一句说「今天这张表是空的」—— 那两句本轮已按实况改成「4 格」，但这条判据
+ * 只管**文档**：源码注释是**历史叙述**的写法，管它就会把「第 4 刀落这一格时表是空的」这类句子一起误伤）。
+ */
+const EMPTY_BEHAVIOUR_TABLE_CLAIMS = [
+  ['README.md', /表还是空的|那张表今天是空的|表里(?: \*\*0 格\*\*|今天一格都没有)/],
+  ['docs/SYNC-POINTS.md', /今天这张表是空的/],
+  ['docs/STANDARD-PACK.md', /`BEHAVIOUR_SWITCHES` 是空表/],
+  ['docs/WORKSHOP.md', /本版那张表是空的/],
+  ['docs/MOD-SURFACE.md', /今天表是空的/],
+  ['docs/design/mod-layer.md', /今天是一张空表/],
+];
+
+test('「BEHAVIOUR_SWITCHES 今天是一张空表」这句话与代码同真同假（说法与代码不许脱钩）', () => {
+  assert.ok(BEHAVIOUR_SWITCHES && typeof BEHAVIOUR_SWITCHES === 'object', 'BEHAVIOUR_SWITCHES 是 shared/behaviour.js 导出的那张表');
+  const n = Object.keys(BEHAVIOUR_SWITCHES).length;
+  const carriers = EMPTY_BEHAVIOUR_TABLE_CLAIMS.filter(([f, re]) => re.test(doc(f))).map(([f]) => f);
+  if (n !== 0) {
+    assert.deepEqual(carriers, [], `这些文档还说「今天这张表是空的」，而 shared/behaviour.js 里已经有 ${n} 格 —— 改文档，别改判据：\n  ${carriers.join('\n  ')}`);
+  } else {
+    // 地板：判据不许自己变成空转（表是空的、而六份文档一处都不再提 ⇒ 要么把话说回去，要么把这条判据删掉）
+    assert.ok(carriers.length, '表是空的，而这六份文档一处都不再提这件事 —— 要么把话说回去，要么把这条判据连同位置表一起删掉（别让它空转）');
+  }
+  // 窄的自证：**同一份文件里**的历史叙述 / 另一件事，不许被算成「今天还是空表」
+  for (const [file, historical] of [
+    ['docs/design/mod-layer.md', '`BEHAVIOUR_SWITCHES` 在第 4 刀落地时**是一张空表**'],
+    ['docs/WORKSHOP.md', '第 4 刀交的是「**通道 + 守卫**」本身（当时表是空的：'],
+    ['README.md', '新建干员/怪物不必从一张空表单开始'],
+  ]) {
+    const re = EMPTY_BEHAVIOUR_TABLE_CLAIMS.find(([f]) => f === file)[1];
+    assert.ok(!re.test(historical), `${file} 的正则不该匹配这句（历史叙述 / 另一件事）：${historical}`);
+  }
+});
+
+test('README 里「behaviour」那一节的锚点跟着标题走（改了标题就要连那几处链接一起改）', () => {
+  // 只实现这一节用得到的几条 GitHub slug 规则；**先拿一个稳定的标题自证算法**，别硬编码今天那个 slug ——
+  // 否则算法写错了也看不出来。`## Forge 现在能干什么` 与它的链接都在 README 里，且不随这一节改。
+  const slug = (h) => h.toLowerCase().replace(/[^\p{L}\p{N} -]/gu, '').replace(/ /g, '-');
+  const stable = README.match(/^## (Forge 现在能干什么)$/m);
+  assert.ok(stable, 'README 里那个稳定的标题');
+  assert.equal(slug(stable[1]), 'forge-现在能干什么', 'slug 算法自证：它必须还原出 README 里已有的那个锚点');
+  assert.ok(README.includes('](#forge-现在能干什么)'), '那个链接也还在（否则自证是空转）');
+
+  const heading = README.match(/^## (behaviour：.+)$/m);
+  assert.ok(heading, 'README 里那一节的标题');
+  const want = slug(heading[1]);
+  const anchors = [...README.matchAll(/\]\(#(behaviour[^)]*)\)/g)].map((m) => m[1]);
+  assert.ok(anchors.length >= 1, 'README 里应当还有指向那一节的锚点');
+  for (const a of anchors) {
+    assert.equal(a, want, `指向「behaviour…」那一节的锚点必须与标题的 slug 逐字相同（今天 ${anchors.length} 处；改了标题就要一起改，否则是死锚点，没有别的门禁会看）`);
+  }
+});
+
+/**
+ * `docs/WORKSHOP.md` 的编号标题**不许重号**。
+ *
+ * 为什么单盯这一份：`WORKSHOP.md` 是**当前状态**文档（不是按时间叙述的历史），读者靠 §1.x 这个号互相指 ——
+ * 两份不同的内容共用一个号时，「见 §1.23」这句话就没法唯一地指向一节，而且 GitHub 的同名锚点只有第一个能到。
+ * 这一条是真发生过的：`### 1.23 逐格加开关` 与 `### 1.23 目标引擎（target）` 同时存在（本刀把后者改成 §1.26）。
+ *
+ * ⚠️ **判据必须钉在「号」上，不能钉在「整行标题」上**：重号的两节标题文字**必然不同**（那正是重号的样子），
+ * 比整行字符串一条都抓不到 —— 本刀先写成比整行，造回重号时判据照样全绿（白写了一次）。所以这里抽出
+ * 号（`1.23`）比号，并把两节的**完整标题**都打印出来，好让人一眼看出是哪两节撞了。
+ *
+ * **故意不扫 `docs/changelog/**` 与 `CHANGELOG.md`**：那是**按时间叙述的冻结件**，同一个版本节里出现
+ * 两次「### 门槛（发布前全绿）」是正常的（每一节各自一个小标题），上一刀已经把它们逐字节冻住 ——
+ * 扫它们就是把「历史长这样」判成错。要扫的是**当前状态**文档。
+ */
+test('docs/WORKSHOP.md 的编号标题不许重号（两份内容共用一个 §号 = 锚点与引文都指不准）', () => {
+  const text = doc('docs/WORKSHOP.md');
+  // `##` 与 `###` 一起看；先剥掉尾随的 `#`（`### 标题 ###` 这种写法），别把闭合井号算进标题。
+  const seen = new Map();          // 号 → { 第几行, 完整标题 }
+  const dups = [];
+  let numbered = 0;
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(#{2,3})\s+(\d+(?:\.\d+)*)[.\s]/);
+    if (!m) continue;
+    numbered++;
+    const num = m[2];
+    const title = `${m[1]} ${lines[i].slice(m[1].length).trim()}`;
+    if (seen.has(num)) dups.push(`  §${num} 撞号：\n    ${seen.get(num).title}（第 ${seen.get(num).line} 行）\n    ${title}（第 ${i + 1} 行）`);
+    else seen.set(num, { line: i + 1, title });
+  }
+  // 地板：抽取本身不许空转 —— 这份文件今天有几十个编号小节，抽不到就是正则坏了。
+  assert.ok(numbered >= 30, `docs/WORKSHOP.md 里应当抽出几十个编号标题，只抽到 ${numbered} 个 —— 抽取坏了，这条判据会永远绿`);
+  assert.deepEqual(dups, [], `docs/WORKSHOP.md 里有重号的编号标题（两份内容共用一个 §号，引文与锚点都指不准）：\n${dups.join('\n')}`);
 });

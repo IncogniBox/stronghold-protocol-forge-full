@@ -9,21 +9,23 @@ import { withBounties } from '../waves.js';
 import { planUnite } from '../unite.js';
 import { FieldRunner, DeadBattle } from '../fields.js';
 import { DELAYS } from './common.js';
+import { battleOptsFromMatch } from './battleOpts.js';
+import { previewPlayer } from '../preview.js';
 
 export class MatchCombat {
   /** Construct a battle; a constructor failure yields a finished stand-in (clean result) and is logged. */
-  newBattle(opts) {
-    const full = { data: this.ds, content: this.battleContent, logger: this.log, ...opts };
-    // 工坊行为层 (docs/WORKSHOP.md §4): the pack's kits are the real functions on the server (the browser rebuilds them
-    // from `workshopKitModules`); an explicit opts.kits always wins.
-    if (this.workshopKits && !full.kits) full.kits = this.workshopKits;
-    // 包声明的战斗逻辑（`server.battle`, DESIGN §28.17）：服务端跑的这一场用同一批 installer（浏览器那边按 spec 的
-    // URL 自己加载）。没有包声明时 `this.battleInstallers` 是 null，这个键就不出现 —— 行为与从前逐字节相同。
-    if (Array.isArray(this.battleInstallers) && this.battleInstallers.length && !full.battleInstallers) full.battleInstallers = this.battleInstallers;
+  newBattle(opts, { preview = false } = {}) {
+    // The assembly both Battle paths share (server/match/match/battleOpts.js): `this.ds` / `this.battleContent` /
+    // `this.log` under the caller's own options, then the match's kit tables (`kits`, `tokenKits` — docs/WORKSHOP.md
+    // §4 / §4.7, the room-trimmed `roomAssets.forRoom(room.modSet)` maps), the pack's battle installers
+    // (DESIGN §28.17) and the 限伤 override. An explicit opts.<key> always wins; a match without packs sets no key, so
+    // a plain install builds byte-for-byte the battle it built before each feature landed. `_specBattle` (复算) calls
+    // the same helper, so a sixth key cannot reach one path and stop at the other.
+    const full = { ...battleOptsFromMatch(this, opts), ...(preview ? { logger: {}, quiet: true } : {}) };
     try {
       return new this.BattleClass(full);
     } catch (e) {
-      this.reportError(`battle ${opts.fieldId} construct`, e);
+      if (!preview) this.reportError(`battle ${opts.fieldId} construct`, e);
       return new DeadBattle(full, 'forced');
     }
   }
@@ -48,13 +50,23 @@ export class MatchCombat {
   _normalBattle(ps) { return this.newBattle(this._normalOpts(ps)); }
 
   /** Battle options of a player's normal field (after the onBattleStart handlers). */
-  _normalOpts(ps) {
-    const wave = this.wave;
+  _normalOpts(ps, { preview = false, board = ps.board } = {}) {
+    const wave = preview ? structuredClone(this.wave) : this.wave;
+    if (preview) ps = previewPlayer(ps, board);
     const input = ps.battleInput({ side: 'L', colOffset: 0 });
     // the client's list: bounty units inserted among their host action's own units, which are re-timed around them
     const spawns = withBounties(this.gd, this.round, wave, ps.bounties, ps.playerId).map((s) => ({ ...s, ownerPlayerId: ps.playerId }));
-    const ev = { input, kind: 'normal', round: this.round, spawns };
-    this.dispatch(ps, 'onBattleStart', ev);
+    // 开发者模式（「全量模拟」）：面板「添加至怪物预览区」追加的敌人 —— 与预览同一份列表（match/views.js
+    // nextEnemiesFor），在 onBattleStart 之前插入，让这一回合的战斗真的带着它们出现。
+    if (Array.isArray(this.devExtraEnemies) && this.devExtraEnemies.length) {
+      for (const s of this.devExtraEnemies) spawns.push({ ...s, ownerPlayerId: ps.playerId });
+    }
+    const ev = { input, kind: 'normal', round: this.round, spawns, ...(preview ? { preview: true } : {}) };
+    // Preview construction failures go to the rehearsal's discard path, never Match.dispatch's live error sink.
+    if (preview) this.dispatcher.dispatch(ps, 'onBattleStart', ev);
+    else this.dispatch(ps, 'onBattleStart', ev);
+    // 开发者模式的数值覆盖并进这一场的 `enemyOverrides`（wave 自带的优先，面板的补在后面）
+    const enemyOverrides = { ...(wave.overrides && typeof wave.overrides === 'object' ? wave.overrides : {}), ...(this.devEnemyOverrides || {}) };
     return {
       seed: deriveSeed(this.seed, `n:${this.round}:${ps.seat}`),
       kind: 'normal',
@@ -69,8 +81,12 @@ export class MatchCombat {
       sharedBoss: null,
       flags: { layerGainsEnabled: true, ...this.gd.dp },
       fieldId: `n:${ps.playerId}`,
-      enemyOverrides: wave.overrides,
+      enemyOverrides,
       waveId: wave.templateId,
+      // 限伤 override for the CLIENT-run spec (shared/constants.js bossHitLimitFrom): only present when a deployment
+      // set it, so an unconfigured server sends byte-for-byte the old spec (and server/sim/spec.js is left untouched
+      // by the key's absence).
+      ...(this.bossHitLimit === undefined ? {} : { bossHitLimit: this.bossHitLimit }),
     };
   }
 
@@ -152,14 +168,12 @@ export class MatchCombat {
         const ps = this.players.get(pid);
         const gains = pp && pp.layerGains && typeof pp.layerGains === 'object' ? pp.layerGains : null;
         if (ps && gains && Object.keys(gains).length) { ps.pendingLayerGains = { ...gains }; ps.dirty(); }
-        // 雷姆必拓 (mod): the battle's cross-phase marks reach the next prep through ps.counters (meta handlers read
-        // rimbilliton:holder / rimbilliton:noredeploy); every battle re-writes them, null clears a previous mark.
-        const rb = pp && pp.rbExtra && typeof pp.rbExtra === 'object' ? pp.rbExtra : null;
-        if (ps && rb) {
-          let changed = false;
-          if ('holder' in rb) { ps.counters['rimbilliton:holder'] = rb.holder; changed = true; }
-          if ('noRedeployChess' in rb) { ps.counters['rimbilliton:noredeploy'] = rb.noRedeployChess; changed = true; }
-          if (changed) ps.dirty();
+        // 战斗 → 休整期的**通用标记**（`battle._perPlayer[pid].marks`，`@battle/setBattleMark` 写）：每场战斗结束
+        // **整体替换**，所以上一场没写的键在这次休整期就是 null。
+        if (ps) {
+          const marks = pp && pp.marks && typeof pp.marks === 'object' && Object.keys(pp.marks).length ? { ...pp.marks } : null;
+          // 干净对局（两边都没有标记）不置脏：视图帧与从前逐字节相同
+          if (marks || ps.marks) { ps.marks = marks; ps.dirty(); }
         }
       }
     }

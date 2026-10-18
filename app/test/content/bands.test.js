@@ -329,7 +329,7 @@ test('凯瑟琳 定向投放: every shop upgrade offers 3 different shop items (
     const ids = offer.slots.map((sl) => sl.id);
     assert.equal(ids.length, 3);
     assert.equal(new Set(ids).size, 3);
-    for (const id of ids) assert.ok(offer.slots[0].kind === 'item' && !DATA.items[id].shopExcluded && !DATA.items[id].isGolden, id);
+    for (const id of ids) assert.ok(offer.slots[0].kind === 'item' && !DATA.items[id].isGolden && (id === 'chess_item_5_08_e_a' || !DATA.items[id].shopExcluded), id);
   }
   const f0 = ps.funds;
   const pick = ps.offers[0].slots[2].id;
@@ -494,7 +494,7 @@ test('贾维 团伙行动: every 6 manual refreshes ⇒ a <叙拉古> operator (
   cover('band_chiave');
 });
 
-test('娜仁图亚 见者有份: even rounds\' prep start — pick 1 of 2 different items (tier ≤ shop level) for free', () => {
+test('娜仁图亚 见者有份: even rounds\' prep start — pick 1 of 2 different shop equips for free (any tier [ASSUMED])', () => {
   const { ps, roundStart } = setup({ band: 'band_narant', seed: 13 });
   ps.shop.level = 3;
   for (const r of [1, 2, 3, 4]) {
@@ -505,7 +505,8 @@ test('娜仁图亚 见者有份: even rounds\' prep start — pick 1 of 2 differ
     const ids = ps.offers[0].slots.map((sl) => sl.id);
     assert.equal(ids.length, 2);
     assert.equal(new Set(ids).size, 2);
-    for (const id of ids) assert.ok(DATA.items[id].itemType === 'EQUIP' && DATA.items[id].tier <= 3);
+    // The blackboard names no tier cap. A level-3 shop can offer tier IV–VI (test/match/r40a-narant-pool.test.js).
+    for (const id of ids) assert.ok(DATA.items[id].itemType === 'EQUIP' && !DATA.items[id].shopExcluded);
   }
   cover('band_narant');
 });
@@ -572,18 +573,22 @@ test('埃芒加德 命结之秘: the first 3 knock-downs of the battle revive at
   cover('band_ermengard');
 });
 
-test('克莱门莎 崇高牺牲: a <阿戈尔> operator knocked down ⇒ +its tier <阿戈尔> layers (no activation needed; none in 联防/boss)', () => {
+test('克莱门莎 崇高牺牲: a <阿戈尔> operator knocked down ⇒ +its tier <阿戈尔> layers (requires activation; none in 联防/boss)', () => {
   const ops = { t_eg: op('t_eg', { bonds: ['egirShip'], tier: 3 }), t_x: op('t_x', { bonds: ['yanShip'], tier: 5 }) };
-  const h = fight({ band: 'band_clementia', ops, units: [{ chessId: 't_eg', row: 10, col: 4 }, { chessId: 't_x', row: 11, col: 4 }], foes: [[10, 9]] });
+  const h = fight({ band: 'band_clementia', bonds: active('egirShip'), ops, units: [{ chessId: 't_eg', row: 10, col: 4 }, { chessId: 't_x', row: 11, col: 4 }], foes: [[10, 9]] });
   h.step(1);
   h.b.dealDamage(foe(h), h.unit('t_eg'), { amount: 1e6, type: 'true' });
   h.b.dealDamage(foe(h), h.unit('t_x'), { amount: 1e6, type: 'true' });
   h.b.retreat(h.unit('t_eg')); // not knocked down: nothing (already dead anyway)
   assert.deepEqual(h.b.result().perPlayer.p1.layerGains, { egirShip: 3 });
-  const u = fight({ band: 'band_clementia', kind: 'unite', ops, units: [{ chessId: 't_eg', row: 10, col: 4 }], foes: [[10, 9]] });
+  const u = fight({ band: 'band_clementia', bonds: active('egirShip'), kind: 'unite', ops, units: [{ chessId: 't_eg', row: 10, col: 4 }], foes: [[10, 9]] });
   u.step(1);
   u.b.dealDamage(foe(u), u.unit('t_eg'), { amount: 1e6, type: 'true' });
   assert.deepEqual(u.b.result().perPlayer.p1.layerGains, {});
+  const inactive = fight({ band: 'band_clementia', ops, units: [{ chessId: 't_eg', row: 10, col: 4 }], foes: [[10, 9]] });
+  inactive.step();
+  inactive.b.dealDamage(foe(inactive), inactive.unit('t_eg'), { amount: 1e6, type: 'true' });
+  assert.deepEqual(inactive.b.result().perPlayer.p1.layerGains, {}, 'an inactive 阿戈尔 bond gains no layers');
   cover('band_clementia');
 });
 

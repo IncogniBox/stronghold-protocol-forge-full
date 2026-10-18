@@ -2,14 +2,16 @@
 // 铁卫 (DEFENDER protector): 近战重装, 阻挡2, 物伤。
 // S1 颤栗之弦 (charges ×2): 一次5连击，对范围内敌人每次造成 atk×atk_scale 的法术伤害。[ASSUMED]
 // S2 无存之所 (duration): 立即使范围内敌人恐惧 fear_dur 秒；期间每秒对范围内敌人造成 atk×dps_scale 法伤。[ASSUMED]
-// T1 应召而至: 「被伤害的敌人 21% 概率停顿 3 秒」已由引擎侧盟约安装器（mod/ave-mujica Timoris：全员 25%+每层0.1%）统一实现，
+// T1 应召而至: 「被伤害的敌人 21% 概率停顿 3 秒」已由本包盟约安装器（battle/main.mjs 的 Timoris：全员 25%+每层0.05%）统一实现，
 //   本 kit 不重复；「技能期间攻击范围扩大」无对应范围数据，未实现。
-// T2 毋畏恐惧: Fever 与「成员对停顿/恐惧敌人增伤」为团队效果，由引擎侧盟约安装器负责，本 kit 不重复。
+// T2 毋畏恐惧: Fever（造成停顿 +2）与「在场时成员对停顿/恐惧敌人增伤 dmg_up」为团队效果，由本包盟约安装器
+//   （battle/main.mjs 的 installAveMujica）负责，本 kit 不重复。
 // 模组 AMB-Y「额外训练」: 特性 50%→65% 闪避由 professions.js 的 stalker 规则读取 trait.bb.prob 生效，无需 kit。
 import { num, skillBbOf } from '@kit/tier1.js';
 
-const S1 = 'skchr_am_timoris_1';
-const S2 = 'skchr_am_timoris_2';
+// 技能 id 用**官方 id**（与包内 fx 索引 `assets/fx/index.json` 的 `skchr_tmoris_*` 一致），见 6_30 的说明。
+const S1 = 'skchr_tmoris_1';
+const S2 = 'skchr_tmoris_2';
 
 export default (bb, chess) => {
   const b1 = skillBbOf(chess, S1);

@@ -1,33 +1,84 @@
 // server/http/mods.js — the HTTP half of the CLIENT MOD STORE (W-C): what a browser downloads and caches locally.
 //
-// Two things live here, and both are deliberately narrow:
+// Three things live here, and all are deliberately narrow:
 //
 //   * `GET /mods/catalog.json` — the catalogue (server/modCatalog.js): every installed pack, its identity, and its file
 //     list with the hashes a client verifies against. The URL follows the existing `/packs/index.json` precedent
 //     (server/packs.js), the "the server publishes an index, the client chooses" pattern this reuses.
 //   * `GET /mods/file/<pack>/<path>` — the BYTES of one pack file. A pack's kits and its art already have routes
 //     (`/workshop-kits/`, `/workshop-assets/`); this one exists for the pack's own JSON (`pack.json`, `chess.json`) and
-//     serves anything else the catalogue lists, so a client can cache the pack whole.
+//     serves anything else the catalogue lists, so a client can cache the pack whole. ONE row of that list names no file
+//     — the reserved container digest (`server/packFiles.js ASSETS_DIGEST_PATH`) — and this route serves the digest text
+//     for it, because a client that cannot fetch a row of the identity can never rebuild the pack hash.
+//   * `GET /mods/panels.json` — 包声明的 **C 层清单**（DESIGN §28.60）: the very `modPanels` / `modTheme` the
+//     `welcome` frame carries, delivered BEFORE the handshake. A brand-new visitor presses 开始 without ever sending
+//     `hello`, so no `welcome` arrives and the title card would show no pack interface at all. Same family, same
+//     one-function source (`server/workshop.js modDeclarationsFor`), 404 when no pack declares anything.
 //
 // A request is served only when BOTH hold: the path is inside the pack directory, and the path is in the pack's file
-// list. The second check is the strong one — that list is what the loader hashed, so this route can never become a
-// general file server for the game's own tree.
+// list. The second check is the strong one — that list is the loader's identity inventory (DESIGN §28.2 裁决 B), so this
+// route can never become a general file server for the game's own tree.
 //
 // The catalogue is built once per process (the pack set is fixed at load, DESIGN §28.2) and handed in already built:
-// `serveMods` does no work per request beyond two map lookups.
+// `serveMods` does no work per request beyond two map lookups. The same holds for `serveModPanels`: the declaration is
+// built once at boot (`server/index.js`) and this route only serializes the object the `welcome` frame is built from.
 //
 // (i18n-ignore-file: the error titles are the bilingual `中文 · English` page text of server/http/common.js, not UI
 // strings — docs/I18N.md)
 
+import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { sendError, sendJson } from './common.js';
 import { WORKSHOP_ASSET_TYPES } from './workshop.js';
 import { modFileAbs } from '../modCatalog.js';
+import { ASSETS_DIGEST_PATH, containerDigestBytes } from '../packFiles.js';
 
 /** The catalogue URL, next to `/packs/index.json`. */
 export const MODS_CATALOG_URL = '/mods/catalog.json';
+/**
+ * 包声明的 **C 层清单**在**握手之前**的那一次（DESIGN §28.60）：与 `welcome.modPanels` / `welcome.modTheme`
+ * **同一份**（`server/workshop.js modDeclarationsFor`）。它存在的唯一理由是时序 —— 全新访客按下「开始」之前不
+ * `hello`、因此收不到 `welcome`，而起名页上的包界面正长在那条帧里。
+ */
+export const MODS_PANELS_URL = '/mods/panels.json';
 /** The route prefix a pack file is fetched from (`<prefix><pack>/<path inside the pack>`). */
 export const MOD_FILE_PREFIX = '/mods/file/';
+
+/**
+ * `GET /mods/panels.json` 的响应体 —— 与 `welcome` 那两格**逐字节同构**：`modPanels` 只在非空时出现、`modTheme`
+ * 同理（`server/lobby.js welcomeInfo` 是另一读者，读的是同一份对象）。两处都没有时返回 `null`（没有包声明），
+ * 调用方据此回 404 —— 「干净安装上这个端点不存在」与「服务端没有包声明就没有这个字段」是同一条不变量。
+ * @param {{ panels?: Array<any>, theme?: any }|null|undefined} decl `modDeclarationsFor(...)`
+ * @returns {Record<string, any>|null}
+ */
+function modDeclarationsBody(decl) {
+  const panels = decl && Array.isArray(decl.panels) ? decl.panels : [];
+  const theme = decl && decl.theme && typeof decl.theme === 'object' ? decl.theme : null;
+  /** @type {Record<string, any>} */
+  const body = {};
+  if (panels.length) body.modPanels = panels;
+  if (theme && theme.vars && Object.keys(theme.vars).length) body.modTheme = theme;
+  return Object.keys(body).length ? body : null;
+}
+
+/**
+ * 回答 `GET /mods/panels.json`：把**同一个函数造出的那份清单**（`decl`，与 `welcome` 那份是同一份对象）交出去；
+ * 没有包声明时 404（与 `/mods/file/…` 那个 404 同一条答复，也是本模块唯一的另一种结局）。
+ *
+ * **同步、只读、公开、无鉴权**：内容与 `welcome` 已经给每个客户端的**是同一份**，所以这里没有新的信息面，也
+ * 没有任何新状态 —— 它只是把那份声明提前送到（DESIGN §28.60）。本函数**不造清单**（造的那一个函数只有一个，
+ * 见文件头那句「不许复制一份逻辑」的正确做法：端点拿到的就是 `welcome` 那份对象本身）。
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @param {{ panels?: Array<any>, theme?: any }|null|undefined} decl
+ * @returns {boolean} 恒为 true（这条路要么回 200，要么回 404，没有第三条出口）
+ */
+export function serveModPanels(req, res, decl) {
+  const body = modDeclarationsBody(decl);
+  if (!body) { sendError(req, res, 404, '页面不存在 · Not found'); return true; }
+  sendJson(req, res, 200, body);
+  return true;
+}
 
 /**
  * What the routes need: the catalogue to publish, and where to read a pack file from.
@@ -103,7 +154,16 @@ export function serveMods(req, res, decoded, query, routes) {
     sendError(req, res, 403, '禁止访问 · Forbidden');
     return true;
   }
-  handleFile(req, res, abs, query).catch((err) => {
+  // The ONE row of the download list that has no file of its own: the reserved container digest (server/packFiles.js).
+  // `identifyPack` puts that digest into the pack's identity (DESIGN §28.13.5), so a client that cannot fetch the row can
+  // never rebuild the pack hash — and then it never proves it holds an asset pack at all. The row's payload is the digest
+  // text (64 bytes), uniquely determined by a value the loader verified against the container's real bytes.
+  // A real file of the same name WINS: `identifyPack` prefers it, the catalogue then describes THAT file, and the route
+  // must hand over its bytes — the existence check is that precedence, not a second opinion about the pack.
+  const virtual = rel === ASSETS_DIGEST_PATH && typeof pack.assetsDigest === 'string' && !fs.existsSync(abs)
+    ? containerDigestBytes(pack.assetsDigest)
+    : null;
+  handleFile(req, res, abs, query, virtual).catch((err) => {
     routes.error = err instanceof Error ? err : new Error(String(err));
     if (!res.headersSent) sendError(req, res, 404, '页面不存在 · Not found');
     else res.destroy();
@@ -143,9 +203,11 @@ function contentTypeFor(abs) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} abs absolute path inside the pack directory (already checked)
  * @param {string} query
+ * @param {Buffer|null} [virtual] the bytes to serve INSTEAD of reading `abs` — the reserved container-digest row, whose
+ *   path names no file at all (see `serveMods`). `null` for every ordinary pack file.
  */
-async function handleFile(req, res, abs, query) {
-  const body = await fsp.readFile(abs);
+async function handleFile(req, res, abs, query, virtual = null) {
+  const body = virtual || await fsp.readFile(abs);
   const immutable = /(^|&)v=[^&]+/.test(query);
   res.writeHead(200, {
     'Content-Type': contentTypeFor(abs),

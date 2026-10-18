@@ -150,7 +150,7 @@ describe('2: the own LP drops live while the battle runs', () => {
     assert.deepEqual(rowLp({ lp: 30 }, { phase: PHASE.FINAL_ASSAULT }, { lp: 99, pending: 5 }), { lp: 30, pending: 0, unite: false, left: null }, 'boss rounds: the row keeps its own share');
   });
 
-  test('LP tower: lp − pending in red with a −N tick keyed by the pending value (it pops again on every leak), the 联防中 tag', () => {
+  test('LP tower: the settled LP in red with a −N tick keyed by the pending value (it pops again on every leak) — the official keeps the current value until settlement (GitHub #479), the 联防中 tag', () => {
     const plain = LpTower({ value: 24, size: 'lg' });
     assert.ok(!hasClass(plain, 'is-pending'));
     assert.equal(textOf(plain), '24');
@@ -160,11 +160,11 @@ describe('2: the own LP drops live while the battle runs', () => {
     assert.equal(pend.key, 3, 'keyed: a new count re-mounts the tick (its pop animation plays again)');
     assert.equal(textOf(pend), '−3');
     const val = [...walk(v)].find((n) => hasClass(n, 'lp__val'));
-    assert.equal(textOf(val), '21');
+    assert.equal(textOf(val), '24', 'the number keeps the settled LP; the −3 tick carries the pending loss (GitHub #479)');
     assert.equal(v.props.title, 'x');
     const unite = LpTower({ value: 5, pending: 9, note: '联防中' });
-    assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__val'))), '0', 'clamped');
-    assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__pend'))), '−5');
+    assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__val'))), '5');
+    assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__pend'))), '−5', 'the tick clamps at the LP left');
     assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__note'))), '联防中');
     assert.equal(textOf(LpTower({ value: null, pending: 3 })), '--');
   });
@@ -482,10 +482,14 @@ describe('9: busy indicators and data loading', () => {
   });
 
   test('every data file the in-match UI reads is in GAME_FILES (the match screen waits for them: no text appears late); main.js warms them in a room', () => {
+    // 这条判据的前提是「`public/js/ui/**` 里的东西都在对局界面里」。**标题页的面板不是**：登录页的「公告」
+    // （`ui/notices.js`）读 `notices`，而那份合并体只在面板被打开时才需要 —— 把它塞进 `GAME_FILES` 会让每一局
+    // 都先拉一份公告，正是这份清单要避免的事。豁免写在**这里**（看得见、有理由），而不是放宽判据本身。
+    const TITLE_ONLY = new Set(['public/js/ui/notices.js']);
     const files = [
       ...readdirSync(path.join(ROOT, 'public/js/ui')).filter((f) => f.endsWith('.js')).map((f) => `public/js/ui/${f}`),
       ...['game', 'briefing', 'bandDraft', 'result'].map((s) => `public/js/screens/${s}.js`),
-    ];
+    ].filter((f) => !TITLE_ONLY.has(f));
     const used = new Set();
     for (const f of files) for (const m of read(f).matchAll(/data\.(?:get|lookup|list|load|status)\('([A-Za-z-]+)'/g)) used.add(m[1]);
     for (const m of read('public/js/ui/gameComponents.js').matchAll(/useData\('([A-Za-z-]+)'/g)) used.add(m[1]);

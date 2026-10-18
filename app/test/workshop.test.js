@@ -103,7 +103,8 @@ describe('workshop: the overlay', () => {
   test('the official data stays a clean baseline when no (or no) pack is used', () => {
     assert.equal(Object.keys(getData({ log: quiet }).chess).length, 266, 'the process singleton must not see workshop content');
     assert.equal(Object.keys(loadData(DATA_DIR, { log: quiet, workshopDir: null }).chess).length, 266);
-    assert.equal(loadWorkshop(WORKSHOP_DIR, { log: quiet }).packs.length, 0, 'the repo ships no active pack');
+    // 仓库随包带了 workshop/ 下的 mod（发行包要开箱即用），但它们不参与上面这条「仅官方」基线
+    assert.ok(loadWorkshop(WORKSHOP_DIR, { log: quiet }).packs.length >= 1, 'the bundled packs live under workshop/, outside the official baseline');
   });
 
   // 「试玩里是一张贴图而不是模型」的数据侧安全网：手写包、CLI 写出来的包、编辑器写出来的包走的是同一层，
@@ -398,9 +399,11 @@ describe('workshop: the overlay', () => {
     assert.equal(normalizePackManifest({ id: 'a/b' }, 'a/b').error, 'BAD_PACK_ID');
     assert.equal(normalizePackManifest({ id: 'x' }, 'y').error, 'PACK_ID_MISMATCH');
     assert.equal(normalizePackManifest({ id: 'x', content: [] }, 'x').error, 'EMPTY_PACK');
-    // `config` is deliberately not a workshop-contributable file
+    // `config` is deliberately not a workshop-contributable file —— 而且它**点名被拒**，不是被静默过滤掉。
+    // （2026-10-13：`content` 的成员资格从前是「不认识的安静丢掉」，于是 `{content:["config"]}` 只是变成一个空包；
+    //   现在它拿 `UNKNOWN_CONTENT_FILE`，作者看得见自己写的那件事没有通道。见 test/workshopVariants.test.js。）
     assert.equal(WORKSHOP_CONTENT_FILES.includes('config'), false);
-    assert.equal(normalizePackManifest({ id: 'x', content: ['config'] }, 'x').error, 'EMPTY_PACK');
+    assert.equal(normalizePackManifest({ id: 'x', content: ['config'] }, 'x').error, 'UNKNOWN_CONTENT_FILE');
     assert.equal(normalizeContentFile('chess', []).error, 'BAD_CONTENT');
     assert.equal(normalizeContentFile('chess', {}).error, 'EMPTY_CONTENT');
     assert.equal(normalizeContentFile('chess', { a: 'nope' }).error, 'BAD_RECORD');
@@ -413,7 +416,11 @@ describe('workshop: the overlay', () => {
   // 判据只有一条：**一个这份格式不认识的顶层键，必须点名拒绝**，绝不读过去。以前 `variants` / `skins`
   // 是静默丢（`{content:["chess","variants"]}` 归一化成 `["chess"]`），`i18n` 连键都不存在。
   test('an unknown top-level key refuses the whole pack, and the reason lists the known fields', () => {
-    for (const key of ['variants', 'skins', 'official', 'config', 'meta', 'shared', 'theme', 'serverModules', 'hasAssets']) {
+    // `skins` 曾经在这张名单里（0.10.0 时代「静默丢」的三个键之一）—— 皮肤层落地后它是**真字段**了，
+    // 所以从这里移出，改由它自己的形状判据覆盖（见 workshopArt.test.js 的 skins 一节）。
+    // `variants` 同样在 2026-10-13 的变体 / 口径层落地后成为**真字段**（DESIGN §28.39，形状见
+    // test/workshopVariants.test.js），所以它也移出这张名单 —— 留着它会让这条测试钉住一个已经过期的判决。
+    for (const key of ['official', 'config', 'meta', 'shared', 'theme', 'serverModules', 'hasAssets']) {
       const r = normalizePackManifest({ id: 'p', content: ['chess'], [key]: {} }, 'p', {});
       assert.equal(r.ok, false, `"${key}" must not be read past`);
       assert.equal(r.error, 'PACK_UNKNOWN_FIELD', `"${key}": ${r.detail}`);
@@ -426,7 +433,7 @@ describe('workshop: the overlay', () => {
 
   test('the refusal happens before any other judgement, and every known field still parses', () => {
     // 一个连键都不认识的清单，后面的字段级判据都是在猜它想说什么 —— 所以这一条排在最前面。
-    const both = normalizePackManifest({ id: 'p', content: [], variants: {}, operators: { char_x: {} } }, 'p', {});
+    const both = normalizePackManifest({ id: 'p', content: [], official: {}, operators: { char_x: {} } }, 'p', {});
     assert.equal(both.error, 'PACK_UNKNOWN_FIELD', 'the unknown key wins over EMPTY_PACK');
     // 闭集里的每一个键都不会因为这一刀被误拒（`id` / `name` … `routes` 各有自己的判据）。
     const ok = normalizePackManifest({
@@ -472,12 +479,14 @@ describe('workshop: the content reaches the game', () => {
   test('the shared pool gives it copies like any tier-5 operator', () => {
     const pool = new SharedPool(new GameData(data, 'mode_multi_hard'), {});
     assert.equal(pool.has(WS_BASE), true);
-    assert.equal(pool.cap(WS_BASE), 8);
-    assert.equal(pool.left(WS_BASE), 8);
+    // `mode_multi_hard` is co-op: 0.2.4 doubles the shared stock (`economy.coopPoolMultiplier: 2`),
+    // so a tier-5 operator holds 16 = 8 x 2 here. Solo still holds the base 8.
+    assert.equal(pool.cap(WS_BASE), 16);
+    assert.equal(pool.left(WS_BASE), 16);
     assert.equal(pool.take(WS_BASE, 3), 3);
-    assert.equal(pool.left(WS_BASE), 5);
+    assert.equal(pool.left(WS_BASE), 13);
     assert.equal(pool.give(WS_BASE, 3), 3);
-    assert.equal(pool.left(WS_BASE), 8);
+    assert.equal(pool.left(WS_BASE), 16);
   });
 
   test('the sim resolves a def for it (this is what makes it fight)', async () => {

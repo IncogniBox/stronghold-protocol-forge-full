@@ -1,0 +1,124 @@
+{
+ "v": 1,
+ "note": "本包给别的包用的**词汇表**（引擎不读这个文件：它是给作者与工具看的契约）。消费包在自己的 chess.json / units.json 记录里写 profession / professionName / subProfessionId / subProfessionName 就生效 —— 引擎对 profession 不做枚举校验，形态由记录自己的 attackKind / dmgType / projectile / canHitFly / targetPriority 决定。译名由本包 i18n 提供。",
+ "professions": [
+  {
+   "id": "CHRONOMANCER",
+   "name": "时术师",
+   "base": { "attackKind": "ranged", "dmgType": "arts", "projectile": "bolt", "canHitFly": true },
+   "recipe": "术师侧：远程 / 法术 / 可对空。照抄官方【术师】的基础形态写进记录即可同形。",
+   "branches": [
+    {
+     "id": "chrono_stasis",
+     "name": "滞时术师",
+     "behavior": "命中减速（官方【凝滞师】onHitStatus sluggish）",
+     "recipe": "引擎的 SUB 表不认识这个 id ⇒ 记录里只给形态，减速由消费包自己的 kit trait（onHitStatus）或 server.battle 模块给。"
+    },
+    {
+     "id": "chrono_echo",
+     "name": "回响术师",
+     "behavior": "无目标时蓄能、齐射（官方【秘术师】storeEnergy）",
+     "recipe": "同上：蓄能走消费包 kit 的 storeEnergy / releaseEnergy，形态照【术师】。"
+    }
+   ]
+  },
+  {
+   "id": "WARDEN",
+   "name": "守望者",
+   "base": { "attackKind": "melee", "dmgType": "phys", "projectile": "none", "canHitFly": false },
+   "recipe": "重装侧：近战 / 物理 / 不可对空（与官方【重装】同形；阻挡数由记录的 stats.blockCnt 给）。",
+   "branches": [
+    {
+     "id": "warden_bulwark",
+     "name": "壁垒守望",
+     "behavior": "地面溅射、不可对空（官方【要塞】fortress）",
+     "recipe": "记录写 splashRadius（官方要塞 1.0）+ groundOnly：引擎 resolveProfile 见到 groundOnly/fortress 会把 canHitFly 关掉。"
+    },
+    {
+     "id": "warden_vigil",
+     "name": "守夜人",
+     "behavior": "防御向（官方【守护者】）",
+     "recipe": "形态照【重装】，天赋/技能加成由消费包自己给。"
+    }
+   ]
+  },
+  {
+   "id": "TRACKER",
+   "name": "追踪者",
+   "base": { "attackKind": "ranged", "dmgType": "phys", "projectile": "arrow", "canHitFly": true, "targetPriority": "lowDef" },
+   "recipe": "狙击侧：远程 / 物理 / 可对空 / 优先低防（与官方【狙击】同形）。",
+   "branches": [
+    {
+     "id": "tracker_marksman",
+     "name": "猎标手",
+     "behavior": "优先低防（官方【重射手】priority lowDef）",
+     "recipe": "记录写 targetPriority: 'lowDef' 即生效（引擎把它当 profile 的 priority）。"
+    },
+    {
+     "id": "tracker_flare",
+     "name": "照明手",
+     "behavior": "锁定攻击范围内全体（官方【阵法术师】/【轰击术师】rangeAoe）",
+     "recipe": "范围齐射要代码：走消费包 server.battle 模块的 kit trait（rangeAoe / allInRange），记录只给形态。"
+    }
+   ]
+  },
+  {
+   "id": "CONDUCTOR",
+   "name": "协奏者",
+   "base": { "attackKind": "none", "dmgType": "heal", "projectile": "none", "canHitFly": false },
+   "recipe": "辅助侧：不普通攻击（attackKind: 'none' 会被引擎折成 noAttackUnlessSkill）/ 恢复向。",
+   "branches": [
+    {
+     "id": "conductor_aura",
+     "name": "光环协奏",
+     "behavior": "不攻击、持续恢复范围内友军（官方【吟游者】bard）",
+     "recipe": "光环行为要代码：消费包 server.battle 的 kit trait（noAttack + 每秒回血）或写成技能。"
+    },
+    {
+     "id": "conductor_pulse",
+     "name": "脉冲协奏",
+     "behavior": "命中削弱（官方【削弱者】underminer）",
+     "recipe": "削弱走 kit trait 的 onHitStatus weaken。"
+    }
+   ]
+  }
+ ],
+ "officialBranches": [
+  {
+   "profession": "CASTER",
+   "professionName": "术师",
+   "id": "patrol_support",
+   "name": "巡援术师",
+   "nameEn": "Patrol-Support Caster",
+   "trait": "攻击造成法术伤害，可以部署在地面，处于地面时会更改自身数值、攻击范围与技能效果。",
+   "icon": {
+    "key": "patrol_support",
+    "art": "sub_patrol_support_icon.png",
+    "file": "assets/sub_patrol_support_icon.png",
+    "recordField": "assets.subProfIcon = \"sub_patrol_support_icon\"",
+    "lookup": "客户端 ui/assetUrls.js subProfIconUrl：先拿 assets.subProfIcon 去掉前缀 sub_ 与后缀 _icon，拿不到就直接用 subProfessionId —— 两种写法都落在 assets.prof.sub[patrol_support]，也就是本包 art.profSub 的那一格。"
+   },
+   "placement": {
+    "engine": "position: 'RANGED'（术师本来就是它）**已经含地面格**，所以「可以部署在地面」不需要任何引擎改动 —— server/match/board.js 的 canPlace 对 'ranged' / 'all' 在 melee 格上返回 true（test/match/board.test.js 钉住）。",
+    "when": "部署那一刻 sim 就写好了 unit.ground = battle.grid.isLow(tile)（server/sim/battle/deploy.js）：高台 false、地面 true。"
+   },
+   "ranges": {
+    "note": "本项目一条记录只有一个 rangeGrid（普通 _a 与精英 _b 各一张），而本分支的高台 / 地面是两张 —— 于是：普通记录写 elite0 的那张，精英记录写 elite1 的那张（精英1 与精英2 同形）。高台 / 地面两张由消费包自己按 unit.ground 换（见 behavior）。",
+    "elite0": {
+     "high": [[2, 1], [1, 0], [1, 1], [0, -1], [0, 0], [0, 1], [0, 2], [-1, 0], [-1, 1], [-2, 1]],
+     "ground": [[1, 0], [0, -1], [0, 0], [0, 1], [0, 2], [-1, 0]]
+    },
+    "elite1": {
+     "high": [[2, 1], [1, 0], [1, 1], [1, 2], [0, -1], [0, 0], [0, 1], [0, 2], [0, 3], [-1, 0], [-1, 1], [-1, 2], [-2, 1]],
+     "ground": [[1, 0], [1, 1], [0, -1], [0, 0], [0, 1], [0, 2], [0, 3], [-1, 0], [-1, 1]]
+    }
+   },
+   "behavior": {
+    "range": "消费包自己的 kit（kits/<chessId>.js）在 battle.on('deploy') 里读 unit.ground：真则 unit.rangeGrid = <地面网格>; battle.refreshRange(unit)（公开方法，流形也这么改）。",
+    "stats": "数值走 battle.addBuff(unit, { mods: { atkPct / defPct / … } })，按 unit.ground 给。",
+    "skills": "技能效果：引擎按记录的 skills[] 读技能表，整套换技能要走 kit；多数情况用技能自己的 rangeGrid / 黑板，或 kit 的 attack / canAttack 钩子表达即可。"
+   },
+   "recipe": "消费包在自己的 chess.json 记录里写 profession: 'CASTER' + professionName: '术师'、subProfessionId: 'patrol_support' + subProfessionName: '巡援术师'，rangeGrid 取本包 ranges 里对应形态的高台那张，再用自己的 kit 在地面时换成地面那张；并声明 dependencies: [{ \"id\": \"profession-expansion\" }]。"
+  }
+ ]
+}

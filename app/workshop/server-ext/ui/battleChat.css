@@ -1,0 +1,135 @@
+/* server-ext 的**对局屏**面板（`ui/battleChat.js`）—— 挂在官方槽 `screen.game.overlay`（`screens/game.js` 根部那块
+   `.mod-host`）里，自己用 `position: absolute` 钉在左下角：引擎「交流」按钮（`.gm__corner` 里的 `.ewheel`，
+   `game.css` 把 `.gm__corner` 放在 left .24rem / bottom .24rem、按钮高 .56rem）的**正上方**。
+
+   * `.mod-panel`（= `ctx.host`）被引擎置 `pointer-events: none`，所以根上打开 `auto`（芯片 / 输入框 / 按钮才点得动）。
+   * 折叠态是一枚小芯片：尺寸 / 描边照引擎 `ui/combatMetrics.js` 那块统计面板的开关芯片 idiom
+     （`public/css/screens/game.css` 的 `.gm__gear` / `.gm__metrics`：.56rem 方块、暗底、薄荷高亮）。
+   * 展开态是一块**半透明**面板：`opacity` 连文字一起压暗 + rgba 背景，于是它像一层贴纸，透出后面的战场。
+   * 尺寸一律 rem（引擎 `theme.css` 里 `html` 的 font-size 按视口缩放、`--t = 1rem`），与左栏邻居同一把尺子。 */
+
+.battle-chat {
+  position: absolute;
+  left: .24rem;
+  /* 钉在「交流」那排按钮（`.gm__corner`：bottom .24rem + 高 .56rem）**上方**，留一点缝 */
+  bottom: calc(.24rem + .56rem + max(.1rem, 8px));
+  z-index: 20;
+  pointer-events: auto;
+  color: var(--text-hi);
+  font-size: max(calc(.13 * var(--t)), 12px);
+  line-height: 1.35;
+}
+
+/* 折叠态：一枚小芯片（尺寸 / 描边照 `.gm__gear`，展开时由 `aria-expanded` 提亮 —— 与 `.gm__metrics` 同一条） */
+.battle-chat__chip {
+  pointer-events: auto;
+  width: .56rem;
+  height: .56rem;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 11, 10, .82);
+  border: 1px solid var(--line-2);
+  color: var(--text-lo);
+  cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+.battle-chat__chip:hover { color: var(--mint-400); border-color: var(--mint-700); }
+.battle-chat__chip-txt { font-size: max(calc(.12 * var(--t)), 11px); font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+
+/* 展开态：一块半透明面板（结构照 `ui/combatMetrics.js`：micro 标签 + 标题 + 收起按钮的头 + 滚动正文 + 底部一行） */
+.battle-chat__panel {
+  width: min(max(4.2rem, 280px), calc(100vw - .48rem));
+  max-height: min(max(5.4rem, 240px), 52vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* 半透明：`opacity` 压暗整块（含文字），rgba 背景再叠一层 —— 面板是一层贴纸，战场从它后面透出来 */
+  opacity: .8;
+  background: linear-gradient(180deg, rgba(20, 26, 24, .9), rgba(12, 16, 14, .93));
+  border: 1px solid var(--line-2);
+  border-top: 2px solid var(--mint-700);
+  box-shadow: 0 .1rem .34rem rgba(0, 0, 0, .5);
+  color: var(--text-md);
+  text-align: left;
+  transition: opacity var(--t-fast);
+}
+/* 交互（悬停 / 输入聚焦）时提亮：半透明是为了「看战场」，但读字时要看得清 */
+.battle-chat__panel:hover,
+.battle-chat__panel:focus-within { opacity: 1; }
+
+.battle-chat__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: .06rem;
+  padding: max(.08rem, 6px) max(.1rem, 8px);
+  border-bottom: 1px solid var(--line);
+}
+.battle-chat__micro { font-family: var(--font-display); font-size: max(calc(.1 * var(--t)), 10px); letter-spacing: .12em; color: var(--mint-500); }
+.battle-chat__title { font-weight: 800; color: var(--text-hi); }
+.battle-chat__toggle {
+  pointer-events: auto;
+  margin-left: auto;
+  width: max(.28rem, 24px);
+  height: max(.28rem, 24px);
+  display: grid;
+  place-items: center;
+  font: inherit;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-lo);
+  cursor: pointer;
+}
+.battle-chat__toggle:hover { color: var(--mint-400); border-color: var(--mint-700); }
+
+/* 滚动列表 */
+.battle-chat__list {
+  flex: 1 1 auto;
+  min-height: .8rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: .04rem max(.1rem, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: .04rem;
+  scrollbar-width: thin;
+}
+.battle-chat__empty { margin: auto; padding: .1rem .02rem; color: var(--text-dim); text-align: center; }
+
+/* 一条消息（发送者 + 文本；文本只走文本节点，从不 innerHTML） */
+.battle-chat__row { display: flex; gap: .06rem; word-break: break-word; }
+.battle-chat__name { flex: none; max-width: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mint-400); font-weight: 700; }
+.battle-chat__text { color: var(--text-md); }
+
+/* 说不了时的那一行说明（旁观 / `chatMode` 不是 open） */
+.battle-chat__note { flex: none; padding: max(.06rem, 4px) max(.1rem, 8px); border-top: 1px solid var(--line); color: var(--text-dim); font-size: max(calc(.1 * var(--t)), 10px); }
+
+/* 输入 + 发送 */
+.battle-chat__send { flex: none; display: flex; gap: .04rem; padding: max(.06rem, 4px); border-top: 1px solid var(--line); }
+.battle-chat__input {
+  pointer-events: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: max(calc(.12 * var(--t)), 11px);
+  padding: .03rem .06rem;
+  color: var(--text-hi);
+  background: rgba(0, 0, 0, .35);
+  border: 1px solid var(--line);
+  outline: none;
+}
+.battle-chat__input::placeholder { color: var(--text-dim); }
+.battle-chat__input:focus { border-color: var(--mint-700); }
+.battle-chat__go {
+  pointer-events: auto;
+  flex: none;
+  font: inherit;
+  font-size: max(calc(.12 * var(--t)), 11px);
+  font-weight: 700;
+  padding: .03rem .1rem;
+  color: var(--text-on-mint);
+  background: var(--mint-500);
+  border: 0;
+  cursor: pointer;
+}
+.battle-chat__go:disabled { opacity: .45; cursor: default; }

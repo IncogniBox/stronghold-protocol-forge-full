@@ -45,7 +45,7 @@ jobs:
         run: node tools/setup.mjs --check --no-local
 
       - name: Unit & integration tests
-        run: node --test
+        run: node --test --test-concurrency=8 --import ./test/official-data.mjs
 
       - name: Server smoke test (boot, /healthz, index.html, doctor)
         shell: bash

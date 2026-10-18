@@ -1,0 +1,16 @@
+{
+ "时术师": "Chronomancer",
+ "滞时术师": "Stasis Chronomancer",
+ "回响术师": "Echo Chronomancer",
+ "守望者": "Warden",
+ "壁垒守望": "Bulwark Warden",
+ "守夜人": "Vigil Warden",
+ "追踪者": "Tracker",
+ "猎标手": "Mark Hunter",
+ "照明手": "Flare Spotter",
+ "协奏者": "Conductor",
+ "光环协奏": "Aura Conductor",
+ "脉冲协奏": "Pulse Conductor",
+ "巡援术师": "Patrol-Support Caster",
+ "攻击造成法术伤害，可以部署在地面，处于地面时会更改自身数值、攻击范围与技能效果。": "Deals Arts damage. Can be deployed on the ground; while on the ground its own stats, attack range and skill effects change."
+}

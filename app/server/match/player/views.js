@@ -21,6 +21,22 @@ export class PlayerViews {
       count: p.kind === 'token' ? (p.count || 1) : 1,
       ownerUid: p.kind === 'token' ? p.ownerUid ?? null : null,
     };
+    // 装备声明的「已继承」数据（`item.params.inherited_key`，例如 `'columbia'`）：把该件棋子 `meta.data[<键>]` 里
+    // 那一份原样下发，装备卡据此列出「已继承的装备」。只送**装备自己声明过的**键，不整包透传 `meta.data`；
+    // 没有任何装备声明时这里什么都不加（干净数据与从前逐字节相同）。装备件本身也送：出售 / 换人后在整备区里仍要能列出。
+    const dataOfPiece = p.meta && p.meta.data ? p.meta.data : null;
+    if (dataOfPiece && (p.kind === 'chess' || p.kind === 'item')) {
+      const refs = p.kind === 'item' ? [p.id] : (p.items || []).map((it) => it.id);
+      const itemData = {};
+      for (const id of refs) {
+        const rec = this.gd.item(id);
+        const ns = rec && rec.params && typeof rec.params.inherited_key === 'string' ? rec.params.inherited_key : null;
+        if (!ns || Object.prototype.hasOwnProperty.call(itemData, ns)) continue;
+        const d = dataOfPiece[ns];
+        if (d && Array.isArray(d.items) && d.items.length) itemData[ns] = { items: [...d.items] };
+      }
+      if (Object.keys(itemData).length) v.itemData = itemData;
+    }
     if (rc) { v.row = rc[0]; v.col = rc[1]; v.dir = pieceDir(p); }
     return v;
   }
@@ -93,6 +109,8 @@ export class PlayerViews {
       hand: this.hand.map((p) => (p ? this.pieceView(p) : null)),
       temp: this.temp.map((p) => (p ? this.pieceView(p) : null)),
       board,
+      // The stage's 外勤医疗 reserve medic is present during prep, but is not a draggable board piece.
+      prepMapChars: this.m.prepMapChars(this),
       deployCap: this.deployCap,
       deployCount: this.deployCount,
       // + the mode-off bonds it has members of (`off: true`, the strip's grey 本局禁用 discs — bondsMeta.offBondCounts)
@@ -125,6 +143,9 @@ export class PlayerViews {
       stats: {
         dmgDealt: Math.round(this.stats.dmgDealt), kills: this.stats.kills, leaks: this.stats.leaks, gold: this.stats.gold,
         refreshes: this.stats.refreshes, merges: this.stats.merges,
+        // 装备进阶（两件同名装备合成一件进阶装备，计数在 `acquire.js`）与干员精锐化（`merges`）是一对：社区面板要把
+        // 这两次数并列显示（业主 2026-10-14）。这里只**多给一格读数** —— 不改对局结果、不改计分口径、不加消息。
+        itemMerges: this.stats.itemMerges,
       },
     };
   }

@@ -2,8 +2,8 @@
 
 《明日方舟》同人复刻「卫戍协议：盟约」（Stronghold Protocol: Alliance）的**零安装整合包**：解压后双击即开服 —— 游戏本体、全部美术与音频素材、两个社区工坊 mod、便携版 Node 都在包里。
 
-![version](https://img.shields.io/badge/version-0.13.1-2ea44f)
-![data](https://img.shields.io/badge/data-0.2.2-2ea44f)
+![version](https://img.shields.io/badge/version-0.19.0-2ea44f)
+![data](https://img.shields.io/badge/data-0.3.0-2ea44f)
 ![license](https://img.shields.io/badge/code%20license-GPL--3.0--or--later-blue)
 ![node](https://img.shields.io/badge/node-v22.23.3%20portable-339933)
 ![mods](https://img.shields.io/badge/bundled%20mods-2-f97316)

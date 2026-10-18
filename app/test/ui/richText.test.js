@@ -96,5 +96,19 @@ describe('placeholders', () => {
     }
     assert.equal(formatBondEffect(null, 3), '');
     assert.equal(formatBondEffect({ effectDesc: 'x{0:0}', effectDescParams: [{ index: 0, format: '0', base: 'a', perStack: 'b' }], bb: { a: 1, b: 2 } }, 'bad'), 'x1');
+    // `perStep`: +1 every `bb[perStep]` layers (哥伦比亚「视为额外携带 N 件装备（每 50 层 +1）」); the step itself can be
+    // a flat placeholder of its own (`perStack: null`).
+    const stepped = {
+      effectDesc: '携带了{1}件（每{2}层+1）',
+      effectDescParams: [
+        { index: 1, format: '0', base: 'extra_carry', perStack: null, perStep: 'extra_carry_per_layer' },
+        { index: 2, format: '0', base: 'extra_carry_per_layer', perStack: null },
+      ],
+      bb: { extra_carry: 1, extra_carry_per_layer: 50 },
+    };
+    assert.equal(richTextPlain(formatBondEffect(stepped, 0)), '携带了1件（每50层+1）');
+    assert.equal(richTextPlain(formatBondEffect(stepped, 49)), '携带了1件（每50层+1）');
+    assert.equal(richTextPlain(formatBondEffect(stepped, 50)), '携带了2件（每50层+1）');
+    assert.equal(richTextPlain(formatBondEffect(stepped, 150)), '携带了4件（每50层+1）');
   });
 });

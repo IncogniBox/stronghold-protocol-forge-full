@@ -18,8 +18,9 @@ const LOAD_TIMEOUT_MS = 12000;
 const METHODS = ['setStage', 'setCamera', 'setPrep', 'enterBattle', 'pushSnapshot', 'pushEvents', 'highlightTiles', 'on', 'resize', 'destroy'];
 // direction-step hooks (ui/facingWheel.js): optional — the wheel falls back to the engine's dev hooks when absent;
 // setPen (enemy preview pen list), prepField ({ kind, side, mirror } of the Final Assault prep), stripesUnder (the view
-// stripes range previews under the units itself) — render/app.js; the DOM fallback lacks them (→ null)
-const OPTIONAL = ['pieceScreenRect', 'setSettings', 'off', 'tileScreen', 'holdPiece', 'setPieceDir', 'setPen', 'prepField', 'stripesUnder'];
+// stripes range previews under the units itself), replayDeploys (the round start's Start-clip replay, PR #416) —
+// render/app.js; the DOM fallback lacks them (→ null)
+const OPTIONAL = ['pieceScreenRect', 'pieceAtClientPoint', 'setSettings', 'off', 'tileScreen', 'holdPiece', 'setPieceDir', 'setPen', 'prepField', 'stripesUnder', 'replayDeploys'];
 
 /**
  * Camera padding (px) that keeps the field clear of the DOM HUD (top bar + bond strip, team panel, shop bar /
@@ -82,17 +83,20 @@ export function hudBands(kind, size, opts) {
   const folded = !!opts && opts.shop === false;
   const h = size?.height || 1080;
   let rem = 100;
+  // 异形屏适配 (ui/screenFit.js): the board's host may not start at the viewport's top — the HUD rects are measured from it
+  let oy = 0;
   let safeTop = 0;
   let safeBottom = 0;
   let corner = 0;
   try {
     rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 100;
+    oy = document.querySelector('.gm__field')?.getBoundingClientRect()?.top || 0;
     // the HUD layer starts below the top safe-area inset and ends above the bottom one (css/devices.css .gm__hud)
     const hud = document.querySelector('.gm__hud')?.getBoundingClientRect();
-    safeTop = Math.max(0, hud?.top || 0);
+    safeTop = Math.max(0, (hud?.top || 0) - oy);
     if (folded) {
-      if (hud && hud.bottom > 0) safeBottom = Math.max(0, h - hud.bottom);
-      corner = cornerBand(h);
+      if (hud && hud.bottom - oy > 0) safeBottom = Math.max(0, h - (hud.bottom - oy));
+      corner = cornerBand(h, oy);
     }
   } catch { /* ignore */ }
   const bottom = folded
@@ -111,7 +115,7 @@ export function hudBands(kind, size, opts) {
  * pad edge there is not pressable.
  * @param {number} h
  */
-function cornerBand(h) {
+function cornerBand(h, oy = 0) {
   const btns = document.querySelectorAll('.gm__corner .gm__gear, .gm__corner .ewheel__btn');
   if (!btns || !btns.length) return 0;
   const root = document.documentElement;
@@ -121,7 +125,7 @@ function cornerBand(h) {
     const r = b.getBoundingClientRect();
     if (r && r.height > 0) top = Math.min(top, r.top + r.height / 2 - Math.max(r.height, tap) / 2);
   }
-  return top < Infinity ? Math.max(0, h - top) : 0;
+  return top < Infinity ? Math.max(0, h - (top - oy)) : 0;
 }
 
 function renderPref() {
@@ -191,14 +195,16 @@ export function guardView(view, kind) {
  * screen waits for them, gameComponents GAME_FILES) to the asset store, now or when they land: it then never downloads
  * the manifest a second time — after a page reload (a phone browser discarding a background tab, Chrome's Memory Saver)
  * that second download was the one createFieldView waited ≤ 4 s for, and a slow or failed one left every operator the
- * image-less placeholder (public issue #8 item 5). Without a copy the store fetches and retries by itself.
+ * image-less placeholder (public issue #8 item 5). Without a copy the store fetches and retries by itself. The copy as
+ * downloaded (data.getRaw): the store lays the cosmetic plugins over it itself (assets.js `cosmetics`), data.js's view
+ * of `assets` already has them.
  * @param {{ seed?: (m: any) => boolean, seedLocal?: (m: any) => boolean }} store public/js/assets.js store
  */
 export function seedAssets(store) {
   if (!store) return;
   const give = (name, fn) => {
     if (typeof fn !== 'function') return;
-    const now = data.get(name);
+    const now = data.getRaw(name);
     if (now) { fn(now); return; }
     // still loading (or failed): adopt it if it lands; a later success of the store's own fetch makes this a no-op
     Promise.resolve(data.load(name)).then((m) => { if (m) fn(m); }, () => {});
@@ -268,31 +274,46 @@ export async function mountFieldView(host, { signal } = {}) {
  */
 export function useFieldView(hostRef) {
   const [state, setState] = useState({ view: null, kind: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+  const retries = useRef(0);
   const viewRef = useRef(null);
   useEffect(() => {
-    let dead = false;
+    let dead = false, retrying = false;
     const host = hostRef.current;
     if (!host) return undefined;
+    setState({ view: null, kind: 'loading' });
     const controller = new AbortController();
     mountFieldView(host, { signal: controller.signal }).then((view) => {
       if (dead) { view.destroy(); return; }
       viewRef.current = view;
+      if (view.kind === 'engine') retries.current = 0;
       globalThis.__SP_VIEW__ = view; // dev / E2E introspection (view.raw.stats?.())
       setState({ view, kind: view.kind });
     }, (err) => { if (!dead && !controller.signal.aborted) console.error('[field] mount failed', err); });
     const unsub = settingsStore.subscribe((s) => viewRef.current?.setSettings?.(s));
     const onResize = () => viewRef.current?.resize();
+    // A temporary network/vendor failure must not pin this mounted match to fallback forever. Retry on a useful
+    // user event, at most twice in succession; the effect cleanup disposes the old view before creating its successor.
+    const onRetry = () => {
+      if (dead || retrying || viewRef.current?.kind !== 'fallback' || renderPref() === 'fallback'
+        || document.visibilityState !== 'visible' || globalThis.navigator?.onLine === false || retries.current >= 2) return;
+      retrying = true; retries.current++; setAttempt((n) => n + 1);
+    };
     window.addEventListener('resize', onResize);
+    window.addEventListener('online', onRetry);
+    document.addEventListener('visibilitychange', onRetry);
     return () => {
       dead = true;
       controller.abort();
       unsub();
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('online', onRetry);
+      document.removeEventListener('visibilitychange', onRetry);
       // the dev hook must not keep the destroyed view — and through its host the whole detached match screen — alive
       if (viewRef.current && globalThis.__SP_VIEW__ === viewRef.current) globalThis.__SP_VIEW__ = null;
       viewRef.current?.destroy();
       viewRef.current = null;
     };
-  }, []);
+  }, [attempt]);
   return state;
 }

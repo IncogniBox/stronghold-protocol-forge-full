@@ -14,7 +14,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { assetUrl, githubSourceUrl, mirrorUrl } from './sources.mjs';
+import { assetUrl, githubSourceUrl, mirrorUrl, withAssetBase } from './sources.mjs';
 
 /** Manifest schema version (bump on breaking shape changes). */
 export const MANIFEST_VERSION = 1;
@@ -60,15 +60,21 @@ export function collectLeaves(node, path = '', out = []) {
 export async function downloadLeaves(leaves, dl, root, label = 'files') {
   const tried = new Map(leaves.map((l) => [l, 0]));
   const blocked = new Set();
-  const satisfied = (l) => l.leaf.alts.slice(0, tried.get(l)).some((a) => existsSync(join(root, a.rel)));
+  const satisfied = (l) => l.leaf.alts.slice(0, tried.get(l)).some((a) =>
+    (!dl.verifier || dl.accepted.has(a.rel)) && existsSync(join(root, a.rel)));
   let last = new Map();
   for (let round = 0; round < 8; round++) {
     const jobs = [];
     for (const l of leaves) {
       const t = tried.get(l);
       if (blocked.has(l)) continue;
+      if (t > 0 && last.get(l.leaf.alts[t - 1].rel)?.status === 'error') {
+        blocked.add(l);
+        // A failed primary cannot establish that untried cached alternatives are orphans.
+        if (dl.verifier) for (const a of l.leaf.alts.slice(t)) dl.preserved.add(a.rel);
+        continue;
+      }
       if (t > 0 && satisfied(l)) continue;
-      if (t > 0 && last.get(l.leaf.alts[t - 1].rel)?.status === 'error') { blocked.add(l); continue; }
       if (t >= l.leaf.alts.length) continue;
       jobs.push(l.leaf.alts[t]);
       tried.set(l, t + 1);
@@ -87,12 +93,15 @@ export async function downloadLeaves(leaves, dl, root, label = 'files') {
  * @param {Map<string, any>} o.spine resolved Spine entries by model key
  * @param {(rel:string)=>string|undefined} [o.sourceOf] URL a file was downloaded from (ledger), to report
  *   fallbacks that share the primary's path (e.g. an enemy icon taken from its base id)
+ * @param {string} [o.assetBase] the `--asset-base` base the run downloaded from ('' = none). The ledger holds the URL
+ *   that actually succeeded, so the primary alternatives are rewritten the same way before a source is called a
+ *   fallback; otherwise every file fetched through a CDN base would be misreported as one.
  * @returns {{ value: any, misses: string[], droppedLeaves: string[], fallbacks: string[], files: Set<string> }}
  *   `droppedLeaves`: the dotted paths of the leaves no alternative of which is on disk, i.e. exactly the entries the
  *   manifest loses here (a subset of `misses`, which also names the unresolved Spine models) — what a caller reports
  *   as dropped, and what --strict fails on.
  */
-export function resolveTemplate(template, { root, spine, sourceOf = () => undefined }) {
+export function resolveTemplate(template, { root, spine, sourceOf = () => undefined, assetBase = '', available = () => true }) {
   const misses = [];
   const droppedLeaves = [];
   const fallbacks = [];
@@ -103,13 +112,22 @@ export function resolveTemplate(template, { root, spine, sourceOf = () => undefi
     if (isLeaf(node)) {
       for (let i = 0; i < node.alts.length; i++) {
         const a = node.alts[i];
-        if (existsSync(join(root, a.rel))) {
+        if (available(a.rel) && existsSync(join(root, a.rel))) {
           const src = sourceOf(a.rel);
-          // Provenance only: disabling/changing a proxy does not change the
-          // identity of a previously downloaded asset.
+          // Provenance only: disabling/changing a proxy or a CDN base does not change the
+          // identity of a previously downloaded asset. The candidates are compared on both
+          // the default source URLs and that same list rewritten onto --asset-base, so a
+          // file fetched through the base is not misread as "every file came from a
+          // fallback" (the ledger stores the URL that actually succeeded).
           const primary = node.alts[0].urls.flatMap((u) => [u, mirrorUrl(u)]);
+          const isPrimary = (url) => {
+            if (!url) return false;
+            const plain = githubSourceUrl(url);
+            return primary.includes(url) || primary.includes(plain)
+              || primary.map((u) => withAssetBase(u, assetBase)).includes(url);
+          };
           if (i > 0) fallbacks.push(`${path} ← ${src || a.urls[0]}`);
-          else if (src && !primary.includes(githubSourceUrl(src))) fallbacks.push(`${path} ← ${src}`);
+          else if (src && !isPrimary(src)) fallbacks.push(`${path} ← ${src}`);
           files.add(a.rel);
           return assetUrl(a.rel);
         }

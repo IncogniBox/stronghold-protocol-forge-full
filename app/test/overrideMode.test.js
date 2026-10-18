@@ -94,6 +94,60 @@ describe('覆盖模式 A 段: spec.override 只活在 spec 层，不许漏进记
   });
 });
 
+/**
+ * 盟约记录的 `members` / `visibleMembers` 是**名册**（`OVERRIDE_UNION_LISTS`）：覆盖时求并集，不是整段替换。
+ *
+ * 业主 2026-10-13 报的正是这条规则缺位时的样子：多索雷斯那只龙舌兰在自己的盟约里有、在官方【迅捷】里没有
+ * —— 整段替换时作者必须手抄官方的整份名单，写一位就把另外十几位删掉。求并集之后作者只写自己那几位。
+ *
+ * 另一半是**一条记录只有一个主人**：两个包写同一个 id 时引擎点名拒绝（`PACK_ID_COLLISION`，id 小的包保留），
+ * 所以「多个包往同一条官方盟约里加人」要由**其中那个包**把各家的干员一起列进它的名册。
+ */
+describe('盟约名册（members / visibleMembers）覆盖时求并集', () => {
+  const official = {
+    swiftShip: { bondId: 'swiftShip', name: '迅捷', isCore: false, members: ['a', 'b', 'c'], visibleMembers: ['a', 'b', 'c'] },
+  };
+  const addMembers = (packId, extra) => ({
+    id: packId, overrides: ['bonds:swiftShip'], files: { bonds: { swiftShip: { bondId: 'swiftShip', members: extra } } },
+  });
+
+  test('一个包往官方盟约里加人：官方那几位一个不丢，自己的追加在末尾', () => {
+    const { data, report } = applyWorkshop({ bonds: official }, [addMembers('p1', ['mine'])]);
+    assert.deepEqual(report.errors, []);
+    assert.deepEqual(data.bonds.swiftShip.members, ['a', 'b', 'c', 'mine'], '官方在前、自己的追加在后');
+    assert.deepEqual(data.bonds.swiftShip.members.slice(0, 3), official.swiftShip.members, '官方成员原序不变');
+    assert.equal(data.bonds.swiftShip.name, '迅捷', '作者没写的字段回退官方');
+  });
+
+  test('同一条盟约只认一个包：第二个包被点名拒绝（所以各家的干员要由那一个包一起列）', () => {
+    const { data, report } = applyWorkshop({ bonds: official }, [addMembers('p-a', ['from_a']), addMembers('p-b', ['from_b'])]);
+    const collision = report.errors.filter((e) => e.code === 'PACK_ID_COLLISION');
+    assert.equal(collision.length, 1, JSON.stringify(report.errors));
+    assert.equal(collision[0].pack, 'p-b', 'id 大的那个被拒（DESIGN §28.3：id 小的包保留）');
+    assert.equal(collision[0].definedBy, 'p-a');
+    assert.deepEqual(data.bonds.swiftShip.members, ['a', 'b', 'c', 'from_a'], '被拒的那一份一个字都不许混进来');
+    // 所以正确写法是**一个主人**把两家的干员都列上；这也是四个包实际的做法（见各处 bonds.json 的成员注释）
+    const both = applyWorkshop({ bonds: official }, [addMembers('p-a', ['from_a', 'from_b'])]);
+    assert.deepEqual(both.data.bonds.swiftShip.members, ['a', 'b', 'c', 'from_a', 'from_b']);
+  });
+
+  test('同一个 id 写两遍只留一个；`visibleMembers` 与 `members` 各自求并集', () => {
+    const { data } = applyWorkshop({ bonds: official }, [
+      { id: 'p', overrides: ['bonds:swiftShip'], files: { bonds: { swiftShip: { members: ['a', 'mine', 'mine'], visibleMembers: ['mine'] } } } },
+    ]);
+    assert.deepEqual(data.bonds.swiftShip.members, ['a', 'b', 'c', 'mine'], '与官方重复的与自己内部的重复都去掉');
+    assert.deepEqual(data.bonds.swiftShip.visibleMembers, ['a', 'b', 'c', 'mine'], '两个字段各算各的并集');
+  });
+
+  test('干员身上的 `bonds` 不受影响：那一边仍然是整段替换（语义是「我就带这些」）', () => {
+    const open = { chessId: 'chess_x_a', stats: { maxHp: 1 }, bonds: ['yanShip', 'swiftShip'] };
+    const { data } = applyWorkshop({ chess: { chess_x_a: open } }, [{
+      id: 'p', overrides: ['chess:chess_x_a'], files: { chess: { chess_x_a: { bonds: ['yanShip', 'swiftShip', 'dossolesShip'] } } },
+    }]);
+    assert.deepEqual(data.chess.chess_x_a.bonds, ['yanShip', 'swiftShip', 'dossolesShip'], '写多少就是多少');
+  });
+});
+
 describe('覆盖模式 A 段: 两个只读端点', () => {
   let tmp;
   let editor;

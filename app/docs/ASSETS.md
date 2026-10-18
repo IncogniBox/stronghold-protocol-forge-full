@@ -69,6 +69,10 @@ npm run assets       # = node tools/vendor.mjs && node tools/fetch-assets.mjs
 | `--offline` | No network. Re-runs post-processing (atlas fixes, skeleton parsing, WOFF2) on what is already on disk, then rebuilds `data/assets.json`. |
 | `--dry-run` | Print the plan (file and model counts, alias notes) and exit. |
 | `--refresh-index` | Re-download the upstream indexes: `audio_data.json`, `charword_table.json` (the 干员战斗语音 slots) and `models_data.json`. |
+| `--asset-base=URL` | Download the files from another host that mirrors the `raw.githubusercontent.com` layout (a CDN or a LAN mirror): the host/base is replaced, the repository path is kept, so `https://cdn.example.com/` turns `https://raw.githubusercontent.com/o/r/main/a.png` into `https://cdn.example.com/o/r/main/a.png`. The jsDelivr fallback is left as it is (it is not a raw URL). Unset = the default sources, exactly as before. An invalid URL is refused by name, never silently ignored. Environment: `SP_ASSET_BASE`. |
+| `--index-base=URL` | The same for the three upstream indexes only (`audio_data.json`, `charword_table.json`, `models_data.json`). Independent of `--asset-base`: either one alone is fine. Environment: `SP_INDEX_BASE`. |
+| `--index-ttl=H` | Re-download a cached index older than `H` hours. Unset (or `0`) = never: a parsable cache is used however old it is, which is what every run before this did. Environment: `SP_INDEX_TTL`. |
+| `--cache-dir=DIR` | Where the cache lives: the ledger, `.cache/assets-report.json`, the Spine parse cache and the three indexes. Relative paths are from the repository root; the default is `.cache`. Environment: `SP_CACHE_DIR`. |
 | `--voice-lang=jp` | The manifest's DEFAULT 干员战斗语音 dub: `jp` (default since 0.9.0 — the dub the released bundle ships) | `cn` | `en` | `kr` — these are the CDN's own folder names (`voice_cn/`, `voice/`, `voice_en/`, `voice_kr/`); the local layout is always `audio/voice/<lang>/<charId>/cn_<n>.mp3` (the same file names in every dump, only the folder differs). |
 | `--voice-langs=cn,jp,en,kr` | Download MORE dubs beside the default one (`cn` \| `jp` \| `en` \| `kr`, comma separated). They land in `audio.voiceLangs[lang]` and the game's 设置 → 配音语言 / 干员详情 → 配音 let a player pick one per operator (v0.7.1). About **2,674 files / 66 MB per dub** — the four dubs are ≈ 262 MB. A release bundle ships the default dub only and the others travel as a separate voice pack (`scripts/make-voice-pack.mjs`, v0.7.2); the client falls back to the default dub for a line the installed dubs lack (`public/js/audio.js`), and `public/js/voiceDubs.js` probes one line per dub so the UI offers only what is really there. |
 | (every run) | `audio.voiceJp` (upstream 0.2.2's 日本語 tree) is planned as well — always the JP dub, beside the default `audio.voice` |
@@ -78,6 +82,60 @@ npm run assets       # = node tools/vendor.mjs && node tools/fetch-assets.mjs
 | `--strict` | Exit 1 when a leaf was dropped for having no file on disk, instead of only reporting it (see "A dropped leaf is reported" below). The same as the environment variable `SP_ASSETS_STRICT=1` — for CI and packaging builds. |
 | `--add-only` | For a checkout whose `public/assets/` and `public/fonts/` are shared with another one (a git worktree with symlinked asset folders): download only the files missing on disk and never re-download, rewrite or delete an existing file — atlases already on disk are left as they are, the fonts are not rebuilt (the manifest keeps its current `fonts`). Not with `--prune` / `--force`. |
 | `--local-spines` | Rewrite `tools/assets/local-enemy-spines.json` and `tools/assets/local-token-spines.json` (the metadata of the enemy and token models only the local client has, see "Enemy aliases" and "Token models from the local client") from the models `tools/local-extract/extract.py` extracted to `public/assets/local/spine/enemy/` and `public/assets/local/spine/token/`. Run it after a game update changed them; without it the committed files are used and a differing extraction only gets a warning. |
+
+### Source snapshot verification
+
+`node tools/fetch-assets.mjs --source-snapshot=/path/to/sources.json` enables content verification for upstream
+downloads and cached JSON indexes. Without it, the existing size/format reuse policy is unchanged.
+The snapshot is supplied by the caller, with one entry for each source repository and branch used by the current plan:
+
+```json
+{
+  "owner/repo@branch": {
+    "commit": "1111111111111111111111111111111111111111",
+    "tree": "2222222222222222222222222222222222222222"
+  }
+}
+```
+
+Both identifiers must be full 40-character hexadecimal Git SHAs. The caller must supply the root tree belonging to
+that commit. Candidate URLs and their order still come from the generator, not from an old ledger. GitHub's tree API
+resolves each candidate to a blob at the supplied tree; truncated recursive results are discarded and lookup walks
+complete nonrecursive subtrees (at most 64 path segments). Complete trees are memoized within the run.
+Failed nonrecursive lookups can retry on the next lookup; failed recursive probes remain cached and use the subtree fallback.
+Payload requests use the pinned commit through the selected direct/mirror policy. A payload must pass both existing
+format checks and `SHA1("blob " + byteLength + "\0" + rawBytes)` comparison with the authoritative blob. A same-size
+stale mirror response is rejected and the next transport is tried. Matching untransformed local bytes are reused,
+including across source revisions, and the ledger is updated even on a skip. Ledger URLs retain the logical source
+branch for cache grouping and Spine page lookup, rather than the mirror or pinned transport URL.
+
+JSON indexes are verified before parsing or planning. Missing snapshot entries, unsupported source URLs, malformed
+API responses and API failures fail closed; they do not allow stale indexes to drive the plan. Failed asset replacements,
+including confirmed source absence and HTTP 404/410, preserve existing bytes and ledger records. `--prune` protects
+these paths across all consumers, even when an older ledger has no blob record. Preservation alone does not authorize
+publication: only files matching the current source blob or revalidated against a previous ledger blob can enter the
+rebuilt manifest. Legacy files without that proof remain on disk for retry, excluded from the manifest and post-processing.
+When a transient error blocks later alternatives, `--prune` preserves their cached files without publication approval.
+Unattempted cached alternatives cannot enter the rebuilt manifest. A verified run exits 1 on
+download errors or font-generation errors; missing optional sources still follow the existing fallback/drop rules,
+and `--strict` rejects dropped leaves. The manifest shrink guard remains in effect.
+
+Mutable atlases are downloaded and verified in raw form on each verified run, then normalized by the existing Spine
+pipeline. Atlas page discovery, normalization and skeleton parsing (including parse-cache reuse) require accepted inputs;
+every texture page must also be accepted. A previously normalized atlas that no longer matches its raw blob is preserved
+on failure but cannot be used until a verified raw replacement arrives. Pruning defers deletion within a failed model's
+directory, preserving old extra pages without using a rejected atlas for page discovery.
+Font originals use the same verifier and accepted file set. Accepted originals reuse matching WOFF2 outputs;
+rejected originals keep existing WOFF2 files on disk but do not enter the new font manifest or generated CSS.
+If no font is accepted, the existing `fonts.css` is left untouched and no CSS is published in the new manifest.
+When accepted fonts generate CSS, replacement is atomic and includes only those fonts.
+Local-client extraction overlays are not upstream downloads and are outside this check.
+
+`--offline`, `--add-only` and `--local-spines` are incompatible with verification. `--dry-run` still verifies the indexes
+needed to produce the plan, but does not verify asset payloads. `GH_TOKEN`, when set, authenticates only requests to
+`api.github.com`; API redirects are rejected and the token is never sent to raw sources or mirrors.
+
+### Manifest guards and default download policy
 
 **The manifest never shrinks by accident.** An entry whose files are missing on this machine is left out of a rebuilt
 manifest, so a run where some downloads failed (or whose upstream audio / model index lost them) would drop entries that
@@ -144,6 +202,119 @@ Upstream indexes are cached under `.cache/`. They are downloaded when missing:
 
 The research JSONs in `docs/research/` (03, 05, 07) define **which** ids are needed.
 
+### Download from another host (a CDN)
+
+`--asset-base` / `--index-base` (or `SP_ASSET_BASE` / `SP_INDEX_BASE`) move the downloads onto another host without
+touching the plan: the base replaces `https://raw.githubusercontent.com/` and the repository path is kept, so a CDN that
+mirrors the GitHub layout serves the same files. The two are independent, and both default to the sources above.
+
+```bash
+# files from a CDN, indexes from their default source
+node tools/fetch-assets.mjs --asset-base=https://cdn.example.com/
+
+# only the three indexes from a LAN mirror (often plain HTTP), files as before
+SP_INDEX_BASE=http://192.168.1.10:8080/ node tools/fetch-assets.mjs
+
+# both, and prove it without downloading: the plan prints the counts it would fetch
+node tools/fetch-assets.mjs --asset-base=https://cdn.example.com/ --index-base=http://127.0.0.1:8080/ --dry-run
+```
+
+A base URL must be an absolute `http`/`https` URL with no credentials, query or fragment; anything else is refused by
+name (`invalid --asset-base URL: …`) instead of being ignored — a typo must never quietly download from GitHub while the
+run log says CDN. A plaintext base on a host that is not loopback prints a warning (the bytes can be replaced in transit
+and they land in `public/assets/`), and such a base may **not** be combined with `--prune` or `--allow-shrink`: an
+unverified source must not be allowed to shrink the committed `data/assets.json`. `--prune` still never touches a
+`<file>.part` (see below), and a file whose ledger entry carries a `sha256` is re-checked against it, so re-downloading
+a library from an HTTP mirror does not silently accept different content.
+
+The report records what the run used, so a `public/assets` tree can be traced to its source later:
+`"sources": { "assetBase": "", "indexBase": "", "cacheDir": ".cache", "indexTtlHours": 0, "untrustedBase": false }`.
+
+### Serving from a CDN (`SP_ASSET_CDN`)
+
+The mirror image of the above: a **deployed server** can hand the art manifests out with their asset entries rewritten to a
+CDN's absolute URLs, so the box's uplink never carries the several hundred MB of art the client fetches on its first
+join. The rewrite happens **in the response only** — `data/assets.json`, `data/local-assets.json` and `data/emotes.json`
+on disk stay byte-for-byte what they were (the server itself reads them for integrity checks, and a rewritten file would
+break updates and self-checks).
+
+```bash
+# start (or restart) the server with the art on a CDN
+SP_ASSET_CDN=https://cdn.example.com/ node server/index.js
+```
+
+- The value is read **once at startup** (restart after changing it) and must be `http(s)://host/` — anything else is
+  treated as unset, so a typo never silently produces broken URLs.
+- Two mappings are rewritten:
+  - `/assets/…`, `/fonts/…` → `<base>assets/…`, `<base>fonts/…` — the official art, which lives under those two prefixes on the CDN.
+  - `/workshop-assets/<pack>/<rel>` (a pack's own art) → `<base>packs/<pack>/<rel>`. The CDN only accepts three top-level
+    prefixes (`assets/`, `fonts/`, `packs/`), and the official art already owns the first two, so a pack's bytes live under
+    the `packs/<pack>/…` namespace and can never collide with an upstream key (rimbilliton, for instance, reuses official
+    operator ids — under `/assets/…` those would hit an upstream key of the same name).
+- A pack's **code** and **container** prefixes (`/workshop-kits/…`, `/workshop-panels/…`, `/workshop-resources/…`) are left
+  alone: they are ES modules / archive containers and the CDN refuses executable content.
+- Unset ⇒ the branch never runs and every response is byte-for-byte what it was before.
+- The CDN must send `Access-Control-Allow-Origin` (the client loads art with `img.crossOrigin='anonymous'`) — otherwise
+  the WebGL textures are tainted and the map/board render empty.
+
+The pack bytes are pushed to the CDN by an agent upload channel (`POST /api/cdn/upload/begin` → direct `PUT` to the bucket's
+S3 endpoint → `POST /api/cdn/upload/commit`); the source of truth for what is live is the CDN's `hosted-index.json` /
+`upload-log.json`, not our tree. Uploading is a one-off deployment step, not something the game server does at runtime.
+
+### Resuming a download
+
+A download streams its body into a **stable** `<file>.part` next to its target (never `<file>.part<pid>`, or the next
+run could not find it), and is renamed into place only when the whole payload is there — so an interrupted run leaves the
+bytes it already has, and the next run continues from them:
+
+```bash
+node tools/fetch-assets.mjs                 # interrupted at 40 %
+ls public/assets/audio/sfx/units/*.part      # what arrived is still there
+node tools/fetch-assets.mjs                 # sends Range: bytes=<part size>- and finishes it
+```
+
+- A file below **1 MB** is always fetched whole: resuming it costs more than it saves.
+- The source must prove it honours `Range` — a one-byte probe at the end of the file (`Range: bytes=-1`) has to answer
+  `206`. A source that ignores `Range` (a `200` answer, some mirrors and CDN edges) is safely re-downloaded whole
+  instead, and the `.part` is replaced.
+- The resumed answer must be the exact tail the probe promised (`content-range` total, `content-length`), and the
+  assembled file must be the advertised size and — when the ledger has one — the recorded hash. A short or wrong tail is
+  an error and never reaches the final path; the `.part` stays for the next attempt.
+- `<file>.part` is never listed as an unreferenced file and `--prune` never deletes it, so pruning cannot remove the
+  bytes a resume depends on. A finished download renames it away, so a healthy tree has no `.part` files.
+
+The ledger now also records the content hash of every file the run **downloads**:
+`{ "url": …, "bytes": …, "sha256": … }` in `<cache-dir>/assets-ledger.json`. An existing file is checked against it
+**only when the entry has one**; an entry from an older version holds `{url, bytes}` and keeps the size-only decision of
+before, so upgrading the tool never re-downloads the library that is already on disk (a kept file gets its hash added the
+first time it is seen, without a download). `--force` is unchanged: it bypasses the decision and re-downloads anyway.
+
+### Index cache freshness
+
+The three upstream indexes are cached and reused **forever** unless `--index-ttl=H` (`SP_INDEX_TTL`) or
+`--refresh-index` says otherwise. Without a TTL a parsable cache is used whatever its timestamp, so a run with no new flag
+behaves exactly as it did before.
+
+```bash
+SP_INDEX_TTL=24 node tools/fetch-assets.mjs    # an index older than 24 h is re-downloaded
+node tools/fetch-assets.mjs --index-ttl=1      # a daily upstream release, picked up the next day
+node tools/fetch-assets.mjs --refresh-index    # unconditional, as before
+```
+
+`--refresh-index` still wins (it ignores the cache whatever its age), and `--offline` never downloads: with both, the
+cached copy is used. The TTL is a local `mtime` check, deliberately not a conditional request: a `304` needs server
+support that these raw GitHub paths do not reliably provide, and a TTL has no such dependency.
+
+### Where the cache lives
+
+`--cache-dir=DIR` (`SP_CACHE_DIR`, default `.cache`) moves the ledger, the report, the Spine parse cache and the three
+indexes together:
+
+```bash
+node tools/fetch-assets.mjs --cache-dir=.cache-2    # a second, isolated cache (relative to the repository root)
+node tools/fetch-assets.mjs --cache-dir=D:\sp-cache  # an absolute path
+```
+
 ## What is downloaded
 
 | Class | Source | Local path (under `public/assets/`) |
@@ -159,12 +330,13 @@ The research JSONs in `docs/research/` (03, 05, 07) define **which** ids are nee
 | Band (strategy) icons | AA2 `…/arts/bandicon/` | `band/{bandId}.png` |
 | Profession, sub-profession and battle-card icons | AA2 `arts/profession_hub`, `arts/ui/subprofessionicon`, `ui_battle_new/battlecard` | `prof/icon_{p}.png`, `prof/large_{p}.png`, `prof/battlecard_{p}.png`, `prof/sub/{subProfessionId}.png` |
 | UI sprites (see below) | AA2 `ui/autochess/**`, `arts/**`, `activity/[uc]act2autochess/**`, `battle/[pack]common/sprites` | `ui/{group}/{key}.png` |
+| Statistics artwork and fonts | [Official statistics template](https://ak-webview.hypergryph.com/autoChess/act1autochess) | `ui/statistics/`; fetched by asset setup, or separately with `node tools/fetch-stats-assets.mjs` |
 | The 36 battle emotes and the 19 玩法说明 (tutorial) pages, which `tools/local-extract` also extracts (GitHub issue #42: without the local client a server showed default emote icons) | AA2 `cn` `ui/emoticon/theme/[uc]{themeId}/icon/{picId}.png` (`shared/constants.js EMOTE_CATALOG`) and `arts/guidebookpages/[pack]autochess/{key}.png` (1024², shown at 16:9 like the local copies) | `ui/emoticon/{dir}/{picId}.png`, `ui/guide/{key}.png` |
 | Operator battle Spine (Front, Back) | fexli/ArknightsResource `spine/{id}/{id}/{Front,Back}/` | `spine/op/{charId}/{front,back}/{stem}.{skel,atlas,png}` |
 | Token Spine | fexli: the default model, or else the first skin variant (`spine/{tokenId}/{variant}/Spine/`) | `spine/token/{tokenId}/{stem}.*` |
 | Enemy Spine (PC build, premultiplied alpha) | isHarryh/Ark-Models `models_enemies/{key}/`, file names from `models_data.json` | `spine/enemy/{enemyId}/{stem}.*` |
 | Enemy Spine that no dump carries (灼热源石虫 / 炽焰源石虫) | the local client only (`tools/local-extract/extract.py ENEMY_SPINES`, optional); never downloaded and never required: an overlay of the web alias (`enemies[id].spineLocal`) | `local/spine/enemy/{enemyId}/{stem}.*` (listed in `data/local-assets.json`) |
-| Token Spine that no dump carries (39 summons: most 自选 summons, 凯瑟琳's 爬行号·防护单元, 凛御银灰's 风雪之眼) | the local client only (`tools/local-extract/extract.py TOKEN_SPINES`, optional); never downloaded and never required: an overlay (`tokens[id].spineLocal`; without it the avatar diamond) | `local/spine/token/{tokenId}/{stem}.*` (listed in `data/local-assets.json`) |
+| Original token Spine overlays (40 summons: most 自选 summons, 凯瑟琳's 爬行号·防护单元, 凛御银灰's 风雪之眼, 香槟炸弹) | local-client extraction (`tools/local-extract/extract.py TOKEN_SPINES`, optional); the original overlay is preferred, with any listed web model retained as fallback | `local/spine/token/{tokenId}/{stem}.*` (listed in `data/local-assets.json`) |
 | BGM | AA2 `voice` branch `audio/sound_beta_2/music/**` (大厅/休整期 `act1autochess`, 开战 `act13side/m_bat_kazimierz2_{1,2}` — 骑士之日 / 无畏者; the 开战 track follows the round: `_2` 无畏者 rounds 1–7, `_1` 骑士之日 from round 8) | `audio/bgm/{file}.mp3` |
 | SFX (UI, battle, per unit) | AA2 `voice` `audio/sound_beta_2/**`, mapped from `audio_data.json` banks | `audio/sfx/{same sub-path}.mp3` |
 | 干员战斗语音 | AA2 `voice` `audio/sound_beta_2/voice_cn/{charId}/cn_nn.mp3` (Chinese, `audio.voice`) and `voice/{charId}/cn_nn.mp3` (Japanese, `audio.voiceJp`: the same file names) — the lines `charword_table.json` lists (`placeType` = when the game plays one, `voiceAsset` = the path); `--voice-lang=jp|en|kr` fills `audio.voice` from `voice/`, `voice_en/`, `voice_kr/` instead | `audio/voice/cn/{charId}/{cn_nn}.mp3`, `audio/voice/jp/{charId}/{cn_nn}.mp3` (`audio/voice/{lang}/…` for another `--voice-lang`) |
@@ -229,7 +401,9 @@ All paths are URL paths relative to the site root, for example `/assets/char/ava
   hash: 'a1b2c3d4e5f6',             // content hash (cache busting)
   generator: 'tools/fetch-assets.mjs',
   stats: { files, bytes, chars, charsWithBack, enemies, enemiesWithSpine, tokens, tokensWithSpine,
-           spineModels, bonds, items, bands, skills, modules, ui, sfxUnits, voiceChars, voiceJpChars },
+           spineModels, bonds, items, bands, skills, modules, ui, sfxUnits, voiceChars, voiceJpChars,
+           voiceEnChars, voiceKrChars, voiceNativeChars },
+           // voiceEnChars / voiceKrChars / voiceNativeChars count the extra dubs; 0 until those trees are fetched
   chars:   { [charId]: { avatar, avatarE2?, portrait, portraitE2?, spine: { front: Spine, back?: Spine } } },
   enemies: { [enemyId]: { icon, spine?: Spine, spineAliasOf?: enemyId,
                           spineLocal?: { group, skel, atlas, textures, …Spine } } },
@@ -291,6 +465,17 @@ All paths are URL paths relative to the site root, for example `/assets/char/ava
                            // player picks 日本語 (settings 语音语言, not tied to the interface language) and falls back to
                            // `voice` for a slot it lacks or a file the host does not have (public/js/audio.js voiceLine);
                            // the full zip ships it unless tools/package.mjs FULL_ZIP_JP_VOICE is off
+    voiceEn?: { [charId]: { …the slots of `voice` } },
+    voiceKr?: { [charId]: { …the slots of `voice` } },
+    voiceNative?: { [charId]: { …the slots of `voice` } },
+                           // English (`voice_en/`), Korean (`voice_kr/`) and the operator's own-language dub
+                           // (`voice_custom/<wordkey>/`, under /assets/audio/voice/native/). Same slots and file names.
+                           // Optional until `fetch-assets` has downloaded them (`--no-optional-voice` leaves them out).
+                           // A missing line falls back to the Chinese file of the same name (public/js/audio.js voiceLine).
+                           // The full zip ships them unless tools/package.mjs FULL_ZIP_OPTIONAL_VOICE is off (default: on).
+    voiceNativeLangType?: { [charId]: 'ITA' | 'GER' | 'RUS' | 'FRE' | 'SPA' | 'CN_TOPOLECT' },
+                           // the official voiceLangType of that operator's own-language dub, only when voiceNative
+                           // has the operator. The per-operator dropdown uses it as the option's name.
     sfx: {
       ui:     { click, back, confirm, tab, pick, drop, error, buy, sell, income, refresh, freeze, levelup,
                 merge, equip, itemMerge, bondUp, artPlace, ready, timer, draft, yourTurn, yourTurnCircle,
@@ -368,6 +553,12 @@ Roles = {
 | `idle` | `Idle` (no attack animation at all) |
 
 On a skill clip, `via: 'attack'` means the model has no skill animation, so the attack clip is reused.
+A skill slot may also declare **`hold: true`** (八幡海铃's S2 / 三角初华's S2 in the Ave Mujica pack): its `loop` is the
+stance the unit holds for the **whole** skill, so once an attack of it is over the actor goes back to that stance — the
+slot's own `idle` when it declares one, else its `loop` — and the `end` clip is left to `setSkill(false)`, i.e. it closes
+the skill rather than each attack while it runs (`public/js/render/spine.js`). A slot **without** the flag is unchanged: a
+skill whose clip ends each cast keeps its `end` after every attack (官方「宴 S1 分神」坐一下再站起来 —
+`test/render/feedback3-skill-idle.test.js` pins that as "unchanged").
 A skill clip may also come from directional-only animations when a model has no undirected ones: for example `Skill_Right_Loop` (`char_279_excu`) or `Skill_Loop_Up` (the Back model of `char_431_ashlok`).
 
 The resolver's full precedence list is in the header of `tools/assets/anim-roles.mjs`.
@@ -448,7 +639,7 @@ Other renderer rules from research 07 §5.4–5.5:
   "missing skel"), nor of 凯瑟琳's 爬行号·防护单元 and 凛御银灰's 风雪之眼, so they were drawn as the avatar diamond. The
   local client has them in its battle token packs (`pkgrps/btl_pfb_tokens_*.ab`, the Windows build carries all of them;
   the iOS build lacks `btl_pfb_tokens_0` and has ASTC pages), the same overlay as the enemies above:
-  - `tools/local-extract/extract.py TOKEN_SPINES` (39 ids; `--only spine/token`) reads each token's battle prefab
+  - `tools/local-extract/extract.py TOKEN_SPINES` (40 ids; `--only spine/token`) reads each token's battle prefab
     (`dyn/battle/prefabs/[uc]tokens/<id>.prefab`), takes the skeleton of its Front renderer — a directional token has
     Front / Back (/ Down) renderers, each with its own skeleton of the same name; the web tokens use Front too — and
     writes it to `public/assets/local/spine/token/{tokenId}/` like an enemy model (skeleton, sized `pma: true` atlas,
@@ -471,13 +662,13 @@ Other renderer rules from research 07 §5.4–5.5:
 
 ### Other fallbacks
 
-- **Emotes and 玩法说明 pages** (`public/js/data.js artUrls / nextArtUrl`, `ui/guide.js guideStage`): the local-client picture (`data/local-assets.json`) first, then the mirror copy (`ui['emoticon/…']`, `ui['guide/…']`), each tried in turn when one fails to load; when none is left — none listed, or every copy failed (for example data/assets.json lists the downloaded pages but the files are not on disk yet: a `git pull` and restart without setup) — the neutral emote glyph, and for a page the official tips text (`config.tips`). The rest of the local-client art (the 3D board, the official HUD sprites, module type icons, the two enemy models and the 39 token models above) is not downloaded: the client looks it up in `data/local-assets.json` only (most of the HUD sprites are on the mirror too, DESIGN §22.5); docs/DEPLOY.md §6 lists what falls back without it.
+- **Emotes and 玩法说明 pages** (`public/js/data.js artUrls / nextArtUrl`, `ui/guide.js guideStage`): the local-client picture (`data/local-assets.json`) first, then the mirror copy (`ui['emoticon/…']`, `ui['guide/…']`), each tried in turn when one fails to load; when none is left — none listed, or every copy failed (for example data/assets.json lists the downloaded pages but the files are not on disk yet: a `git pull` and restart without setup) — the neutral emote glyph, and for a page the official tips text (`config.tips`). The rest of the local-client art (the 3D board, the official HUD sprites, module type icons, the two enemy models and the 40 token models above) is not downloaded: the client looks it up in `data/local-assets.json` only (most of the HUD sprites are on the mirror too, DESIGN §22.5); docs/DEPLOY.md §6 lists what falls back without it.
 - **Tokens:**
   - Without an avatar, use `chars[owner].avatar` with a 召唤物 badge, or `prof.battlecard.token` — except 圣聆初雪's 保护目标（冻结状态） (PRTS 无头像; the frozen gate), drawn as a procedural ice diamond (`render/units.js ICE_TOKENS`).
   - Without a Spine (and without its local-client model, "Token models from the local client"), draw the avatar sprite with a bob tween.
   - `spineVariant` names the skin-variant model that stands in for the missing default model.
 - **Enemies without a spine** (for example `enemy_9016_acstmr`): draw `icon` in a diamond. Enemies with no manifest entry at all (`enemy_5601_entlec` 心烛): draw a procedural glyph.
-- **Battle effects** (projectiles per kind, hit sparks and slashes, skill bursts and auras, 蕾缪安's lock reticles and shells, 回环射手 boomerangs — DESIGN §17.3) are procedural: the FX atlas is drawn at run time (`public/js/render/textures.js`), so they need no downloaded or local art. The local client does have battle effect art — `battle/[pack]common.ab` holds per-weapon projectile sprites (`projectile_arrow(_new)`, `projectile_crossbow(_new)`, `projectile_yuki`, `img_fx_light_01/02`, `trail_11`), and the per-character `battle/prefabs/effects/*.ab` are particle systems whose textures live in other bundles — but none of it is extracted: the sim's `arrow` also covers gun snipers, and friends joining a game may not have the local art.
+- **Battle effects** (projectiles per kind, hit sparks and slashes, skill bursts and auras, 蕾缪安's lock reticles and shells, 回环射手 boomerangs — DESIGN §17.3) are procedural by default: the FX atlas is drawn at run time (`public/js/render/textures.js`), so they need no downloaded or local art. Since 0.3.0 the official battle effects can be extracted from the local client (`tools/local-extract/extract.py --only fx --fx-set used`, opt-in; the files under `public/assets/local/fx/` with their own file list `data/local-fx.json`, DESIGN §35). When the served list names effects, 设置「官方特效」 appears and the 3D board draws them in WebGL2 (`public/js/render/vfx/`, DESIGN §9 "Official battle effects"): normal attacks' casts, projectiles and hits (a multi-hit attack's hit groups, an enemy's blow on a blocker), heals, status loops, deaths and deploys, the operators' and summons' skills, passive ones included (their start, loop, end, ready and range effects, the skill attacks' casts, hit groups and projectiles, the buffs on their targets), the enemies' skills (the sim names each use), the units' talents and abilities (deploy, passive, toggled and 重生 effects) and 深靛's stored energies. They come from the server's files, so every player of that server sees them, whatever client they have. Effects the battle gives no moment for (a buff template's cast at an event the client never sees), a unit the effects' index does not list, the 2D and simplified boards, a browser without WebGL2 and an install without the files keep the procedural effects; a missing texture or mesh leaves that part of an effect undrawn. The older sprites of `battle/[pack]common.ab` (`projectile_arrow(_new)`, `projectile_crossbow(_new)`, `projectile_yuki`, `img_fx_light_01/02`, `trail_11`) are still not extracted: the sim's `arrow` also covers gun snipers.
 - **Spine memory** (`public/js/assets.js`): skeletons are refcounted in an LRU with an idle budget (`SPINE_IDLE_BYTES`, 48 MB) and a 15 s grace; eviction runs `SPINE_EVICT_DELAY_MS` (1 s) after a release, the "no scene on screen" budget (0 bytes) applies after `SPINE_QUIET_DELAY_MS` (3 s) with nothing referenced, and a skeleton whose unload is still in flight is never handed out again — a new load waits for the unload (DESIGN §17.1; it used to leave operators invisible after a battle → prep switch).
 
 ### Looking up `data/chess.json` asset ids
@@ -511,6 +702,88 @@ The 2026-09-27 verification pass also checked:
 - **Browser:** headless Chrome loads and animates all 529 Spine models with the vendored PixiJS 7.4.2 and pixi-spine 4.0.6, with no console errors. Chrome's font sanitizer also accepts the three WOFF2 files.
 - **Official data:** 771 provenance checks against the official data (`activity_table`, `skill_table`, `models_data.json`) all match: avatars, portraits, E2 art, bond, band and item icons, and enemy skeleton files.
 
+## Large assets at server start (maps and scenes)
+
+`MANIFEST.json` covers **code** — `server/update.js`'s `isSetupArt` deliberately excludes `public/assets/`. Two other
+manifests name part of the art (`data/assets.json`, `data/local-assets.json`), but everything the 3D board reads straight
+off disk — the 35 `local/scene/**` lighting maps and the 13 `local/map/**` tiles/materials — is named by none of them.
+A mostly-complete install can therefore silently fall back to the generated metal board. So the server keeps its own list
+of the big files and repairs them when it boots:
+
+- **`data/large-assets.json`** — `{ v, scope, minBytes, files: { "<rel>": { size, sha256 } } }`, generated from the
+  install by `node tools/large-assets.mjs --snapshot` (default scope: every `assets/local/**` file **plus** anything
+  ≥ 1 MiB; `SP_LARGE_ASSETS_SCOPE` / `SP_LARGE_ASSETS_MIN` change that). Re-run it when the art changes.
+- **At boot** `server/http/boot.js` starts `tools/large-assets.mjs --repair --json` **in the background** — it never
+  blocks `npm start`, and a missing asset never keeps the server from starting. Console lines carry the bytes
+  (`[大资源] 下载 4.5 / 4.5 MB（100%）· 1.4 MB/s · 3/3 项`); `GET /assets-status.json` (no-store) is that state as JSON,
+  and the title screen shows the same numbers (`public/js/ui/largeAssets.js`).
+- **Only unambiguous files are touched**: *missing* or *shorter than the manifest* ⇒ downloaded from `SP_CDN_BASE`
+  (default `https://speedcdn.jiangjiangze.icu`, which serves `<base>/assets/…` with Range support). *Larger than the
+  manifest*, or same size with a different sha256, is only **reported** — a stale manifest or another platform's encoding
+  (Windows BC7 vs Android ASTC) must never overwrite a good local file.
+- **Hashing is on demand**: sizes are compared first, and a matching size with the same `mtime` recorded in
+  `.cache/large-assets-state.json` is trusted without re-reading — a boot with nothing missing costs ~0.1 s.
+- **Off switch** `SP_LARGE_ASSETS=off`; CLI `node tools/large-assets.mjs [--check|--list|--repair|--snapshot]` plus
+  `--repair --force [--only <group|rel>]` (exit 1 when something is missing, so a service wrapper can notice). Covered by
+  `test/largeAssets.test.js` (temp trees and an injected `fetch`; the real install is never touched).
+
+### The 资源 panel (viewing and re-downloading what is on disk)
+
+The title screen's top-right row — the same row as 统计 / 公告 / language — carries a **资源** button
+(`public/js/ui/largeAssets.js`, mounted by `screens/title.js`). It opens the manifest grouped by directory
+(`local/scene`, `audio/bgm`, …) with each file's size and status, and a **重新下载** button per group, per file, and for
+everything at once. Two read-only routes back it, both `no-store`:
+
+- `GET /assets-list.json` — `{ totals, groups, files }` from `tools/large-assets.mjs --list --json` (the tool is spawned
+  per request and cached in-process for 5 s, so a cold first read that hashes 192 MB never blocks the event loop).
+- `GET /assets-redownload.json?target=all|local/scene|assets/…` — **a GET that acts**, which is deliberate: this engine's
+  HTTP surface is GET/HEAD only (`server/http/routes.js` answers 405 to anything else; play goes over WebSocket, pack
+  surfaces go through `/workshop-panels/*`), and opening a POST lane for one maintenance action would cost more than it
+  buys. The action is narrow in exchange: the target is matched against the manifest only (never a caller-supplied path),
+  and it is **single-flight** — while any run is in progress a second request just reads back the same state instead of
+  stacking a second downloader.
+- Re-downloads are *forced* (`--force`): the Downloader's `existingSize` is bypassed, and its temp-file-then-rename still
+  means a failed re-download cannot destroy the good file already on disk. Progress for these runs is the same
+  `/assets-status.json` the startup check feeds, so the title-screen line and the panel both track it live.
+
+### The backup source (a GitHub Release asset pack)
+
+A second, client-side lane for the same files, for a server whose players cannot reach the CDN: `tools/asset-pack.mjs`
+reads `data/large-assets.json` (the manifest above) and writes **one zip per group** (`local/scene` → `local__scene.zip`,
+`/` → `__`) plus a `manifest.json` whose shape is exactly what `data/asset-pack.json` wants (`v`, `repo`, `tag`,
+`releaseBase`, `mirrors`, `groups: [{ id, name, file, bytes, sha256, files }]`). The zip container is written in the tool
+itself (no dependency; the same deterministic rules as `shared/zip.js`: entries sorted by name, a fixed DOS timestamp,
+`deflate` only when it really is smaller, no extra field), so the same input always yields the same bytes — a hash can be
+checked and a re-run is reproducible. `--full` adds one `full.zip`; with `--repo`/`--tag` the tool prints every pack's
+Release URL (`<releaseBase>/<tag>/<file>`) and warns when a pack passes 1.9 GiB (GitHub's per-attachment cap is 2 GiB).
+
+`data/asset-pack.json` is the **per-server** config (repo, tag, mirrors). It is git-ignored, and the tool writes a
+`{v:1, groups:[]}` skeleton when it is absent — which the panel reads as 还没配备用源.
+
+The 资源 panel (`public/js/ui/largeAssets.js`) then renders a **备用完整资源包（GitHub）** block between its summary row
+and its group list: one line per group (name · size · the first 8 hex digits of the zip's `sha256`) with a 下载并导入
+button, and one 全部下载并导入 button for every group. When nothing is configured (file absent, `groups` empty, or no
+`repo`+`tag`) the block is one 还没配备用源 hint that asks for what to fill in, and it downloads nothing.
+
+**The bytes come through a same-origin proxy, because the page's CSP — not CORS — is the binding constraint.** The
+client asks **its own origin**: `GET /asset-pack/<file>` (`server/assetPack.js`, reserved in
+`server/http/routeMount.js`). That endpoint walks the declared sources **in order** (`<releaseBase>/<tag>/<file>`, then
+each `mirrors[]` prefix + `<file>`) and streams the upstream body straight through — never buffering a 600 MB pack,
+never reading the 302 that a GitHub Release asset takes to `objects.githubusercontent.com`. The page's CSP is
+`connect-src 'self'` (`server/http/csp.js`), so a browser **cannot** fetch a cross-origin source at all: measured in
+headless Chrome, the request never left the browser (`violates the following Content Security Policy directive:
+"connect-src 'self'"`) and the stand-in server received **zero** requests — a mirror with a perfect
+`Access-Control-Allow-Origin` would have changed nothing. CORS is the *second* gate, and only a source fetched from the
+browser would need it. The proxy is bounded: `<file>` must equal a declared `groups[].file` verbatim (else 404, and the
+name is only written to the server log); a source prefix must be a clean `http(s)` URL with no `..` segment and no
+userinfo, and the URL built from it must still start with it; the upstream read is cut after 15 s of silence, the body
+is capped at that group's own `bytes` × 1.2, and the endpoint is rate-limited per client address. Unconfigured
+(`data/asset-pack.json` absent, or `groups` empty) means the path is a plain 404, as with every other cell the engine
+does not declare. The client then hands the whole zip to the import path that already exists
+(`public/js/assetPack.js` `assetImport.start({ type: 'zip', data })`), which validates every member file against the
+served manifests by SHA-256 — the browser never hashes a 600 MB pack. When every source fails, the endpoint answers
+**502 with a named reason per source**, and the panel prints that list.
+
 ## Licensing and credits
 
 The project's code is GPL-3.0-or-later (`LICENSE`); none of the items below is covered by it. Details: `NOTICE.md` (scope, non-commercial terms) and `THIRD-PARTY-NOTICES.md` (libraries, fonts, licence texts).
@@ -541,3 +814,5 @@ banks prefer START over ON, then plain/numeric order; this is a deterministic ap
 operator's runtime ability graph. Mixed-letter banks are skipped. Preserve `mixOf` for each selected bank separately;
 `attacks`/`hits` and `attackMix`/`hitMix` use matching skill keys. Regenerate the current manifest instead of importing
 an older PR's full JSON, preserving JP voices and current operators. See DESIGN §28.17.
+
+The 40th local token model is the original champagne bomb (`token_10031_swire2_gdtrap`, §31.5), extracted from the official `btl_pfb_tokens_0.ab` through `TOKEN_SPINES`. Its web fallback is retained. Failed board-pack/image requests can retry after connectivity/visibility recovers; a failed three.js module gets at most two fresh-URL retries per page because browser module failures are cached. Successful resources remain cached.

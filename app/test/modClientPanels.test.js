@@ -5,7 +5,7 @@
 //   服务端 —— 声明合法 ⇒ 模块在 `/workshop-panels/<pack>/<module>` 被注册、可服务，清单随 `welcome.modPanels` 到达
 //             客户端；声明**不可用**（文件不在 / 不是 `.js` / 逃出包目录）⇒ **整个包被拒**（本刀的纪律裁决，
 //             不是「包照旧加载、只是那个面板不出现」）；
-//   客户端 —— 按 `slot` 挂到四个宿主、按 `order`（再按包 id、面板 id）决定顺序、按 `gate`（store 点路径）决定
+//   客户端 —— 按 `slot` 挂到十个宿主（四个浮层 + 六个既有组件里的宿主）、按 `order`（再按包 id、面板 id）决定顺序、按 `gate`（store 点路径）决定
 //             什么时候挂；`requires` 缺一项就**明示「浏览器不支持」**；面板拿到的注入面是冻结且极小的
 //             （没有 store / net / engine 内部对象）。
 //
@@ -29,8 +29,11 @@ import { createStore, initialState, selectRoute, entryGateBlocked } from '../pub
 import { Net, RESOURCE_MSG_TYPES } from '../public/js/net.js';
 import {
   createPanelRegistry, capabilityIssues, readGate, slotSelector, browserSlotHost,
-  MOD_PANEL_SLOTS, MOD_PANEL_PREFIX, MOD_PANEL_REQUIRES,
+  MOD_PANEL_SLOTS, MOD_PANEL_PREFIX, MOD_PANEL_REQUIRES, PANEL_SEND_TYPES,
 } from '../public/js/ui/extensions.js';
+import { portraitEntry, clearAppearanceLookup, currentAppearanceLookup } from '../public/js/ui/portraitChain.js';
+// 素材加载源的排序面（第 5 刀，DESIGN §28.40）：与外观提供者同族的另一块注册面，见下面 4c 那一组。
+import { orderDeclared, currentSourceOrderer, resetSourcesState, setSourcesEnabled } from '../public/js/resources/sources.js';
 import { TestClient } from './helpers/wsClient.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -181,7 +184,7 @@ describe('C 层装载期：合法声明进包，不可用声明拒整包', () =>
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  test('身份：**声明了**的面板模块进内容哈希，没声明的文件不进（DESIGN §28.8）', () => {
+  test('身份：面板模块的字节进内容哈希；B 之后**包目录里的每一个文件**都进（DESIGN §28.2/§28.8）', () => {
     // 同样的 pack.json（同一个包 id），模块字节不同 ⇒ 两个摘要
     const decl = { license: 'CC0-1.0', client: { panels: [{ id: 'p', slot: 'root.overlays', module: 'm.js' }] } };
     const a = packRoot('ident', decl, { 'm.js': PANEL_JS });
@@ -189,11 +192,14 @@ describe('C 层装载期：合法声明进包，不可用声明拒整包', () =>
     const ha = loadWorkshop(a, { log: quiet }).packs[0].hash;
     const hb = loadWorkshop(b, { log: quiet }).packs[0].hash;
     assert.notEqual(ha, hb, '面板源码不在身份里 ⇒ 两份不同的面板会共用一个摘要');
-    // 两个包都**没有**声明 client：多出来的那个 `.js` 文件不进哈希
+    // 两个包都**没有**声明 client：`m.js` 照样进身份 —— 这一条按**新定义**翻了面（业主裁决 B，DESIGN §28.2）：
+    // 清单不再是"声明清单"，而是**包目录下的每一个普通文件**。理由就是下面这句旧断言的背面：一个被声明的模块
+    // 可以 import 同目录的兄弟文件，所以"没声明就不算"恰恰是那个洞（摘要不再等价于同一份行为，而且干净的客户端
+    // 根本下不到那个文件）。面板这一格仍然是必需的 —— 它保证的是"声明过的面板一定被服务"，不是"没声明的文件不算"。
     const plain = { license: 'CC0-1.0', content: ['chess'] };
     const ea = loadWorkshop(packRoot('un', plain, { ...CHESS_FILES, 'm.js': PANEL_JS }), { log: quiet }).packs[0].hash;
     const eb = loadWorkshop(packRoot('un', plain, { ...CHESS_FILES }), { log: quiet }).packs[0].hash;
-    assert.equal(ea, eb, '没声明的文件不许进哈希（否则每加一个文件就换一次身份）');
+    assert.notEqual(ea, eb, 'B：包目录里多一个文件就是另一个身份（"没声明就不算"正是要堵的那个洞）');
     for (const r of [a, b]) fs.rmSync(r, { recursive: true, force: true });
   });
 
@@ -471,20 +477,91 @@ describe('C 层客户端：注册点', () => {
     await settle();
     assert.equal(seen.length, 1);
     const ctx = seen[0];
-    assert.deepEqual(Object.keys(ctx).sort(), ['gate', 'host', 'id', 'log', 'net', 'order', 'pack', 'session', 'slot']);
+    // `hostKey` 是业主 2026-10-10 裁决里「可重复宿主」那一半（每张商店卡一个容器）：不可重复的宿主它是 `null`。
+    // `data` 是同一条裁决里的**数据口**（`ctx.data.get('<表>')` 返回冻结快照）。
+    // `me` 是「一格只读会话态」：`{ playerId, name, room }` 一份**冻结快照** —— 面板答不出来的那几件事实。
+    // `battle` 是 §28.38 那一格（`ctx.battle.damage()`：逐单位伤害 + 时间基准，供包自己算 DPS）。
+    // `cloud` 是 §28.58 那一格（`ctx.cloud.read()` / `.apply(patch)`：那七个 `sp.pref.*` 键的闭白名单读写口）。
+    // 这一条**故意逐键列全**：`ctx` 上多一个键就必须在这里显式加一个（不是「随便加」）。
+    assert.deepEqual(Object.keys(ctx).sort(),
+      ['battle', 'cloud', 'data', 'gate', 'host', 'hostKey', 'id', 'log', 'me', 'net', 'order', 'pack', 'session', 'slot']);
+    assert.ok(Object.isFrozen(ctx.battle), '战斗读数那一格也是冻结门面');
+    assert.deepEqual(Object.keys(ctx.battle), ['damage'], '那一格只有 damage 一个成员');
+    assert.ok(Object.isFrozen(ctx.cloud), '云配置那一格也是冻结门面');
+    assert.deepEqual(Object.keys(ctx.cloud).sort(), ['apply', 'read'], '那一格只有 read / apply 两个成员');
+    assert.equal(typeof ctx.session.setName, 'function', '§28.58：面板改得了自己的游戏名（写的是 me.name + session.entered）');
+    assert.equal(ctx.hostKey, null, '不可重复的宿主没有键');
     assert.ok(Object.isFrozen(ctx));
     assert.ok(Object.isFrozen(ctx.session));
     assert.ok(Object.isFrozen(ctx.net));
     assert.ok(Object.isFrozen(ctx.log));
+    assert.ok(Object.isFrozen(ctx.me), '会话态也是一份冻结快照');
+    // 只读会话态的形状与**边界**：只有这三样 + voice（§28.31 的配音读数），没有 store / match / battle / runner / audio
+    assert.deepEqual(Object.keys(ctx.me).sort(), ['name', 'playerId', 'room', 'snapshot', 'voice'],
+      '只读会话态：三样读数 + 一次取全的 snapshot + 配音读数（没有别的）');
     assert.equal(ctx.store, undefined, '不给 store');
     assert.equal(ctx.engine, undefined);
     assert.equal(ctx.match, undefined);
+    assert.equal(ctx.me.battle, undefined, '会话态里没有对局对象');
+    assert.equal(ctx.me.runner, undefined, '也没有战斗播放层');
+    assert.equal(ctx.me.audio, undefined);
     assert.notEqual(ctx.net, realNet, '给的是受控门面，不是 net 本身');
     assert.equal(typeof ctx.net.sendResourceMessage, 'function');
     assert.equal(typeof ctx.session.setPreload, 'function');
     assert.equal(typeof ctx.host.appendChild, 'function');
     assert.throws(() => { ctx.extra = 1; }, TypeError);
     assert.equal(ctx.gate, 'session.entered');
+  });
+
+  // 「一格只读会话态」：面板答不出来的那几件事实（我是谁 / 房间的展示面），由引擎以**冻结快照**告知。
+  // 这条是它的语义钉子：房间三类状态（不在房间 / 就座 / 旁观）各自读出什么。
+  test('只读会话态 me：不在房间时是空态；就座时给出座位号；旁观时 spectating=true 且 mySeat=null', async () => {
+    const seen = [];
+    const URL_S1 = `${MOD_PANEL_PREFIX}alpha/s1.js?v=1`;
+    const h = harness({ modules: new Map([[URL_S1, { mount: (ctx) => { seen.push(ctx.me); } }]]) });
+    const list = [wire({ url: URL_S1 })];
+
+    // ① 还没进房间：三样都是空态（不是错误 —— 面板该画空态，不该抛）
+    h.apply(list);
+    await settle();
+    assert.equal(seen.length, 1);
+    const me = seen[0];
+    assert.deepEqual({ ...me.snapshot() }, { playerId: null, name: null, room: null }, '没进房间时是干净的空态');
+
+    // ② 就座：拿到自己的 playerId / name、房间码与座位号
+    //    注意：面板**挂上之后不重挂**，所以这三点是**活的只读读数**（每次读都取当前值），不是挂载那一刻的定格。
+    h.store.patch('me', { playerId: 'p1', name: '甲' });
+    h.store.patch('room', {
+      code: 'ABCD', mode: 'coop', difficulty: 'NORMAL', inMatch: false, mods: ['alpha'],
+      seats: [{ playerId: 'p1', seat: 0 }, { playerId: 'p2', seat: 1 }], spectators: [],
+    });
+    await settle();
+    assert.equal(me.playerId, 'p1', 'store 变了之后读得到新值（不是挂载时的定格）');
+    assert.equal(me.name, '甲');
+    assert.equal(me.room.code, 'ABCD');
+    assert.equal(me.room.mySeat, 0, '座位号让面板能在 seats 里定位自己');
+    assert.equal(me.room.spectating, false);
+    assert.deepEqual([...me.room.mods], ['alpha'], '房间自己那一套（W-A）也读得到');
+
+    // ③ 旁观：座位表里没有我、观众席里有我 ⇒ spectating=true 且 mySeat=null
+    h.store.patch('room', {
+      code: 'ABCD', mode: 'coop', difficulty: 'NORMAL', inMatch: true,
+      seats: [{ playerId: 'p2', seat: 0 }], spectators: [{ playerId: 'p1' }],
+    });
+    await settle();
+    assert.equal(me.room.mySeat, null, '旁观没有座位号');
+    assert.equal(me.room.spectating, true);
+    assert.equal(me.room.inMatch, true, '对局中：面板据此决定要不要显示对局相关的块');
+    // 没声明集合的房间：`mods` 是 null（不是 undefined）——面板可以按 falsy 判。
+    // 注意 `store.patch('room', …)` 是**浅合并**（store 的既有语义），所以要显式写 `mods: null` 才清得掉。
+    h.store.patch('room', { code: 'ABCD', mode: 'coop', difficulty: 'NORMAL', inMatch: false, mods: null, seats: [], spectators: [] });
+    await settle();
+    assert.equal(me.room.mods, null, '没声明集合的房间：mods 是 null');
+    // 快照是**冻结**的：面板改不动它（也就改不了引擎那份）
+    assert.throws(() => { me.room.code = 'ZZZZ'; }, TypeError);
+    assert.throws(() => { me.playerId = 'p9'; }, TypeError);
+    // 一次取全：三样来自同一次 store 读（避免面板分三次读出现撕裂）
+    assert.deepEqual(Object.keys({ ...me.snapshot() }).sort(), ['name', 'playerId', 'room']);
   });
 
   test('gate：等路径为真才挂；路径不存在 ⇒ 具名拒绝（不是永远不出现）', async () => {
@@ -609,6 +686,206 @@ describe('C 层客户端：注册点', () => {
 });
 
 // ---------------------------------------------------------------------------------------------------
+// 4b. 外观提供者（皮肤层第 2 步，设计稿 §2 / §6）：一个进程最多一个，接进解析链的**唯一 hook**。
+//
+// 三条性质各有一条测试：最多一个（后注册者点名拒绝）/ 接进链（链真的走它）/ dispose 收回（回到「没有 hook」
+// 那条与今天逐字相同的路径）。外加两条边界：只提供外观不挂界面的模块是合法的；抛异常或形状不对都点名拒绝。
+// ---------------------------------------------------------------------------------------------------
+describe('外观提供者：一个进程最多一个，接进解析链', () => {
+  const URL_AP1 = `${MOD_PANEL_PREFIX}alpha/app1.js?v=1`;
+  const URL_AP2 = `${MOD_PANEL_PREFIX}beta/app2.js?v=1`;
+  const M2 = { chars: { char_a: { portrait: 'a/p1.png' } } };
+  const askChain = () => portraitEntry(M2, { charId: 'char_a', assets: { portrait: 'summer' } }, { lookup: currentAppearanceLookup() });
+
+  test('模块导出 appearance(ctx) ⇒ 接进链；appearance() 报出是谁提供的', async () => {
+    clearAppearanceLookup();
+    const h = harness({
+      modules: new Map([[URL_AP1, {
+        // 只提供外观、不挂界面 —— 合法形态（它已经把要做的事做完了）
+        appearance: () => ({ lookup: (kind, charId, id) => (id === 'summer' ? { portrait: 's/p.png' } : null) }),
+      }]]),
+    });
+    h.apply([wire({ url: URL_AP1 })]);
+    await settle();
+    assert.deepEqual(h.registry.refusals(), [], '0 拒绝');
+    assert.equal(h.registry.appearance().providedBy, 'alpha/p1');
+    assert.equal(askChain(), 's/p.png', '链真的走了它');
+    clearAppearanceLookup();
+  });
+
+  test('第二个提供者被点名拒绝（谁提供外观不能取决于加载次序）', async () => {
+    clearAppearanceLookup();
+    const h = harness({
+      modules: new Map([
+        [URL_AP1, { appearance: () => ({ lookup: () => null }), mount: () => ({ unmount() {} }) }],
+        [URL_AP2, { appearance: () => ({ lookup: () => null }), mount: () => ({ unmount() {} }) }],
+      ]),
+    });
+    h.apply([
+      wire({ id: 'p1', pack: 'alpha', url: URL_AP1, order: 0 }),
+      wire({ id: 'p2', pack: 'beta', url: URL_AP2, order: 1 }),
+    ]);
+    await settle();
+    const refused = h.registry.refusals();
+    assert.equal(refused.length, 1, `恰好一条拒绝：${JSON.stringify(refused)}`);
+    assert.equal(refused[0].code, 'CLIENT_APPEARANCE_TAKEN');
+    assert.match(refused[0].detail, /alpha\/p1/, '理由要点名先来的那个');
+    assert.equal(h.registry.appearance().providedBy, 'alpha/p1', '先来的继续有效');
+    clearAppearanceLookup();
+  });
+
+  test('appearance 抛异常 / 形状不对 ⇒ 点名拒绝，链不受影响', async () => {
+    clearAppearanceLookup();
+    const URL_BAD = `${MOD_PANEL_PREFIX}alpha/bad.js?v=1`;
+    const URL_SHAPE = `${MOD_PANEL_PREFIX}alpha/shape.js?v=1`;
+    const h1 = harness({ modules: new Map([[URL_BAD, { appearance: () => { throw new Error('boom'); } }]]) });
+    h1.apply([wire({ url: URL_BAD })]);
+    await settle();
+    assert.equal(h1.registry.refusals()[0].code, 'CLIENT_APPEARANCE_THREW');
+    assert.equal(h1.registry.appearance().providedBy, null);
+    const h2 = harness({ modules: new Map([[URL_SHAPE, { appearance: () => ({ list: () => [] }) }]]) });
+    h2.apply([wire({ url: URL_SHAPE })]);
+    await settle();
+    assert.equal(h2.registry.refusals()[0].code, 'CLIENT_APPEARANCE_BAD_SHAPE', '必须有 lookup');
+    clearAppearanceLookup();
+  });
+
+  test('不导出 appearance 的面板一切照旧（这是绝大多数）', async () => {
+    clearAppearanceLookup();
+    const h = harness({ modules: new Map([[URL_AP1, { mount: () => ({ unmount() {} }) }]]) });
+    h.apply([wire({ url: URL_AP1 })]);
+    await settle();
+    assert.deepEqual(h.registry.refusals(), []);
+    assert.equal(h.registry.appearance().providedBy, null);
+    assert.equal(currentAppearanceLookup(), undefined, '链上没有 hook ⇒ 与今天逐字相同');
+  });
+
+  test('dispose 把提供者收回去：链回到「没有 hook」', async () => {
+    clearAppearanceLookup();
+    const h = harness({ modules: new Map([[URL_AP1, { appearance: () => ({ lookup: () => ({ portrait: 'x' }) }) }]]) });
+    h.apply([wire({ url: URL_AP1 })]);
+    await settle();
+    assert.equal(typeof currentAppearanceLookup(), 'function');
+    h.registry.dispose();
+    assert.equal(currentAppearanceLookup(), undefined, 'dispose 之后回到与今天逐字相同的链');
+    assert.equal(h.registry.appearance().providedBy, null);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// 4c. 素材加载源的提供者（第 5 刀，DESIGN §28.40）：与 4b 那一条**逐条同构**，但这一格只排**已声明的**镜像
+//     ——「包能改加载源」与「包不能指名任意主机」两句话同时成立，而后者是结构性的：注册面没有位置写下地址。
+//     地址在 `pack.json.assets.mirrors[]`（装载期已与包内容器摘要比对过，见 test/modAssetsMirrors.test.js）。
+// ---------------------------------------------------------------------------------------------------
+describe('加载源提供者：一个进程最多一个，只排序、不点名主机', () => {
+  const URL_S1 = `${MOD_PANEL_PREFIX}alpha/src1.js?v=1`;
+  const URL_S2 = `${MOD_PANEL_PREFIX}beta/src2.js?v=1`;
+  const DECLARED = Object.freeze([
+    Object.freeze({ id: 'a', base: 'https://a.example/', sha256: 'a'.repeat(64) }),
+    Object.freeze({ id: 'b', base: 'https://b.example/', sha256: 'a'.repeat(64) }),
+  ]);
+
+  test('模块导出 sources(ctx) ⇒ 接进排序面；sources() 报出是谁提供的', async () => {
+    resetSourcesState();
+    const h = harness({
+      modules: new Map([[URL_S1, {
+        // 只提供加载源、不挂界面 —— 合法形态（与「只提供外观」同族）
+        sources: () => ({ order: (mirrors) => mirrors.map((m) => m.id).reverse() }),
+      }]]),
+    });
+    h.apply([wire({ url: URL_S1 })]);
+    await settle();
+    assert.deepEqual(h.registry.refusals(), [], '0 拒绝');
+    assert.equal(h.registry.sources().providedBy, 'alpha/p1');
+    assert.equal(currentSourceOrderer(), 'alpha/p1');
+    assert.deepEqual(orderDeclared(DECLARED), { ids: ['b', 'a'], refusals: [] }, '排序面真的走了它');
+  });
+
+  test('**喂一个主机名 / URL 进去必须被拒** —— 面板这条路也没有位置引入主机', async () => {
+    resetSourcesState();
+    const h = harness({
+      modules: new Map([[URL_S1, { sources: () => ({ order: () => ['https://evil.example/'] }) }]]),
+    });
+    h.apply([wire({ url: URL_S1 })]);
+    await settle();
+    // 注册本身合法（那是一个函数），但**顺序**整条作废，并点名 —— 恶意的那个字符串排不出任何地址来。
+    assert.equal(h.registry.sources().providedBy, 'alpha/p1');
+    const out = orderDeclared(DECLARED);
+    assert.deepEqual(out.ids, ['a', 'b'], '整条顺序作废，回落声明顺序');
+    assert.equal(out.refusals[0].code, 'CLIENT_SOURCES_BAD_ORDER');
+  });
+
+  test('第二个提供者被点名拒绝（哪台主机先说话不能取决于加载次序）', async () => {
+    resetSourcesState();
+    const h = harness({
+      modules: new Map([
+        [URL_S1, { sources: () => ({ order: () => ['a'] }), mount: () => ({ unmount() {} }) }],
+        [URL_S2, { sources: () => ({ order: () => ['b'] }), mount: () => ({ unmount() {} }) }],
+      ]),
+    });
+    h.apply([
+      wire({ id: 'p1', pack: 'alpha', url: URL_S1, order: 0 }),
+      wire({ id: 'p2', pack: 'beta', url: URL_S2, order: 1 }),
+    ]);
+    await settle();
+    const refused = h.registry.refusals();
+    assert.equal(refused.length, 1, `恰好一条拒绝：${JSON.stringify(refused)}`);
+    assert.equal(refused[0].code, 'CLIENT_SOURCES_TAKEN');
+    assert.match(refused[0].detail, /alpha\/p1/, '理由要点名先来的那个');
+    assert.equal(h.registry.sources().providedBy, 'alpha/p1', '先来的继续有效');
+    assert.deepEqual(orderDeclared(DECLARED).ids, ['a', 'b'], '先来的那个（只留 a）仍然说了算');
+  });
+
+  test('sources 抛异常 / 形状不对 ⇒ 点名拒绝，排序面不受影响', async () => {
+    resetSourcesState();
+    const URL_BAD = `${MOD_PANEL_PREFIX}alpha/sbad.js?v=1`;
+    const URL_SHAPE = `${MOD_PANEL_PREFIX}alpha/sshape.js?v=1`;
+    const h1 = harness({ modules: new Map([[URL_BAD, { sources: () => { throw new Error('boom'); } }]]) });
+    h1.apply([wire({ url: URL_BAD })]);
+    await settle();
+    assert.equal(h1.registry.refusals()[0].code, 'CLIENT_SOURCES_THREW');
+    assert.equal(h1.registry.sources().providedBy, null);
+    const h2 = harness({ modules: new Map([[URL_SHAPE, { sources: () => ({ list: () => [] }) }]]) });
+    h2.apply([wire({ url: URL_SHAPE })]);
+    await settle();
+    assert.equal(h2.registry.refusals()[0].code, 'CLIENT_SOURCES_BAD_SHAPE', '必须有 order');
+    assert.equal(currentSourceOrderer(), null);
+  });
+
+  test('不导出 sources 的面板一切照旧（这是绝大多数）', async () => {
+    resetSourcesState();
+    const h = harness({ modules: new Map([[URL_S1, { mount: () => ({ unmount() {} }) }]]) });
+    h.apply([wire({ url: URL_S1 })]);
+    await settle();
+    assert.deepEqual(h.registry.refusals(), []);
+    assert.equal(h.registry.sources().providedBy, null);
+    assert.equal(currentSourceOrderer(), null, '排序面上没有 hook ⇒ 导入按声明顺序');
+  });
+
+  test('dispose 把提供者收回去：排序面回到「没有 hook」', async () => {
+    resetSourcesState();
+    const h = harness({ modules: new Map([[URL_S1, { sources: () => ({ order: () => ['b'] }) }]]) });
+    h.apply([wire({ url: URL_S1 })]);
+    await settle();
+    assert.equal(currentSourceOrderer(), 'alpha/p1');
+    h.registry.dispose();
+    assert.equal(currentSourceOrderer(), null, 'dispose 之后下一次导入按声明顺序');
+    assert.equal(h.registry.sources().providedBy, null);
+  });
+
+  test('门控（设置里的「工坊素材源」）关掉时，注册面照旧、但「一次都不问」由调用方那一个 if 保证', async () => {
+    resetSourcesState();
+    const h = harness({ modules: new Map([[URL_S1, { sources: () => ({ order: () => ['b'] }) }]]) });
+    h.apply([wire({ url: URL_S1 })]);
+    await settle();
+    setSourcesEnabled(false);
+    assert.equal(currentSourceOrderer(), 'alpha/p1', '关掉门控不注销提供者（它只是不再被问到）');
+    setSourcesEnabled(true);
+    resetSourcesState();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
 // 5. 客户端三处既有缺口（mod4 侦查报告点名，至今未动）
 // ---------------------------------------------------------------------------------------------------
 describe('客户端缺口：资源消息 / 入口闸门 / wasEntered 旁路', () => {
@@ -691,5 +968,232 @@ describe('客户端缺口：资源消息 / 入口闸门 / wasEntered 旁路', ()
     const sp = src.match(/globalThis\.__SP__ = \{([^}]*)\}/);
     assert.ok(sp);
     assert.doesNotMatch(sp[1], /panel/i);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// 面板能主动发的引擎消息：`PANEL_SEND_TYPES` 是闭枚举（加一条要同时改表 + 那条消息的 C2S 形状 + 一条测试）
+// ---------------------------------------------------------------------------------------------------
+describe('面板发送白名单：room.mods / room.chat 放得出去，room.create 依旧被拒（G4）', () => {
+  /** 最小宿主元素（注册点只 setAttribute / appendChild）。 */
+  const hostEl = () => ({
+    className: '', attributes: {}, children: [],
+    setAttribute(k, v) { this.attributes[k] = v; },
+    appendChild(c) { this.children.push(c); return c; },
+  });
+
+  test('表：只多 room.mods 与 room.chat 两条 —— room.create 绝不进去', () => {
+    assert.deepEqual([...PANEL_SEND_TYPES], ['room.appearance', 'room.mods', 'room.chat']);
+    assert.equal(PANEL_SEND_TYPES.includes('room.create'), false,
+      '面板能改对局状态的那一天，就是这一层失效的那一天（extensions.js 的原文）');
+    assert.equal(PANEL_SEND_TYPES.includes('room.quickMsg'), false,
+      '快捷短语没有进来：面板要说话就走 room.chat 那一条用户动作，不多开一格');
+  });
+
+  test('行为：形状合法的 room.mods / room.chat / room.appearance 都真的发到网上；坏形状与 room.create 一条都不发，各自点名', async () => {
+    const frames = [];
+    let ctx = null;
+    const registry = createPanelRegistry({
+      store: createStore(initialState),
+      // 假 net 必须与真 `Net.send(t, fields)` 同签名（`public/js/net.js`：`t` 由它自己拼进帧里）——
+      // 单参数假体曾把「过的是真实线上形状」这句断言糊过去，而真实发送口收的是两个参数。
+      net: { on: () => () => {}, send: (t, fields) => { frames.push({ t, ...(fields && typeof fields === 'object' ? fields : {}) }); return true; }, sendResourceMessage: () => true },
+      log: { info() {}, warn() {}, error() {} },
+      importModule: async () => ({ mount: (c) => { ctx = c; return {}; } }),
+      createElement: () => hostEl(),
+      slotHost: () => hostEl(),
+    });
+    registry.apply([wire()]);
+    await settle();
+    assert.ok(ctx && ctx.session && ctx.net, '面板挂上了，拿到了 ctx.session / ctx.net');
+
+    // ① 「发一条引擎消息」的入口是 **ctx.session.send**（NetFacade 上那个同名 send 走的是包通道那条路，见 ⑤）。
+    //    三条合法消息逐一过客户端的形状判据（与服务端同一份 `shared/protocol.js`）再发出去。
+    assert.equal(ctx.session.send('room.mods', { modIds: ['alpha-pack'] }), true);
+    assert.equal(ctx.session.send('room.appearance', { avatar: { avatar: 'a_1' } }), true, '换装那一条照旧发得出去');
+    assert.equal(ctx.session.send('room.chat', { text: '打得漂亮' }), true, '房内聊天那一条（用户动作）发得出去');
+    assert.deepEqual(frames, [
+      { t: 'room.mods', modIds: ['alpha-pack'] },
+      { t: 'room.appearance', avatar: { avatar: 'a_1' } },
+      { t: 'room.chat', text: '打得漂亮' },
+    ], '三条过的都是真实线上形状（含 t）');
+    // ② 坏形状：不发出去，点名 CLIENT_SEND_BAD_SHAPE（而不是等一个 error 帧回来）
+    assert.equal(ctx.session.send('room.mods', { modIds: 'alpha-pack' }), false, 'modIds 必须是数组');
+    assert.equal(ctx.session.send('room.chat', { text: 42 }), false, 'text 必须是字符串');
+    // ③ room.create 仍在白名单之外：一条都不发 —— 面板改不了对局状态
+    assert.equal(ctx.session.send('room.create', { mode: 'solo', difficulty: 'NORMAL' }), false);
+    assert.equal(frames.length, 3, '只有那三条合法消息出去了');
+    // ④ 两个 facade 上是两条不同的路：`ctx.net.send` 是**这个包自己的通道**，名字没在 `messages` 里声明过 ⇒ 点名
+    assert.equal(ctx.net.send('room.mods', {}), false, 'ctx.net.send 不是引擎消息那条路');
+    assert.deepEqual(registry.refusals().map((r) => r.code),
+      ['CLIENT_SEND_BAD_SHAPE', 'CLIENT_SEND_BAD_SHAPE', 'CLIENT_SEND_NOT_ALLOWED', 'CLIENT_CHANNEL_UNDECLARED'],
+      `点名拒绝：${JSON.stringify(registry.refusals())}`);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// 6. DOM 观察：宿主在**非主 store 的时机**出现 / 消失时也要被发现（业主现象：「账号界面要并进统计页」）
+//
+// 统计页由它自己的 `statsStore`（`screens/stats.js`）开关，不会碰主 store ⇒ 注册点在那里收不到任何通知，而 `flush()`
+// 只在主 store 变化与 `apply()` 时跑 —— 刚渲染出来的 `[data-mod-slot]` 宿主于是**没人发现**（包的面板永远挂不上）。
+// 这一组钉两件事：
+//   ① 宿主在一个非主 store 的时机出现 / 换成新元素 ⇒ 面板被挂上 / 旧的那一份被卸下；
+//   ② 与槽位宿主**无关**的 DOM 变化一个都不触发（对局里每帧的文字 / 属性更新不会把 flush 变成第二个每帧调度器）。
+// 观察器由 `globalThis.MutationObserver` 注入：这里给一个记录回调的假实现，用例自己按需喂它「变更记录」；浏览器里
+// 那份由真 `MutationObserver` 喂，而判据是**同一段** `hasSlotSignal`。Node 里没有 `MutationObserver` / `<body>` 时
+// 这条能力根本不存在（`observeDom` 直接返回），行为与今天逐字相同 —— 那条由既有用例隐式覆盖。
+// ---------------------------------------------------------------------------------------------------
+describe('DOM 观察：宿主在非主 store 的时机出现 / 消失', () => {
+  /** 一个只记录回调的假 `MutationObserver`（`observeDom` 只看 `globalThis.MutationObserver` 这个注入位）。 */
+  function fakeObserver() {
+    const observers = [];
+    class FakeMutationObserver {
+      constructor(cb) { this.cb = cb; this.options = null; this.disconnected = false; observers.push(this); }
+      observe(target, options) { this.target = target; this.options = options; }
+      disconnect() { this.disconnected = true; }
+    }
+    return { FakeMutationObserver, observers };
+  }
+
+  /**
+   * 一个够用的假元素节点：`matches` / `querySelector` 按「选择器里写着 data-mod-slot」判真假 —— 与浏览器里
+   * `[data-mod-slot]` 这条选择器对同一个属性回答同一个真假。
+   */
+  const el = (attrs = {}) => ({
+    nodeType: 1, attrs, children: [], className: '',
+    setAttribute(k, v) { this.attrs[k] = v; },
+    getAttribute(k) { return Object.hasOwn(this.attrs, k) ? this.attrs[k] : null; },
+    appendChild(c) { this.children.push(c); c.parentNode = this; return c; },
+    remove() { this.removed = true; },
+    matches(sel) { return sel === '[data-mod-slot]' && Object.hasOwn(this.attrs, 'data-mod-slot'); },
+    querySelector(sel) {
+      for (const c of this.children) {
+        if (c.matches && c.matches(sel)) return c;
+        const deep = c.querySelector && c.querySelector(sel);
+        if (deep) return deep;
+      }
+      return null;
+    },
+  });
+
+  /** 一个「有面板要伺候」的注册点 + 一份可增删的宿主表（组件渲染的宿主就是这么来的）。 */
+  function domHarness(opts = {}) {
+    const { FakeMutationObserver, observers } = fakeObserver();
+    const saved = { document: globalThis.document, raf: globalThis.requestAnimationFrame, Observer: globalThis.MutationObserver };
+    globalThis.MutationObserver = FakeMutationObserver;
+    globalThis.document = { body: el(), documentElement: el() };
+    // 观察器用 rAF 防抖；Node 里没有 rAF，注入一个「马上排队」的版本，好让用例与 `settle()` 对上。
+    globalThis.requestAnimationFrame = (fn) => setImmediate(fn);
+    const hosts = new Map();
+    const unmounted = [];
+    let mounts = 0;
+    const registry = createPanelRegistry({
+      store: createStore(initialState),
+      log: opts.log || quiet,
+      importModule: async () => ({ mount: () => { mounts++; return { unmount: () => unmounted.push('p1') }; } }),
+      createElement: () => el(),
+      slotHosts: (slot) => hosts.get(slot) || [],
+    });
+    return {
+      registry, hosts, observers, unmounted, mounts: () => mounts,
+      setHost(slot, list) { hosts.set(slot, list); },
+      restore() {
+        globalThis.document = saved.document;
+        globalThis.requestAnimationFrame = saved.raf;
+        globalThis.MutationObserver = saved.Observer;
+      },
+    };
+  }
+
+  test('宿主后来才出现（非主 store 的时机）⇒ 挂上；换成新宿主 ⇒ 旧的那份被卸下', async () => {
+    const h = domHarness();
+    try {
+      h.registry.apply([wire({ slot: 'screen.game.hud' })]);
+      await settle();
+      // 观察器由 `apply()` 建起（有面板要伺候）：`childList` + `subtree`，外加「宿主自己的身份键」这一格。
+      assert.equal(h.observers.length, 1, 'apply() 之后才建观察器（没有包声明就没有成本）');
+      assert.deepEqual(h.observers[0].options, {
+        childList: true, subtree: true, attributes: true, attributeFilter: ['data-mod-slot-key'],
+      });
+      assert.deepEqual(h.registry.mounted(), [], '宿主还没出现 ⇒ 「还没到时候」，不记拒绝');
+      assert.deepEqual(h.registry.refusals(), []);
+
+      // ① 组件在**非主 store 的时机**渲染出宿主（统计页那种：它由自己的 store 开关，不碰主 store）。
+      const first = el({ 'data-mod-slot': 'screen.game.hud' });
+      first.isConnected = true;
+      h.setHost('screen.game.hud', [first]);
+      h.observers[0].cb([{ type: 'childList', addedNodes: [first], removedNodes: [] }]);
+      await settle();
+      assert.deepEqual(h.registry.mounted(), ['alpha/p1'], '观察器看到宿主出现 ⇒ 面板挂上（不必等一次主 store 变化）');
+      assert.equal(h.mounts(), 1);
+      assert.equal(first.children.length, 1, '面板那个 div 挂进了这个宿主');
+
+      // ② 宿主**换了元素**（一收一开：框架把那块容器整棵换掉）⇒ 旧的那一份被卸下、新的挂上。
+      const second = el({ 'data-mod-slot': 'screen.game.hud' });
+      second.isConnected = true;
+      h.setHost('screen.game.hud', [second]);
+      h.observers[0].cb([{ type: 'childList', addedNodes: [second], removedNodes: [first] }]);
+      await settle();
+      assert.deepEqual(h.unmounted, ['p1'], '旧宿主上那一份被卸下（unmount 被叫到）');
+      assert.equal(first.children[0].removed, true, '旧宿主里那个 div 被摘走');
+      assert.equal(second.children.length, 1, '新宿主里挂上一份');
+      assert.equal(h.mounts(), 2);
+      assert.deepEqual(h.registry.mounted(), ['alpha/p1']);
+    } finally { h.restore(); }
+  });
+
+  test('与槽位宿主无关的 DOM 变化一个都不触发（对局里每帧的文字 / 属性更新喂不出一个每帧 flush）', async () => {
+    const h = domHarness();
+    try {
+      h.registry.apply([wire({ slot: 'screen.game.hud' })]);
+      const host = el({ 'data-mod-slot': 'screen.game.hud' });
+      host.isConnected = true;
+      h.setHost('screen.game.hud', [host]);
+      h.observers[0].cb([{ type: 'childList', addedNodes: [host], removedNodes: [] }]);
+      await settle();
+      assert.deepEqual(h.registry.mounted(), ['alpha/p1']);
+      const before = h.mounts();
+
+      // 探针：把宿主换成**另一个**元素 —— 只有 flush 真的跑起来，它才会看到「宿主换了身份」而重挂一次。
+      const replacement = el({ 'data-mod-slot': 'screen.game.hud' });
+      replacement.isConnected = true;
+      h.setHost('screen.game.hud', [replacement]);
+      // 一堆与槽位宿主无关的变更：文本节点、普通元素、别的属性、characterData。
+      const plain = el({ class: 'hud-line' });
+      const text = { nodeType: 3, textContent: '打得漂亮' };
+      h.observers[0].cb([
+        { type: 'childList', addedNodes: [text], removedNodes: [text] },
+        { type: 'childList', addedNodes: [plain], removedNodes: [] },
+        { type: 'attributes', target: plain, attributeName: 'class' },
+        { type: 'characterData', target: text },
+      ]);
+      await settle();
+      assert.equal(h.mounts(), before, '噪声没有触发 flush（否则这一步会看到「宿主换新」而重挂一次）');
+      assert.equal(replacement.children.length, 0, '没有 flush ⇒ 新宿主上什么都没挂');
+
+      // 对照：真正的槽位信号（同一条「元素被换掉」）确实会动 —— 证明上面的探针不是永远不动。
+      h.observers[0].cb([{ type: 'childList', addedNodes: [replacement], removedNodes: [host] }]);
+      await settle();
+      assert.equal(h.mounts(), before + 1, '槽位宿主的增删才是信号：同一条路真的会重挂一次');
+      assert.equal(replacement.children.length, 1, '新宿主这次挂上了');
+      assert.deepEqual(h.unmounted, ['p1']);
+    } finally { h.restore(); }
+  });
+
+  test('回调里的异常绝不外溢：只记一行日志，游戏照旧', async () => {
+    const logged = [];
+    const h = domHarness({ log: { info() {}, warn() {}, error: (...a) => logged.push(a) } });
+    try {
+      h.registry.apply([wire({ slot: 'screen.game.hud' })]);
+      await settle();
+      // 一条形状坏掉的记录（`addedNodes` 是个会抛的 getter）—— 回调里的任何错都只记一行日志，不外溢。
+      const boom = { type: 'childList' };
+      Object.defineProperty(boom, 'addedNodes', { get() { throw new Error('bad record'); } });
+      h.observers[0].cb([boom]);
+      await settle();
+      assert.equal(logged.length, 1, `恰好一行日志：${JSON.stringify(logged)}`);
+      assert.match(String(logged[0][0]), /dom observer callback failed/);
+      assert.deepEqual(h.registry.mounted(), [], '坏记录没有把面板挂上，也没有把异常带到游戏里');
+    } finally { h.restore(); }
   });
 });

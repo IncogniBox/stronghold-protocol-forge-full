@@ -6,7 +6,7 @@
 //       handUnits  pieces in the 整备区 (hand, 10 slots; operators, items and summon stacks),
 //       handChess  operators in the hand,
 //       roundStats { refreshes, buys, sells, spent, gainedChess, arts }   (this round's prep, ps.round),
-//       matchBands band ids of every alive player (this player first),
+//       matchBands band ids of every alive player (this player first), plus a retained Touch team grant,
 //       teammates  [{ playerId, bandId }] of the other alive players }
 // Global handlers run first in every dispatch, so band / bond / garrison / item handlers of the same onBattleStart can
 // read or extend `ev.input.contentInfo`.
@@ -18,6 +18,7 @@
 //                               RIGHT = col + 1; board piece views carry `dir`, sim/dir.js)
 
 import { frontOf } from '../../dir.js';
+import { grantedBondsByTrait } from '../../../../shared/morph.js';
 
 export function registerSupportMeta(registry) {
   registry.global('contentb_info', {
@@ -26,6 +27,10 @@ export function registerSupportMeta(registry) {
       const hand = ctx.hand();
       const rs = ctx.roundStats();
       const mates = ctx.teammates();
+      const matchBands = [ctx.bandId(), ...mates.map(t => t.bandId())].filter(Boolean);
+      // [ASSUMED] 外勤医疗 is a team grant for this match, not an aura revoked when its holder is eliminated.
+      // Other team strategies and the teammate contexts still require a living player.
+      if (ctx.teamMedicGranted?.() && !matchBands.includes('band_amedic')) matchBands.push('band_amedic');
       ev.input.contentInfo = {
         round: ctx.round,
         kind: ev.kind ?? null,
@@ -37,30 +42,46 @@ export function registerSupportMeta(registry) {
           refreshes: rs.refreshes | 0, buys: rs.buys | 0, sells: rs.sells | 0, spent: rs.spent | 0,
           gainedChess: rs.gainedChess | 0, arts: rs.arts | 0,
         },
-        matchBands: [ctx.bandId(), ...mates.map((t) => t.bandId())].filter(Boolean),
+        matchBands,
         teammates: mates.map((t) => ({ playerId: t.playerId, bandId: t.bandId() })),
       };
     },
   });
 }
 
-/** Bonds of a piece view (own + 变形同构体 grants), as the match counts them. */
+/** Bonds of a piece view (own + 变形同构体 grants + **特质 grants**), as the match counts them. */
 export function metaBonds(ctx, piece) {
   if (!piece || piece.kind !== 'chess') return [];
   const fresh = Number.isInteger(piece.uid) && piece.uid > 0 ? ctx.piece(piece.uid) : null;
   const p = fresh && fresh.kind === 'chess' ? fresh : piece;
   const rec = ctx.chessRecord(p.id);
-  return withGrants(ctx, p, rec && Array.isArray(rec.bonds) ? rec.bonds.slice() : []);
+  return withGrants(ctx, p, rec && Array.isArray(rec.bonds) ? rec.bonds.slice() : [], rec);
 }
 
-function withGrants(ctx, piece, bonds) {
+/**
+ * 授予来的盟约那两条腿。
+ *
+ * **特质那条腿**走 `shared/morph.js` 的 `grantedBondsByTrait`（DESIGN §28.49）—— 这一格只有一份判据，包读到的
+ * 成员资格与引擎数的必须一致。**装备那条腿**是这段代码里**遗留的第二份实现**（它把 `official` 档的
+ * 「两件起配」写死在 `items.length < 2` 上，看不到行为开关 `morphPairing`），本次**刻意不动它**：本刀只加一条
+ * 成员资格来源，收编那半条属于另一刀（改动会牵动 `plus` 档下的行为，不混进来）。
+ */
+function withGrants(ctx, piece, bonds, rec) {
   const items = Array.isArray(piece.items) ? piece.items : [];
-  if (items.length < 2) return bonds;
-  const recs = items.map((it) => ctx.gd.item(it.id)).filter(Boolean);
-  if (!recs.some((r) => r.canGiveBond)) return bonds;
-  const out = bonds.slice();
-  for (const r of recs) if (!r.canGiveBond && typeof r.giveBondId === 'string' && ctx.gd.bond(r.giveBondId) && !out.includes(r.giveBondId)) out.push(r.giveBondId);
-  return out;
+  const traitIds = grantedBondsByTrait(rec && rec.trait, { hasBond: (id) => !!ctx.gd.bond(id) });
+  const morph = () => {
+    if (items.length < 2) return bonds;
+    const recs = items.map((it) => ctx.gd.item(it.id)).filter(Boolean);
+    if (!recs.some((r) => r.canGiveBond)) return bonds;
+    const out = bonds.slice();
+    for (const r of recs) if (!r.canGiveBond && typeof r.giveBondId === 'string' && ctx.gd.bond(r.giveBondId) && !out.includes(r.giveBondId)) out.push(r.giveBondId);
+    return out;
+  };
+  const out = morph();
+  if (!traitIds.length) return out;
+  const merged = out.slice();
+  for (const b of traitIds) if (!merged.includes(b)) merged.push(b);
+  return merged;
 }
 
 /** Distinct tiers of board chess matching `pred(pieceView)`. */

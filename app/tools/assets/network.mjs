@@ -1,27 +1,30 @@
 // Explicit download-source selection and one shared policy per asset invocation.
 // Selecting a source never looks up the user's public IP or makes a request.
-import { downloadUrls, normalizeProxyPrefix } from './sources.mjs';
+import { downloadUrls, normalizeProxyPrefix, normalizeAssetBase } from './sources.mjs';
 
 export function validateSource(mode) {
   if (!['direct', 'mirror'].includes(mode)) throw new Error(`unknown asset source: ${mode} (direct|mirror)`);
   return mode;
 }
 
-export async function selectDownloadSource({ mode = 'direct', offline = false, proxyPrefix, log = console.log } = {}) {
+export async function selectDownloadSource({ mode = 'direct', offline = false, proxyPrefix, log = console.log, verified = false } = {}) {
   validateSource(mode);
   if (offline) return 'direct';
   const normalizedProxy = mode === 'mirror' ? normalizeProxyPrefix(proxyPrefix) : '';
   log(mode === 'mirror'
-    ? `[network] 手动开启 GitHub 镜像：${normalizedProxy || '代理已禁用'}；文件仅校验格式和大小。`
+    ? `[network] 手动开启 GitHub 镜像：${normalizedProxy || '代理已禁用'}；${verified ? '原始文件校验 Git blob。' : '文件仅校验格式和大小。'}`
     : '[network] 原始源（未开启 GitHub 镜像）');
   return mode;
 }
 
 /** Shared by indexes, files, Spine follow-ups and fonts; a tripped mirror stays off. */
 export class MirrorPolicy {
-  constructor({ source = 'direct', proxyPrefix, failureLimit = 3, timeoutMs = 8000, log = console.log } = {}) {
+  constructor({ source = 'direct', proxyPrefix, failureLimit = 3, timeoutMs = 8000, assetBase = '', log = console.log } = {}) {
     this.source = validateSource(source);
     this.proxyPrefix = this.source === 'mirror' ? normalizeProxyPrefix(proxyPrefix) : '';
+    // --asset-base / SP_ASSET_BASE: the alternative download host (`downloadUrls` rewrite). Validated by name here as
+    // well, so a programmatic caller cannot pass a malformed base that would silently be ignored.
+    this.assetBase = normalizeAssetBase(assetBase, 'assetBase');
     this.failureLimit = Math.max(1, Number(failureLimit) || 3);
     this.timeoutMs = Math.max(1, Number(timeoutMs) || 8000);
     this.log = log;
@@ -32,7 +35,7 @@ export class MirrorPolicy {
   }
 
   urls(url) {
-    return downloadUrls(url, { source: this.disabled ? 'direct' : this.source, proxyPrefix: this.proxyPrefix });
+    return downloadUrls(url, { source: this.disabled ? 'direct' : this.source, proxyPrefix: this.proxyPrefix, assetBase: this.assetBase });
   }
 
   isProxy(url) {

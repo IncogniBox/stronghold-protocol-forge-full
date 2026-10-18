@@ -19,12 +19,33 @@
 
 import { getData } from '../../../data.js';
 import { COLS, DIRECT_BONUS_STACKING } from '../../constants.js';
+import { memberBonds } from '../../../../shared/morph.js';
 import { frontOf, offsetTile } from '../../dir.js';
-import { bodyInKeys, bodyDist, bodyInRadius, bodyOnTile, bodyTileReach } from '../../body.js';
+import { bodyInKeys, bodyDist, bodyInRadius, bodyOnTile, bodyTileReach, bodyInRange } from '../../body.js';
 
 export { COLS };
 /** Where an enemy can be hit (a huge enemy's whole hit rectangle, sim/body.js) — for every range test on enemies. */
 export { bodyInKeys, bodyDist, bodyInRadius, bodyOnTile, bodyTileReach };
+
+// 工坊 kit / 战斗逻辑模块的**再导出面**（`shared/kitImports.js` 的白名单只放行 11 条 specifier）。
+//
+// 为什么补在这一个文件：它就是白名单里的 `@battle/index.js`，**已经在两端被服务**
+// （服务端按 `KIT_IMPORT_TARGETS` 解析，浏览器走 `public/index.html` 的 import map，
+// `test/kitImports.test.js` 把两张表钉在一起）。所以在这里补再导出**不开新前缀、不动 import map、
+// 不动白名单本身** —— 这是把引擎里已有的原语交给包的最小改动。
+//
+// 这 5 个符号的出处是实测的：社区投稿（包 `makoto-yuki`，结城理）的 kit 用的是引擎内部相对路径
+// `../../../simdata.js` / `../../tokens.js` / `../../items/battle.js`，换名搬进 `kits/<charId>.js` 后
+// 装载器逐条报 `KIT_IMPORT`「不在白名单里」（共 5 个符号 / 15 处调用）。
+// **只增导出、不改既有行为**：下面三行是纯转发，本文件里没有任何调用点因此改变。
+//
+// ⚠️ `items/battle.js` 反过来 import 本文件（`../support/index.js`，它要 `num` / `itemRecord` / `fxOn` …），
+// 所以这一行让两个模块**成环**。这是安全的、也是刻意的：`weaknessRetype` 是**函数声明**（提升，取用时才读绑定），
+// 而 `items/battle.js` 只在函数体里用本文件的导出（顶层没有一处调用），所以两条边都不会在模块初始化期读到未初始化的绑定。
+// 新增再导出时**照这条判据核对**：被转发的符号必须是函数/常量**声明**，且对方只在函数体里用本文件的导出。
+export { normalizeChess, normalizeSkill } from '../../simdata.js';
+export { TOKEN_IDS, releaseSkillSummon, tacticalPoint } from '../tokens.js';
+export { weaknessRetype } from '../items/battle.js';
 
 // =====================================================================================================================
 // numbers & data
@@ -75,6 +96,30 @@ export function withGameData(data, fn) {
   try { return fn(); } finally { SCOPED.pop(); }
 }
 
+/**
+ * 这一场战斗的行为开关档位（`morphPairing`），与 `withGameData` **同一条作用域纪律**：两个 Match 在一个进程里并发
+ * 跑（server/lobby.js 一房一个 Match），而这一段是**同步区**（一场 Battle 的构造与每一次 `step()`），两个 Match
+ * 只会在步与步之间交错、不会在一步之内交错。所以「进作用域前压上、出来弹掉」对并发是安全的，也正是
+ * `withGameData` 已经在用的那条做法（DESIGN §29 的那条业主裁决逐字同一条）。
+ *
+ * 不入栈时是 `null` ⇒ `morphPairingOf(null)` 给出缺省档 `official`，所以没有包声明这一格的战斗读到的还是今天
+ * 那一条规则。浏览器端同理：它由 BattleSpec 上的那一个键压进来（`public/js/battle/runner.js`）。
+ * @type {Array<string|null>}
+ */
+const MORPH = [];
+/**
+ * Run `fn` with `option` as this battle's `morphPairing`档位（见 MORPH）。可重入、异常安全。
+ * @template T @param {string|null|undefined} option @param {() => T} fn @returns {T}
+ */
+export function withMorphPairing(option, fn) {
+  MORPH.push(typeof option === 'string' && option ? option : null);
+  try { return fn(); } finally { MORPH.pop(); }
+}
+/** 当前作用域的档位（没入栈 ⇒ null = 缺省档）；`unitBonds` 与测试读它。 */
+export function currentMorphPairing() {
+  return MORPH.length ? MORPH[MORPH.length - 1] : null;
+}
+
 /** The scoped data merged over the default one (identity when the scoped object IS the default one). */
 function viewOf(scoped) {
   const base = defaultData();
@@ -104,10 +149,12 @@ export const bondRecord = (id) => own(gameData().bonds, id);
 export const itemRecord = (id) => own(gameData().items, id);
 export const garrisonRecord = (id) => own(gameData().garrisons, id);
 export const bandRecord = (id) => own(gameData().bands, id);
+/** Behaviour identity, while the concrete record still supplies all numbers. */
+export const bandEffectId = id => bandRecord(id)?.effectRef ?? id;
 export const effectRecord = (id) => own(gameData().effects, id);
 export const chessRecord = (id) => own(gameData().chess, id);
 /** Registry key of an item: id without the `_a` / `_b` suffix (Arts have none). */
-export const itemKeyOf = (id) => String(id ?? '').replace(/_[ab]$/, '');
+export const itemKeyOf = (id) => String(itemRecord(id)?.effectRef ?? id ?? '').replace(/_[ab]$/, '');
 /** True for golden (进阶) items / elite chess ids. */
 export const isGoldenId = (id) => /_b$/.test(String(id ?? ''));
 
@@ -193,11 +240,11 @@ export function contentInfo(battle, pid) {
   const ci = player(battle, pid)?.input?.contentInfo;
   return ci && typeof ci === 'object' ? ci : {};
 }
-/** Band ids of every alive player of the match (own first); falls back to this battle's players. */
+/** Alive players' bands (own first), plus a retained Touch team grant; falls back to this battle's players. */
 export function matchBands(battle, pid) {
   const mb = contentInfo(battle, pid).matchBands;
-  if (Array.isArray(mb) && mb.length) return mb;
-  return (battle.players || []).map((p) => p.bandId).filter(Boolean);
+  if (Array.isArray(mb) && mb.length) return mb.map(bandEffectId);
+  return (battle.players || []).map((p) => bandEffectId(p.bandId)).filter(Boolean);
 }
 
 // =====================================================================================================================
@@ -234,24 +281,36 @@ export const goldenItemCount = (u) => itemsOf(u).filter(isGoldenId).length;
 const BONDS = new WeakMap();
 /**
  * A unit's own bonds: the chess's data bonds + bonds granted by 变形同构体 (an item with `canGiveBond` worn together
- * with an item that has a `giveBondId`; same rule as server/match/bondsMeta.js pieceBonds). Tokens / enemies: [].
+ * with an item that has a `giveBondId`) + **特质授予**（`u.def.raw.trait.grantsBonds`，DESIGN §28.49）
+ * + engine-level grants the piece carries (`u.pieceData.bondGrants`, ctx.setPieceData — 哥伦比亚 mod 的源石辅助仪
+ * inheriting a destroyed item's grant). **The membership merge lives in `shared/morph.js`** (行为开关 `morphPairing`,
+ * DESIGN §28.43.1) so this, `server/match/bondsMeta.js pieceBonds` and the client's `grantedBonds` cannot drift; the
+ * option of THIS battle comes from the scope below (`withMorphPairing`, pushed around a Battle's construction and each
+ * `step()` — the same synchronous region `withGameData` uses). Tokens / enemies: [].
  */
 export function unitBonds(u) {
   if (!isOp(u)) return EMPTY;
   const cached = BONDS.get(u);
   const items = itemsOf(u);
-  const key = items.join('|');
+  const grants = u.pieceData && Array.isArray(u.pieceData.bondGrants) ? u.pieceData.bondGrants : null;
+  const morphed = currentMorphPairing();
+  const key = `${items.join('|')}#${morphed}${grants ? `#${grants.join(',')}` : ''}`;
   if (cached && cached.key === key) return cached.bonds;
-  const out = [...(Array.isArray(u.def?.bonds) ? u.def.bonds : Array.isArray(u.def?.raw?.bonds) ? u.def.raw.bonds : [])];
-  if (items.length >= 2) {
-    const recs = items.map((id) => itemRecord(id)).filter(Boolean);
-    if (recs.some((r) => r.canGiveBond)) {
-      for (const r of recs) {
-        if (r.canGiveBond) continue;
-        if (typeof r.giveBondId === 'string' && bondRecord(r.giveBondId) && !out.includes(r.giveBondId)) out.push(r.giveBondId);
-      }
-    }
-  }
+  // 成员资格的**合并**在 `shared/morph.js` 的 `memberBonds`（一处判据、三处同源）：自己的 `bonds` ∪ 装备授予 ∪
+  // **特质授予**（`trait.grantsBonds`，DESIGN §28.49）。特质读的是**记录**那一份 —— `u.def.raw.trait`：`u.def.trait`
+  // 是 `simdata.js` 投影出来的 trait **文本字符串**，它没有子键，读错了会静默地什么都不授予。
+  // 缓存键不加特质：`u.def` 对一名单位是固定的（与下面这条 `def.bonds` 是同一条既有假设）。
+  const own = Array.isArray(u.def?.bonds) ? u.def.bonds : Array.isArray(u.def?.raw?.bonds) ? u.def.raw.bonds : [];
+  const recs = items.map((id) => itemRecord(id)).filter(Boolean);
+  const out = memberBonds(own, {
+    trait: u.def?.raw?.trait,
+    recs,
+    morphed,
+    hasBond: (id) => !!bondRecord(id),
+  });
+  // 引擎级额外授予（`u.pieceData.bondGrants`，内容钩子经 ctx.setPieceData 写入 —— 哥伦比亚 mod 的源石辅助仪继承一件
+  // 被销毁装备的 grant）：它们是**数据**，不进 `memberBonds`，但同样要进缓存键。
+  if (grants) for (const id of grants) if (typeof id === 'string' && bondRecord(id) && !out.includes(id)) out.push(id);
   const bonds = Object.freeze(out);
   BONDS.set(u, { key, bonds });
   return bonds;
@@ -329,7 +388,7 @@ export const tileKey = (u) => (u.side === 'ally' ? u.tileR * COLS + u.tileC : Ma
 /** Is `target` on a tile of `keys` (Set or array)? An ally: its tile; an enemy: its body (a huge one: every tile). */
 export const onKeys = (target, keys) => {
   if (!target || !keys) return false;
-  if (target.side !== 'ally') return bodyInKeys(target, keys);
+  if (target.side !== 'ally') return bodyInRange(target, keys);
   const k = tileKey(target);
   return keys instanceof Set ? keys.has(k) : keys.includes(k);
 };
@@ -377,6 +436,26 @@ export function battleStore(battle, ns, init = () => ({})) {
   let s = m.get(ns);
   if (s === undefined) { s = init(); m.set(ns, s); }
   return s;
+}
+
+/**
+ * 战斗 → 休整期的**通用标记**：战斗侧（pack 的 `server.battle` 模块）写一个标量，引擎在战斗结束时把它收进
+ * `ps.marks`（`server/match/match/combat.js _finishCombat`），休整期处理器用 `ctx.mark(key)` 读 —— 这是
+ * **战斗 → 休整期**唯一的通用通道（反方向是 `PlayerBattleInput.contentInfo`）。每次战斗结束**整体替换**，
+ * 所以「上一场没写」的键在下一次休整期就是 null，不会留着上一场之前的旧值。
+ *
+ * 值只能是 字符串(≤64) / 数字 / 布尔 / null，最多 16 个键（`compactResult` 的 `marks` 与
+ * `shared/protocol.js RESULT_LIMITS.marks` 同一套上限）—— 超出的部分在结算时会被丢掉。
+ * `value === undefined` 表示删掉这个键。返回写进去的值（或 null）。
+ */
+export function setBattleMark(battle, pid, key, value) {
+  if (!battle || pid == null || typeof key !== 'string' || !key) return null;
+  const pp = battle._perPlayer && battle._perPlayer[pid];
+  if (!pp || typeof pp !== 'object') return null;
+  if (!pp.marks || typeof pp.marks !== 'object') pp.marks = {};
+  if (value === undefined) delete pp.marks[key];
+  else pp.marks[key] = value;
+  return pp.marks[key] ?? null;
 }
 
 // =====================================================================================================================

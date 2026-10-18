@@ -3,8 +3,9 @@
 //
 //   * first, an update package extracted over the install (UPDATE.json) is finished — old files deleted, the install
 //     verified (server/update.js); one that does not match its MANIFEST.json keeps the server from starting (exit 1);
-//   * the boot banner: release version, the Local URL, the LAN URLs when listening on every interface, the
-//     cloudflared command for internet play;
+//   * the boot banner: the bundled upstream game version, the Local URL, the LAN URLs when listening on every
+//     interface, the plugin studio's address with its key (server/studio/key.js: this machine and the local network
+//     only), the cloudflared command for internet play;
 //   * a server that cannot start exits 1 (with a hint when the port is in use); unhandled rejections and uncaught
 //     exceptions are logged, not fatal;
 //   * graceful shutdown on SIGINT/SIGTERM (rooms get room.closed{reason:'shutdown'}, sockets close 1001); a second
@@ -13,9 +14,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { APP_VERSION, DEV_BUILD } from '../../shared/constants.js';
+import { UPSTREAM_VERSION, DEV_BUILD } from '../../shared/constants.js';
 import { limitKeyOf } from '../net.js';
 import { applyPendingUpdate } from '../update.js';
+import { startLargeAssetsCheck, stopLargeAssetsCheck } from '../largeAssets.js';
 import { ROOT } from './config.js';
 
 /**
@@ -63,14 +65,20 @@ export function isProcessEntry(metaUrl) {
   }
 }
 
-/** Print the boot banner of a started server. @param {{ url: string, host: string, port: number }} srv */
+/**
+ * Print the boot banner of a started server.
+ * @param {{ url: string, host: string, port: number, studio?: { pageUrl: (base: string) => string | null } | null }} srv
+ */
 export function printBanner(srv) {
-  console.log(`\n  卫戍协议：盟约 · Stronghold Protocol: Alliance v${APP_VERSION}`);
+  console.log(`\n  卫戍协议：盟约 · Stronghold Protocol: Alliance v${UPSTREAM_VERSION}`);
   if (DEV_BUILD) console.log('  ! 开发版（dev 分支）：不稳定，请勿用于公开服务器 · development build — unstable, not for public servers');
   console.log(`  Local:   ${srv.url}`);
   if (srv.host === '0.0.0.0' || srv.host === '::') {
     for (const u of lanUrls(srv.port)) console.log(`  LAN:     ${u}`);
   }
+  // the plugin studio with its key: what a change in it needs (a raw TCP tunnel looks like this machine; the key does not)
+  const studio = srv.studio?.pageUrl?.(srv.url);
+  if (studio) console.log(`  Studio:  ${studio}  (插件工作台 · plugin studio — this machine and the LAN; the link carries its key)`);
   console.log('  Internet: cloudflared tunnel --url ' + `http://localhost:${srv.port}` + '\n');
 }
 
@@ -94,12 +102,16 @@ export async function runMain(start) {
     process.exit(1);
   }
   printBanner(srv);
+  // 起服之后的**后台**大资源核对/补齐（地图与场景那类大文件）：不挡监听、不挡玩家；进度打控制台，状态挂
+  // `/assets-status.json`（客户端标题屏也读它）。关掉它的开关是 `SP_LARGE_ASSETS=off`。
+  startLargeAssetsCheck({ root: ROOT, log: console });
 
   let stopping = false;
   const stop = (signal) => {
     if (stopping) { console.log('forced exit'); process.exit(1); }
     stopping = true;
     console.log(`\n[${signal}] shutting down…`);
+    stopLargeAssetsCheck();
     setTimeout(() => process.exit(0), 5000).unref();
     srv.close().then(() => process.exit(0), () => process.exit(1));
   };

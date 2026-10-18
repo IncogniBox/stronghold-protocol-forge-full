@@ -18,7 +18,7 @@
    "potRank": 0
   },
   "shopSortId": 430,
-  "charId": "char_3001_doloris",
+  "charId": "char_4184_dolris",
   "name": "三角初华",
   "appellation": "Doloris",
   "rarity": 4,
@@ -35,7 +35,7 @@
    "garrison_181_a"
   ],
   "price": 3,
-  "sellPrice": 2,
+  "sellPrice": 1,
   "upgradeNum": 3,
   "upgradeChessId": "chess_char_5_30_b",
   "status": {
@@ -45,22 +45,22 @@
    "equipLevel": 0
   },
   "stats": {
-   "maxHp": 950,
-   "atk": 380,
-   "def": 90,
-   "res": 5,
+   "maxHp": 1057,
+   "atk": 276,
+   "def": 202,
+   "res": 0,
+   "cost": 5,
    "blockCnt": 1,
-   "bat": 1,
+   "bat": 1.3,
    "aspd": 100,
-   "respawnTime": 60,
+   "respawnTime": 66,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
    "tauntLevel": 0,
    "massLevel": 0,
    "deployLimit": 1,
-   "deckStack": 0,
-   "cost": 17
+   "deckStack": 0
   },
   "immunities": {
    "stun": false,
@@ -139,7 +139,7 @@
    "rangeGrid": null
   },
   "skill": {
-   "skillId": "skchr_am_doloris_1",
+   "skillId": "skchr_dolris_1",
    "iconId": "skchr_am_doloris_1",
    "name": "我思念的",
    "level": 4,
@@ -163,15 +163,14 @@
    "bbStr": {},
    "rangeId": null,
    "rangeGrid": null,
-   "prefabId": "skchr_am_doloris_1",
+   "prefabId": "skchr_dolris_1",
    "trigger": {
     "rule": "DEFAULT",
     "rawRule": "DEFAULT",
     "customRangeGrid": null
    },
    "index": 0,
-   "overrideTokenKey": null,
-   "isDefault": true
+   "overrideTokenKey": null
   },
   "talents": [
    {
@@ -214,15 +213,15 @@
    "active": false
   },
   "assets": {
-   "avatar": "char_3001_doloris",
-   "portrait": "char_3001_doloris",
-   "spine": "char_3001_doloris",
+   "avatar": "char_4184_dolris",
+   "portrait": "char_4184_dolris_2",
+   "spine": "char_4184_dolris",
    "skillIcon": "skchr_am_doloris_1",
    "subProfIcon": "sub_bard_icon"
   },
   "skills": [
    {
-    "skillId": "skchr_am_doloris_1",
+    "skillId": "skchr_dolris_1",
     "iconId": "skchr_am_doloris_1",
     "name": "我思念的",
     "level": 4,
@@ -246,7 +245,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_doloris_1",
+    "prefabId": "skchr_dolris_1",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -257,7 +256,7 @@
     "isDefault": true
    },
    {
-    "skillId": "skchr_am_doloris_2",
+    "skillId": "skchr_dolris_2",
     "iconId": "skchr_am_doloris_2",
     "name": "我悲悯的",
     "level": 4,
@@ -281,7 +280,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_doloris_2",
+    "prefabId": "skchr_dolris_2",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -312,7 +311,7 @@
    "potRank": 0
   },
   "shopSortId": 431,
-  "charId": "char_3001_doloris",
+  "charId": "char_4184_dolris",
   "name": "三角初华",
   "appellation": "Doloris",
   "rarity": 4,
@@ -329,7 +328,7 @@
    "garrison_181_b"
   ],
   "price": 3,
-  "sellPrice": 2,
+  "sellPrice": 1,
   "upgradeNum": 0,
   "upgradeChessId": null,
   "status": {
@@ -339,15 +338,15 @@
    "equipLevel": 0
   },
   "stats": {
-   "maxHp": 1235,
-   "atk": 456,
-   "def": 117,
-   "res": 10,
+   "maxHp": 1463,
+   "atk": 329,
+   "def": 240,
+   "res": 0,
+   "cost": 5,
    "blockCnt": 1,
-   "bat": 1,
+   "bat": 1.3,
    "aspd": 100,
-   "respawnTime": 57,
-   "cost": 15,
+   "respawnTime": 66,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
@@ -436,7 +435,7 @@
    "moduleDescRaw": "攻击范围内存在2名及以上其他干员时，攻击力<@ba.kw>+8%</>（不受技能影响）"
   },
   "skill": {
-   "skillId": "skchr_am_doloris_2",
+   "skillId": "skchr_dolris_2",
    "iconId": "skchr_am_doloris_2",
    "name": "我悲悯的",
    "level": 7,
@@ -460,15 +459,14 @@
    "bbStr": {},
    "rangeId": null,
    "rangeGrid": null,
-   "prefabId": "skchr_am_doloris_2",
+   "prefabId": "skchr_dolris_2",
    "trigger": {
     "rule": "DEFAULT",
     "rawRule": "DEFAULT",
     "customRangeGrid": null
    },
    "index": 1,
-   "overrideTokenKey": null,
-   "isDefault": true
+   "overrideTokenKey": null
   },
   "talents": [
    {
@@ -511,15 +509,15 @@
    "active": true
   },
   "assets": {
-   "avatar": "char_3001_doloris",
-   "portrait": "char_3001_doloris",
-   "spine": "char_3001_doloris",
+   "avatar": "char_4184_dolris",
+   "portrait": "char_4184_dolris_2",
+   "spine": "char_4184_dolris",
    "skillIcon": "skchr_am_doloris_2",
    "subProfIcon": "sub_bard_icon"
   },
   "skills": [
    {
-    "skillId": "skchr_am_doloris_1",
+    "skillId": "skchr_dolris_1",
     "iconId": "skchr_am_doloris_1",
     "name": "我思念的",
     "level": 7,
@@ -543,7 +541,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_doloris_1",
+    "prefabId": "skchr_dolris_1",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -554,7 +552,7 @@
     "isDefault": false
    },
    {
-    "skillId": "skchr_am_doloris_2",
+    "skillId": "skchr_dolris_2",
     "iconId": "skchr_am_doloris_2",
     "name": "我悲悯的",
     "level": 7,
@@ -578,7 +576,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_doloris_2",
+    "prefabId": "skchr_dolris_2",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -659,15 +657,15 @@
    }
   ],
   "statsBase": {
-   "maxHp": 1093,
-   "atk": 443,
-   "def": 117,
-   "res": 10,
+   "maxHp": 1321,
+   "atk": 316,
+   "def": 240,
+   "res": 0,
+   "cost": 5,
    "blockCnt": 1,
-   "bat": 1,
+   "bat": 1.3,
    "aspd": 100,
-   "respawnTime": 57,
-   "cost": 15,
+   "respawnTime": 66,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
@@ -696,7 +694,7 @@
    "potRank": 0
   },
   "shopSortId": 231,
-  "charId": "char_3002_amoris",
+  "charId": "char_4185_amoris",
   "name": "祐天寺若麦",
   "appellation": "Amoris",
   "rarity": 2,
@@ -712,7 +710,7 @@
   "garrisonIds": [
    "garrison_183_a"
   ],
-  "price": 2,
+  "price": 3,
   "sellPrice": 1,
   "upgradeNum": 3,
   "upgradeChessId": "chess_char_5_31_b",
@@ -723,22 +721,22 @@
    "equipLevel": 0
   },
   "stats": {
-   "maxHp": 1400,
-   "atk": 340,
-   "def": 180,
-   "res": 10,
-   "blockCnt": 1,
-   "bat": 1.05,
+   "maxHp": 1861,
+   "atk": 987,
+   "def": 300,
+   "res": 0,
+   "cost": 18,
+   "blockCnt": 2,
+   "bat": 1.8,
    "aspd": 100,
-   "respawnTime": 16,
+   "respawnTime": 70,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
    "tauntLevel": 0,
    "massLevel": 0,
    "deployLimit": 1,
-   "deckStack": 0,
-   "cost": 12
+   "deckStack": 0
   },
   "immunities": {
    "stun": false,
@@ -774,7 +772,7 @@
    "rangeGrid": null
   },
   "skill": {
-   "skillId": "skchr_am_amoris_1",
+   "skillId": "skchr_amoris_1",
    "iconId": "skchr_am_amoris_1",
    "name": "如焰般热烈",
    "level": 4,
@@ -798,15 +796,14 @@
    "bbStr": {},
    "rangeId": null,
    "rangeGrid": null,
-   "prefabId": "skchr_am_amoris_1",
+   "prefabId": "skchr_amoris_1",
    "trigger": {
     "rule": "DEFAULT",
     "rawRule": "DEFAULT",
     "customRangeGrid": null
    },
    "index": 0,
-   "overrideTokenKey": null,
-   "isDefault": true
+   "overrideTokenKey": null
   },
   "talents": [
    {
@@ -850,15 +847,15 @@
    "active": false
   },
   "assets": {
-   "avatar": "char_3002_amoris",
-   "portrait": "char_3002_amoris",
-   "spine": "char_3002_amoris",
+   "avatar": "char_4185_amoris",
+   "portrait": "char_4185_amoris_2",
+   "spine": "char_4185_amoris",
    "skillIcon": "skchr_am_amoris_1",
    "subProfIcon": "sub_hammer_icon"
   },
   "skills": [
    {
-    "skillId": "skchr_am_amoris_1",
+    "skillId": "skchr_amoris_1",
     "iconId": "skchr_am_amoris_1",
     "name": "如焰般热烈",
     "level": 4,
@@ -882,7 +879,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_amoris_1",
+    "prefabId": "skchr_amoris_1",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -893,7 +890,7 @@
     "isDefault": true
    },
    {
-    "skillId": "skchr_am_amoris_2",
+    "skillId": "skchr_amoris_2",
     "iconId": "skchr_am_amoris_2",
     "name": "如麦般生长",
     "level": 4,
@@ -917,7 +914,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_amoris_2",
+    "prefabId": "skchr_amoris_2",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -948,7 +945,7 @@
    "potRank": 0
   },
   "shopSortId": 232,
-  "charId": "char_3002_amoris",
+  "charId": "char_4185_amoris",
   "name": "祐天寺若麦",
   "appellation": "Amoris",
   "rarity": 2,
@@ -964,7 +961,7 @@
   "garrisonIds": [
    "garrison_183_b"
   ],
-  "price": 2,
+  "price": 3,
   "sellPrice": 1,
   "upgradeNum": 0,
   "upgradeChessId": null,
@@ -975,15 +972,15 @@
    "equipLevel": 0
   },
   "stats": {
-   "maxHp": 1820,
-   "atk": 408,
-   "def": 234,
-   "res": 15,
-   "blockCnt": 1,
-   "bat": 1.05,
+   "maxHp": 2464,
+   "atk": 1195,
+   "def": 353,
+   "res": 0,
+   "cost": 18,
+   "blockCnt": 2,
+   "bat": 1.8,
    "aspd": 100,
-   "respawnTime": 15,
-   "cost": 10,
+   "respawnTime": 70,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
@@ -1029,7 +1026,7 @@
    "moduleDescRaw": "溅射范围内有大于或等于3个敌人时，使当次攻击力提升至<@ba.kw>115%</>"
   },
   "skill": {
-   "skillId": "skchr_am_amoris_2",
+   "skillId": "skchr_amoris_2",
    "iconId": "skchr_am_amoris_2",
    "name": "如麦般生长",
    "level": 7,
@@ -1053,15 +1050,14 @@
    "bbStr": {},
    "rangeId": null,
    "rangeGrid": null,
-   "prefabId": "skchr_am_amoris_2",
+   "prefabId": "skchr_amoris_2",
    "trigger": {
     "rule": "DEFAULT",
     "rawRule": "DEFAULT",
     "customRangeGrid": null
    },
    "index": 1,
-   "overrideTokenKey": null,
-   "isDefault": true
+   "overrideTokenKey": null
   },
   "talents": [
    {
@@ -1105,15 +1101,15 @@
    "active": true
   },
   "assets": {
-   "avatar": "char_3002_amoris",
-   "portrait": "char_3002_amoris",
-   "spine": "char_3002_amoris",
+   "avatar": "char_4185_amoris",
+   "portrait": "char_4185_amoris_2",
+   "spine": "char_4185_amoris",
    "skillIcon": "skchr_am_amoris_2",
    "subProfIcon": "sub_hammer_icon"
   },
   "skills": [
    {
-    "skillId": "skchr_am_amoris_1",
+    "skillId": "skchr_amoris_1",
     "iconId": "skchr_am_amoris_1",
     "name": "如焰般热烈",
     "level": 7,
@@ -1137,7 +1133,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_amoris_1",
+    "prefabId": "skchr_amoris_1",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -1148,7 +1144,7 @@
     "isDefault": false
    },
    {
-    "skillId": "skchr_am_amoris_2",
+    "skillId": "skchr_amoris_2",
     "iconId": "skchr_am_amoris_2",
     "name": "如麦般生长",
     "level": 7,
@@ -1172,7 +1168,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_amoris_2",
+    "prefabId": "skchr_amoris_2",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -1257,15 +1253,15 @@
    }
   ],
   "statsBase": {
-   "maxHp": 1681,
-   "atk": 352,
-   "def": 221,
-   "res": 15,
-   "blockCnt": 1,
-   "bat": 1.05,
+   "maxHp": 2325,
+   "atk": 1139,
+   "def": 340,
+   "res": 0,
+   "cost": 18,
+   "blockCnt": 2,
+   "bat": 1.8,
    "aspd": 100,
-   "respawnTime": 15,
-   "cost": 10,
+   "respawnTime": 70,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
@@ -1294,7 +1290,7 @@
    "potRank": 0
   },
   "shopSortId": 332,
-  "charId": "char_3003_timoris",
+  "charId": "char_4186_tmoris",
   "name": "八幡海铃",
   "appellation": "Timoris",
   "rarity": 3,
@@ -1312,7 +1308,7 @@
    "garrison_182_a"
   ],
   "price": 3,
-  "sellPrice": 2,
+  "sellPrice": 1,
   "upgradeNum": 3,
   "upgradeChessId": "chess_char_5_32_b",
   "status": {
@@ -1322,22 +1318,22 @@
    "equipLevel": 0
   },
   "stats": {
-   "maxHp": 1900,
-   "atk": 420,
-   "def": 350,
-   "res": 10,
-   "blockCnt": 2,
-   "bat": 1.2,
+   "maxHp": 1469,
+   "atk": 655,
+   "def": 274,
+   "res": 30,
+   "cost": 19,
+   "blockCnt": 0,
+   "bat": 3.5,
    "aspd": 100,
-   "respawnTime": 65,
+   "respawnTime": 70,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
-   "tauntLevel": 0,
+   "tauntLevel": -1,
    "massLevel": 0,
    "deployLimit": 1,
-   "deckStack": 0,
-   "cost": 16
+   "deckStack": 0
   },
   "immunities": {
    "stun": false,
@@ -1404,7 +1400,7 @@
    "rangeGrid": null
   },
   "skill": {
-   "skillId": "skchr_am_timoris_1",
+   "skillId": "skchr_tmoris_1",
    "iconId": "skchr_am_timoris_1",
    "name": "颤栗之弦",
    "level": 4,
@@ -1426,15 +1422,14 @@
    "bbStr": {},
    "rangeId": null,
    "rangeGrid": null,
-   "prefabId": "skchr_am_timoris_1",
+   "prefabId": "skchr_tmoris_1",
    "trigger": {
     "rule": "DEFAULT",
     "rawRule": "DEFAULT",
     "customRangeGrid": null
    },
    "index": 0,
-   "overrideTokenKey": null,
-   "isDefault": true
+   "overrideTokenKey": null
   },
   "talents": [
    {
@@ -1477,15 +1472,15 @@
    "active": false
   },
   "assets": {
-   "avatar": "char_3003_timoris",
-   "portrait": "char_3003_timoris",
-   "spine": "char_3003_timoris",
+   "avatar": "char_4186_tmoris",
+   "portrait": "char_4186_tmoris_2",
+   "spine": "char_4186_tmoris",
    "skillIcon": "skchr_am_timoris_1",
    "subProfIcon": "sub_stalker_icon"
   },
   "skills": [
    {
-    "skillId": "skchr_am_timoris_1",
+    "skillId": "skchr_tmoris_1",
     "iconId": "skchr_am_timoris_1",
     "name": "颤栗之弦",
     "level": 4,
@@ -1507,7 +1502,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_timoris_1",
+    "prefabId": "skchr_tmoris_1",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -1518,7 +1513,7 @@
     "isDefault": true
    },
    {
-    "skillId": "skchr_am_timoris_2",
+    "skillId": "skchr_tmoris_2",
     "iconId": "skchr_am_timoris_2",
     "name": "无存之所",
     "level": 4,
@@ -1540,7 +1535,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_timoris_2",
+    "prefabId": "skchr_tmoris_2",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -1571,7 +1566,7 @@
    "potRank": 0
   },
   "shopSortId": 333,
-  "charId": "char_3003_timoris",
+  "charId": "char_4186_tmoris",
   "name": "八幡海铃",
   "appellation": "Timoris",
   "rarity": 3,
@@ -1589,7 +1584,7 @@
    "garrison_182_b"
   ],
   "price": 3,
-  "sellPrice": 2,
+  "sellPrice": 1,
   "upgradeNum": 0,
   "upgradeChessId": null,
   "status": {
@@ -1599,19 +1594,19 @@
    "equipLevel": 0
   },
   "stats": {
-   "maxHp": 2470,
-   "atk": 504,
-   "def": 455,
-   "res": 15,
-   "blockCnt": 2,
-   "bat": 1.2,
-   "aspd": 100,
-   "respawnTime": 62,
-   "cost": 14,
+   "maxHp": 1768,
+   "atk": 805,
+   "def": 317,
+   "res": 30,
+   "cost": 19,
+   "blockCnt": 0,
+   "bat": 3.5,
+   "aspd": 105,
+   "respawnTime": 70,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
-   "tauntLevel": 0,
+   "tauntLevel": -1,
    "massLevel": 0,
    "deployLimit": 1,
    "deckStack": 0
@@ -1683,7 +1678,7 @@
    "moduleDescRaw": null
   },
   "skill": {
-   "skillId": "skchr_am_timoris_2",
+   "skillId": "skchr_tmoris_2",
    "iconId": "skchr_am_timoris_2",
    "name": "无存之所",
    "level": 7,
@@ -1705,15 +1700,14 @@
    "bbStr": {},
    "rangeId": null,
    "rangeGrid": null,
-   "prefabId": "skchr_am_timoris_2",
+   "prefabId": "skchr_tmoris_2",
    "trigger": {
     "rule": "DEFAULT",
     "rawRule": "DEFAULT",
     "customRangeGrid": null
    },
    "index": 1,
-   "overrideTokenKey": null,
-   "isDefault": true
+   "overrideTokenKey": null
   },
   "talents": [
    {
@@ -1756,15 +1750,15 @@
    "active": true
   },
   "assets": {
-   "avatar": "char_3003_timoris",
-   "portrait": "char_3003_timoris",
-   "spine": "char_3003_timoris",
+   "avatar": "char_4186_tmoris",
+   "portrait": "char_4186_tmoris_2",
+   "spine": "char_4186_tmoris",
    "skillIcon": "skchr_am_timoris_2",
    "subProfIcon": "sub_stalker_icon"
   },
   "skills": [
    {
-    "skillId": "skchr_am_timoris_1",
+    "skillId": "skchr_tmoris_1",
     "iconId": "skchr_am_timoris_1",
     "name": "颤栗之弦",
     "level": 7,
@@ -1786,7 +1780,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_timoris_1",
+    "prefabId": "skchr_tmoris_1",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -1797,7 +1791,7 @@
     "isDefault": false
    },
    {
-    "skillId": "skchr_am_timoris_2",
+    "skillId": "skchr_tmoris_2",
     "iconId": "skchr_am_timoris_2",
     "name": "无存之所",
     "level": 7,
@@ -1819,7 +1813,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_timoris_2",
+    "prefabId": "skchr_tmoris_2",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -1900,19 +1894,19 @@
    }
   ],
   "statsBase": {
-   "maxHp": 2365,
-   "atk": 469,
-   "def": 455,
-   "res": 15,
-   "blockCnt": 2,
-   "bat": 1.2,
-   "aspd": 95,
-   "respawnTime": 62,
-   "cost": 14,
+   "maxHp": 1663,
+   "atk": 770,
+   "def": 317,
+   "res": 30,
+   "cost": 19,
+   "blockCnt": 0,
+   "bat": 3.5,
+   "aspd": 100,
+   "respawnTime": 70,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
-   "tauntLevel": 0,
+   "tauntLevel": -1,
    "massLevel": 0,
    "deployLimit": 1,
    "deckStack": 0
@@ -1937,7 +1931,7 @@
    "potRank": 0
   },
   "shopSortId": 630,
-  "charId": "char_3004_oblivionis",
+  "charId": "char_4182_oblvns",
   "name": "丰川祥子",
   "appellation": "Oblivionis",
   "rarity": 6,
@@ -1954,7 +1948,7 @@
    "garrison_180_a"
   ],
   "price": 5,
-  "sellPrice": 2,
+  "sellPrice": 1,
   "upgradeNum": 3,
   "upgradeChessId": "chess_char_6_30_b",
   "status": {
@@ -1964,22 +1958,22 @@
    "equipLevel": 0
   },
   "stats": {
-   "maxHp": 1350,
-   "atk": 560,
-   "def": 200,
-   "res": 15,
-   "blockCnt": 1,
-   "bat": 1.2,
+   "maxHp": 1624,
+   "atk": 613,
+   "def": 352,
+   "res": 10,
+   "cost": 18,
+   "blockCnt": 2,
+   "bat": 1.3,
    "aspd": 100,
-   "respawnTime": 70,
+   "respawnTime": 66,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
    "tauntLevel": 0,
    "massLevel": 0,
    "deployLimit": 1,
-   "deckStack": 0,
-   "cost": 21
+   "deckStack": 0
   },
   "immunities": {
    "stun": false,
@@ -2038,7 +2032,7 @@
    "rangeGrid": null
   },
   "skill": {
-   "skillId": "skchr_am_oblivionis_1",
+   "skillId": "skchr_oblvns_1",
    "iconId": "skchr_am_oblivionis_1",
    "name": "新月的苏醒",
    "level": 4,
@@ -2069,15 +2063,14 @@
    "bbStr": {},
    "rangeId": null,
    "rangeGrid": null,
-   "prefabId": "skchr_am_oblivionis_1",
+   "prefabId": "skchr_oblvns_1",
    "trigger": {
     "rule": "DEFAULT",
     "rawRule": "DEFAULT",
     "customRangeGrid": null
    },
    "index": 0,
-   "overrideTokenKey": null,
-   "isDefault": true
+   "overrideTokenKey": null
   },
   "talents": [
    {
@@ -2120,15 +2113,15 @@
    "active": false
   },
   "assets": {
-   "avatar": "char_3004_oblivionis",
-   "portrait": "char_3004_oblivionis",
-   "spine": "char_3004_oblivionis",
+   "avatar": "char_4182_oblvns",
+   "portrait": "char_4182_oblvns_2",
+   "spine": "char_4182_oblvns",
    "skillIcon": "skchr_am_oblivionis_1",
    "subProfIcon": "sub_lord_icon"
   },
   "skills": [
    {
-    "skillId": "skchr_am_oblivionis_1",
+    "skillId": "skchr_oblvns_1",
     "iconId": "skchr_am_oblivionis_1",
     "name": "新月的苏醒",
     "level": 4,
@@ -2159,7 +2152,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_oblivionis_1",
+    "prefabId": "skchr_oblvns_1",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -2170,7 +2163,7 @@
     "isDefault": true
    },
    {
-    "skillId": "skchr_am_oblivionis_3",
+    "skillId": "skchr_oblvns_2",
     "iconId": "skchr_am_oblivionis_3",
     "name": "满月的舞会",
     "level": 4,
@@ -2194,7 +2187,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_oblivionis_3",
+    "prefabId": "skchr_oblvns_2",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -2205,7 +2198,7 @@
     "isDefault": false
    },
    {
-    "skillId": "skchr_am_oblivionis_2",
+    "skillId": "skchr_oblvns_3",
     "iconId": "skchr_am_oblivionis_2",
     "name": "残月的余响",
     "level": 4,
@@ -2228,7 +2221,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_oblivionis_2",
+    "prefabId": "skchr_oblvns_3",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -2259,7 +2252,7 @@
    "potRank": 0
   },
   "shopSortId": 631,
-  "charId": "char_3004_oblivionis",
+  "charId": "char_4182_oblvns",
   "name": "丰川祥子",
   "appellation": "Oblivionis",
   "rarity": 6,
@@ -2276,7 +2269,7 @@
    "garrison_180_b"
   ],
   "price": 5,
-  "sellPrice": 2,
+  "sellPrice": 1,
   "upgradeNum": 0,
   "upgradeChessId": null,
   "status": {
@@ -2286,15 +2279,15 @@
    "equipLevel": 0
   },
   "stats": {
-   "maxHp": 1755,
-   "atk": 672,
-   "def": 260,
-   "res": 20,
-   "blockCnt": 1,
-   "bat": 1.2,
-   "aspd": 100,
-   "respawnTime": 67,
-   "cost": 19,
+   "maxHp": 2090,
+   "atk": 742,
+   "def": 400,
+   "res": 10,
+   "cost": 18,
+   "blockCnt": 2,
+   "bat": 1.3,
+   "aspd": 105,
+   "respawnTime": 66,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
@@ -2363,7 +2356,7 @@
    "moduleDescRaw": "攻击范围内存在2名及以上敌人时攻击速度<@ba.kw>+12</>"
   },
   "skill": {
-   "skillId": "skchr_am_oblivionis_3",
+   "skillId": "skchr_oblvns_2",
    "iconId": "skchr_am_oblivionis_3",
    "name": "满月的舞会",
    "level": 7,
@@ -2387,15 +2380,14 @@
    "bbStr": {},
    "rangeId": null,
    "rangeGrid": null,
-   "prefabId": "skchr_am_oblivionis_3",
+   "prefabId": "skchr_oblvns_2",
    "trigger": {
     "rule": "DEFAULT",
     "rawRule": "DEFAULT",
     "customRangeGrid": null
    },
    "index": 1,
-   "overrideTokenKey": null,
-   "isDefault": true
+   "overrideTokenKey": null
   },
   "talents": [
    {
@@ -2438,15 +2430,15 @@
    "active": true
   },
   "assets": {
-   "avatar": "char_3004_oblivionis",
-   "portrait": "char_3004_oblivionis",
-   "spine": "char_3004_oblivionis",
+   "avatar": "char_4182_oblvns",
+   "portrait": "char_4182_oblvns_2",
+   "spine": "char_4182_oblvns",
    "skillIcon": "skchr_am_oblivionis_3",
    "subProfIcon": "sub_lord_icon"
   },
   "skills": [
    {
-    "skillId": "skchr_am_oblivionis_1",
+    "skillId": "skchr_oblvns_1",
     "iconId": "skchr_am_oblivionis_1",
     "name": "新月的苏醒",
     "level": 7,
@@ -2477,7 +2469,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_oblivionis_1",
+    "prefabId": "skchr_oblvns_1",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -2488,7 +2480,7 @@
     "isDefault": false
    },
    {
-    "skillId": "skchr_am_oblivionis_3",
+    "skillId": "skchr_oblvns_2",
     "iconId": "skchr_am_oblivionis_3",
     "name": "满月的舞会",
     "level": 7,
@@ -2512,7 +2504,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_oblivionis_3",
+    "prefabId": "skchr_oblvns_2",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -2523,7 +2515,7 @@
     "isDefault": true
    },
    {
-    "skillId": "skchr_am_oblivionis_2",
+    "skillId": "skchr_oblvns_3",
     "iconId": "skchr_am_oblivionis_2",
     "name": "残月的余响",
     "level": 7,
@@ -2546,7 +2538,7 @@
     "bbStr": {},
     "rangeId": null,
     "rangeGrid": null,
-    "prefabId": "skchr_am_oblivionis_2",
+    "prefabId": "skchr_oblvns_3",
     "trigger": {
      "rule": "DEFAULT",
      "rawRule": "DEFAULT",
@@ -2628,15 +2620,15 @@
    }
   ],
   "statsBase": {
-   "maxHp": 1575,
-   "atk": 634,
-   "def": 260,
-   "res": 20,
-   "blockCnt": 1,
-   "bat": 1.2,
-   "aspd": 95,
-   "respawnTime": 67,
-   "cost": 19,
+   "maxHp": 1910,
+   "atk": 704,
+   "def": 400,
+   "res": 10,
+   "cost": 18,
+   "blockCnt": 2,
+   "bat": 1.3,
+   "aspd": 100,
+   "respawnTime": 66,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
    "moveSpeed": 1,
@@ -2675,9 +2667,9 @@
   "position": "MELEE",
   "nationId": null,
   "bonds": [
+   "aveMujica",
    "rimBilliton",
-   "indomShip",
-   "aveMujica"
+   "indomShip"
   ],
   "garrisonIds": [
    "garrison_164_a"
@@ -3017,9 +3009,9 @@
   "position": "MELEE",
   "nationId": null,
   "bonds": [
+   "aveMujica",
    "rimBilliton",
-   "indomShip",
-   "aveMujica"
+   "indomShip"
   ],
   "garrisonIds": [
    "garrison_164_b"

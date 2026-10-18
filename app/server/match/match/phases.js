@@ -8,6 +8,7 @@ import { PHASE, ERR } from '../../../shared/constants.js';
 import { msg } from '../../../shared/i18n.js';
 import { buildNormalWave, buildBossWave } from '../waves.js';
 import { pairPlayers } from '../finalAssault.js';
+import { createRng, deriveSeed } from '../../sim/rng.js';
 import { botPickBand } from '../bot.js';
 import { OK, fail, DELAYS, BAND_TURN_SECONDS } from './common.js';
 
@@ -28,7 +29,9 @@ import { OK, fail, DELAYS, BAND_TURN_SECONDS } from './common.js';
  * 名单里一个 `visibleChess` 里没有的 id 只是**不出现在结果里**，不抛错：那是声明侧该拦的事
  * （`PLAYTEST_UNKNOWN_CHESS`），引擎不该为了一个坏 id 把一局打不开。
  *
- * 取牌走的是共享池（`pool.take`），所以「池里那一份」是真的被拿走的 —— 与开局礼包不同，这里不会凭空多出一份拷贝。
+ * 取牌走 `PlayerState.poolOf` —— 唯一分派点（design-level A, docs/PS100-MIGRATION.md §10-A）：`≤ MAX_SEATS` 时它就是共享池
+ * （同一个 `m.pool` 对象），座位变体打开时是本玩家自己的池。两种情况下「池里那一份」都是真的被拿走的 —— 与开局礼包不同，
+ * 这里不会凭空多出一份拷贝。
  * @param {object} gd 这一局的 GameData
  * @param {Record<string, string|undefined>} [env] 默认 `process.env`（单测直接喂一个假环境）
  * @returns {string[]} 可见、非精锐、且被两个来源之一点名的干员 id
@@ -122,7 +125,7 @@ export class MatchPhases {
     const d = this.draft;
     this.cancel(this._turnTimer);
     this._turnTimer = null;
-    while (d.idx < d.order.length && d.picks[d.order[d.idx]]) d.idx++;
+    while (d.idx < d.order.length && d.picks[d.order[d.idx]]) d.idx++; // loop-cap: draft order
     if (d.idx >= d.order.length) {
       d.turnDeadline = 0;
       this.deadline = 0;
@@ -281,6 +284,22 @@ export class MatchPhases {
     this.enterBattleCheck();
   }
 
+  /**
+   * 开发者模式（工坊包 dev-ext 的「全量模拟」，`Match.dev`）：**跳过 INFO_CHECK 与 BAND_DRAFT 两屏**，直接进战斗。
+   * 策略按 `finishBandDraft` 的默认逻辑**逐个**分配（座位顺序分配 ⇒ 后一位的默认看得见前一位的选择，不会重复），
+   * 再把每位在场玩家标记为「已确认本局信息」，然后走 `enterBattleCheck()` → 第 1 回合 → 休整期/战斗。
+   */
+  skipToBattle() {
+    for (const ps of this.order) {
+      const id = this.defaultBand(ps.playerId);
+      ps.bandId = id;
+      ps.lp = this.gd.startLp(id);
+      ps.infoReady = true;
+      this.markPrivate(ps);
+    }
+    this.enterBattleCheck();
+  }
+
   enterBattleCheck() {
     this.phase = PHASE.BATTLE_CHECK;
     this.setDeadline(this.gd.timer('battleCheck'), () => this.startRound(1), { silent: this.soloUntimed });
@@ -297,17 +316,28 @@ export class MatchPhases {
     this.sp = null;
     this.wave = null;
     this.bossWaves = null;
+    // 开发者面板（「全量模拟」）追加的敌人与它们的数值覆盖**只在添加的那一个回合**里出现（预览与战斗是同一份列表，
+    // 见 views.js nextEnemiesFor / combat.js _normalOpts）：新回合开始即清空。
+    this.devExtraEnemies = [];
+    this.devEnemyOverrides = Object.create(null);
     const alive = this.alivePlayers();
     // the round's enemies (shared composition, generated now so the prep preview is exact). Planned BEFORE the players'
     // round start: its recompute() checks the board on the field the player deploys on this round (deployFieldOf reads
     // the boss pairing), so R14 → R15 never re-checks a boss-field board against the normal field (user playtest #5
     // item 7). rngWaves is used only here, so the order leaves every random stream unchanged.
-    const isBoss = r === this.gd.bossRound || r === this.gd.hiddenRound;
+    // 开发者面板「场景相关」：一次性强制的战斗类型（消费后清空）；否则按模式的 首领 / 隐秘核心 回合
+    const forcedKind = this.devRoundKind;
+    this.devRoundKind = null;
+    // 强制首领：记下「这一个回合号是首领回合」（endPrep / _planBossWaves / m.public 都按这个号判定）；强制普通则清掉覆盖
+    this.devBossRound = forcedKind === 'boss' ? r : null;
+    const isBoss = forcedKind ? forcedKind === 'boss' : (r === this.gd.bossRound || r === this.gd.hiddenRound);
     if (isBoss) {
       this._planBossWaves();
     } else {
       // stageId: a workshop stage may bind its own wave table to a round (shared/waveAuthoring.js; waves.js buildNormalWave)
-      this.wave = buildNormalWave(this.gd, this.rngWaves, this.factions, r, this.stageId);
+      // 「全量模拟」回合数无限（首领战打完不结算）：超出试验场绑定范围的回合沿用**最后一个有绑定的回合**那条波次，
+      // 出怪才始终只有面板加的那些（否则 >15 的回合会退回模式的官方波次）
+      this.wave = buildNormalWave(this.gd, this.rngWaves, this.factions, this.devWaveRound(r), this.stageId);
     }
     for (const ps of alive) ps.startRound(r);
     // 助战 (shared/support.js): re-check what each player brought against the pool ONE more time at the first round's
@@ -347,7 +377,10 @@ export class MatchPhases {
         try {
           const rec = this.gd.chess(id);
           const base = this.gd.baseIdOf(id);
-          const taken = this.pool.take(base, rec && rec.isGolden ? this.gd.goldenCopies : 1);
+          // 份数走 `PlayerState.poolOf` —— 唯一分派点（design-level A, docs/PS100-MIGRATION.md §10-A）：自选槽走本人 stock、
+          // 100 座变体走本玩家自己的池，≤ MAX_SEATS 时它就是 `this.pool` 本身（同一个对象上的同一条语句）。
+          // 从共享目录直接 take 会让变体下的目录 `left < cap`，正是变体要消灭的东西。
+          const taken = ps.poolOf(base).take(base, rec && rec.isGolden ? this.gd.goldenCopies : 1);
           ps.hand[slot] = ps.newPiece('chess', id, { poolCopies: taken });
           got.push(id);
         } catch (e) {
@@ -363,13 +396,33 @@ export class MatchPhases {
     }
   }
 
-  /** The boss round's fields (seat pairs of the alive players) and their templates, generated for the prep preview. */
-  _planBossWaves() {    const r = this.round;
+  /** Stable per-match pairs and their templates, generated before the prep preview / board validation. */
+  _planBossWaves() {
+    const r = this.round;
+    // 开发者面板强制的首领回合：本回合号在官方表里没有首领模板，取**官方首领回合**那一套（模板 / 波次 / 血量）
+    const wr = this.devBossRound === r ? this.gd.bossRound : r;
     const bossId = r === this.gd.hiddenRound && r !== this.gd.bossRound ? this.hiddenBossId : this.bossId;
-    this.bossWaves = pairPlayers(this.alivePlayers()).map((g) => ({
+    // Pairing uses an independent seeded draw, consuming no shop, wave, draft or battle randomness.
+    const groups = pairPlayers(this.alivePlayers(), createRng(deriveSeed(this.seed, 'boss-pairs')), this.bossPairs);
+    this.bossPairs = groups.map(g => g.map(p => p.playerId));
+    this.bossWaves = groups.map((g) => ({
       players: g.map((p) => p.playerId),
-      wave: buildBossWave(this.gd, this.rngWaves, this.factions, r, { bossId, solo: this.isSolo || g.length === 1 }, this.stageId),
+      wave: buildBossWave(this.gd, this.rngWaves, this.factions, wr, { bossId, solo: this.isSolo || g.length === 1 }, this.stageId),
     }));
+  }
+
+  /**
+   * 「全量模拟」的波次回合号：试验场把所有回合都绑到空波次表，但 `stage.rounds` 的键只到 15，回合数无限后
+   * （>15）沿用**最后一个有绑定的回合**那条 —— 出怪才始终只有面板加的那些。非 dev 对局原样返回（逐字节不变）。
+   */
+  devWaveRound(r) {
+    if (!this.dev) return r;
+    const stage = this.gd.stage(this.stageId);
+    const rounds = stage && stage.rounds;
+    if (!rounds || typeof rounds !== 'object') return r;
+    if (rounds[String(r)]) return r;
+    const below = Object.keys(rounds).map(Number).filter((n) => Number.isInteger(n) && n > 0 && n < r);
+    return below.length ? Math.max(...below) : r;
   }
 
   afterRoundStart() {

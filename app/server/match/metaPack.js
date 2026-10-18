@@ -23,6 +23,11 @@ import { META_KEY_CLASSES } from '../../shared/workshop.js';
 import { MOD_API_VERSION } from '../../shared/constants.js';
 import { MetaRegistry } from './effectsMeta.js';
 import { num, bondRecord, itemRecord, garrisonRecord, bandRecord, effectRecord, buffsOf, buffParams, itemKeyOf, isGoldenId } from '../sim/content/support/index.js';
+// 内容层（工坊 mod）的休整期处理器用到的读法：盟约顺序 / 棋盘上的棋子 / 记录自身的盟约 / 身前一格 —— 与官方内容模块
+// 用的是同一份实现（`content/garrisons/meta.js`、`content/support/meta.js`）。加进 `registry.api` 是为了让包不再依赖
+// 引擎专属的挂载点（这些 helper 原本只在引擎内部可见）。
+import { ids, bondOrder, chessOnBoard } from '../sim/content/garrisons/meta.js';
+import { metaBonds, frontPiece } from '../sim/content/support/meta.js';
 
 /**
  * 除 kit 那套「不确定性 / 环境绑定」名单之外，**服务端**模块还要禁掉的东西。
@@ -47,6 +52,8 @@ function importSpecifiers(code) {
 function climbOf(spec) {
   let n = 0;
   let rest = spec;
+  // loop-cap: rest.length / 3 —— 每轮 slice(3)，rest 必短 3 ⇒ 上界就是初始长度除以 3，
+  // 不可能死循环（test/plugins/loopCaps.test.js 要求每个 while 点名它的预算）。
   while (rest.startsWith('../')) { n++; rest = rest.slice(3); }
   return n;
 }
@@ -224,6 +231,12 @@ export const META_API = Object.freeze({
   buffsOf, buffParams,
   /** 装备「同一族」的键（`chess_item_c_01_e_a` → `chess_item_c_01_e`）与金制品判定。 */
   itemKeyOf, isGoldenId,
+  /**
+   * 休整期读法（工坊 mod 的盟约 / 特质 / 策略处理器用到的）：`ids("a,b")` 切分；`bondOrder(ctx)` 盟约的遍历顺序；
+   * `chessOnBoard(ctx)` 棋盘上的棋子视图；`metaBonds(ctx, piece)` 一枚棋子按其记录算出的盟约；`frontPiece(ctx, p)`
+   * 身前一格的棋子。与官方内容模块是同一份实现。
+   */
+  ids, bondOrder, chessOnBoard, metaBonds, frontPiece,
 });
 
 /** 一个包声明的 meta 模块的绝对路径（形状层已经判过「包内相对 + .mjs」）。 */

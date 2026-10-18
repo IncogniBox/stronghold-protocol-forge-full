@@ -3,37 +3,65 @@
 //
 // Model:
 //   * Every visible (non-hidden, non-DIY) base chess that is not banned this match has `cap` copies
-//     (config.economy.poolCopies[tier], overrides e.g. 缪尔赛思 4). `left[baseId]` = copies not owned by anyone.
+//     (config.economy.poolCopies[tier], measured identity overrides; co-op shared stock doubled). `left` is the
+//     signed capacity minus occupation; the public left() and shop sampling clamp a deficit to zero.
 //   * Owning a piece takes copies: a normal piece holds 1, an elite holds 3 (merge of 3 normals). Shop displays
-//     do NOT reserve copies; buying fails (SOLD_OUT) when left = 0.
+//     do NOT reserve copies. An operator or equipment card already shown in the shop, or a reward already shown, can
+//     still be taken and overdraws (chess: a negative raw left; equipment: SharedItemPool's debt — GitHub #498, and
+//     the maintainer's decision of 2026-10-14 for equipment, #624). A slot that is already sold still fails SOLD_OUT.
+//     Future rolls exclude empty stock. 整备 and grants that are not an already-shown card stay stock-limited.
 //   * Pieces remember how many copies they hold (`piece.poolCopies`), so selling / elimination / temp wipes return
 //     exactly what was taken — chess granted by effects while the pool is empty (or hidden/banned chess) hold 0.
-//   * Invariant (tests): 0 ≤ left ≤ cap and left + Σ held copies == cap for every base chess.
+//   * Invariant: raw left ≤ cap and raw left + Σ held copies == cap. Mimic can exceed stock, but its copies still occupy it.
 //
 // Rolls: each chess slot draws ONE copy uniformly from all remaining copies of eligible chess with tier ≤ shop level
 // ("copy-weighted"; duplicates within a roll allowed). The item slot picks a tier with the same tier shares, then a
 // uniform shop-eligible item of that tier (falling back to lower tiers). A roll may add entries outside the pool
-// (`extra`, after its own): one player's 自选 stock (0.2.0, player/diy.js diyRollEntries) — weighted by its copies like
-// any chess, drawn by that player's shop only.
+// (`extra`, after its own): one player's 自选 stock — the ordinary shop passes diyRollEntries (the shopLevel gate);
+// the promotion reward and random grants pass diyStockEntries (the roll's own tier, DESIGN §32.23). Weighted by its
+// copies like any chess, drawn by that player only.
 
 /**
  * Per-match disabled bond set D and banned chess (research 01 A2): D = uniform sample of `core` core bonds and `addon`
  * add-on bonds among weight > 0 bonds that are active in the mode. A visible chess is banned iff every one of its
  * bonds is in D ∪ mode.inactiveBondIds.
+ *
+ * **策略钩子（`policies`，可选）**：包可以通过它的 `server.battle` 模块导出 `matchBondPolicy(ctx)`，在**引擎自己抽签之前**
+ * 介入这一局盟约的禁用表。它是引擎与包之间**通用**的一层（引擎不认识任何具体盟约），契约是：
+ *   ctx = { gd, rng, eligible }  — `eligible` = 引擎本会参与抽签的盟约 id（weight > 0 且非本模式静态禁用），已排序；
+ *   返回 `{ claim?, drawn?, removed? }`（`null` / 缺省 = 这个包不介入）：
+ *     * `claim`   —— 这个包**接管**的盟约 id：引擎**不再**把它们放进自己的核心/附加抽签池（包的规则说了算）；
+ *     * `drawn`   —— 这个包判定**本局禁用**的盟约 id（并入 D —— 于是「全身都是这些盟约」的棋子照既有规则被禁）；
+ *     * `removed` —— 其中还应当**从棋子身上摘除**的盟约 id（不计入归属、不下发、不参与战斗 —— 见 bondsMeta.pieceBonds）。
+ * 多个包的策略按包 id 升序依次跑（`installers` 的同一条次序），谁都抛异常只丢它自己那一条。
+ *
  * @param {import('./gamedata.js').GameData} gd
  * @param {Function} rng seeded rng (createRng)
- * @returns {{ drawn: string[], staticOff: string[], banned: string[] }}
+ * @param {Array<(ctx: object) => any>|null} [policies] 包声明的本局盟约抽签策略（`server.battle` 的 `matchBondPolicy`）
+ * @returns {{ drawn: string[], staticOff: string[], banned: string[], removed: string[] }}
  */
-export function drawDisabledBonds(gd, rng) {
+export function drawDisabledBonds(gd, rng, policies = null) {
   const { core: nCore, addon: nAddon } = gd.bans(gd.difficulty);
   const staticOff = [...gd.modeInactiveBonds].filter((b) => gd.bond(b)).sort();
   const eligible = gd.bondIds.filter((b) => {
     const bond = gd.bond(b);
     return bond && Number(bond.weight) > 0 && !gd.modeInactiveBonds.has(b);
   });
-  const core = eligible.filter((b) => gd.bond(b).isCore);
-  const addon = eligible.filter((b) => !gd.bond(b).isCore);
-  const drawn = [...sample(core, nCore, rng), ...sample(addon, nAddon, rng)].sort();
+  const claimed = new Set();
+  const policyDrawn = [];
+  const removed = [];
+  for (const policy of Array.isArray(policies) ? policies : []) {
+    let out;
+    try { out = policy({ gd, rng, eligible: eligible.slice() }); } catch { out = null; }
+    if (!out || typeof out !== 'object') continue;
+    for (const id of Array.isArray(out.claim) ? out.claim : []) if (typeof id === 'string' && gd.bond(id)) claimed.add(id);
+    for (const id of Array.isArray(out.drawn) ? out.drawn : []) if (typeof id === 'string' && gd.bond(id)) policyDrawn.push(id);
+    for (const id of Array.isArray(out.removed) ? out.removed : []) if (typeof id === 'string' && gd.bond(id)) removed.push(id);
+  }
+  const pool = eligible.filter((b) => !claimed.has(b));
+  const core = pool.filter((b) => gd.bond(b).isCore);
+  const addon = pool.filter((b) => !gd.bond(b).isCore);
+  const drawn = [...new Set([...sample(core, nCore, rng), ...sample(addon, nAddon, rng), ...policyDrawn])].sort();
   const off = new Set([...drawn, ...staticOff]);
   const banned = [];
   for (const id of gd.visibleChess) {
@@ -41,7 +69,7 @@ export function drawDisabledBonds(gd, rng) {
     const bonds = Array.isArray(c.bonds) ? c.bonds : [];
     if (bonds.length > 0 && bonds.every((b) => off.has(b))) banned.push(id);
   }
-  return { drawn, staticOff, banned };
+  return { drawn, staticOff, banned, removed: [...new Set(removed)].sort() };
 }
 
 function sample(arr, n, rng) {
@@ -87,13 +115,13 @@ export class SharedPool {
   /** Whether this chess is in the pool because somebody brought it as 助战. */
   isSupport(baseId) { return this.entries.get(baseId)?.support === true; }
   cap(baseId) { return this.entries.get(baseId)?.cap ?? 0; }
-  left(baseId) { return this.entries.get(baseId)?.left ?? 0; }
+  left(baseId) { return Math.max(0, this.entries.get(baseId)?.left ?? 0); }
 
   /** Take up to n copies; returns the number actually taken (0 when not in the pool / empty). */
-  take(baseId, n = 1) {
+  take(baseId, n = 1, { overdraw = false } = {}) {
     const e = this.entries.get(baseId);
     if (!e || !(n > 0)) return 0;
-    const k = Math.min(e.left, Math.floor(n));
+    const k = overdraw ? Math.floor(n) : Math.min(Math.max(0, e.left), Math.floor(n));
     e.left -= k;
     return k;
   }
@@ -111,14 +139,14 @@ export class SharedPool {
    * Remaining copies of eligible chess (tier ≤ maxTier, or exactly `tier`): the pool's entries, then `extra` ([id, entry]
    * pairs of the same shape — a player's 自选 stock) under the same filters.
    */
-  _eligible({ maxTier = 6, tier = null, filter = null, extra = null } = {}) {
+  _eligible({ maxTier = 6, tier = null, filter = null, extra = null, ignoreCounts = false } = {}) {
     const out = [];
     const scan = (list) => {
       for (const [id, e] of list) {
-        if (e.left <= 0) continue;
+        if (!ignoreCounts && e.left <= 0) continue;
         if (tier != null ? e.tier !== tier : e.tier > maxTier) continue;
         if (filter && !filter(id, e)) continue;
-        out.push([id, e.left]);
+        out.push([id, ignoreCounts ? 1 : e.left]);
       }
     };
     scan(this.entries);
@@ -159,8 +187,18 @@ export class SharedPool {
   /**
    * Item roll for the shop's item slot: tier by the chess tier shares at this level, uniform item within the tier,
    * falling back to lower tiers when a tier has no item. Returns an item id or null.
+   *
+   * `restrict`（可选，行为开关 `shopBias: "bondBias"`）：`(id, stock) => boolean`，**只缩小候选集、不加权**。抽到
+   * 的阶级照旧由棋子份额决定（那一半一字不动）；三类扫描（本阶级 → 更低阶级 → 更高阶级）里，先在这一级的
+   * **官方候选**（≥1 件）上挑一件**合偏向且库存拿得动**的；挑不出来就照旧用这一级的官方名单 —— 于是「偏向」
+   * 永远不会把商店的装备槽变成空的，也不会改变候选阶级（`shopBias` 的 `effect` 逐字这么写）。
+   * 不给谓词 ⇒ `restrict` 为 null，每一步都走官方名单，与从前同一份结果。
+   *
+   * @param {() => number} rng @param {number} maxTier
+   * @param {{ canGain: (id: string) => boolean, pick: (rng: () => number, list: string[]) => string }|null} [stock]
+   * @param {((id: string, stock: any) => boolean)|null} [restrict]
    */
-  rollItem(rng, maxTier) {
+  rollItem(rng, maxTier, stock = null, restrict = null) {
     const shares = this.tierShares(maxTier);
     const tiers = Object.keys(shares).map(Number).sort((a, b) => a - b);
     let tier = null;
@@ -172,26 +210,136 @@ export class SharedPool {
       tier = 1 + Math.floor(rng() * Math.max(1, maxTier));
     }
     for (let t = tier; t >= 1; t--) {
-      const list = this.gd.shopItemsByTier[t];
-      if (list && list.length) return list[Math.floor(rng() * list.length)];
+      const id = this._pickItemTier(rng, t, stock, restrict);
+      if (id) return id;
     }
     for (let t = tier + 1; t <= 6; t++) {
-      const list = this.gd.shopItemsByTier[t];
-      if (list && list.length) return list[Math.floor(rng() * list.length)];
+      const id = this._pickItemTier(rng, t, stock, restrict);
+      if (id) return id;
     }
     return null;
+  }
+
+  /**
+   * One tier of `rollItem`: the official candidate list of that tier (`stock.canGain`), then — when a 偏向 is
+   * declared — the same list narrowed to it. `pick` is asked FIRST on the narrowed list and only then on the official
+   * one, so a tier whose entire stock is held still falls through to the next tier exactly as it does today.
+   */
+  _pickItemTier(rng, t, stock, restrict) {
+    const all = (this.gd.shopItemsByTier[t] || []).filter(id => !stock || stock.canGain(id));
+    if (!all.length) return null;
+    const draw = (list) => (stock ? stock.pick(rng, list) : list[Math.floor(rng() * list.length)]);
+    if (restrict) {
+      const narrowed = all.filter(id => restrict(id, stock));
+      if (narrowed.length) {
+        const hit = draw(narrowed);
+        if (hit) return hit;
+      }
+    }
+    return draw(all);
   }
 
   /** { baseId: left } snapshot (tests / diagnostics). */
   snapshot() {
     const o = {};
-    for (const [id, e] of this.entries) o[id] = e.left;
+    for (const [id, e] of this.entries) o[id] = Math.max(0, e.left);
     return o;
   }
 
   totalLeft() {
     let n = 0;
-    for (const e of this.entries.values()) n += e.left;
+    for (const e of this.entries.values()) n += Math.max(0, e.left);
     return n;
   }
+}
+
+/** Shared equipment stock, derived from actual ownership. Merges, equips and returns cannot lose a reservation:
+ * normal equipment occupies one, upgraded equipment two. Shop and reward displays reserve nothing. An already
+ * displayed shop card or item reward may be taken after `left` hits 0; `owe` records those copies and `repay`
+ * clears them first when a copy actually leaves the match (destroy, consume, elimination, a temp wipe). Rolls and
+ * `canGain` keep using the clamped `left`, so an empty item does not appear again until the debt is repaid and a
+ * copy is free. 整备 and ordinary grants stay limited. Fixed gift families may exceed the cap without a debt entry.
+ * Source: the original experiment BV1eLXXBqEgF, 1:30 and 2:30, extended to equipment by the maintainer on
+ * 2026-10-14 (#624). [ASSUMED] An item that is consumed, destroyed or removed by elimination no longer occupies
+ * stock, consistently with the video's ownership model; this is not a per-match purchase limit. */
+export class SharedItemPool {
+  constructor(gd, players) {
+    this.gd = gd;
+    this.players = players;
+    /** @type {Map<string, number>} base id → copies taken past the cap by an already-displayed card */
+    this.debt = new Map();
+  }
+  cap(id) { return this.gd.itemPoolCopies(id); }
+  need(id) { return this.gd.isGolden(id) ? 2 : 1; }
+  held(id) {
+    const base = this.gd.baseIdOf(id);
+    let count = 0;
+    const see = p => {
+      if (!p) return;
+      if (p.kind === 'item' && this.gd.baseIdOf(p.id) === base) count += this.need(p.id);
+      for (const item of p.items || []) if (this.gd.baseIdOf(item.id) === base) count += this.need(item.id);
+    };
+    for (const ps of this.players()) {
+      for (const p of ps.hand) see(p);
+      for (const p of ps.temp) see(p);
+      for (const p of ps.board.values()) see(p);
+    }
+    return count;
+  }
+  /** Signed cap − held. Infinity when the item has no shop cap. */
+  rawLeft(id) { const cap = this.cap(id); return cap == null ? Infinity : cap - this.held(id); }
+  left(id) { const raw = this.rawLeft(id); return raw === Infinity ? Infinity : Math.max(0, raw); }
+  canGain(id) { return this.left(id) >= this.need(id); }
+  debtOf(id) { return this.debt.get(this.gd.baseIdOf(id)) || 0; }
+  /** Record `copies` of debt on the base item. Uncapped items and non-positive counts record nothing. */
+  owe(id, copies) {
+    const n = Math.floor(Number(copies));
+    const base = this.gd.baseIdOf(id);
+    if (!(n > 0) || this.cap(base) == null) return 0;
+    this.debt.set(base, (this.debt.get(base) || 0) + n);
+    return n;
+  }
+  /** Repay up to `copies` of debt. Returns how many were repaid (0 when nothing is owed). */
+  repay(id, copies) {
+    const n = Math.floor(Number(copies));
+    const base = this.gd.baseIdOf(id);
+    const cur = this.debt.get(base) || 0;
+    if (!(n > 0) || cur <= 0) return 0;
+    const k = Math.min(cur, n);
+    if (cur === k) this.debt.delete(base);
+    else this.debt.set(base, cur - k);
+    return k;
+  }
+  /** Stock gates eligibility, not probability: retain the existing uniform item draw or explicit data weights.
+   * The measured stock table alone does not establish shop probabilities. */
+  pick(rng, ids, weights = null) {
+    const list = [...new Set(ids)].filter(id => this.canGain(id));
+    const pairs = list.map(id => [id, weights ? Math.max(0, Number(weights.get(id)) || 0) : 1]);
+    const total = pairs.reduce((n, p) => n + Math.max(0, p[1]), 0);
+    if (!(total > 0)) return null;
+    let r = rng() * total;
+    for (const [id, weight] of pairs) if ((r -= Math.max(0, weight)) < 0) return id;
+    return pairs.at(-1)?.[0] || null;
+  }
+}
+
+/**
+ * 行为开关 `shopBias: "bondBias"` 的谓词：这件装备是不是「偏向」的那一类 —— 它的 `giveBondId` 落在
+ * `bonds`（这个玩家**已激活**盟约的 id 集合）里。**只读，不授予**：授予盟约是 `giveBondId` 本来的语义，
+ * 由装备自己的规则（`server/match/bondsMeta.js` 的 `pieceBonds`）管，这一层一个字节都不碰它。
+ *
+ * 与 `SharedPool.rollItem` 的 `restrict` 同一个签名（`(id, stock) => boolean`）。把盟约集合单独传进来，
+ * 是因为这条谓词要能被**纯**地测（不需要造一局对局）。
+ *
+ * @param {import('./gamedata.js').GameData} gd
+ * @param {Iterable<string>} bonds 这个玩家已激活盟约的 id
+ * @returns {(id: string, stock?: any) => boolean}
+ */
+export function bondBiasPreference(gd, bonds) {
+  const wanted = bonds instanceof Set ? bonds : new Set(bonds || []);
+  return (id) => {
+    if (!wanted.size) return false;
+    const rec = gd.item(id);
+    return !!(rec && typeof rec.giveBondId === 'string' && wanted.has(rec.giveBondId));
+  };
 }

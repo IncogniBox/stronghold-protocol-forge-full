@@ -24,7 +24,7 @@ globalThis.fetch = async (url) => {
   }
 };
 
-const { matchInfoModel, MatchBondRow, MatchLegend, BannedOperators, MatchInfo, MatchInfoDialog } = await import('../../public/js/ui/matchInfo.js');
+const { matchInfoModel, MatchBondRow, MatchLegend, BannedOperators, MatchInfo, MatchInfoDialog, BriefBonds, BriefBanned } = await import('../../public/js/ui/matchInfo.js');
 const { briefingBondTip } = await import('../../public/js/ui/gameLogic.js');
 const { BondDisc, Tooltip, Modal, Button } = await import('../../public/js/ui/components.js');
 const { UnitThumb } = await import('../../public/js/ui/gameComponents.js');
@@ -131,9 +131,14 @@ test('BannedOperators: the count and dimmed avatars in tier order; none ⇒ 本�
 test('MatchInfo = 核心盟约, 附加盟约, the legend, 本局禁用干员 (one model); MatchInfoDialog = the same in a Modal with 关闭 and the status line', () => {
   const m = model();
   const parts = MatchInfo({ model: m }).filter((v) => v && typeof v === 'object');
-  assert.deepEqual(parts.map((v) => v.type), [MatchBondRow, MatchBondRow, MatchLegend, BannedOperators]);
-  assert.deepEqual(parts.slice(0, 2).map((v) => [v.props.title, v.props.bonds]), [['核心盟约', m.core], ['附加盟约', m.addon]]);
+  // 首尾两块现在是**可改写的具名组件**（`briefing.bonds` / `briefing.banned`，DESIGN §28.19）：包里没有声明 wraps
+  // 时它们就是引擎自己那份实现（`BriefBonds` → 两块盟约行、`BriefBanned` → 本局禁用干员），逐字与从前相同。
+  assert.deepEqual(parts.map((v) => v.type), [BriefBonds, MatchLegend, BriefBanned]);
   assert.ok(parts.every((v) => v.props.model === m));
+  const rows = BriefBonds({ model: m });
+  assert.deepEqual(rows.map((v) => v.type), [MatchBondRow, MatchBondRow]);
+  assert.deepEqual(rows.map((v) => [v.props.title, v.props.bonds]), [['核心盟约', m.core], ['附加盟约', m.addon]]);
+  assert.deepEqual(BriefBanned({ model: m }).type, BannedOperators);
   const onClose = () => {};
   const dlg = MatchInfoDialog({ open: true, onClose, model: m, status: '轮到你决策' });
   assert.equal(dlg.type, Modal);

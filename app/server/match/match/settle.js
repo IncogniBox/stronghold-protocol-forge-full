@@ -9,6 +9,7 @@ import { buildResult } from '../results.js';
 import { FLOW_TICKER_PRIORITY, DELAYS } from './common.js';
 import { msg } from '../../../shared/i18n.js';
 import { onSettle, resetRoundCounters } from '../botEmotes.js';
+import { creditedKillsOf } from '../../sim/spec.js';
 
 export class MatchSettle {
   settle(plan, uniteResult) {
@@ -69,6 +70,7 @@ export class MatchSettle {
         ps.stats.kills += Number(up.killed) || 0;
         mergeUnits(up.unitStats);   // 联防 kills count for the MVP too
       }
+      ps.creditedKills += creditedKillsOf(r) + creditedKillsOf(up);
       // perfect-payout bounties (战术特训): own phase perfect
       for (const b of ps.bounties) if (b.card.payout === 'perfect' && counted === 0 && r.perfect !== false) coins += b.card.coin;
       if (coins > 0) { ps.pendingFunds += coins; ps.stats.fundsGained += coins; }
@@ -153,6 +155,10 @@ export class MatchSettle {
       result = { t: 'm.result', victory: !!victory, roundsPassed: 0, reason, modeId: this.modeId, difficulty: this.difficulty, players: [] };
     }
     this.lastResultMsg = result;
+    // the match's LAST m.public is sent in full: the lobby keeps that frame and replays it to a resume / reload that
+    // comes back to the result screen without a baseline to merge into (a delta there could not be applied — DESIGN
+    // §8.2, incremental frame)
+    this.markPublicFull();
     this.markPublic();
     try { this.flush(true); } catch (e) { this.reportError('flush', e); }
     // every human still here gets the settlement — the spectator seats the same public rows (none of them their own)
@@ -160,6 +166,9 @@ export class MatchSettle {
     const { t, ...summary } = result;
     void t;
     summary.errors = this.errorCount;
+    // 走的是哪条路径，不许静默 (业主裁令 2026-10-12): 参与人数决定超容变体（每人独立池 / 分小队联防），
+    // 所以结算日志里必须看得到人数与闸门状态。
+    this.log?.info?.(`[match] ${this.roomCode} settled (${summary.reason}) participants=${this.participants} variant=${this.variant === true}`);
     try { this.onEndFn(summary); } catch (e) { this.reportError('onEnd', e); }
   }
 }

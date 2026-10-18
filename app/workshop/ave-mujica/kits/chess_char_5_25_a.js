@@ -10,10 +10,10 @@
 // T1 另一个"她": 若叶睦和<替身>受到物理/法术伤害的 damage_resistance 转化为 dark_damage_mul_factor 的凋亡损伤；
 //   <替身>不攻击，防御力 +def。[ASSUMED] "Ave Mujica 成员攻击时有 20% 概率使替身持续时间缩短 1 秒" — mod 无乐队成员
 //   判定数据，不实现。
-// T2 毋畏死亡: 受伤 Fever +cnt（mod 无 Fever 系统，无下游 [ASSUMED]）；在场时 Ave Mujica 成员生命上限 +max_hp
-//   ([ASSUMED] mod 无成员判定 — 近似为对若叶睦自身生效，见 install 注释)。
+// T2 毋畏死亡: 受伤 Fever +cnt；在场时 Ave Mujica 成员生命上限 +max_hp —— 两半都由本包盟约安装器
+//   （battle/main.mjs 的 installAveMujica）负责，团队判定在那侧，本 kit 不重复。
 
-import { num, talentBb, traitBb, skillBbOf, statBuff, batMod } from '@kit/tier1.js';
+import { num, talentBb, traitBb, skillBbOf, batMod } from '@kit/tier1.js';
 import { onDefaultSkill } from '@kit/tier2.js';
 
 const S1 = 'skchr_mortis_1';
@@ -70,10 +70,6 @@ export default (bb, chess, def) => {
               if (unit.trait.doll) battle.addBuff(unit, { key: 'talent:mortis:dollDef', duration: 0.3, mods: { defPct: def }, tags: ['talent'] });
             }, { owner: unit });
           }
-        } },
-        { install(battle, unit) { // 毋畏死亡
-          const hp = num(talentBb(chess, 1).max_hp, 0);
-          if (hp > 0) statBuff(battle, unit, 'talent:mortis:field', { hpPct: hp }); // [ASSUMED] 近似对自身; Fever 无下游
         } },
       ],
       install(battle, unit) {

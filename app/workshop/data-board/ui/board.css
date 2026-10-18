@@ -1,0 +1,256 @@
+/* 数据显示（工坊包 data-board）—— 每条规则都以 .db 起头：样式表是注入到页面里的，作用域只有这一块。
+   尺寸一律 rem（1rem = 100 设计像素，见 css/theme.css），字号乘 var(--t)（设置里的四档文字大小），
+   颜色取主题变量 —— 与引擎自己的面板 / 按钮同一条口径，所以它长得就是页面里本来就有的东西。
+
+   本面板挂在官方槽 `screen.game.overlay` 的一块 `.mod-host`（display: contents）里，然后自己用 JS 找对局左侧
+   同盟成员表里的每一个玩家行（`.team__row`），把一块 `.db-slot` 用 `position: fixed` 贴到该行右边：`.db-slot`
+   的 left/top 由 JS 按该行的 `getBoundingClientRect()` 现算，收起态把整块垂直居中于该行（与头像同一条水平线），
+   展开态与该行顶对齐。 */
+
+/* 宿主里那个根 div 不产生盒子：真正定位的是里面的 .db-slot。 */
+.db-root { display: contents; }
+
+/* 贴在某一行右边的那一块（JS 现算 left/top；收起态用 transform 垂直居中于行）。不挡战场 —— 只有 .db 自己打开指针。 */
+.db-slot {
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 6;             /* 高于 .gm__hud（z-index: 3），不被战场 / HUD 遮住 */
+  pointer-events: none;
+}
+
+.db {
+  margin-left: .14rem;    /* 与那一行（头像）之间留出的间距，随 rem 缩放 */
+  pointer-events: auto;   /* 槽位宿主默认 pointer-events: none（引擎那条规矩），这里必须自己打开 */
+}
+
+/* ---- 收起态：头像右边一个小按钮（文字竖排，三角在右边） --------------------------------------- */
+.db__tab {
+  display: inline-flex; align-items: center; gap: .03rem;
+  height: .8rem;                       /* = css/screens/game.css 的 .pavatar { --pa: .8rem } */
+  padding: .05rem .05rem .05rem .07rem;
+  background: rgba(10, 14, 12, .82); border: 1px solid var(--line);
+  color: var(--text-md); cursor: pointer;
+  box-shadow: 0 .04rem .16rem rgba(0, 0, 0, .45);
+  transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.db__tab:hover { border-color: var(--mint-700); color: var(--mint-500); background: rgba(10, 14, 12, .9); }
+/* 竖排：数 / 据 / 统 / 计 一列往下 */
+.db__tab-label {
+  writing-mode: vertical-rl; text-orientation: upright;
+  font-size: calc(.13 * var(--t)); line-height: 1; letter-spacing: .02em; white-space: nowrap;
+}
+.db__chev { width: .15rem; height: .15rem; flex: none; color: var(--mint-500); }
+
+/* ---- 展开态：一整块面板 ---------------------------------------------------------------------- */
+.db.is-open {
+  width: 2.9rem;
+  background: linear-gradient(180deg, rgba(10, 14, 12, .88), rgba(10, 14, 12, .78));
+  border: 1px solid var(--line);
+  box-shadow: 0 .1rem .3rem rgba(0, 0, 0, .5);
+}
+
+.db__head {
+  display: flex; align-items: center; gap: .06rem;
+  padding: .05rem .07rem .05rem .12rem;
+  border-bottom: 1px solid var(--line);
+  background: rgba(78, 216, 175, .06);
+}
+.db__title { flex: none; font-size: calc(.16 * var(--t)); font-weight: 700; letter-spacing: .08em; color: var(--text-hi); }
+.db__who {
+  flex: 1 1 auto; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: calc(.12 * var(--t)); color: var(--text-lo);
+}
+.db__close {
+  display: grid; place-items: center; width: .26rem; height: .26rem; flex: none;
+  padding: 0; background: none; border: 1px solid transparent; color: var(--text-lo); cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+.db__close:hover { color: var(--mint-500); border-color: var(--mint-700); }
+
+/* ---- 三个选项卡：框里是大字，下面一行小字 ---------------------------------------------------- */
+.db__tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: .04rem; padding: .06rem .08rem 0; }
+.db__tabbtn {
+  display: flex; flex-direction: column; align-items: center; gap: .01rem;
+  padding: .05rem .04rem; background: rgba(255, 255, 255, .03);
+  border: 1px solid var(--line); color: var(--text-lo); cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.db__tabbtn:hover { border-color: var(--mint-700); color: var(--text-md); }
+.db__tabbtn.is-on { background: var(--mint-a20); border-color: var(--mint-600); color: var(--text-hi); }
+.db__tabbtn-label { font-size: calc(.16 * var(--t)); font-weight: 700; line-height: 1.2; }
+.db__tabbtn.is-on .db__tabbtn-label { color: var(--mint-400); }
+.db__tabbtn-micro {
+  font-family: var(--font-display); font-size: calc(.09 * var(--t)); letter-spacing: .12em;
+  line-height: 1.2; color: var(--text-dim); white-space: nowrap;
+}
+
+/* ---- 数据区：行与行之间用横线分隔 ------------------------------------------------------------ */
+.db__body { padding: .04rem .08rem .1rem; }
+.db__list { list-style: none; margin: 0; padding: 0; max-height: 3.6rem; overflow-y: auto; }
+
+.db__row { display: flex; align-items: baseline; gap: .1rem; padding: .05rem .02rem; border-top: 1px solid rgba(47, 58, 53, .55); }
+.db__row:first-child { border-top: 0; }
+.db__k { flex: 1 1 auto; min-width: 0; font-size: calc(.13 * var(--t)); color: var(--text-lo); }
+.db__v { flex: none; font-size: calc(.15 * var(--t)); color: var(--text-hi); }
+.db__row.is-mint .db__v { color: var(--mint-400); }
+.db__row.is-red .db__v { color: var(--red-premium); }
+
+.db__empty { padding: .12rem .02rem; font-size: calc(.13 * var(--t)); color: var(--text-dim); line-height: 1.5; }
+
+/* ---- 干员行：名字 + 阶级 / 上场次数；名字下方是头像，右边四项基础数值 ------------------------- */
+.db__unit { padding: .06rem .02rem; border-top: 1px solid rgba(47, 58, 53, .55); }
+.db__unit:first-child { border-top: 0; }
+.db__uhead { display: flex; align-items: baseline; gap: .05rem; }
+.db__uname { font-size: calc(.15 * var(--t)); color: var(--text-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db__copies { flex: none; font-size: calc(.12 * var(--t)); color: var(--gold); }
+.db__umeta { margin-left: auto; flex: none; font-size: calc(.11 * var(--t)); color: var(--text-lo); white-space: nowrap; }
+.db__umeta .num { color: var(--mint-500); }
+.db__dot { padding: 0 .03rem; color: var(--line-3); }
+
+.db__ubody { display: flex; align-items: center; gap: .06rem; margin-top: .03rem; }
+.db__uavatar {
+  flex: none; width: .42rem; height: .42rem; overflow: hidden;
+  background: rgba(0, 0, 0, .35); border: 1px solid var(--line);
+}
+.db__uavatar img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; display: block; }
+.db__ustats { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: .04rem; }
+.db__stat { display: flex; flex-direction: column; align-items: center; line-height: 1.25; }
+.db__stat i { font-style: normal; font-size: calc(.1 * var(--t)); color: var(--text-dim); }
+.db__stat b { font-size: calc(.14 * var(--t)); color: var(--text-md); }
+
+/* 这一位干员**自己的**伤害（上回合 / 一局累计 / 本场 DPS）：贴在头像与四项数值下面，与数值区左对齐。
+   三格放不下时**折行**，而不是把面板撑破（DPS 在窄屏 / 大字号下会落到第二行）。 */
+.db__udmg { display: flex; flex-wrap: wrap; gap: .03rem .12rem; margin-top: .03rem; padding-left: calc(.42rem + .06rem); }
+.db__dmg { font-size: calc(.11 * var(--t)); color: var(--text-dim); white-space: nowrap; }
+.db__dmg b { font-size: calc(.13 * var(--t)); color: var(--text-lo); }
+.db__dmg.is-on, .db__dmg.is-on b { color: var(--mint-400); }
+/* DPS 与前面两格**不是同一本账**（那两格是跨场台账，这一格读的是正在演的那一场），所以给它一条细竖线；
+   预期 DPS 是纸面值、实测那一格是这一场的实况，两者用**深浅**区分（实测亮、预期淡），别让人读混。 */
+.db__dps { padding-left: .12rem; border-left: 1px solid rgba(47, 58, 53, .55); }
+.db__dps-predict { padding-left: .12rem; border-left: 1px solid rgba(47, 58, 53, .55); color: var(--text-dim); }
+.db__dps-predict b { color: var(--mint-700); }
+
+/* 速率那一行（实测 / 预期 / 技能的 DPS 与 HPS）—— 与伤害那一行**分开**（业主 2026-10-14：五格挤在一行太长），
+   行内还是同一条折行规则。 */
+.db__urate { display: flex; flex-wrap: wrap; gap: .03rem .12rem; margin-top: .02rem; padding-left: calc(.42rem + .06rem); }
+
+/* 治疗那一组（HPS / 预期 HPS / 技能 HPS）：与 DPS 那组同款淡色，但**组首**那条竖线亮一点，一眼分得出两组。 */
+.db__hps { padding-left: .12rem; border-left: 1px solid rgba(47, 58, 53, .55); color: var(--text-dim); }
+.db__hps b { color: var(--mint-700); }
+.db__hps--first { border-left-color: rgba(78, 216, 175, .5); }
+
+/* ---- 「保留一回合」与「综合 DPS」的两处淡色（业主 2026-10-15）----------------------------------- */
+/* 实测那一格（DPS / HPS）在**战斗刚停 / 休整期**时回落成「上一场量到的那一份」：淡一档，与正在演的实时读数
+   （`is-on` 的亮色）一眼分得出 —— 后者优先，所以两者不会同时出现。 */
+.db__dmg.is-past, .db__dmg.is-past b { color: var(--text-dim); opacity: .75; }
+/* 预期 DPS 用的是**这一位当前生效**的属性（含他自己吃到的增益）时，值比纸面那一档亮一点。 */
+.db__dps-predict.is-eff b { color: var(--mint-500); }
+/* 这一回合刚下场、上一回合还在场上的那一行：整行淡一档（数值是它最后一次在场上时的，保留到下一回合）。 */
+.db__unit.is-past { opacity: .72; }
+
+/* ---- 扇形统计图：干员页右边那一列（业主 2026-10-14）------------------------------------------- */
+/* 只有「干员」这一页有图，所以只有它加宽：切到协防 / 其他时面板回到原来的 2.9rem，不留一列空白。
+   伤害那一行现在只有两格（上回合 / 累计），速率那一行最多六格（DPS / 预期DPS / 技能DPS / HPS / 预期HPS /
+   技能HPS —— 只有真会治疗的干员才有后三格），所以宽度按**最宽的那一行**给：治疗干员那一档。
+   （放不下时靠两行各自的 `flex-wrap` 折行，绝不撑破面板。） */
+.db.is-open.is-units { width: 6rem; }
+/* 左列是原来那张表，右列是图；两列顶对齐（表比图长时靠各自的 max-height 自己滚）。 */
+.db__body--units { display: grid; grid-template-columns: minmax(0, 1fr) 1.66rem; gap: .1rem; align-items: start; }
+
+.db__chart {
+  display: flex; flex-direction: column; gap: .06rem; min-width: 0;
+  padding-left: .1rem; border-left: 1px solid rgba(47, 58, 53, .55);
+}
+.db__chart-k { font-size: calc(.11 * var(--t)); letter-spacing: .06em; color: var(--text-lo); white-space: nowrap; }
+.db__chart-k i { font-style: normal; font-family: var(--font-display); font-size: calc(.085 * var(--t)); letter-spacing: .12em; color: var(--text-dim); }
+.db__pie { width: 1.44rem; height: 1.44rem; flex: none; align-self: center; }
+/* 一瓣之间那一道细缝：与面板底色同色，扇形的边界因此不是「两个色块贴在一起」而是「两条线」。 */
+.db__slice { fill: var(--dbc, #4ed8af); stroke: rgba(10, 14, 12, .92); stroke-width: .8; }
+/* 还没有伤害数据时的空环：细虚线，占住这一列的位置（不是把图表整块抽掉）。 */
+.db__pie-empty { fill: none; stroke: rgba(47, 58, 53, .8); stroke-width: 3; stroke-dasharray: 4 5; }
+.db__chart-note { font-size: calc(.11 * var(--t)); color: var(--text-dim); text-align: center; }
+
+.db__legend { list-style: none; margin: 0; padding: 0; max-height: 3.6rem; overflow-y: auto; }
+.db__lrow { display: flex; align-items: center; gap: .05rem; padding: .03rem 0; }
+.db__lrow + .db__lrow { border-top: 1px solid rgba(47, 58, 53, .4); }
+.db__swatch { flex: none; width: .1rem; height: .1rem; background: var(--dbc, #4ed8af); }
+.db__lname {
+  flex: 1 1 auto; min-width: 0; font-size: calc(.11 * var(--t)); color: var(--text-md);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.db__lpct { flex: none; font-size: calc(.12 * var(--t)); color: var(--text-hi); }
+
+/* 一瓣一色：`--dbc` 挂在同一个元素上，图里的 `fill` 与图例里的 `background` 取的就是这一格。 */
+.db__c0 { --dbc: #4ed8af; }
+.db__c1 { --dbc: #e8c56a; }
+.db__c2 { --dbc: #6fb3ff; }
+.db__c3 { --dbc: #ff7f7f; }
+.db__c4 { --dbc: #9d8cff; }
+.db__c5 { --dbc: #57d7d7; }
+.db__c6 { --dbc: #ffa14a; }
+.db__c7 { --dbc: #8fa6a0; }
+
+/* ---- 全量测试统计页（**只在 `pub.dev === true` 的全量模拟对局**出现）------------------------------------ */
+/* 这一页比别的页多一个选项卡（四列）＋三块各自的标题，内容也更宽（盟约来源 / 增益清单），所以面板随它加宽。 */
+.db.is-open.is-dev { width: 3.6rem; }
+.db.is-dev .db__tabs { grid-template-columns: repeat(4, 1fr); }
+/* 这一页的内容比别的页长得多（三块 + 盟约清单 + 增益总结 + 增益明细），一屏放不下 ⇒ 给它自己的滚动区，
+   看不到的那部分用滚轮 / 触摸滑动看（业主 2026-10-15）。**只对「全量测试统计」这一页生效**，别的页一行不加；
+   双保险的上限：面板自己的高度（4.6rem）与视口高度（矮屏时用后者，留出面板上下的边距）。 */
+.db.is-dev .db__body {
+  max-height: min(4.6rem, calc(100vh - 2.2rem));
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+}
+
+/* 三个小节的标题：一块一行，左对齐的那条横线由 border-top 画 */
+.db__devh {
+  margin-top: .08rem; padding: .05rem .02rem .03rem;
+  border-top: 1px solid rgba(47, 58, 53, .55);
+  font-size: calc(.12 * var(--t)); font-weight: 700; letter-spacing: .04em; color: var(--mint-400);
+}
+.db__devh:first-child { border-top: 0; margin-top: 0; }
+/* 小注：口径 / 限制说明（理论值 / 实测、留一法不含哪些增伤） */
+.db__devnote { padding: .02rem .02rem .04rem; font-size: calc(.1 * var(--t)); line-height: 1.4; color: var(--text-dim); }
+
+/* 盟约：一项一块 —— 名字 + 层 / 阶，下面一行来源与一行描述 */
+.db__bonds { list-style: none; margin: 0; padding: 0; }
+.db__bond { padding: .04rem .02rem; border-top: 1px solid rgba(47, 58, 53, .4); }
+.db__bond:first-child { border-top: 0; }
+.db__bond-head { display: flex; align-items: baseline; gap: .06rem; }
+.db__bond-name { flex: 1 1 auto; min-width: 0; font-size: calc(.13 * var(--t)); color: var(--text-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db__bond-meta { flex: none; font-size: calc(.1 * var(--t)); color: var(--text-lo); white-space: nowrap; }
+.db__bond-meta .num { color: var(--mint-500); }
+.db__bond-src { display: block; margin-top: .02rem; font-size: calc(.1 * var(--t)); line-height: 1.4; color: var(--text-lo); }
+.db__bond-desc {
+  display: block; margin-top: .02rem; font-size: calc(.1 * var(--t)); line-height: 1.4; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* 盟约加成总结（业主 2026-10-15「盟约加成要在下面要总结」）：接在盟约清单下面，**一个盟约一行**
+   （`【颂乐人偶】+50%攻击力、攻击速度+12`）；数字优先取引擎落在那几位身上的 `bond:*` 增益，读不到时退回盟约
+   自己的 `bb` **数据口径**（那一行带「数据口径（未实测）」小标签、用 `.db__bondline-data` 的淡色），两条都拿不到
+   才给名字 + 层数（`.db__bondline-none`）。 */
+.db__bondsum { list-style: none; margin: .04rem 0 0; padding: 0 .02rem; }
+.db__bondsum-k { font-size: calc(.1 * var(--t)); letter-spacing: .04em; color: var(--text-dim); }
+.db__bondline {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: .02rem .05rem;
+  padding: .03rem 0; border-top: 1px solid rgba(47, 58, 53, .4);
+}
+.db__bondline-n { flex: none; font-size: calc(.13 * var(--t)); color: var(--text-hi); }
+.db__bondline-v { flex: 1 1 auto; min-width: 0; font-size: calc(.12 * var(--t)); color: var(--mint-400); }
+/* 数据口径（未实测）那一档：与实测的亮色分开 —— 数字来自盟约自己的 bb，不是引擎落在成员身上的实时读数 */
+.db__bondline-data { flex: 1 1 auto; min-width: 0; font-size: calc(.11 * var(--t)); color: var(--text-md); }
+.db__bondline-tag {
+  font-style: normal; margin-right: .04rem; padding: 0 .04rem;
+  border: 1px solid var(--line); font-size: calc(.09 * var(--t)); color: var(--gold);
+}
+.db__bondline-extra { color: var(--text-dim); }
+.db__bondline-none { flex: 1 1 auto; min-width: 0; font-size: calc(.1 * var(--t)); color: var(--text-dim); }
+.db__bondline-none .num { color: var(--mint-500); }
+
+/* 增益清单：一行一个 key + 提升 / 占比（逐条），与上面的类目合计分开 */
+.db__buffs { list-style: none; margin: .03rem 0 0; padding: 0; max-height: 2.4rem; overflow-y: auto; }
+.db__buffrow { display: flex; align-items: baseline; gap: .08rem; padding: .03rem .02rem; border-top: 1px solid rgba(47, 58, 53, .4); }
+.db__buffrow:first-child { border-top: 0; }
+.db__buffk { flex: 1 1 auto; min-width: 0; font-size: calc(.1 * var(--t)); color: var(--text-lo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db__buffv { flex: none; font-size: calc(.11 * var(--t)); color: var(--mint-400); }

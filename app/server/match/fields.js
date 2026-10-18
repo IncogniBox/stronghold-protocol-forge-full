@@ -1,4 +1,4 @@
-﻿// server/match/fields.js — runs the battles of one combat phase (DESIGN §4, §11, §14).
+// server/match/fields.js — runs the battles of one combat phase (DESIGN §4, §11, §14).
 //
 // Server-run combat (legacy streaming mode, SP_COMBAT=server; and the Final Assault when no field has a connected human):
 // FieldRunner steps every live field in lockstep:
@@ -34,7 +34,7 @@
 import { TICK, SNAPSHOT_EVERY } from '../sim/constants.js';
 import { layerGainRoom } from '../../shared/constants.js';
 import { uniteLeft } from '../sim/spec.js';
-import { diyTokenOwner } from '../../shared/diy.js';
+import { diyTokenOwner, diyRecordOf } from '../../shared/diy.js';
 
 export const MAX_TICKS_PER_INTERVAL = 8;
 export const INTERVAL_MS = 1000 / 30;
@@ -130,7 +130,7 @@ export class FieldRunner {
 
   _runInstant() {
     const cap = Math.ceil(HARD_CAP_SECONDS / TICK);
-    while (!this.stopped && !this.done && this.ticks < cap) {
+    while (!this.stopped && !this.done && this.ticks < cap) { // loop-cap: tick cap
       this._tick();
       if (this.fields.every((f) => !f.live)) break;
     }
@@ -307,7 +307,7 @@ export class HeadlessJob {
     let b = this.battle;
     try {
       let k = 0;
-      while (!b.finished && this.n < this.cap) {
+      while (!b.finished && this.n < this.cap) { // loop-cap: step cap
         b.step();
         this.n++;
         k++;
@@ -356,7 +356,7 @@ export function timelineAt(timeline, gt) {
   if (!Array.isArray(timeline) || !timeline.length) return [0, 0, 0, null];
   let lo = 0, hi = timeline.length - 1;
   if (gt >= timeline[hi][0]) return timeline[hi];
-  while (lo < hi) {
+  while (lo < hi) { // loop-cap: binary search
     const mid = (lo + hi + 1) >> 1;
     if (timeline[mid][0] <= gt) lo = mid; else hi = mid - 1;
   }
@@ -411,7 +411,7 @@ export class HeadlessPacer {
     const b = entry.battle;
     let k = 0;
     try {
-      while (!b.finished && b.tickCount < cap && k < max) { b.step(); k++; }
+      while (!b.finished && b.tickCount < cap && k < max) { b.step(); k++; } // loop-cap: tick cap
     } catch (e) {
       this.m.reportError('pacer skip', e);
       try { b.forceEnd('timeout'); } catch { /* ignore */ }
@@ -679,6 +679,7 @@ export function specBounds(spec, gd = null) {
     if (!p || typeof p.playerId !== 'string') continue;
     const chess = new Map();
     const all = new Map();
+    const names = new Map();
     // unit types this player can field: its board's chess / tokens, their summons, and the ownerless summons of
     // bonds / bands (炎佑, 预备干员) — the only names a statistic of a unit created in battle (no board uid) may carry
     const defIds = new Set(gd ? ownerlessSummons(gd) : []);
@@ -686,6 +687,11 @@ export function specBounds(spec, gd = null) {
       if (!u || !Number.isInteger(u.uid)) continue;
       const defId = u.kind === 'token' ? u.tokenId : u.chessId;
       all.set(u.uid, defId);
+      if (gd) {
+        const base = gd.chess?.(defId) || gd.token?.(defId);
+        const rec = u.standIn === true ? gd.standIn?.(defId) : u.diy && base?.isDiy ? diyRecordOf(base, u.diy, gd.raw) : base;
+        if (typeof rec?.name === 'string') names.set(u.uid, rec.name);
+      }
       if (typeof defId === 'string') defIds.add(defId);
       if (u.kind !== 'token') {
         chess.set(u.uid, defId);
@@ -699,7 +705,7 @@ export function specBounds(spec, gd = null) {
       const v = Number(b && b.layers);
       if (Number.isFinite(v) && v > 0) startLayers.set(id, v);
     }
-    players.set(p.playerId, { chess, all, defIds, bonds: gd ? layerBondsOf(p, gd) : null, startLayers, layerAllow: gd ? layerAllowanceOf(p, gd) : new Map() });
+    players.set(p.playerId, { chess, all, names, defIds, bonds: gd ? layerBondsOf(p, gd) : null, startLayers, layerAllow: gd ? layerAllowanceOf(p, gd) : new Map() });
   }
   const round = Number(spec && spec.round) || 0;
   return {
@@ -794,6 +800,7 @@ export function validateClientResult(spec, raw, { gd = null } = {}) {
       const p = raw.perPlayer[pid];
       if (!p || typeof p !== 'object') return bad('player');
       const own = B.players.get(pid);
+      if (p.creditedKills !== undefined && (!Number.isInteger(p.creditedKills) || p.creditedKills < 0 || p.creditedKills > 1e9)) return bad('kill credit');
       // `killed` counts every counted knock-out — a runtime split child / summon too — while `total` counts only the
       // enemies the round scheduled, so `killed ≤ total` no longer holds (PR #157 capsule semantics): bound it by
       // maxTotal (the spec's content-spawn allowance) instead, exactly like `total`
@@ -875,26 +882,28 @@ export function validateClientResult(spec, raw, { gd = null } = {}) {
         const rec = gd ? (gd.chess?.(defId) || gd.token?.(defId)) : null;
         if (gd && !rec) continue;
         unitStats.push({
-          uid: Number.isInteger(u.uid) ? u.uid : null, defId, name: rec && typeof rec.name === 'string' ? rec.name : defId, kind: u.kind === 'token' ? 'token' : 'op',
+          uid: Number.isInteger(u.uid) ? u.uid : null, defId, name: (onBoard && own.names.get(u.uid)) || (typeof rec?.name === 'string' ? rec.name : defId), kind: u.kind === 'token' ? 'token' : 'op',
           dmg: Math.max(0, Number(u.dmg) || 0), kills: Math.max(0, Math.trunc(Number(u.kills) || 0)), heal: Math.max(0, Number(u.heal) || 0),
           taken: Math.max(0, Number(u.taken) || 0), attacks: Math.max(0, Math.trunc(Number(u.attacks) || 0)),
         });
       }
       const stat = (v) => (finiteIn(v, 0, 1e13) ? v : 0);
-      // 雷姆必拓 (mod): cross-phase marks (开拓心 holder / 暴行 no-redeploy) survive the client-result whitelist
-      const rbExtra = p.rbExtra;
-      if (rbExtra != null) {
-        if (typeof rbExtra !== 'object' || Array.isArray(rbExtra)) return bad('rbExtra');
-        for (const k of ['holder', 'noRedeployChess']) {
-          if (k in rbExtra && !(rbExtra[k] === null || typeof rbExtra[k] === 'string')) return bad('rbExtra');
-        }
-      }
       perPlayer[pid] = {
         killed: p.killed, total: p.total, leaked, perfect: countedLeaks === 0, layerGains, coins,
         damageDealt: stat(p.damageDealt), bossDamage: stat(p.bossDamage), healingDone: stat(p.healingDone), deaths: Math.trunc(stat(p.deaths)),
         unitsEnd, unitStats,
-        ...(rbExtra ? { rbExtra } : {}),
+        creditedKills: Number.isInteger(p.creditedKills) ? p.creditedKills : unitStats.reduce((n, u) => n + u.kills, 0),
       };
+      // 战斗 → 休整期的**通用标记**（`battle._perPlayer[pid].marks`）：客户端战斗时这份标记只存在于客户端算出来的
+      // 结果里（服务端复算不了 pack 的战斗逻辑），所以校验通过后要原样留下。只放行标量、≤16 键、键 ≤32 字符
+      // （与 `compactResult` / `RESULT_LIMITS.marks` 同一套），越界的一律丢掉。
+      const marks = {};
+      let mk = 0;
+      for (const [k, v] of Object.entries(p.marks && typeof p.marks === 'object' ? p.marks : {})) {
+        if (mk >= 16 || k.length > 32) break;
+        if (v === null || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 64)) { marks[k] = v; mk++; }
+      }
+      if (mk) perPlayer[pid].marks = marks;
       // the HUD capsule's numerator: kept only when the client reported one (an absent value must stay absent — the
       // teammate UI then falls back to `killed`, never to a fabricated 0); clamped to the denominator
       if (Number.isInteger(p.resolved) && p.resolved >= 0) perPlayer[pid].resolved = Math.min(p.total, p.resolved);

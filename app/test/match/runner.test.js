@@ -5,7 +5,7 @@
 // leak count of normal fields (state().leaks, user playtest #3 item 2).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBattleRunner, ticksPerFrameCap } from '../../public/js/battle/runner.js';
+import { createBattleRunner, ticksPerFrameCap, RATE_MIN, RATE_MAX } from '../../public/js/battle/runner.js';
 import { createStore, initialState } from '../../public/js/store.js';
 import * as specMod from '../../server/sim/spec.js';
 import { DataSource } from '../../server/sim/simdata.js';
@@ -28,14 +28,16 @@ function fakeNet() {
   return n;
 }
 
-function rig({ hidden = false } = {}) {
+function rig({ hidden = false, combatMetrics = true, pinMetrics = true, createHost = null } = {}) {
   let t = 1000;
   const frames = [];
   const intervals = [];
   const doc = { hidden, addEventListener() {} };
   const net = fakeNet();
   const store = createStore(initialState);
-  const runner = createBattleRunner({
+  // Existing cases pin the meter on, which is what the PR asserted. pinMetrics false leaves the production default
+  // (off) so a test can drive setCombatMetrics. createHost stands in for a Worker sim.
+  const deps = {
     net, store, doc,
     now: () => t,
     raf: (fn) => { frames.push(fn); return frames.length; },
@@ -44,7 +46,10 @@ function rig({ hidden = false } = {}) {
     clearInterval: () => {},
     loadSim: async () => ({ spec: specMod, ds: DS }),
     logger: { error() {}, warn() {}, info() {}, debug() {} },
-  });
+  };
+  if (pinMetrics) deps.combatMetrics = combatMetrics;
+  if (createHost) deps.createHost = createHost;
+  const runner = createBattleRunner(deps);
   const feed = { snaps: [], evs: [], fields: [] };
   runner.on('snap', (s) => feed.snaps.push(s));
   runner.on('ev', (e) => feed.evs.push(e));
@@ -124,6 +129,17 @@ test('authoritative battle: 2× pacing, ≤ max(8, 4·speed) ticks per frame, b.
   const b = validateClientResult(start.spec, specMod.compactResult(server), {});
   assert.ok(a.ok && b.ok);
   assert.equal(specMod.resultDigest(a.result).hash, specMod.resultDigest(b.result).hash, 'the browser result equals the server simulation');
+  const metrics = r.runner.combatMetrics();
+  const hpDamage = e.battle.allyUnits.reduce((n, u) => n + u.stats.dmg, 0);
+  assert.ok(Math.abs(metrics.damage - hpDamage) < 1e-6, 'local accounting matches unrounded simulation totals');
+  const finalMetrics = structuredClone(metrics);
+  await r.runner.onStart(start);
+  assert.deepEqual(r.runner.combatMetrics(), finalMetrics, 'resending a finished battle does not count it twice');
+  r.store.patch('match', { public: { phase: PHASE.PREP, round: 3 } });
+  assert.deepEqual(r.runner.combatMetrics(), finalMetrics, 'match totals survive next-round prep');
+  assert.equal(r.runner.combatMetrics({ scope: 'battle' }).rows.length, 0, 'current battle clears at prep');
+  r.store.patch('match', { public: null });
+  assert.equal(r.runner.combatMetrics().rows.length, 0, 'leaving the match clears totals');
   r.runner.dispose();
 });
 
@@ -135,6 +151,8 @@ test('fast-forward to `elapsed` before showing; display replicas never report; b
   await r.settle();
   const e = r.runner._entries.get(start.battleId);
   assert.ok(e.battle.time >= 19.8, `caught up to the field clock (${e.battle.time})`);
+  assert.ok(Math.abs(r.runner.combatMetrics().damage - e.battle.allyUnits.reduce((n, u) => n + u.stats.dmg, 0)) < 1e-6,
+    'initial silent catch-up records all damage');
   assert.equal(r.feed.fields.length, 1, 'shown once, after the catch-up');
   r.advance(3000);
   assert.equal(r.net.sent.length, 0, 'a display replica never reports');
@@ -163,6 +181,8 @@ test('fast-forward to `elapsed` before showing; display replicas never report; b
   const snaps = r3.feed.snaps.length;
   r3.advance(2000, 1000);
   assert.ok(e3.battle.tickCount >= 110, `pumped while hidden (${e3.battle.tickCount})`);
+  assert.ok(Math.abs(r3.runner.combatMetrics().damage - e3.battle.allyUnits.reduce((n, u) => n + u.stats.dmg, 0)) < 1e-6,
+    'hidden-tab damage is recorded before visual events are discarded');
   assert.equal(r3.feed.snaps.length, snaps, 'nothing rendered while hidden');
   r3.runner.dispose();
 });
@@ -183,6 +203,52 @@ test('b.end forced ends the local battle and reports at once; a new prep clears 
   r.store.patch('match', { public: { phase: 'PREP' } });
   assert.equal(r.runner._entries.size, 0);
   assert.equal(r.store.get().match.battle, null);
+  r.runner.dispose();
+});
+
+test('own battle statistics stay available when viewing a teammate; owner filtering excludes teammate damage', async () => {
+  const start = realStart(7311);
+  const r = rig();
+  await r.runner.onStart(start);
+  r.advance(5000, 50);
+  const ownerId = start.spec.players[0].playerId;
+  const own = r.runner.combatMetrics({ scope: 'battle', ownerId });
+  assert.ok(own.rows.length > 0);
+  const teammate = structuredClone(start);
+  teammate.battleId = 'metrics-teammate';
+  teammate.fieldId = 'n:metrics-teammate';
+  teammate.authoritative = false;
+  teammate.watch = true;
+  for (const player of teammate.spec.players) player.playerId = 'metrics-teammate';
+  await r.runner.onStart(teammate);
+  assert.deepEqual(r.runner.combatMetrics({ scope: 'battle', ownerId }), own, 'own field is selected instead of the watched field');
+  assert.ok(r.runner.combatMetrics({ scope: 'battle', ownerId }).rows.every((row) => row.ownerId === ownerId));
+  assert.deepEqual(r.runner.combatMetrics({ scope: 'match', ownerId }), own, 'match view remains restricted to self');
+  assert.equal(r.runner.combatMetrics({ scope: 'battle', ownerId: 'unavailable-player' }).rows.length, 0);
+  r.runner.dispose();
+});
+
+test('evicted observed battles keep match totals; replaying one replaces its snapshot without double counting', async () => {
+  const start = realStart(7310);
+  const r = rig();
+  const recorded = new Map();
+  for (let i = 0; i < 5; i++) {
+    const battleId = `metrics-replica-${i}`;
+    await r.runner.onStart({ ...start, battleId, authoritative: false, watch: true });
+    r.advance(10000, 50);
+    const b = r.runner._entries.get(battleId).battle;
+    recorded.set(battleId, b.allyUnits.reduce((n, u) => n + u.stats.dmg, 0));
+  }
+  assert.ok(!r.runner._entries.has('metrics-replica-0'), 'first replica was evicted');
+  const expected = [...recorded.values()].reduce((n, v) => n + v, 0);
+  assert.ok(expected > 0);
+  assert.ok(Math.abs(r.runner.combatMetrics().damage - expected) < 1e-6);
+  await r.runner.onStart({ ...start, battleId: 'metrics-replica-0', authoritative: false, watch: true });
+  assert.ok(Math.abs(r.runner.combatMetrics().damage - expected) < 1e-6, 'replay at time zero retains prior totals');
+  r.advance(12000, 50);
+  const replay = r.runner._entries.get('metrics-replica-0').battle;
+  const updated = expected - recorded.get('metrics-replica-0') + replay.allyUnits.reduce((n, u) => n + u.stats.dmg, 0);
+  assert.ok(Math.abs(r.runner.combatMetrics().damage - updated) < 1e-6, 'same battle contributes only its newer snapshot');
   r.runner.dispose();
 });
 
@@ -325,9 +391,11 @@ test('solo pause: m.public.paused freezes every local battle clock (no ticks, no
   assert.equal(r.runner.state().paused, true);
   assert.equal(r.store.get().match.battle.paused, true, 'published for the HUD');
   const reports = r.net.sent.length;
+  const beforePause = r.runner.combatMetrics();
   r.advance(5000);
   assert.equal(e.battle.tickCount, t1, 'no tick while paused');
   assert.equal(r.net.sent.length, reports, 'no report while paused');
+  assert.deepEqual(r.runner.combatMetrics(), beforePause, 'damage, healing and rates all freeze while paused');
   // a resend while paused (reconnect) keeps the clock frozen
   r.net.emit('b.start', { ...start, elapsed: t1 / 30 });
   await r.settle();
@@ -473,5 +541,153 @@ test('live unit stats (user playtest #4 item 7): unitStats(id) reads the battle 
   r.runner.clear();
   assert.equal(r.runner.unitStats(ally.id), null, 'nothing on screen after the battles were dropped');
   assert.equal(r.runner.unitIdOf(ally.uid, ally.ownerId), null);
+  r.runner.dispose();
+});
+
+test('unitBuffs(id) (全量测试统计): frozen copies of a unit\'s active buffs + the fold inputs (raw base / cultMul); read-only (never unit.s)', async () => {
+  const start = realStart(7305);
+  const r = rig();
+  r.net.emit('b.start', start);
+  await r.settle();
+  const e = r.runner._entries.get(start.battleId);
+  r.advance(2000);
+  const ally = e.battle.allyUnits.find((u) => u.alive && u.deployed && u.kind === 'op');
+  assert.ok(ally, 'a deployed operator');
+  // a trap on the lazy getter: reading the buffs / fold inputs must not recompute the sim's stats
+  Object.defineProperty(ally, 's', { configurable: true, get() { throw new Error('unit.s read by the UI'); } });
+  const got = r.runner.unitBuffs(ally.id);
+  delete ally.s;
+  assert.ok(got, 'the unit of the battle on screen');
+  assert.equal(got.unitId, ally.id);
+  assert.equal(got.uid, ally.uid);
+  assert.equal(got.defId, ally.defId);
+  assert.equal(got.battleId, start.battleId);
+  // the raw (uncultivated) base + the 练度 multiplier: base.atk unchanged, unitStats().base.atk is cultivated
+  assert.equal(got.base.atk, ally.base.atk);
+  assert.equal(got.base.aspd, ally.base.aspd);
+  assert.equal(got.base.bat, ally.base.bat);
+  assert.equal(got.cultMul && got.cultMul.atk, ally.cultMul ? ally.cultMul.atk : null);
+  assert.notEqual(r.runner.unitStats(ally.id).base.atk, ally.base.atk, '单元读数那份 base 是含练度的（两份不是同一个数）');
+  assert.ok(Object.isFrozen(got) && Object.isFrozen(got.buffs), 'frozen copies');
+  assert.equal(got.buffs.length, ally.buffs.length, 'every active buff, no more');
+  // a synthetic buff shows up at once with its mods / stacks (the panel maps these by key prefix)
+  e.battle.addBuff(ally, { key: 'dev:test', mods: { atkPct: 0.5 }, duration: 30 });
+  const after = r.runner.unitBuffs(ally.id);
+  const row = after.buffs.find((b) => b.key === 'dev:test');
+  assert.ok(row, 'the new buff is in the list');
+  assert.deepEqual(row.mods, { atkPct: 0.5 });
+  assert.equal(row.stacks, 1);
+  assert.equal(after.buffs.length, got.buffs.length + 1);
+  assert.ok(Object.isFrozen(row.mods), 'mods are copied and frozen too');
+  // scoping / missing units
+  assert.equal(r.runner.unitBuffs(ally.id, 'n:someone_else'), null, 'another field: nothing');
+  assert.equal(r.runner.unitBuffs(999999), null, 'unknown unit');
+  assert.equal(r.runner.unitBuffs('x'), null);
+  r.runner.clear();
+  assert.equal(r.runner.unitBuffs(ally.id), null, 'nothing on screen after the battles were dropped');
+  r.runner.dispose();
+});
+
+// 本地播放倍速（顶栏那个 ×1/×2/×3/×4 按钮；插件包 `hud.js.patch` 的 SpeedButton 那一半）。
+//
+// 它存在的唯一理由，是原件自己注释里的那句话：**「purely local playback choice — the same deterministic tick
+// sequence just advances faster, so the outcome is unchanged」**。所以这一组测的就是那句话：
+//   * 倍速只改「墙钟 → tick」的映射（同一段墙钟跑更多 tick），**不改 tick 序列本身**；
+//   * 因此**战果一字不变**：同一种子、同一份 spec，跑完后 `b.result` 完全一致；
+//   * 它**不碰**服务端给的 `speed`（那是对局节奏），两者相乘；
+//   * 非法值不抛，夹在上下限内。
+test('本地播放倍速：跑得更快，但 tick 序列与战果一字不变', async () => {
+  const start = realStart(4407);
+
+  /** 跑完一场，返回 { ticks, time, result }。 */
+  const playOut = async (rate) => {
+    const r = rig();
+    r.net.emit('b.start', start);
+    await r.settle();
+    if (rate !== undefined) {
+      assert.equal(r.runner.setRate(rate), rate);
+      assert.equal(r.runner.rate(), rate);
+    }
+    const e = r.runner._entries.get(start.battleId);
+    for (let i = 0; i < 600 && !e.done; i++) r.advance(1000, 50);
+    assert.ok(e.done, `跑到结束（rate=${rate}）`);
+    await r.settle();
+    const res = r.net.sent.filter((x) => x.t === 'b.result').pop();
+    return { ticks: e.battle.tickCount, time: e.battle.time, result: res };
+  };
+
+  const base = await playOut(undefined);      // 默认 1×（与从前逐字相同）
+  const fast = await playOut(4);              // 4×
+  const slow = await playOut(0.5);            // 0.5×
+
+  // 战果与游戏内时间**完全相同**：倍速只是让我们更快地走到同一个地方
+  assert.equal(fast.ticks, base.ticks, '4× 与 1× 跑过的 tick 数相同');
+  assert.equal(fast.time, base.time, '游戏内时间相同');
+  assert.deepEqual(fast.result, base.result, 'b.result 逐字节相同 —— 倍速不改战果');
+  assert.equal(slow.ticks, base.ticks, '0.5× 也是同一段 tick');
+  assert.deepEqual(slow.result, base.result, '慢放同样不改战果');
+});
+
+test('本地播放倍速：同一段墙钟时间跑更多 tick（这就是「更快」的全部含义）', async () => {
+  const start = realStart(4407);
+  const ticksAfter = async (rate, ms = 1000) => {
+    const r = rig();
+    r.net.emit('b.start', start);
+    await r.settle();
+    if (rate !== undefined) r.runner.setRate(rate);
+    const e = r.runner._entries.get(start.battleId);
+    r.advance(ms);
+    return e.battle.tickCount;
+  };
+  const one = await ticksAfter(1);
+  const two = await ticksAfter(2);
+  const four = await ticksAfter(4);
+  assert.ok(one > 0);
+  // 服务端给的 speed 是 2，所以 1× ⇒ ~60 tick / 秒；2× ⇒ ~120；4× ⇒ ~240
+  assert.ok(Math.abs(one - 60) <= 3, `1× ⇒ ~60 tick（实际 ${one}）`);
+  assert.ok(Math.abs(two - 120) <= 4, `2× ⇒ ~120 tick（实际 ${two}）`);
+  assert.ok(Math.abs(four - 240) <= 8, `4× ⇒ ~240 tick（实际 ${four}）`);
+});
+
+test('本地播放倍速：不碰服务端给的 speed，非法值不抛且被夹住', async () => {
+  const start = realStart(4407);
+  const r = rig();
+  r.net.emit('b.start', start);
+  await r.settle();
+  const e = r.runner._entries.get(start.battleId);
+
+  // 服务端那一份 speed 原样保留（它是对局节奏，玩家改不了也不该改）
+  assert.equal(e.speed, 2, 'b.start 的 speed 没被动过');
+  assert.equal(r.runner.rate(), 1, '默认 1×（不声明就与从前逐字相同）');
+
+  // 非法值：一律当 1，**不抛**
+  for (const bad of [0, -3, NaN, Infinity, null, undefined, 'x', {}]) {
+    assert.doesNotThrow(() => r.runner.setRate(bad), `${String(bad)} 不该抛`);
+    assert.equal(r.runner.rate(), 1, `${String(bad)} ⇒ 回到 1`);
+  }
+  // 夹在上下限
+  assert.equal(r.runner.setRate(99), RATE_MAX, '上限');
+  assert.equal(r.runner.setRate(0.01), RATE_MIN, '下限');
+  assert.equal(r.runner.setRate(2.34), 2.3, '一位小数');
+  r.runner.dispose();
+});
+
+test('本地播放倍速：切换广播 rate 事件，且上报帧仍然合法', async () => {
+  const start = realStart(4407);
+  const r = rig();
+  const rates = [];
+  r.runner.on('rate', (x) => rates.push(x));
+  r.net.emit('b.start', start);
+  await r.settle();
+  r.runner.setRate(3);
+  r.runner.setRate(1);
+  assert.deepEqual(rates, [3, 1], '每次切换广播一次（顶栏那个按钮是唯一读者）');
+
+  const e = r.runner._entries.get(start.battleId);
+  for (let i = 0; i < 300 && !e.done; i++) r.advance(1000, 50);
+  await r.settle();
+  const prog = r.net.sent.filter((x) => x.t === 'b.progress');
+  assert.ok(prog.length > 0, '仍然在按协议上报');
+  assert.ok(prog.every((x) => validateC2S(x) === null), '每一帧都仍然是合法协议帧');
   r.runner.dispose();
 });

@@ -5,6 +5,83 @@
 
 .title-screen { align-items: center; justify-content: center; }
 
+/* ---- 大型资源补齐中（public/js/ui/largeAssets.js）------------------------------------------------
+   只在服务器真在补「地图与场景那类大文件」时出现的一行：标题屏顶端、居中、细进度条。
+   `.large-assets` 自己绝对定位，所以它不参与标题屏的居中布局（不缺东西时整块不渲染）。 */
+.large-assets {
+  position: absolute; z-index: 30; top: .12rem; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: .08rem; padding: .05rem .12rem;
+  font-size: calc(.13 * var(--t)); color: var(--text-md);
+  background: var(--bg-glass); border: 1px solid var(--line-2);
+}
+.large-assets__bar { flex: none; width: 1.6rem; height: .08rem; overflow: hidden; background: var(--line-2); }
+.large-assets__fill { display: block; height: 100%; background: var(--gold); transition: width .3s linear; }
+.large-assets__pct { flex: none; color: var(--text-lo); }
+
+/* ---- 资源查看（public/js/ui/largeAssets.js 的 ResourceButton / ResourceModal）---------------------
+   标题屏右上角那一排里的「资源」按钮打开的面板：每个分组 / 每个文件的尺寸与状态，和逐项「重新下载」。
+   列表可能上千行，所以面板本体给一个最大高度、里面自己滚（而不是把标题屏顶出去）。 */
+.res-modal { max-height: min(78vh, 6.4rem); display: flex; flex-direction: column; }
+.res-head { display: flex; align-items: center; flex-wrap: wrap; gap: .08rem; margin-bottom: .08rem; }
+.res-head__sum { color: var(--text-md); font-size: calc(.13 * var(--t)); }
+.res-head__chips { display: inline-flex; gap: .04rem; }
+.res-head__act { margin-left: auto; }
+
+.res-chip {
+  display: inline-flex; align-items: center; height: max(.24rem, 1.3em); padding: 0 .08rem;
+  font-size: calc(.12 * var(--t)); letter-spacing: .04em;
+  background: var(--bg-2); border: 1px solid var(--line-2); color: var(--text-md);
+}
+.res-chip--ok { color: var(--mint); border-color: var(--mint-a40, var(--line-3)); }
+.res-chip--missing, .res-chip--short { color: var(--danger, #e0554a); }
+.res-chip--longer, .res-chip--sha { color: var(--gold); }
+
+.res-run { display: flex; align-items: center; gap: .08rem; margin-bottom: .06rem; }
+.res-note { margin: .04rem 0 .06rem; color: var(--gold); font-size: calc(.13 * var(--t)); }
+
+/* ---- 备用源（public/js/ui/largeAssets.js 的 AssetPackSection；data/asset-pack.json）----------------
+   面板里那条汇总行与分组列表之间的一小块：一行标题 + 每个组一行（名称 · 大小 · sha256 前 8 位）+ 下载并导入。
+   没配（文件不在 / groups 为空 / 没有 repo+tag）时只有 `.res-pack__hint` 一行提示，不多任何元素。 */
+.res-pack { display: flex; flex-direction: column; gap: .04rem; margin-bottom: .06rem; }
+.res-pack__head { display: flex; align-items: center; gap: .08rem; }
+.res-pack__act { margin-left: auto; }
+.res-pack__row {
+  display: flex; align-items: center; gap: .08rem; padding: .04rem .08rem;
+  background: var(--bg-1); border: 1px solid var(--line-1, var(--line-2));
+}
+.res-pack__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-md); }
+.res-pack__num { flex: none; color: var(--text-lo); font-size: calc(.12 * var(--t)); }
+.res-pack__row > button:last-child { flex: none; }
+.res-pack__prog { margin: 0; color: var(--text-md); font-size: calc(.13 * var(--t)); }
+.res-pack__hint { margin: .04rem 0 .06rem; font-size: calc(.13 * var(--t)); }
+
+.res-groups { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: .04rem; }
+.res-group { border: 1px solid var(--line-1, var(--line-2)); background: var(--bg-1); }
+.res-group__row { display: flex; align-items: center; gap: .06rem; }
+.res-group__head {
+  flex: 1 1 auto; display: flex; align-items: center; gap: .08rem; min-width: 0;
+  padding: .05rem .08rem; text-align: left; cursor: pointer; background: transparent; border: 0; color: var(--text-md);
+}
+.res-group__head:hover { color: var(--text-hi); }
+.res-group__head.is-open { color: var(--text-hi); }
+.res-group__caret { flex: none; width: .1rem; color: var(--gold); }
+.res-group__id { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-group__num { flex: none; color: var(--text-lo); font-size: calc(.12 * var(--t)); }
+.res-group__row > button:last-child { flex: none; margin-right: .06rem; }
+
+.res-files { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0 0 .04rem .22rem; list-style: none; }
+.res-file { display: flex; align-items: center; gap: .08rem; padding: .02rem .08rem; font-size: calc(.12 * var(--t)); }
+.res-file:hover { background: var(--bg-2); }
+.res-file__rel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-lo); }
+.res-file__num { flex: none; color: var(--text-dim, var(--text-lo)); }
+.res-file__redo {
+  flex: none; height: max(.22rem, 1.3em); padding: 0 .08rem; cursor: pointer;
+  font-size: calc(.12 * var(--t)); color: var(--text-md); background: var(--bg-glass);
+  border: 1px solid var(--line-2);
+}
+.res-file__redo:hover:not(:disabled) { color: #fff; border-color: var(--line-3); }
+.res-file__redo:disabled { opacity: .45; cursor: not-allowed; }
+
 /* ---- backdrop ----------------------------------------------------------------------------------- */
 .title-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .title-bg__art {
@@ -230,6 +307,39 @@
   background: linear-gradient(90deg, var(--mint-500), transparent 60%);
 }
 .title-login .btn--xl { letter-spacing: .6em; padding-left: calc(.48rem + .3em); }
+/* 下载完整素材 and 导入素材包 side by side under the login box (ui/assetDownload.js, ui/assetImport.js), each with its hint line;
+   a label too long for its half (a larger 文字大小) wraps inside its button instead of spilling over the other one */
+.title-assets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .12rem; width: 4.9rem; margin-top: .12rem; text-align: center; }
+.title-assets__item { min-width: 0; }
+/* (`>`: the dialogs render inside the items — their buttons keep the shared sizes) */
+.title-assets__item > .btn { height: auto; min-height: .36rem; padding-top: .04rem; padding-bottom: .04rem; white-space: normal; line-height: 1.15; }
+.title-assets__item > small { display: block; margin-top: .06rem; color: var(--text-lo); font-size: calc(.12 * var(--t)); line-height: 1.35; }
+.asset-download, .asset-import-dialog { text-align: left; }
+.asset-download p, .asset-import-dialog p { margin: .12rem 0; line-height: 1.6; }
+.asset-import-dialog .asset-import__status:empty { margin: 0; }
+.asset-download__errors { color: var(--amber); }
+.asset-download__errors ul { max-height: 1.8rem; overflow: auto; padding-left: .24rem; }
+.asset-download__errors code { overflow-wrap: anywhere; font-size: calc(.13 * var(--t)); }
+.asset-import__row { display: flex; flex-wrap: wrap; gap: .08rem; margin: .08rem 0; }
+.asset-import__drop {
+  margin: .08rem 0;
+  padding: .12rem;
+  border: 1px dashed var(--line);
+  color: var(--text-lo);
+  text-align: center;
+}
+.asset-import__file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.asset-import__reason { color: var(--text-lo); }
 .title-invite {
   display: flex;
   align-items: center;
@@ -265,9 +375,14 @@ html[data-script="alphabetic"] .title-login .btn--xl { letter-spacing: .3em; }
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  flex-wrap: wrap;
+  gap: .12rem .2rem;
   font-size: calc(.13 * var(--t));
   color: var(--text-dim);
 }
+.title-foot__meta { display: flex; align-items: flex-end; gap: .16rem; flex-wrap: wrap; justify-content: flex-end; }
+.title-repo { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+.title-repo:hover, .title-repo:focus-visible { color: var(--text-hi); border-bottom-color: currentColor; }
 /* a development build (shared/constants.js DEV_BUILD): an unmissable tag in the footer */
 .title-dev {
   padding: .03rem .1rem;
@@ -278,3 +393,9 @@ html[data-script="alphabetic"] .title-login .btn--xl { letter-spacing: .3em; }
   font-weight: 700;
   letter-spacing: .02em;
 }
+/* the server's plugins (DESIGN §34 P1a): 「本服务器安装了 N 个插件」, a button listing them (ui/pluginPanel.js InstalledPlugins) */
+.title-plugins {
+  display: inline-flex; align-items: center; gap: .06rem; padding: .03rem .1rem;
+  border: 1px solid rgba(255, 159, 67, .5); color: #ffb066; background: rgba(255, 159, 67, .08); font-size: inherit;
+}
+.title-plugins .icon { width: .15rem; height: .15rem; }

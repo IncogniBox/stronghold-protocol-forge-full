@@ -1,15 +1,19 @@
 // forge-flow-avemujica.mjs — 颂乐人偶/Ave Mujica mod（Forge 版）流程验证（app 内运行）
 //   node forge-flow-avemujica.mjs
-// A) prep：盟约激活 + 1人每6刷新发放
-// B) prep：2人 onPrepEnd 层数 / 3人 onRoundStart 资金 / 4人 onPrepStart 部署位 / 5人翻倍
+// A) prep：盟约激活 + 1人每9刷新发放
+// B) prep：2人 onPrepEnd 层数 / 3人 onRoundStart 资金 / 4人 onBondChange 部署位（摆放即生效）/ 5人翻倍
 // C) battle：Amoris ATK buff / Doloris Fever 翻倍 / Timoris 停顿 / Mortis 凋亡损伤 / Oblivionis 25%
 import { makeMatch, give, DATA } from './test/match/harness.js';
 import { makeBattle } from './test/helpers/battleHarness.js';
-import { createRegistry } from './server/match/effectsMeta.js';
+import { packLayer } from './test/helpers/packLayer.js';
 import { battleStore } from './server/sim/content/support/index.js';
 
 const log = (...a) => console.log(...a);
-const REG = createRegistry({ log: { warn() {}, error() {}, info() {} } });
+const QUIET = { warn() {}, error() {}, info() {}, debug() {}, log() {} };
+// 已安装包的 Layer-B 载荷（server.battle + server.meta）：包的行为只在房间装配里生效，这里按同一条路装一遍。
+// 全装（不筛 id）——若叶睦的双盟约特质来自雷姆必拓包，D2 的放大器对照需要两个包同时在。
+const LAYER = await packLayer({ log: QUIET });
+const REG = LAYER.registry;
 const CH = DATA.chess;
 const nameOf = (id) => (CH[id] ? CH[id].name : id);
 let pass = 0, fail = 0;
@@ -23,9 +27,9 @@ const newChess = (ps, beforeUids) => {
 };
 
 // ---------------------------------------------------------------------------
-// A) 盟约激活 + 1人 tier（每刷新6次发放）
+// A) 盟约激活 + 1人 tier（每刷新9次发放）
 // ---------------------------------------------------------------------------
-log('\n=== A) 盟约激活 + 1人（每刷新6次发放） ===');
+log('\n=== A) 盟约激活 + 1人（每刷新9次发放） ===');
 {
   const h = makeMatch({ mode: 'solo', seed: 3, data: DATA, registry: REG, fake: true }).start();
   const m = h.m, ps = h.ps('p_0');
@@ -37,10 +41,10 @@ log('\n=== A) 盟约激活 + 1人（每刷新6次发放） ===');
   ok(!!b && b.active && b.tier >= 1, `1 名成员 → 盟约激活 (count=${b?.count}, tier=${b?.tier})`);
   const before = new Set();
   for (const area of [ps.hand, ps.board.values()]) for (const p of area) if (p) before.add(p.uid);
-  for (let i = 0; i < 6; i++) m.handle('p_0', { t: 'g.refresh' });
-  ok(ps.counters['avemujica:refresh'] === 6, `刷新计数 = 6 (${ps.counters['avemujica:refresh']})`);
+  for (let i = 0; i < 9; i++) m.handle('p_0', { t: 'g.refresh' });
+  ok(ps.counters['avemujica:refresh'] === 9, `刷新计数 = 9 (${ps.counters['avemujica:refresh']})`);
   const gained = newChess(ps, before).filter((p) => (CH[p.id]?.bonds ?? []).includes('aveMujica'));
-  ok(gained.length > 0, `每6次刷新发放 1 名颂乐人偶干员: ${gained.map((p) => nameOf(p.id)).join(', ') || '无'}`);
+  ok(gained.length > 0, `每9次刷新发放 1 名颂乐人偶干员: ${gained.map((p) => nameOf(p.id)).join(', ') || '无'}`);
   h.m.dispose?.();
 }
 
@@ -57,28 +61,27 @@ log('\n=== B) 2/3/4/5 人 tier ===');
   give(m, ps, 'chess_char_5_30_a', 'board', [10, 4]); // 三角初华
   give(m, ps, 'chess_char_5_31_a', 'board', [10, 5]); // 祐天寺若麦
   const layersBefore = ps.layers?.aveMujica ?? 0;
-  // 2人: 休整期结束 (onPrepEnd) → 每成员使已激活盟约 +2（2 成员 × 2 = 4）
+  // 2人: 休整期结束 (onPrepEnd) → 每成员使已激活盟约 +1（本盟约贡献 = 2 成员 × 1 = 2；所选策略自身也加层，只断言下界）
   h.drive(() => m.phase === 'COMBAT' && m.round === 1, { ready: true });
   const afterPrepEnd = ps.layers?.aveMujica ?? 0;
-  ok(afterPrepEnd - layersBefore >= 4, `2人 onPrepEnd: aveMujica 层数 +4 (${layersBefore} → ${afterPrepEnd})`);
+  ok(afterPrepEnd - layersBefore >= 2, `2人 onPrepEnd: aveMujica 层数 +≥2 (${layersBefore} → ${afterPrepEnd})`);
   // 3人: 下一个休整期开始时 (onRoundStart) → 每成员 +1 资金
   give(m, ps, 'chess_char_5_32_a', 'board', [10, 6]); // 八幡海铃
   const fundsBefore = ps.funds;
   h.drive(() => m.phase === 'PREP' && m.round === 2, { ready: true, band: 'band_bldsk' });
   const fundsAfter = ps.funds;
   ok(fundsAfter - fundsBefore >= 3, `3人 onRoundStart: +3 资金 (${fundsBefore} → ${fundsAfter})`);
-  // 4人: onPrepStart → deployCap +1（8 + 1 = 9）
+  // 4人: 编队变化当帧 (onBondChange) → deployCap +1（8 + 1 = 9），无需推进回合
   give(m, ps, 'chess_char_5_25_a', 'board', [10, 7]); // 若叶睦（双盟约成员）
-  h.drive(() => ps.deployCap > 8, { ready: true });
-  ok(ps.deployCap === 9, `4人 onPrepStart: deployCap = ${ps.deployCap} (期望 9)`);
-  // 5人: 全部效果翻倍 → deployCap = 8 + 1×2 = 10
+  ok(ps.deployCap === 9, `4人 onBondChange: deployCap = ${ps.deployCap} (期望 9, 摆放即生效)`);
+  // 5人: 全部效果翻倍 → deployCap = 8 + 1×2 = 10（摆放即生效）
   give(m, ps, 'chess_char_6_30_a', 'board', [10, 8]); // 丰川祥子
-  h.drive(() => ps.deployCap === 10, { ready: true });
-  ok(ps.deployCap === 10, `5人翻倍: deployCap = ${ps.deployCap} (期望 10)`);
+  ok(ps.deployCap === 10, `5人翻倍: deployCap = ${ps.deployCap} (期望 10, 摆放即生效)`);
   const layersBefore5 = ps.layers?.aveMujica ?? 0;
   h.drive(() => m.phase === 'COMBAT' && m.round === 2, { ready: true });
   const layersAfter5 = ps.layers?.aveMujica ?? 0;
-  ok(layersAfter5 - layersBefore5 >= 40, `5人翻倍: onPrepEnd 层数 +≥40 (实际 +${layersAfter5 - layersBefore5})`);
+  // 本盟约贡献 = 成员数(5) × prep_layer(1) × 翻倍(2) = 10；所选策略自身也加层，只断言下界
+  ok(layersAfter5 - layersBefore5 >= 10, `5人翻倍: onPrepEnd 层数 +≥10 (实际 +${layersAfter5 - layersBefore5})`);
   h.m.dispose?.();
 }
 
@@ -97,7 +100,7 @@ const battleWith = (members, enemies = 3, steps = 200, preStep = null) => {
     data: DATA, players: [input],
     // 敌人放成员右侧同行（近战朝右攻击）；col ≤ 9
     enemies: Array.from({ length: enemies }, (_, i) => ({ key: 'enemy_1010_errdrg', pos: [10, Math.min(9, 4 + members.length + i)] })),
-    timeLimit: 30, autoFinish: false,
+    battleInstallers: LAYER.installers, timeLimit: 30, autoFinish: false,
   });
   if (preStep) preStep(b);
   b.step(steps);
@@ -174,7 +177,7 @@ const memberUnit = (b, cid) => {
   give(m, ps, 'chess_char_6_30_a', 'board', [10, 5]); // 祥子（成员）
   give(m, ps, 'chess_char_1_01_a', 'board', [10, 6]); // 非成员（官方 1★）
   const input = ps.battleInput();
-  const b = makeBattle({ data: DATA, players: [input], enemies: [{ key: 'enemy_1010_errdrg', pos: [10, 9] }], timeLimit: 30, autoFinish: false });
+  const b = makeBattle({ data: DATA, players: [input], enemies: [{ key: 'enemy_1010_errdrg', pos: [10, 9] }], battleInstallers: LAYER.installers, timeLimit: 30, autoFinish: false });
   b.step(120);
   const out = b.b.allyUnits.find((u) => String(u.defId || u.def?.id) === 'chess_char_1_01_a');
   const buf = out && out.findBuff('bond:avemujica:atk');
@@ -195,12 +198,14 @@ log('\n=== D) 干员个人特质 ===');
   const m = h.m, ps = h.ps('p_0');
   h.toPrep(1); ps.shop.level = 6;
   give(m, ps, 'chess_char_6_30_a', 'board', [10, 4]); // 祥子（普通）
-  give(m, ps, 'chess_char_5_31_a', 'board', [10, 5]); // 若麦（2 成员 → 层数可涨）
+  // 若麦放**远处**（处决者 1 格，够不到敌人）：D1 量的是「祥子击倒敌人 → 层数+2」，不是抢刀速度
+  // （音符改走扩张正弦后她的伤害晚约 0.4~0.8 s 落地，靠得近的若麦会抢掉击杀 —— 业主 2026-10-17 已确认接受该代价）
+  give(m, ps, 'chess_char_5_31_a', 'board', [10, 1]); // 若麦（2 成员 → 层数可涨）
   h.drive(() => m.phase === 'COMBAT' && m.round === 1, { ready: true }); // onPrepEnd +4 层
   const input = ps.battleInput();
   const L0 = input.bonds.aveMujica.layers || 0;
   // 祥子(领主, 2格范围) 在 [10,4]，令敌人进入正面 1-2 格内
-  const b = makeBattle({ data: DATA, players: [input], enemies: [{ key: 'enemy_1010_errdrg', pos: [10, 5] }, { key: 'enemy_1010_errdrg', pos: [10, 6] }], timeLimit: 30, autoFinish: false });
+  const b = makeBattle({ data: DATA, players: [input], enemies: [{ key: 'enemy_1010_errdrg', pos: [10, 5] }, { key: 'enemy_1010_errdrg', pos: [10, 6] }], battleInstallers: LAYER.installers, timeLimit: 30, autoFinish: false });
   b.step(240);
   const st = battleStore(b.b, 'avemujica:st');
   const fever = st ? st.fever : 0;
@@ -222,7 +227,7 @@ log('\n=== D) 干员个人特质 ===');
     if (extra) give(m, ps, 'chess_char_5_30_a', 'board', [10, 7]); // 初华（放大器）
     give(m, ps, 'chess_char_5_32_a', 'board', [10, 6]); // 海铃（凑成员使盟约活跃）
     const input = ps.battleInput();
-    const b = makeBattle({ data: DATA, players: [input], enemies: [{ key: 'enemy_1010_errdrg', pos: [10, 9] }], timeLimit: 30, autoFinish: false });
+    const b = makeBattle({ data: DATA, players: [input], enemies: [{ key: 'enemy_1010_errdrg', pos: [10, 9] }], battleInstallers: LAYER.installers, timeLimit: 30, autoFinish: false });
     const s = { dmg: 0, gain: 0 };
     b.b.on('damaged', (c) => { if (c.target && String(c.target.defId || c.target.def?.id) === 'chess_char_5_25_a') s.dmg++; });
     b.b.on('layerGain', (c) => { if (c.reason === 'garrison' && c.bondId === 'aveMujica') s.gain++; });

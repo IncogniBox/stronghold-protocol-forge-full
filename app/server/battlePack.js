@@ -24,6 +24,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { KIT_FORBIDDEN_GLOBALS, SERVER_CODE_FORBIDDEN_GLOBALS, stripComments, mentionsIdentifier } from '../shared/kitAuthoring.js';
+import { effectivePackCallBudget } from '../shared/callBudget.js';
 import {
   BATTLE_IMPORT_TARGETS, battleImportAllowedText, kitImportDeclarations, kitImportIssues, rewriteKitImports,
 } from '../shared/kitImports.js';
@@ -76,11 +77,13 @@ function moduleAbs(pack) {
  * @param {{ log?: any, baseUrl?: string, importModule?: (url: string) => Promise<any> }} [opts]
  * @returns {Promise<{ installers: Array<{ id: string, hash: string, pack: string, install: Function }>,
  *   modules: Array<{ id: string, pack: string, hash: string, url: string }>,
+ *   policies: Array<{ id: string, policy: Function }>,
  *   errors: Array<{ pack: string, code: string, reason: string }> }>}
  */
 export async function loadBattleInstallers(loaded, { log = null, baseUrl = '/workshop-battle', importModule = (url) => import(url) } = {}) {
   const installers = [];
   const modules = [];
+  const policies = [];
   const errors = [];
   const packs = (loaded && Array.isArray(loaded.packs) ? loaded.packs : [])
     .filter((p) => p && p.server && p.server.battle)
@@ -117,12 +120,20 @@ export async function loadBattleInstallers(loaded, { log = null, baseUrl = '/wor
       continue;
     }
     const install = typeof mod?.install === 'function' ? mod.install : null;
-    if (!install) {
-      errors.push({ pack: pack.id, code: 'BATTLE_NO_INSTALL', reason: `server.battle.module "${rel}" does not export an install(battle) function — the same shape the official content modules use` });
+    // 可选的对局级盟约抽签策略（`server/match/pool.js drawDisabledBonds`）：**引擎通用**的一层 —— 引擎不认识任何
+    // 具体盟约，包在这里声明「哪些盟约我自己接管、哪些本局禁用、哪些还要从棋子身上摘除」。它与 `install` 是两件事，
+    // 只要导出其中之一这个模块就算可用。
+    const policy = typeof mod?.matchBondPolicy === 'function' ? mod.matchBondPolicy : null;
+    if (!install && !policy) {
+      errors.push({ pack: pack.id, code: 'BATTLE_NO_INSTALL', reason: `server.battle.module "${rel}" does not export an install(battle) function — the same shape the official content modules use — nor a matchBondPolicy(ctx) hook` });
       continue;
     }
-    installers.push({ id: pack.id, hash: pack.hash || '', install });
-    modules.push({ id: pack.id, pack: pack.id, hash: pack.hash || '', url: `${baseUrl}/${encodeURIComponent(pack.id)}/${rel.split('/').map(encodeURIComponent).join('/')}?v=${v}` });
+    const budget = effectivePackCallBudget(pack);
+    if (install) {
+      installers.push({ id: pack.id, hash: pack.hash || '', install, ...(budget === null ? {} : { callBudget: budget }) });
+      modules.push({ id: pack.id, pack: pack.id, hash: pack.hash || '', url: `${baseUrl}/${encodeURIComponent(pack.id)}/${rel.split('/').map(encodeURIComponent).join('/')}?v=${v}`, ...(budget === null ? {} : { callBudget: budget }) });
+    }
+    if (policy) policies.push({ id: pack.id, policy });
   }
-  return { installers, modules, errors };
+  return { installers, modules, policies, errors };
 }

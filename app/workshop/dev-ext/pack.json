@@ -1,0 +1,32 @@
+{
+  "id": "dev-ext",
+  "name": "开发者功能扩展",
+  "version": "1.0.0",
+  "author": "开发者功能扩展 mod",
+  "description": "专门用来测试各种数据与环境：提供大厅「全量模拟」入口所需的试验场关卡（stages.json，各回合的出怪已全部绑定到空波次表 waves.json，怪物由局内开发者面板现场添加），并挂一个只读诊断浮层（环境与数据读数）。大厅入口本身在核心 screens/lobby.js。",
+  "content": [
+    "stages",
+    "waves"
+  ],
+  "combat": true,
+  "server": {
+    "battle": {
+      "module": "battle/main.mjs"
+    }
+  },
+  "client": {
+    "panels": [
+      {
+        "id": "dev",
+        "slot": "root.overlays",
+        "module": "ui/devPanel.js",
+        "styles": [
+          "ui/devPanel.css"
+        ],
+        "data": [
+          "chess"
+        ]
+      }
+    ]
+  }
+}

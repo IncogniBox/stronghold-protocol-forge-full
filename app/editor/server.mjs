@@ -69,6 +69,10 @@ import { WORKSHOP_ASSET_TYPES } from '../server/index.js';
 import { normalizePackManifest, WORKSHOP_MEDIA_PREFIX, WORKSHOP_CONTENT_FILES, workshopPlaytestIndex } from '../shared/workshop.js';
 import { VOICE_SLOTS, DIFFICULTIES, VOICE_LANGS, DEFAULT_VOICE_LANG } from '../shared/constants.js';
 import { withForgeMeta, stampForgeHeader, parseForgeHeader } from '../shared/forgeNotice.js';
+// 「校验这个包」（B1，2026-10-13）：判据本体在 shared/workshopValidate.mjs，**与 tools/workshop-validate.mjs
+// 同一个函数** —— 所以界面给绿、命令行给红这种漂移结构上不会发生。`kindOfCode` 把逐记录那批问题（它们只带码，
+// 没有 kind 字段）分到正确的层，界面才分得清「干员记录的问题」与「装备的问题」。
+import { validateWorkshop, kindOfCode } from '../shared/workshopValidate.mjs';
 import {
   HOOK_EVENTS, KIT_FORBIDDEN_GLOBALS, validateKit, kitErrors, hookNamesInSource,
 } from '../shared/kitAuthoring.js';
@@ -445,20 +449,46 @@ function packKits(packDir) {
 }
 
 /**
- * What a kit in this pack may target, reproducing loadWorkshopKits' ownership rule: the chess ids THIS pack ships,
- * plus the official ones it declared it may replace (`pack.json.overrides`).
+ * What a kit in this pack may target, reproducing loadWorkshopKits' ownership rule. **Two key spaces** (docs/WORKSHOP.md
+ * §4.7), because the engine resolves a kit by two different keys and a pack may ship either:
+ *   * OPERATOR — the chess ids THIS pack ships, the charIds it declares into the 自选 pool (`pack.json.operators`; that
+ *     charId IS the key the sim looks a DIY piece's kit up by), plus the official ids it declared it may replace;
+ *   * SUMMON — the token ids its own `tokens.json` ships, plus `tokens:<id>` overrides.
+ * `ambiguousIds` are the ids the merged data carries in BOTH spaces: the loader refuses those by name (the operator half
+ * would win and the summon half would silently never run), so the editor must refuse them too — the page and the loader
+ * have to reach one verdict.
+ * @param {string} packDir
+ * @param {string} dataDir the official data directory (the two tables the ambiguity is judged against)
  */
-function kitTargets(packDir) {
+function kitTargets(packDir, dataDir = DATA_DIR) {
   const manifest = readJson(path.join(packDir, 'pack.json'), null);
   const ownChessIds = Object.keys(readJson(path.join(packDir, 'chess.json'), {}) || {}).sort();
+  const ownTokenIds = Object.keys(readJson(path.join(packDir, 'tokens.json'), {}) || {}).sort();
+  const ownCharIds = Object.keys((manifest && manifest.operators) || {}).sort();
   const overrides = Array.isArray(manifest && manifest.overrides) ? manifest.overrides : [];
-  const declared = overrides.filter((o) => typeof o === 'string' && o.startsWith('chess:')).map((o) => o.slice('chess:'.length));
-  return { manifest, ownChessIds, overrides, legalIds: [...new Set([...ownChessIds, ...declared])].sort() };
+  const declaredChess = overrides.filter((o) => typeof o === 'string' && o.startsWith('chess:')).map((o) => o.slice('chess:'.length));
+  const declaredTokens = overrides.filter((o) => typeof o === 'string' && o.startsWith('tokens:')).map((o) => o.slice('tokens:'.length));
+  const officialChess = new Set(Object.keys(readJson(path.join(dataDir, 'chess.json'), {}) || {}));
+  const officialTokens = new Set(Object.keys(readJson(path.join(dataDir, 'tokens.json'), {}) || {}));
+  const chessSide = new Set([...officialChess, ...ownChessIds, ...ownCharIds, ...declaredChess]);
+  const tokenSide = new Set([...officialTokens, ...ownTokenIds, ...declaredTokens]);
+  const ambiguousIds = [...chessSide].filter((id) => tokenSide.has(id)).sort();
+  return {
+    manifest, ownChessIds, ownTokenIds, ownCharIds, overrides, ambiguousIds,
+    legalIds: [...new Set([...ownChessIds, ...ownCharIds, ...ownTokenIds, ...declaredChess, ...declaredTokens])].sort(),
+  };
 }
 
 /** The same static check `/api/items` runs, with this pack's own ids — one place, so preview and save cannot drift. */
 function kitIssues(source, id, targets) {
-  return validateKit(source, { id, ownChessIds: targets.ownChessIds, overrides: targets.overrides });
+  return validateKit(source, {
+    id,
+    ownChessIds: targets.ownChessIds,
+    ownCharIds: targets.ownCharIds,
+    ownTokenIds: targets.ownTokenIds,
+    overrides: targets.overrides,
+    ambiguousIds: targets.ambiguousIds,
+  });
 }
 
 /** id → the packs that ship a kit with that id. loadWorkshopKits keeps the first and reports the rest. */
@@ -490,7 +520,10 @@ const duplicateKitIssue = (others) => ({
 function kitAdvisories(targets) {
   const out = [];
   const content = Array.isArray(targets.manifest && targets.manifest.content) ? targets.manifest.content : [];
-  if (!content.length) {
+  // `pack.json.operators` 与 `content` 里的**任何一个数据文件**都算「这个包贡献了东西」（`server/workshop.js`
+  // loadWorkshop 的同一份清单）—— 只带 `operators`（自选池干员）的包同样是已加载的包，它的 kit 会被导入。
+  const declaresData = content.length > 0 || Object.keys((targets.manifest && targets.manifest.operators) || {}).length > 0;
+  if (!declaresData) {
     out.push({
       field: 'pack', code: 'PACK_NOT_LOADED', severity: 'warning',
       message: '这个包还没有声明任何数据文件（pack.json 的 content 为空），加载器不会把它算作已加载的包，kit 也就不会被导入',
@@ -2388,6 +2421,64 @@ export async function createEditorServer(opts = {}) {
       });
     }
 
+    // ---- 「校验这个包」（B1，2026-10-13）-------------------------------------------------------------------------
+    //
+    // 缺口：这一页原来只有 `加载器接受` / `已被拒绝` 两个徽标（**结论**），没有任何「按一下给我结论」的动作，
+    // 而引擎最强的一层检查（第 3 层「真引擎装载」：记录有没有真的并进合并数据、能不能建出棋子 def、
+    // 精锐链接对不对）只活在 `tools/workshop-validate.mjs` 里。
+    //
+    // 判据**不复制第二份**：直接调 `shared/workshopValidate.mjs` 的 `validateWorkshop`（CLI 用的同一个函数）。
+    // 为什么搬进 shared/：CLI 是维护者工具，`tools/package.mjs` 的 PLAYER_TOOLS 不收它 —— 玩家包里没有那个
+    // 文件，编辑器 import 它会当场崩。shared/ 是编辑器与游戏共用、且随包发出的一层。
+    //
+    // ⚠ **只读**：`validateWorkshop` 只 load / 只读文件，不写任何东西（没有 `fs.write*`、没有写盘分支）。
+    // 它也只认 GET；`PACK_ID_RE` 挡住 `../` 这类路径穿越（id 会被拼进 `<root>/<id>/pack.json`）。
+    if (p.startsWith('/api/packs/') && p.endsWith('/validate') && method === 'GET') {
+      const packId = p.slice('/api/packs/'.length, -'/validate'.length);
+      if (!PACK_ID_RE.test(packId)) throw refuse(400, '工坊包 id 不合法（只能是字母、数字、下划线和短横线）');
+      if (!fs.existsSync(path.join(root, packId, 'pack.json'))) throw refuse(404, `工坊包 "${packId}" 不存在（没有可读的 pack.json）`);
+      const report = await validateWorkshop({ root, only: packId, log: quietLog });
+      // 装载结论：与 `/api/packs/support` 同一份判据（`loadWorkshop` 的 errors / foreign / packs）。
+      const loadedAgain = loadWorkshop(root, { log: quietLog });
+      const err = (loadedAgain.errors ?? []).find((e) => e.pack === packId) ?? null;
+      const foreign = (loadedAgain.foreign ?? []).find((f) => f.pack === packId) ?? null;
+      const present = (loadedAgain.packs ?? []).some((x) => x.id === packId);
+      const row = report.packs.find((x) => x.pack === packId) ?? null;
+      /** 一条问题 → 界面要的那一格（`kind` 是展示分组，`message` / `hint` 是引擎原文，界面再翻人话）。 */
+      const asCheck = (i, fallbackKind) => ({
+        kind: i.kind ?? fallbackKind,
+        field: i.field ?? '',
+        code: i.code ?? '',
+        severity: i.severity ?? 'error',
+        // 装机期那条带 `detail`（拆掉 `CODE:` 前缀之后的原文）；没有就用整句 `message`。
+        message: i.detail ?? i.message ?? '',
+        hint: i.hint ?? '',
+      });
+      const checks = [
+        // 逐记录 + 路由 + 外观素材 + 装备图标（`packs[].issues`；`kind` 已由装载阶段标好，兜底再推一次）
+        ...((row?.issues ?? []).map((i) => asCheck(i, kindOfCode(i.code, i)))),
+        // 第 3 层真引擎（只留这一个包的）
+        ...(report.engine ?? []).filter((i) => i.pack === packId).map((i) => asCheck(i, 'engine')),
+        // 其余各层（自带 kind；**按包过滤** —— `only` 只筛 `packs[]`，不过滤这两个数组）
+        ...(report.checks ?? []).filter((i) => i.pack === packId).map((i) => asCheck(i, i.kind)),
+      ].map((c, n) => ({ ...c, n }));
+      return sendJson(res, 200, {
+        ok: true,
+        pack: packId,
+        // `loaded` / `foreign` / `refused`：与这一页的徽标同一套口径
+        status: err ? 'refused' : foreign ? 'foreign' : present ? 'loaded' : 'absent',
+        reason: err?.reason ?? foreign?.reason ?? null,
+        checkedAt: Date.now(),
+        // 总数从**这一个包**的 checks 现算：`report.errorCount` 是整根的账，按包查询时不能拿它冒充
+        // （否则界面上会出现「10 处问题」而下面只列出 3 条 —— 那比不报还糟）。
+        errors: checks.filter((c) => c.severity === 'error').length,
+        warnings: checks.filter((c) => c.severity !== 'error').length,
+        checks,
+        // 只读这句话随回话一起给：界面把它显示在结果面板下方，作者不必怀疑「按一下会不会改我的文件」。
+        readOnly: true,
+      });
+    }
+
     // ---- 覆盖模式: 只读，把一条官方记录读成一份可编辑的 spec ------------------------------------------
     // 这两个端点**不写任何东西**：它们只回答「这条官方记录长什么样、它的 id 是什么」。写盘走保存路径的分支（B 段）。
     // 形状校验挡的是 `../etc` 这类路径穿越（id 会被拼进 data/<file>.json 的查找里）。
@@ -3180,11 +3271,12 @@ export async function createEditorServer(opts = {}) {
       for (const packId of fs.existsSync(root) ? fs.readdirSync(root).sort() : []) {
         if (!PACK_ID_RE.test(packId) || !fs.existsSync(path.join(root, packId, 'pack.json'))) continue;
         const packDir = path.join(root, packId);
-        const targets = kitTargets(packDir);
+        const targets = kitTargets(packDir, dataDir);
         const files = packKits(packDir);
         packs.push({
           id: packId, name: targets.manifest?.name ?? packId, author: targets.manifest?.author ?? null,
-          ownChessIds: targets.ownChessIds, overrides: targets.overrides, legalIds: targets.legalIds,
+          ownChessIds: targets.ownChessIds, ownCharIds: targets.ownCharIds, ownTokenIds: targets.ownTokenIds,
+          overrides: targets.overrides, legalIds: targets.legalIds, ambiguousIds: targets.ambiguousIds,
           kitIds: files.map((f) => f.id),
         });
         for (const kit of files) {
@@ -3214,7 +3306,7 @@ export async function createEditorServer(opts = {}) {
     // static validate WITHOUT writing: the page's live feedback, and the only validation the editor can honestly do
     if (p === '/api/kits/preview' && method === 'POST') {
       const { pack, id, source } = await readBody(req);
-      const targets = kitTargets(path.join(root, typeof pack === 'string' ? pack : ''));
+      const targets = kitTargets(path.join(root, typeof pack === 'string' ? pack : ''), dataDir);
       const issues = kitIssues(source, id, targets);
       const others = (kitIdOwners(root).get(id) || []).filter((x) => x !== pack);
       if (others.length) issues.push(duplicateKitIssue(others));
@@ -3238,7 +3330,7 @@ export async function createEditorServer(opts = {}) {
       }
       if (typeof source !== 'string') throw Object.assign(new Error('source must be the file text'), { status: 400 });
       const packDir = path.join(root, packId);
-      const targets = kitTargets(packDir);
+      const targets = kitTargets(packDir, dataDir);
       const issues = kitIssues(source, id, targets);
       const blocking = kitErrors(issues);
       if (blocking.length) return sendJson(res, 400, { error: 'the kit did not validate', errors: blocking });

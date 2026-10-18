@@ -43,6 +43,16 @@ export const ATTACK_PAUSE = 0.35;
  */
 export const ALLY_COLLIDER_RADIUS = 0.25;
 /**
+ * Collider radius of an enemy (a regular one: a huge enemy's hit rectangle is its collider, body.js). The official
+ * client gives every enemy prefab of this mode a CircleCollider2D of radius 0.1 (237 prefabs, local CN client read
+ * 2026-10-14), and target search tests colliders (PRTS 作战机制, above): an operator-side range — an attack range, a
+ * skill's or trait's range grid, the skill-range trigger — takes an enemy whose circle overlaps one of its tiles
+ * (body.js colliderKeys / bodyInRange; the owner's decision of 2026-10-14). Tile rules keep the tile of the position
+ * (格子判定: terrain, traps, fields and marks laid on tiles, "所在格" effects — Battle.enemiesOnTiles, body.js bodyInKeys),
+ * blocking and splash keep the position (中点判定); a radius PRTS marks 碰撞判定 takes the collider (Battle.foesInColliderRadius).
+ */
+export const ENEMY_COLLIDER_RADIUS = 0.1;
+/**
  * Block contact (PRTS 游戏数据基础 §阻挡半径; 作战机制 §碰撞体积与位置识别 "中点判定 … 案例: 阻挡"): an unblocked enemy whose
  * position lies within the blocker's radius of the blocker's centre touches it — compared on squared distances, as the
  * official client does. Ground blocking 0.70709997 (² 0.49999037); air blocking (起飞 / blockFly units against flyers)
@@ -229,11 +239,48 @@ export const EVENT_BUFFER_CAP = 50000;
 
 /** Nested hook emits deeper than this are skipped (content recursion, e.g. a `damaged` handler dealing damage). */
 export const MAX_HOOK_DEPTH = 32;
-/** spawnEnemy refuses to exceed this many living enemies on one field (runaway content spawn loops). */
+/**
+ * `spawnEnemy` refuses to exceed this many living enemies on ONE field with ONE player on it (runaway content spawn
+ * loops). It is also the PER-PLAYER allowance of a field several players share: see aliveEnemyCap.
+ *
+ * The flat rail was measured too tight for a 100-seat match (百卫补丁 v0.3, docs/PS100-MIGRATION.md §2.3): a single
+ * board already carried ≥ 600 living enemies, so the shared 联防 field hit the refusal. Raising it here would change
+ * the guard for every existing scale, and `test/sim/robustness.test.js` pins the single-player rail at exactly this
+ * value — so the scaling lives in aliveEnemyCap instead and this number keeps its meaning.
+ */
 export const MAX_ALIVE_ENEMIES = 600;
+/**
+ * Per-player allowance of the living-enemy cap. It EQUALS `MAX_ALIVE_ENEMIES` by design: one player's own board is
+ * the unit the rail was calibrated on, and a field shared by `n` players may legitimately carry the sum of what `n`
+ * boards can (server/match/match/combat.js gives every player a field of exactly one player; the 联防 field is the
+ * only shared one). A deployment that measured a higher per-board peak raises this one number.
+ */
+export const MAX_ALIVE_ENEMIES_PER_PLAYER = MAX_ALIVE_ENEMIES;
+/**
+ * The living-enemy cap of a shared field with `players` players on it: `MAX_ALIVE_ENEMIES × players`.
+ *
+ * `players = 1` (every normal / boss / hidden field, solo or co-op — one field per player) returns EXACTLY
+ * `MAX_ALIVE_ENEMIES`, i.e. the guard of every existing scale is unchanged, to the unit. Only the 联防 field, which
+ * carries one player per helper (≤ `gd.unite.maxHelpers`), gets the multiplied rail — and 600 × 2 still exceeds the
+ * ≤ 600 a single board was ever measured to reach, so even there it stays a runaway guard rather than a gameplay
+ * limit. A missing / unparsable count falls back to one player.
+ */
+export const aliveEnemyCap = (players) => {
+  const n = Number(players);
+  return MAX_ALIVE_ENEMIES_PER_PLAYER * (Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1);
+};
 
 /** Heal-over-time / regen events are aggregated and only emitted when they reach this amount. */
 export const REGEN_EVENT_MIN = 1;
+
+/**
+ * How far inside the field rectangle an enemy is held (tiles; Battle._clampPos). [ASSUMED] The rectangle's edge lies
+ * exactly halfway between two tiles, where the tile of a position — rounded half to even (body.js; PRTS 作战机制
+ * 四舍六入五成双) — would depend on whether the row or column number is even. Held this little inside, an enemy at the
+ * edge stays on the edge tile. 2^-20 is exact in binary and too small to move a slide of 0.1-tile steps; a 1/1024 inset
+ * did move those steps.
+ */
+export const FIELD_EDGE_INSET = 1 / 1048576;
 
 /** Row offset mapping board rows (9..12) onto boss-field rows (2..5). */
 export const BOSS_ROW_OFFSET = -7;

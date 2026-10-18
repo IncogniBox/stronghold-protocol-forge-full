@@ -15,9 +15,10 @@ import { Img, RichText, BondGlyph } from '../ui/gameComponents.js';
 import { profIconUrl, skillRecordIconUrl, moduleTypeIconUrl } from '../ui/assetUrls.js';
 import { portraitUrlOf, avatarUrlOf, currentAppearanceLookup } from '../ui/portraitChain.js';
 import { data } from '../data.js';
-import { PROF_NAME, skillLabel, moduleBadge, fullTraitText } from '../ui/loadoutModel.js';
+import { profName, skillLabel, moduleBadge, fullTraitText, skillTags } from '../ui/loadoutModel.js';
 import { diySlotList, pickChoices, pickOptions, slotRecord, defaultPick } from '../ui/diyModel.js';
 import { OperatorVoice } from '../ui/operatorVoice.js';
+import { LoadoutStats } from '../ui/loadoutStats.js';
 import { CultivationSelects } from './cultivation.js';
 import { t } from '../../../shared/i18n.js';
 
@@ -30,7 +31,7 @@ export const diyData = () => ({ chess: data.get('chess'), backups: data.get('bac
 /** A unit summary's avatar / portrait URL (a backups.json unit or a composed record). */
 // 头像走统一解析链（皮肤层）：`elite` 由调用方自己选变体，链**不看** isGolden（两边语义一致）。
 const avatarOf = (m, unit, elite = false) => avatarUrlOf(m, unit && { charId: unit.charId, assets: { avatar: elite ? unit.assets?.avatarGolden : unit.assets?.avatar } }, { lookup: currentAppearanceLookup() });
-const classLine = (u) => `${t(PROF_NAME[u?.profession] || '') || ''}${u?.subProfessionName ? ` · ${u.subProfessionName}` : ''}`;
+const classLine = (u) => `${profName(u?.profession, u)}${u?.subProfessionName ? ` · ${u.subProfessionName}` : ''}`;
 const bondName = (id) => data.lookup('bonds', id)?.name || id;
 
 /** The 原型 / 已持有 tag of a pick. */
@@ -67,8 +68,10 @@ function SlotCard({ m, slot, pick, illegal, onOpen, onClear, ops = {}, onOps = n
     <div class="diy-slot__art"><${Img} src=${portraitUrlOf(m, elite || rec, { lookup: currentAppearanceLookup() })} fallback=${html`<b>${[...(rec.name || '?')][0]}</b>`} /></div>
     <div class="diy-slot__body">
       <div class="diy-slot__head"><${TierChip} tier=${slot.tier} size="sm" /><span class="diy-slot__label">${label}</span><${KindTag} proto=${proto} /></div>
-      <b class="diy-slot__name">${rec.name}</b>
-      <small class="diy-slot__class">${classLine(rec)}</small>
+      <span class="diy-slot__idrow">
+        <span class="diy-slot__idtxt"><b class="diy-slot__name">${rec.name}</b><small class="diy-slot__class">${classLine(rec)}</small></span>
+        <span class="mod-host" data-mod-slot="screen.diy.card" data-mod-slot-key=${rec.charId}></span>
+      </span>
       <${Bonds} bonds=${rec.bonds} />
       <span class="diy-slot__kit" data-skill=${sk?.index ?? ''}>
         <${Img} src=${skillRecordIconUrl(m, sk, { empty: false })} class="diy-slot__sicon" fallback=${html`<b class="num">${skillLabel(sk?.index)}</b>`} />
@@ -109,14 +112,16 @@ function OptionCard({ m, opt, selected, onSel }) {
 }
 
 /** A skill choice of an owned pick (or the locked skill of a prototype). */
-function SkillRow({ m, s, on, locked, onPick }) {
-  const rec = s.elite || s.normal;
+function SkillRow({ m, s, on, locked, onPick, level }) {
+  const rec = level === 'elite' ? s.elite || s.normal : s.normal || s.elite;
+  const tags = skillTags(rec);
   return html`<button type="button" role="radio" aria-checked=${on ? 'true' : 'false'} data-skill=${s.index} disabled=${locked}
       class=${cx('diy-choice', on && 'is-on')} onClick=${() => onPick(s.index)}>
     <span class="diy-choice__icon"><${Img} src=${skillRecordIconUrl(m, rec, { empty: false })} fallback=${html`<b class="num">${skillLabel(s.index)}</b>`} /></span>
     <span class="diy-choice__body">
       <span class="diy-choice__head"><b class="num">${skillLabel(s.index)}</b><b>${rec?.name || ''}</b>${on ? html`<span class="lo-badge lo-badge--on"><${Icon} name="check" />${locked ? t('锁定') : t('已选择')}</span>` : null}</span>
-      <${RichText} as="span" class="diy-choice__desc" text=${s.normal?.descRaw || s.normal?.desc || ''} />
+      <span class="diy-choice__tags"><span>${tags.sp}</span>${!tags.passive ? html`<span>${t('初始')} ${tags.init} · ${t('消耗')} ${tags.cost}</span>` : null}${tags.duration ? html`<span>${tags.duration}</span>` : null}</span>
+      <${RichText} as="span" class="diy-choice__desc" text=${rec?.descRaw || rec?.desc || ''} />
     </span>
   </button>`;
 }
@@ -145,6 +150,7 @@ function ModuleRow({ id, rec, on, locked, onPick }) {
  * @param {{ m: any, slot: any, picks: Record<string, any>, kitted: string[]|null, onDone: (pick: any) => void, onClose: () => void }} props
  */
 export function DiyPicker(props) {
+  const [previewLevel, setPreviewLevel] = useState('elite');
   const cur = props.picks[props.slot.slotId] || null;
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -163,20 +169,20 @@ export function DiyPicker(props) {
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [props.onClose]);
-  return DiyPickerView({ ...props, filter, query, draft, onFilter: setFilter, onQuery: setQuery, onDraft: setDraft });
+  return DiyPickerView({ ...props, previewLevel, onPreviewLevel: setPreviewLevel, filter, query, draft, onFilter: setFilter, onQuery: setQuery, onDraft: setDraft });
 }
 
 /**
  * The picker's view (no hooks: the tests draw it): `filter` 'all' | 'proto' | 'owned', `query`, `draft` the pick being
  * made (null = none chosen yet) and their setters.
  */
-export function DiyPickerView({ m, slot, picks, kitted, onDone, onClose, filter, query, draft, onFilter: setFilter, onQuery: setQuery, onDraft: setDraft }) {
+export function DiyPickerView({ m, slot, picks, kitted, onDone, onClose, filter, query, draft, onFilter: setFilter, onQuery: setQuery, onDraft: setDraft, ops = {}, onOps = null, previewLevel = 'elite', onPreviewLevel = () => {} }) {
   const D = diyData();
   const cur = picks[slot.slotId] || null;
   const options = pickOptions(slot.slotId, picks, D, kitted);
   const q = query.trim().toLowerCase();
   const list = options.filter((o) => (filter === 'all' || (filter === 'proto') === o.proto)
-    && (!q || [o.unit?.name, o.unit?.appellation, o.unit?.subProfessionName, t(PROF_NAME[o.unit?.profession] || ''), ...o.bonds.map(bondName)].some((x) => typeof x === 'string' && x.toLowerCase().includes(q))));
+    && (!q || [o.unit?.name, o.unit?.appellation, o.unit?.subProfessionName, profName(o.unit?.profession, o.unit), ...o.bonds.map(bondName)].some((x) => typeof x === 'string' && x.toLowerCase().includes(q))));
   const ch = draft ? pickChoices(draft.charId, slot.slotId, D) : null;
   const sel = (charId) => {
     if (draft?.charId === charId) return;
@@ -187,6 +193,11 @@ export function DiyPickerView({ m, slot, picks, kitted, onDone, onClose, filter,
   const modOn = ch ? (ch.proto ? lk?.uniEquipId ?? null : draft.uniEquipId ?? null) : null;
   const unit = draft ? D.backups?.units?.[draft.charId] : null;
   const label = t('{tier}阶 自选', { tier: slot.tier });
+  const potential = ops[draft?.charId]?.potential ?? 6;
+  const base = draft ? slotRecord(slot.slotId, draft, D, { potential }) : null;
+  const golden = draft ? slotRecord(slot.slotId, draft, D, { elite: true, potential }) : null;
+  const previewEntries = base ? { [base.baseId || base.chessId]: { skill: skillOn, module: modOn || 'none' } } : {};
+  const previewChess = (id) => id === golden?.chessId ? golden : base;
   return html`<section class="diy-pick" role="dialog" aria-label=${t('{slot}：选择干员', { slot: label })} data-testid="diy-picker" data-slot=${slot.slotId}>
     <header class="diy-pick__head">
       <${TierChip} tier=${slot.tier} size="sm" /><b>${label}</b>
@@ -214,9 +225,12 @@ export function DiyPickerView({ m, slot, picks, kitted, onDone, onClose, filter,
             <span class="diy-pick__wtxt"><b>${unit.name}</b><small>${classLine(unit)}</small></span>
             <${KindTag} proto=${ch.proto} />
           </div>
+          ${!ch.proto && onOps ? html`<section class="lo-sec"><header class="lo-sec__head"><h3>${t('潜能与练度')}</h3></header><${CultivationSelects} charId=${draft.charId} ops=${ops} onSet=${onOps} /></section>` : null}
+          <${LoadoutStats} base=${base} golden=${golden} entries=${previewEntries} level=${previewLevel}
+            onLevel=${onPreviewLevel} getChess=${previewChess} ops=${ch.proto ? null : ops} />
           <h4 class="diy-pick__sec">${t('技能')}${ch.proto ? html`<small>${t('原型干员的技能与补位时一致，不可更改')}</small>` : null}</h4>
           <div role="radiogroup" aria-label=${t('选择技能')} class="diy-pick__choices">
-            ${ch.skills.filter((s) => !ch.proto || s.index === skillOn).map((s) => html`<${SkillRow} key=${s.index} m=${m} s=${s} on=${s.index === skillOn} locked=${ch.proto}
+            ${ch.skills.filter((s) => !ch.proto || s.index === skillOn).map((s) => html`<${SkillRow} key=${s.index} m=${m} s=${s} level=${previewLevel} on=${s.index === skillOn} locked=${ch.proto}
               onPick=${(i) => setDraft({ ...draft, skillIndex: i })} />`)}
           </div>
           <h4 class="diy-pick__sec">${t('模组')}<small>${t('精锐时生效 · 模组等级 {stage}', { stage: ch.stage })}</small></h4>
@@ -266,7 +280,7 @@ export function DiyPanelView({ m, picks, legal, kitted, onSet, picking, onPickin
         </div>
       </section>`)}
     </div>
-    ${slot ? html`<${DiyPicker} m=${m} slot=${slot} picks=${picks} kitted=${kitted} onClose=${() => setPicking(null)}
+    ${slot ? html`<${DiyPicker} m=${m} slot=${slot} picks=${picks} kitted=${kitted} ops=${ops} onOps=${onOps} onClose=${() => setPicking(null)}
       onDone=${(pick) => { onSet(slot.slotId, pick); setPicking(null); }} />` : null}
   </main>`;
 }

@@ -23,6 +23,14 @@
 // by its view (`spine.restart(entry)`, RefLru.restart); such a fresh load — and any load after a failure — drops PIXI's
 // still-pending requests of that skeleton first (forgetPendingSpine), so it does not join them.
 //
+// Cosmetic plugins (DESIGN §34 P1a, docs/PLUGINS.md §9): the manifest the helpers read is the installation's with the
+// cosmetic layers laid over it — `cosmetics` (public/js/cosmetics.js createCosmeticLayers; public/js/content.js sets
+// them): the room's visual set, then the player's personal plugins, composed on the page's own manifest (every plugin
+// URL built from a set's checked composition, every reference copied out of that manifest: shared/plugins/visual.js). A
+// layer change is told like a late manifest (onChange 'manifest'). A plugin file that fails to load (an image, a model)
+// is reported (`cosmetics.fail`): its entry falls back to the art beneath it. This store itself loads with the first
+// match (ui/fieldHost.js), as in 0.2.6: the title page needs neither it nor its Spine cache.
+//
 // Pure at import time: no PIXI, no DOM access until a loader actually runs (Node tests import this file).
 //
 //   import { assets } from './assets.js';          // browser singleton (manifest fetched on first use, or seeded)
@@ -41,6 +49,17 @@
 // Every URL helper is also exported as a pure function taking the manifest first (`avatarUrl(manifest, …)`),
 // so it can be unit tested without a browser. Helpers never throw on unknown ids — they return null and the
 // caller falls back (docs/ASSETS.md "Other fallbacks").
+
+// 包声明里的**行为增量**（DESIGN §28.29）：形态（`assets.modForms` → `shared/packForms.js`）与静态相位
+// （`assets.silentPhases` → `render/fx/kinds.js`）。两者都随这份清单到达，所以装包声明挂在这里（见 readyState）。
+import { installPackForms } from '../../shared/packForms.js';
+// 装包声明的**视觉增量**（DESIGN §34 P1a）：`cosmetics` 这一份是页面单例，本文件的 store 只把它当 opts 收下
+// （createAssets({ cosmetics })）；`createCosmeticLayers` / `EMPTY_MANIFEST` 供复用者与空清单兜底。
+import { cosmetics, createCosmeticLayers, EMPTY_MANIFEST } from './cosmetics.js';
+import { installSilentPhases } from './render/fx/kinds.js';
+// 换装（皮肤层）的模型那一半（`appearanceSpineFor`）：与立绘 / 头像**同一条链、同一份选择状态**。本模块只调用
+// 它，不持有任何选择 —— 链自己一个 import 都没有（`test/ui/portraitChain.test.js` 的源码守卫）。
+import { appearanceSpineFor } from './ui/portraitChain.js';
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' && v ? v : null);
@@ -205,8 +224,15 @@ export function hasBackSpine(m, id) {
   return !!(ch && isObj(ch.spine) && validSpine(ch.spine.back));
 }
 
+/**
+ * A usable spine entry. `skel` may be a **root-relative path or an absolute `http(s)://` URL** — the
+ * manifest hands out absolute CDN URLs when the art is served from a CDN (`SP_ASSET_CDN` / the CDN
+ * dropin sidecar); the official CDN client widens the pattern the same way. It must still END in
+ * `.skel`, because pixi-spine finds the atlas by swapping that suffix (so a `?v=…` token must not be
+ * appended to a spine URL — spine URLs stay token-free on purpose).
+ */
 export function validSpine(sp) {
-  return isObj(sp) && typeof sp.skel === 'string' && /^\/[^\s]*\.skel$/.test(sp.skel) && typeof sp.atlas === 'string' && isObj(sp.anims);
+  return isObj(sp) && typeof sp.skel === 'string' && /^(?:\/|https?:\/\/)[^\s]*\.skel$/.test(sp.skel) && typeof sp.atlas === 'string' && isObj(sp.anims);
 }
 
 /** Best 2D picture for a unit asset id (operator avatar, token avatar, enemy icon, item icon). */
@@ -245,6 +271,12 @@ export function unitSfxUrl(m, id, kind, skillIndex) {
   }
   return str(u[kind]);
 }
+
+// ---- cosmetic plugins (DESIGN §34 P1a) ---------------------------------------------------------------------------
+
+// The layers live in public/js/cosmetics.js (small: the title page loads it, not this store); re-exported for the code
+// and the tests that read them from here.
+export { createCosmeticLayers, cosmetics };
 
 // ---- generic caches ----------------------------------------------------------------------------------------
 
@@ -714,21 +746,29 @@ const transientFetch = (err) => {
  * after MANIFEST_BACKOFF_MS (bounded; a 404 or a body that is no JSON only on the next `ready()`). `onChange(fn)` is told
  * when the manifest (`'manifest'`) or the optional local-client manifest (`'local'`) arrives, so views built without it
  * resolve their models then (render/app.js → UnitView.retryAssets).
+ * Cosmetic plugins (`opts.cosmetics`, createCosmeticLayers; the browser singleton has the page's `cosmetics`): every
+ * helper reads the manifest with the layers laid over it, `manifest` is that one, and a layer change is told as
+ * 'manifest' (the views re-resolve what they draw next).
  * @param {{ url?: string, fetch?: typeof fetch, manifest?: object, localManifest?: object, loadImage?: (url) => Promise<any>,
  *           loadSpine?: (entry) => Promise<any>, unloadSpine?: (entry, value, keepPages:Set<string>) => (Promise<void>|void),
  *           spineMax?: number, spineTimeout?: number, spineWeigh?: (key, spineData) => number, spineIdleBytes?: number,
  *           spineQuietBytes?: number, spineIdleGrace?: number, spineEvictDelay?: number, spineQuietDelay?: number,
  *           spineTimers?: { set, clear }, spineNow?: () => number, retryDelays?: number[], backoff?: number[],
- *           wait?: (ms: number) => Promise<void>, timers?: { set, clear } }} [opts]
+ *           wait?: (ms: number) => Promise<void>, timers?: { set, clear },
+ *           cosmetics?: ReturnType<typeof createCosmeticLayers> | null }} [opts]
  */
 export function createAssets(options) {
   const opts = options && typeof options === 'object' ? options : {};
+  const layers = opts.cosmetics && typeof opts.cosmetics.apply === 'function' ? opts.cosmetics : null;
   const url = opts.url || '/data/assets.json';
   const localUrl = opts.localUrl || '/data/local-assets.json';
   let localPromise = isObj(opts.localManifest) ? Promise.resolve(opts.localManifest) : null;
   let localManifest = isObj(opts.localManifest) ? opts.localManifest : null;
   const doFetch = opts.fetch || ((...a) => globalThis.fetch(...a));
   let manifest = isObj(opts.manifest) ? opts.manifest : null;
+  // 一次构造函数就带着清单来的那一半（`createAssets({ manifest })`，render/app/host.js 的 resolveAssets）：
+  // 它不走 `adopt`，所以包增量在这里装一次（`readyState` 与 `adopt` 里那次互不重叠）。
+  if (manifest) readyState(manifest);
   let readyPromise = manifest ? Promise.resolve(manifest) : null;
   const loadImage = opts.loadImage || loadImageElement;
   const images = new Map(); // url → { promise, value }
@@ -748,10 +788,26 @@ export function createAssets(options) {
     for (const fn of [...listeners]) { try { fn(what); } catch (err) { console.warn('[assets] change listener failed', err); } }
   };
 
+  /**
+   * 形态 / 静态相位的**包增量**（DESIGN §28.29）：它们随 `assets.json` 一起到达（`assets.modForms` /
+   * `assets.silentPhases`，由 `shared/workshop.js` 的 `mergeWorkshopForms` / `mergeWorkshopFx` 并进去），
+   * 所以「装包声明」这件事的挂点就是**清单被采纳的那一刻** —— 只在 `adopt` 里做一次，不在每个视图上重复。
+   * 第一方那一半（`FORMS` / `SILENT_PHASES`）不在这里，也不许在这里：它们是渲染器的常量，优先权在 `formsFor`。
+   */
+  function readyState(m) {
+    const dropped = installPackForms(isObj(m.modForms) ? m.modForms : null).dropped;
+    if (dropped.length) {
+      // 不静默：形状层（pack.json 解析）已经拒过非法声明，能走到这里的只有跨包撞车与「想盖第一方」那两类。
+      console.warn('[assets] 形态声明被丢掉（第一方优先 / 包 id 小的赢）：', dropped);
+    }
+    installSilentPhases(m.silentPhases);
+  }
+
   /** Adopt a manifest (fetched or seeded): resolves `ready()`, stops the background tries, tells the listeners. */
   function adopt(m) {
     if (manifest || !isObj(m)) return false;
     manifest = m;
+    readyState(m);
     readyPromise = Promise.resolve(m);
     backoffN = 0;
     if (backoffTimer != null) { timers.clear(backoffTimer); backoffTimer = null; }
@@ -839,16 +895,23 @@ export function createAssets(options) {
     now: opts.spineNow,
   });
 
-  /** Image element (cached; failures resolve to null). */
-  function image(u) {
+  /**
+   * A file of a cosmetic layer failed to load (DESIGN §34 P1a): its entry falls back to the art beneath it from now on
+   * (createCosmeticLayers fail — the listeners re-resolve their art). Whether it was a layer's file.
+   */
+  const failed = (u) => { try { return !!layers?.fail?.(u); } catch { return false; } };
+
+  /** Image element (cached; failures resolve to null — a cosmetic plugin's image that failed falls back: `failed`). */
+  function image(u, { retry = false } = {}) {
     const s = str(u);
     if (!s) return Promise.resolve(null);
     let e = images.get(s);
+    if (retry && e?.done && !e.value) { images.delete(s); e = null; }
     if (!e) {
       e = { value: null, done: false, promise: null };
       e.promise = Promise.resolve().then(() => loadImage(s)).then(
-        (img) => { e.value = img; e.done = true; return img; },
-        () => { e.done = true; return null; },
+        (img) => { e.value = img; e.done = true; if (!img) failed(s); return img; },
+        () => { e.done = true; failed(s); return null; },
       );
       images.set(s, e);
     }
@@ -871,7 +934,9 @@ export function createAssets(options) {
     return localPromise;
   }
 
-  const m = () => manifest || {};
+  const m = () => (layers ? layers.apply(manifest || EMPTY_MANIFEST) : manifest || {});
+  // a layer switched on or off draws like a manifest that arrived: the views re-resolve their art (render/app.js)
+  if (layers) layers.subscribe(() => notify('manifest'));
   return {
     ready,
     local,
@@ -895,7 +960,8 @@ export function createAssets(options) {
       return () => listeners.delete(fn);
     },
     localUrl: (group, name) => localAssetUrl(localManifest, group, name),
-    get manifest() { return manifest; },
+    /** The manifest the helpers read (the cosmetic layers over the loaded one), null until one is loaded. */
+    get manifest() { return manifest ? m() : null; },
     get loaded() { return !!manifest; },
     avatar: (id, o) => avatarUrl(m(), id, o),
     portrait: (id, o) => portraitUrl(m(), id, o),
@@ -909,8 +975,32 @@ export function createAssets(options) {
     subProfIcon: (s) => subProfIconUrl(m(), s),
     ui: (name) => uiUrl(m(), name),
     picture: (id) => unitPictureUrl(m(), id),
-    spineEntry: (id, o) => spineEntry(m(), id, localManifest ? { ...o, local: localManifest } : o),
+    spineEntry: (id, o) => {
+      // 换装（皮肤层）：这个单位的主人选过一套时装、而那套带自己的 spine 模型时用它 —— 与立绘 / 头像同一条链
+      // （`portraitChain.appearanceSpineFor`）。对局里的单位只知道 `ownerId`，所以由 `render/units.js` 把它作为
+      // `opts.owner` 传下来；没有时装 / 那套没带模型 / `owner` 不给时，落到下面那条原路（与从前逐字相同）。
+      if (o && o.owner !== undefined) {
+        const skin = appearanceSpineFor(o.owner, str(id), !!o.back, m());
+        if (skin) return skin;
+      }
+      return spineEntry(m(), id, localManifest ? { ...o, local: localManifest } : o);
+    },
     hasBack: (id) => hasBackSpine(m(), id),
+    /**
+     * 换装（皮肤层）的**模型 stem**：这位干员的主人选过一套时装、而那套带自己的 spine 模型时，返回该模型文件名去掉
+     * `.skel` 的部分（如 `char_4182_oblvns_avemujica_1`），否则 null。战斗特效层（`render/vfx/wiring.js` 的
+     * `opts.skin`）拿它去 index.json 的 `skins` 里查那套时装的挂载点与 `fx`（该包自备的特效后缀）—— 与模型换装
+     * （`spineEntry`）**同一条链、同一份选择**，所以对局单位只知道 `ownerId` 也走这一条。
+     * @param {string|null|undefined} owner 与 `spineEntry` 的 `opts.owner` 同义（`undefined` = 不给 owners）
+     * @param {string} id 干员 asset id（charId）
+     */
+    skinModel: (owner, id) => {
+      if (owner === undefined) return null;
+      const sp = appearanceSpineFor(owner, str(id), false, m());
+      const base = sp && str(sp.skel) ? String(sp.skel).split('/').pop() : '';
+      if (!base) return null;
+      return base.toLowerCase().endsWith('.skel') ? base.slice(0, -5) : base;
+    },
     audio: {
       bgm: (kind) => bgmEntry(m(), kind),
       sfx: (group, key) => sfxUrl(m(), group, key),
@@ -918,6 +1008,12 @@ export function createAssets(options) {
     },
     /** Cached image element promise (null on failure). */
     image,
+    /**
+     * Report a file that failed to load outside this store (a texture another loader made — render/app.js's shadow, an
+     * `<img>` of the interface: public/js/content.js): a cosmetic plugin's file falls back. Whether it was one.
+     * @param {string} u
+     */
+    failed,
     /** Already-loaded image element or null (sync). */
     imageNow(u) { const e = images.get(str(u) || ''); return e && e.done ? e.value : null; },
     /**
@@ -939,7 +1035,13 @@ export function createAssets(options) {
      * hold() → release function (a scene that will need its skeletons again: RefLru).
      */
     spine: {
-      acquire: (entry, o) => (validSpine(entry) ? spine.acquire(entry.skel, entry, o) : Promise.reject(new Error('no spine entry'))),
+      // a cosmetic plugin's model that fails to load (any of its files) falls back to the installation's: its view loads
+      // that one (render/units.js retryAssets) — not while the tab is hidden (a load the hidden tab left hanging times out
+      // without the file being at fault: GitHub #68; the view tries again when it is shown)
+      acquire: (entry, o) => (validSpine(entry) ? spine.acquire(entry.skel, entry, o).catch((err) => {
+        if (!globalThis.document?.hidden) failed(entry.skel);
+        throw err;
+      }) : Promise.reject(new Error('no spine entry'))),
       restart: (entry) => (validSpine(entry) ? spine.restart(entry.skel, entry) : false),
       release: (entry) => { if (entry && entry.skel) spine.release(entry.skel); },
       peek: (entry) => (entry && entry.skel ? spine.peek(entry.skel) : null),
@@ -951,5 +1053,5 @@ export function createAssets(options) {
   };
 }
 
-/** Browser singleton. */
-export const assets = createAssets();
+/** Browser singleton (with the page's cosmetic layers). */
+export const assets = createAssets({ cosmetics });

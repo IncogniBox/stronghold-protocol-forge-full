@@ -12,8 +12,17 @@
 // that still carries them is ignored).
 
 import { getConfig, getMode } from '../data.js';
+import { MAX_SEATS } from '../../shared/constants.js';
+// 变体 / 口径层（DESIGN §28.39）：`opts.variants` → 这一局的 `config` 覆盖。值与轴表都在 `shared/variants.js`，
+// 这里只消费它的判决（`null` = 什么都不用改，缺省路径逐字节不变）。
+import { variantDataPatch, variantValue } from '../../shared/variants.js';
+import { morphPairingOf, morphSlotPolicy } from '../../shared/morph.js';
+import { formView, isEliteForm } from '../../shared/formProjection.js';
 import { isShopItem } from '../sim/simdata.js';
+import { mergeData } from '../../shared/plugins/dataUtils.js';
 import { standInRecord } from '../../shared/standIn.js';
+import { equipCapacity as equipCapacityOf } from '../../shared/equipSlots.js';
+import { MAX_OFFER_SLOTS } from './player/common.js';
 import {
   normalizeSupportConfig, supportSlotsFor, supportCapacity, supportPicker, isSupportChess, supportTierOf, supportPriceOf,
   checkSupport as checkSupportSelection,
@@ -68,19 +77,31 @@ export const COMBAT_TIME_SCALE = 2;
  *          at most `aliveFull` (4); a count left out means a full team;
  *          `perPlayer` false: the fixed pool of 0.1.x (「保持固定血量」, restorable with `solo` 0.25): `coop` whatever the
  *          count, × min(alive, aliveFull) / aliveFull with `aliveScaling`.
+ *
+ * `aliveFull` is a CEILING on the per-player multiplier, and it is calibrated for the official 4-seat room. A bigger
+ * room (百卫补丁 v0.3, docs/PS100-MIGRATION.md §2.4) must not be silently clamped to it — `Math.min(32, 4)` made a
+ * 32-seat pool exactly as large as a 4-seat one — so the effective ceiling is `max(aliveFull, seatCap)`.
+ *
+ * This reads the room's CAPACITY (`seatCap`), deliberately: it is a calibration floor, not the variant gate (that one
+ * is `Match.variant` = 参与人数 > 4, 业主裁令 2026-10-12). With the 缺省上限 of 20 a room that fields fewer people is
+ * therefore scaled as if it could hold 20 — a no-op for today's data (`data/config.json`'s only `bossHpScale` has
+ * `perPlayer: true`, so the share is `coop × alive` and `full` never enters), but a mode switching to `perPlayer: false`
+ * would see the 20-seat ceiling instead of the 4-seat one.
  * @param {object|null|undefined} modeScale config.modes[modeId].bossHpScale
  * @param {object|null|undefined} cfgScale config.bossHpScale
  * @param {boolean} isSolo
  * @param {number} [aliveCount] alive players at the Final Assault / Hidden Core start (co-op)
+ * @param {number} [seatCap] seat slots of the room (default MAX_SEATS): the floor of the `aliveFull` ceiling
  * @returns {number}
  */
-export function bossPoolShareOf(modeScale, cfgScale, isSolo, aliveCount) {
+export function bossPoolShareOf(modeScale, cfgScale, isSolo, aliveCount, seatCap = MAX_SEATS) {
   const ms = modeScale && typeof modeScale === 'object' ? modeScale : {};
   const cs = cfgScale && typeof cfgScale === 'object' ? cfgScale : {};
   const pick = (k, d) => (Number.isFinite(ms[k]) && ms[k] > 0 ? ms[k] : Number.isFinite(cs[k]) && cs[k] > 0 ? cs[k] : d);
   const flag = (k, d) => (typeof ms[k] === 'boolean' ? ms[k] : typeof cs[k] === 'boolean' ? cs[k] : d);
   if (isSolo) return pick('solo', 1);
-  const full = Math.max(1, Math.floor(pick('aliveFull', 4)));
+  const cap = Number.isFinite(seatCap) && seatCap >= 1 ? Math.floor(seatCap) : MAX_SEATS;
+  const full = Math.max(1, Math.floor(pick('aliveFull', 4)), cap);
   const n = Number(aliveCount);
   const alive = Number.isFinite(n) && n >= 1 ? Math.min(full, Math.floor(n)) : full;
   if (flag('perPlayer', true)) return pick('coop', 1) * alive;
@@ -94,16 +115,85 @@ export class GameData {
   /**
    * @param {Readonly<Record<string, any>>} data server/data.js getData() (may be partial)
    * @param {string} modeId e.g. 'mode_multi_hard'
+   * @param {{ seatCap?: number, variants?: Array<{ axis: string, default: string }>|null, forms?: object|null }} [opts] seatCap = seat slots of the room (default MAX_SEATS): the floor of the
+   *        bossHpScale `aliveFull` ceiling, so a bigger room is not clamped to the 4-seat calibration
+   *        (bossPoolShareOf; 百卫补丁 v0.3, docs/PS100-MIGRATION.md §2.4).
+   *        variants = the 口径 this match runs under (DESIGN §28.39, `pack.json.variants`); absent ⇒ the engine
+   *        defaults, i.e. exactly today's behaviour.
+   *        forms = 形态投影视图（`shared/formProjection.js` 的 `formView`，DESIGN §28.41）：`Match` 把它那一份传进来，
+   *        与这一局的 `DataSource` **共用同一份**（两边分叉就是 bug）。不给 ⇒ 由 `variants` 自己建一份（等价）。
    */
-  constructor(data, modeId) {
+  constructor(data, modeId, opts = {}) {
     this.raw = data && typeof data === 'object' ? data : {};
     this.config = getConfig(this.raw) || {};
     this.modeId = modeId;
     this.mode = getMode(modeId, this.raw) || {};
+    // Mode-level globals inherit field by field; the vanilla mode never changes its config object.
+    const overrides = Object.fromEntries(Object.keys(this.config).filter(k => k !== 'modes' && Object.hasOwn(this.mode, k)).map(k => [k, this.mode[k]]));
+    if (Object.keys(overrides).length) this.config = mergeData(this.config, overrides);
+    /**
+     * 开发者模式（「全量模拟」）的**调度中心槽位覆盖**：`{ [level]: { chess?, item? } }`。Match 在 `g.dev` 的
+     * `shopSlots` 动作里写它；缺省 `null` ⇒ `shopSlots(level)` 走的还是 mode / DEFAULTS 那条路（逐字节不变）。
+     * @type {Record<string, { chess?: number, item?: number }>|null}
+     */
+    this.shopSlotOverride = null;
+    /**
+     * 变体 / 口径层（DESIGN §28.39）给出的 `config` 覆盖 —— **一个轴一个值，值来自引擎常量，不是包**。
+     * `opts.variants` 是本局声明的口径（`Array<{ axis, default }>`，`shared/variants.js` 归一化过的那一份）；
+     * 没声明（`undefined` / 空数组）时它逐字是 `null`，于是下面每一个读点都走今天那条缺省路径。
+     *
+     * 为什么在**这里**读、而不是把 `config.economy.deployCap` 写进 `data`：`data/*.json` 是 generated 且
+     * 逐字节被 `test/data.test.js` 钉住的（那张离线重建表要能逐字节复现 data/），口径改的是**这一局**的规则，
+     * 不是那份基线。这条与工坊 overlay 的既有分工一致：overlay 加的是**内容**，口径加的是**规则的一个选项**。
+     * @type {{ economy?: { deployCap?: number } } | null}
+     */
+    this.variantPatch = variantDataPatch(opts?.variants ?? null);
+    /**
+     * 行为开关 `morphPairing` 的档位（DESIGN §28.43.1）：`GameData` 是**这一局**的读取视图（prep 侧的
+     * `pieceBonds` 从它读），所以档位也挂在这里、由 `Match` 建它时传进来 —— 与 `variants` 那条口径同一条分工
+     * （改的是这一局的读取，不是 `data/*.json` 那份基线）。没声明 ⇒ `'official'`，也就是引擎今天的行为。
+     * @type {'official'|'plus'}
+     */
+    this.morphPairing = morphPairingOf(opts?.behaviour ?? null);
+    /**
+     * 装备位语义的策略（第 7 段，与上面那一行是**同一格开关的另外半条**）：`plus` 档下变形同构体不占装备位、
+     * 每名干员最多一件、第三件顶掉真正占格的那两件；缺省档 ⇒ `OFFICIAL_SLOT_POLICY`（**共享的冻结单例**，每一个
+     * 方法都逐字是引擎今天那条算术）。
+     *
+     * 挂在 `GameData` 上的理由与 `morphPairing` 逐字相同：`GameData` 是**这一局**的读取视图，而槽位判定的调用方
+     * （`server/match/player/items.js` / `acquire.js` / `bot.js` / `invariants.js`）手上有的就是它。**它不参与
+     * `equipPerChess` 的取值** —— 那两格装备位是官方的；策略只回答「这一行占了几格、能不能再放一件、顶替挑哪一件」。
+     * @type {import('../../shared/morph.js').MorphSlotPolicy}
+     */
+    this.morphSlots = morphSlotPolicy(opts?.behaviour ?? null);
+    /** 口径给出的部署位；没有口径 ⇒ `null`（`deployCap` 落到数据 / DEFAULTS 那两级）。 */
+    const cap = this.variantPatch?.economy?.deployCap;
+    this._deployCap = Number.isInteger(cap) && cap > 0 ? cap : null;
+    /**
+     * Seat slots of the room this game data belongs to (MAX_SEATS when the caller has no seat list). Only the
+     * boss-pool ceiling reads it — see bossPoolShareOf.
+     */
+    this.seatCap = Number.isFinite(opts?.seatCap) && opts.seatCap >= 1 ? Math.floor(opts.seatCap) : MAX_SEATS;
     this.economy = this.config.economy && typeof this.config.economy === 'object' ? this.config.economy : {};
     const chess = this.raw.chess && typeof this.raw.chess === 'object' ? this.raw.chess : {};
     this._chess = chess;
+    /**
+     * 形态投影（口径轴 `form`，DESIGN §28.41）：`form: "elite"` 时普通（`_a`）棋子按精锐（`_b`）的战斗职能出战。
+     * 这一份是**读取期**的视图（`shared/formProjection.js`）：缺省（没声明这个轴）时它的 `chess(id)` 返回**原对象
+     * 本身**，所以缺省路径逐字节不变、对象身份也不变（`sim/simdata.js` 的 DataSource 缓存与 golden 摘要都靠它）。
+     * 与 `deploy` 那条口径的分工一样：口径改的是**这一局的读取**，`data/*.json` 那份基线一个字节都不动。
+     */
+    this.eliteForm = isEliteForm(variantValue(opts?.variants ?? null, 'form'));
+    // 调用方（`Match`）可以把它那一份直接传进来：**同一份视图**才能在面板与战斗之间保证不分叉。
+    this.formView = opts && opts.forms && typeof opts.forms.chess === 'function' && typeof opts.forms.token === 'function'
+      ? opts.forms
+      : formView(chess, this.eliteForm, { tokens: this.raw.tokens });
+    this._tokensView = this.formView.token;
     this._items = this.raw.items && typeof this.raw.items === 'object' ? this.raw.items : {};
+    // Fixed operator gifts are unlimited outputs, but every produced normal/advanced item still occupies 1/2 copies
+    // (card-pool experiment BV1eLXXBqEgF, maintainer-confirmed 2026-10-11). Random subset gifts are not exempt.
+    this._fixedGiftItems = new Set(Object.values(this.raw.garrisons || {})
+      .filter(g => g.effectKey === 'SERVER_GAIN_EQUIP').map(g => g.bbStr?.chess).filter(id => this._items[id]));
     this._bonds = this.raw.bonds && typeof this.raw.bonds === 'object' ? this.raw.bonds : {};
     /** visible, shop-eligible base (normal) chess ids */
     this.visibleChess = Object.keys(chess).filter((id) => {
@@ -112,8 +202,9 @@ export class GameData {
     }).sort();
     /**
      * Shop item ids by tier (sim/simdata.js isShopItem: normal EQUIP, not hidden, not effect-only — the special
-     * 维式重锤 and 突变细胞 are never sold). Every "shop item" draw uses it: the shop item slot (pool.js), the 道具补给 /
-     * 机密商店 cards (choices.js) and the shop-eligible item pools (Match.rollItemId).
+     * 维式重锤 and 突变细胞 are never sold). Every shop-item draw uses it: the shop item slot (pool.js), the 道具补给 /
+     * 机密商店 cards (choices.js) and the shop-eligible item pools (Match.rollItemId). A pool's `also` list
+     * (pool_equip_kathe: 突变细胞, #631) is appended there and is not in this table, so the shop slot still never sells it.
      */
     this.shopItemsByTier = {};
     for (const [id, it] of Object.entries(this._items)) {
@@ -172,7 +263,7 @@ export class GameData {
    * @param {number} [aliveCount]
    */
   bossPoolShare(aliveCount) {
-    return bossPoolShareOf(this.mode.bossHpScale, this.config.bossHpScale, this.isSolo, aliveCount);
+    return bossPoolShareOf(this.mode.bossHpScale, this.config.bossHpScale, this.isSolo, aliveCount, this.seatCap);
   }
 
   /** config.titles with the tuning overrides (stat / rule per title id) merged in. */
@@ -191,7 +282,12 @@ export class GameData {
 
   // ---- ids ------------------------------------------------------------------------------------------
 
-  chess(id) { return own(this._chess, id); }
+  /**
+   * A chess record. 口径 `form: "elite"`（DESIGN §28.41）下**普通（`_a`）棋子**返回按它精锐兄弟烘出来的那一份
+   * （`shared/formProjection.js`：职能取 `_b`，棋子 id / 阶级 / 价格 / 盟约 / 特质 / 合成数仍取 `_a`）；没声明这个
+   * 轴时逐字返回 `data/chess.json` 里**那个对象本身**（`===`，对象身份不变）。
+   */
+  chess(id) { return this.formView.chess(id) ?? own(this._chess, id); }
   item(id) { return own(this._items, id); }
   bond(id) { return own(this._bonds, id); }
   band(id) { return own(this.raw.bands, id); }
@@ -285,6 +381,8 @@ export class GameData {
 
   chessPrice(id) {
     const c = this.chess(id);
+    const override = this.mode.economy?.chessPrice?.[this.tierOf(id)]?.[c?.isGolden ? 'golden' : 'normal'];
+    if (Number.isFinite(override) && override >= 0) return override;
     if (c && Number.isFinite(c.price) && c.price >= 0) return c.price;
     const tier = this.tierOf(id);
     const row = this.economy.chessPrice && this.economy.chessPrice[tier];
@@ -295,6 +393,8 @@ export class GameData {
 
   sellPrice(id) {
     const c = this.chess(id);
+    const override = this.mode.economy?.chessSell?.[this.tierOf(id)]?.[c?.isGolden ? 'golden' : 'normal'];
+    if (Number.isFinite(override) && override >= 0) return override;
     if (c && Number.isFinite(c.sellPrice) && c.sellPrice >= 0) return c.sellPrice;
     const tier = this.tierOf(id);
     const row = this.economy.chessSell && this.economy.chessSell[tier];
@@ -310,34 +410,77 @@ export class GameData {
   get refreshPrice() { return Math.max(0, numOr(this.economy.refreshPrice, DEFAULTS.refreshPrice)); }
   get benchSize() { return posIntOr(this.economy.benchSize, DEFAULTS.benchSize); }
   get tempSize() { return posIntOr(this.economy.tempSize, DEFAULTS.tempSize); }
-  get deployCap() { return posIntOr(this.economy.deployCap, DEFAULTS.deployCap); }
+  /**
+   * 部署位（一名玩家同时站在场上的干员数）。三条来源，**优先级就是这个顺序**：
+   *   1. 本局的**口径**（`pack.json.variants` 的 `deploy: "max"`，DESIGN §28.39）—— 见构造函数里的 `_deployCap`；
+   *   2. 数据里的 `config.economy.deployCap`（官方 `maxBattleChessCnt` = 8）；
+   *   3. `DEFAULTS.deployCap`（一份被裁过的 data 也还能开局）。
+   * 没有口径、也没有数据时逐字回到今天那条：`posIntOr(economy.deployCap, DEFAULTS.deployCap)`。
+   */
+  get deployCap() { return this._deployCap ?? posIntOr(this.economy.deployCap, DEFAULTS.deployCap); }
   get equipPerChess() { return posIntOr(this.economy.equipPerChess, DEFAULTS.equipPerChess); }
+
+  /**
+   * 一个携带者的**装备格上限**：`equipPerChess` 加上他携带的每件装备声明的 `params.slot_cap`
+   * （`shared/equipSlots.js`，哥伦比亚 mod 的源石辅助仪「装备格+2/+4」就是这一条）。
+   * 判断「还能不能装下正在拖的那一件」时把那一件一起传进 `extra` —— 一件 2/2 满格的干员仍然装得下源石辅助仪。
+   * @param {Iterable<any>} items 携带的装备（记录 / `{ id }` / id 字符串）
+   * @param {any} [extra] 额外算进来的那一件
+   */
+  equipCapacity(items, extra = null) {
+    const list = [...(items || [])];
+    if (extra) list.push(extra);
+    return equipCapacityOf(this.equipPerChess, list, (id) => this.item(id));
+  }
   get maxArtsPerRound() { return posIntOr(this.economy.maxArtsPerRound, DEFAULTS.maxArtsPerRound); }
   get goldenCopies() { return posIntOr(this.economy.goldenCopies, DEFAULTS.goldenCopies); }
   get itemMergeCount() { return posIntOr(this.economy.itemMergeCount, DEFAULTS.itemMergeCount); }
-  get leftoverKeptBands() { return Array.isArray(this.economy.leftoverFundsKeptByBands) ? this.economy.leftoverFundsKeptByBands : DEFAULTS.leftoverFundsKeptByBands; }
+  get leftoverKeptBands() {
+    const ids = Array.isArray(this.economy.leftoverFundsKeptByBands) ? this.economy.leftoverFundsKeptByBands : DEFAULTS.leftoverFundsKeptByBands;
+    const extra = Object.values(this.raw.bands || {}).filter(b => b.effectRef && ids.includes(b.effectRef)).map(b => b.bandId);
+    return extra.length ? [...ids, ...extra] : ids;
+  }
   get defaultBandId() { return typeof this.economy.defaultBandId === 'string' ? this.economy.defaultBandId : DEFAULTS.defaultBandId; }
   get defaultStartLp() { return posIntOr(this.economy.defaultStartLp, DEFAULTS.defaultStartLp); }
 
   rewardOffer() {
     const r = this.economy.rewardOffer && typeof this.economy.rewardOffer === 'object' ? this.economy.rewardOffer : {};
     return {
-      count: posIntOr(r.count, DEFAULTS.rewardOffer.count),
+      // (an offer shows at most MAX_OFFER_SLOTS: a larger count — a data plugin's — only rolled for slots nobody sees)
+      count: Math.min(MAX_OFFER_SLOTS, posIntOr(r.count, DEFAULTS.rewardOffer.count)),
       tierOffset: Number.isInteger(r.tierOffset) ? r.tierOffset : DEFAULTS.rewardOffer.tierOffset,
       maxTier: posIntOr(r.maxTier, DEFAULTS.rewardOffer.maxTier),
       price: Math.max(0, numOr(r.price, 0)),
     };
   }
 
-  /** Copies of a base chess in the shared pool. */
+  /**
+   * Copies of a base chess in the shared pool — and, for a DIY slot, of a slotted 自选 piece in its player's own stock
+   * (player/diy.js buildDiyStock).
+   */
   poolCopies(baseId) {
     const ov = this.economy.poolCopiesOverrides;
-    if (ov && typeof ov === 'object' && Number.isInteger(ov[baseId]) && ov[baseId] >= 0) return ov[baseId];
     const tier = this.tierOf(baseId);
     const pc = this.economy.poolCopies;
-    const v = pc && typeof pc === 'object' ? pc[tier] : undefined;
-    return Number.isInteger(v) && v >= 0 ? v : (DEFAULTS.poolCopies[tier] ?? 10);
+    const v = ov && Number.isInteger(ov[baseId]) && ov[baseId] >= 0 ? ov[baseId] : pc?.[tier];
+    const base = Number.isInteger(v) && v >= 0 ? v : (DEFAULTS.poolCopies[tier] ?? 10);
+    // Co-op doubles the single-player counts: the measured shared pool (shared by the whole team, independent of team
+    // size) and each player's private 自选 stock alike — the maintainer's decision of 2026-10-15 (GitHub #650): with
+    // the shared pool doubled and the 自选 stock not, a 自选 operator was diluted in the copy-weighted rolls.
+    const multiplier = this.isSolo ? 1 : posIntOr(this.economy.coopPoolMultiplier, 1);
+    return base * multiplier;
   }
+
+  /** Normal equipment copies in the shared pool; effect-only items have no shop stock limit. */
+  itemPoolCopies(id) {
+    const base = this.baseIdOf(id), rec = this.item(base);
+    if (!rec || !isShopItem(rec)) return null;
+    const count = this.economy.itemPoolCopiesOverrides?.[base] ?? this.economy.itemPoolCopies?.[rec.tier];
+    return Number.isInteger(count) && count >= 0 ? count : null;
+  }
+
+  /** Whether a fixed trait gift may be produced beyond stock (including the advanced version of that item). */
+  isUnlimitedGiftItem(id) { return this._fixedGiftItems.has(this.baseIdOf(id)); }
 
   /** Copies needed to merge (0 = never merges: golden chess). */
   mergeCount(id) {
@@ -381,8 +524,15 @@ export class GameData {
   }
 
   shopSlots(level) {
-    const s = this.mode.shopSlots && this.mode.shopSlots[String(level)];
     const d = DEFAULTS.shopSlots[level] || DEFAULTS.shopSlots[6];
+    // 开发者模式（「全量模拟」）：面板的槽位覆盖优先（Match 写 `gd.shopSlotOverride`）
+    const ov = this.shopSlotOverride && this.shopSlotOverride[String(level)];
+    if (ov && typeof ov === 'object') {
+      const c = Number.isInteger(ov.chess) && ov.chess >= 0 ? ov.chess : d.chess;
+      const it = Number.isInteger(ov.item) && ov.item >= 0 ? ov.item : d.item;
+      return { chess: Math.min(c, 8), item: Math.min(it, 4) };
+    }
+    const s = this.mode.shopSlots && this.mode.shopSlots[String(level)];
     if (!s || typeof s !== 'object') return { ...d };
     const chess = Number.isInteger(s.chess) && s.chess >= 0 ? s.chess : d.chess;
     const item = Number.isInteger(s.item) && s.item >= 0 ? s.item : d.item;
@@ -480,8 +630,8 @@ export class GameData {
    * Team LP the overtime drain has taken when a boss field clock reads `gt` game seconds: bossOvertimeDrainReal per
    * whole REAL second past bossOvertimeAfterReal (the first point at 151 real s).
    */
-  bossOvertimeDue(gt) {
-    const over = (Number(gt) || 0) / this.combatTimeScale - this.bossOvertimeAfterReal;
+  bossOvertimeDue(gt, afterReal = this.bossOvertimeAfterReal) {
+    const over = (Number(gt) || 0) / this.combatTimeScale - afterReal;
     return over >= 1 ? Math.floor(over) * this.bossOvertimeDrainReal : 0;
   }
   get dp() {

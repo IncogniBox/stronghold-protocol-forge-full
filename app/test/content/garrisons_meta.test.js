@@ -3,12 +3,21 @@
 // numbers; one normal and one elite id per key are also asserted with literal numbers. The last test checks coverage.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeMatch, give, giveItem, DATA } from '../match/harness.js';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { makeMatch, give, giveItem } from '../match/harness.js';
+import { loadData } from '../../server/data.js';
 import { createRegistry } from '../../server/match/effectsMeta.js';
 import { triggerGainEffects } from '../../server/sim/content/garrisons.js';
 
 const QUIET = { warn() {}, error() {}, info() {} };
 const REG = createRegistry({ log: QUIET });
+// 本文件校验的是**官方**特质名册（REG 是官方注册表），所以数据基线固定为「仅官方」（`workshopDir: null`）：
+// 否则在 `node --test --import ./test/official-data.mjs` 之外的直接运行下，进程单例 `getData()` 会先加载 `workshop/`
+// 里的包，让「每个 SERVER_* effectKey 都有处理器」「每个可见 SERVER_* 特质都被覆盖」两条 sweep 把工坊包的特质
+// 也算进来（既有报错）。显式 `loadData` 一份官方数据；`setup` 的 match 也用同一份，令本文件无论怎么起测都自足。
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const DATA = loadData(join(ROOT, 'data'), { log: QUIET, workshopDir: null });
 const GR = (gid) => DATA.garrisons[gid];
 const CH = (id) => DATA.chess[id];
 const ids = (s) => String(s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -31,7 +40,7 @@ const plain = (pred = () => true) => Object.values(DATA.chess).filter((c) => c.v
 const noPrepFin = (pred = () => true) => Object.values(DATA.chess).filter((c) => c.visible && !c.isGolden && (c.garrisonIds || []).every((g) => GR(g).eventType !== 'SERVER_PREP_FIN') && pred(c)).map((c) => c.chessId).sort();
 
 function setup(seed = 70) {
-  const h = makeMatch({ mode: 'solo', seed, registry: REG, fake: true }).start();
+  const h = makeMatch({ mode: 'solo', seed, registry: REG, fake: true, data: DATA }).start();
   h.toPrep(1);
   const m = h.m;
   const ps = h.ps('p_0');
@@ -838,6 +847,26 @@ test('塞雷娅 99 / 白面鸮 86: the copier runs the front operator\'s prep-en
   w.roundStart();
   assert.equal(w.ps.shop.freeRefreshes, 3);
 });
+
+// Maintainer-confirmed replay of the linked official-game footage (#473): only Ptilopsis copying these two gifts.
+for (const targetId of ['chess_char_4_12_a', 'chess_char_6_03_a']) {
+  for (const ownRow of [false, true]) for (const sourceRow of [false, true]) {
+    test(`白面 copies ${targetId} gift without either row condition (own=${ownRow}, source=${sourceRow})`, () => {
+      const s = setup(11);
+      const white = give(s.m, s.ps, 'chess_char_4_21_a', 'board', [11, 4]); white.dir = 'DOWN';
+      give(s.m, s.ps, targetId, 'board', [10, 4]);
+      const fillers = plain(c => c.position === 'RANGED').slice(0, 4); let filler = 0;
+      for (const [r, on] of [[11, ownRow], [10, sourceRow]]) if (on) {
+        give(s.m, s.ps, fillers[filler++], 'board', [r, 3]);
+        give(s.m, s.ps, fillers[filler++], 'board', [r, 5]);
+      }
+      s.ps.recompute(); const before = s.ps.round.gainedChess;
+      s.roundStart();
+      assert.equal(s.ps.round.gainedChess - before, 1 + (sourceRow ? 1 : 0), 'copier always gives one; original still checks its own row');
+      s.h.invariants();
+    });
+  }
+}
 
 test('triggerGainEffects export (band 铃兰): re-runs 获得时 garrisons ×投资人 and returns the effects run', () => {
   const s = setup();

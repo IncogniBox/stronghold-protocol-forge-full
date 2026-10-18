@@ -35,9 +35,18 @@ function cleanText(value, max) {
 /**
  * 从 `CHANGELOG.md` 生成公告（**引擎自己的那一份**，单一事实源）。
  *
- * 认的形状就是这份文件自己的形状：`## <version> — <date>` 一节，节内第一段是摘要，`### <名字>` 是小节，
+ * 认的形状就是这份文件自己的形状：`## <version> — <date>` 一节，**节内第一段正文是摘要**，`### <名字>` 是小节，
  * 小节里的 `- ` 行是条目（续行按缩进并入上一条）。不认识的写法**跳过**而不是猜 —— 公告是展示用的，
  * 猜错比少一条难查得多。
+ *
+ * **三处实测过的漏**（2026-10-12 收，`test/packNotices.test.js` 逐条钉住）：
+ * ① 发行 tag 会把上游版本挂在标题后面，一节可以写成 `## 0.16.0-0.2.4 — 2026-10-12`（本仓库 0.16.0 +
+ *    上游 0.2.4）。原来只认 `## x.y.z — date`，这半边不认 —— 而 `test/version.test.js` 早就认了。
+ * ② 「第一段正文」原来要求它落在**第一个 `###` 之前**；0.16.0 起有几节是「`##` 紧跟 `###`、正文写在小节
+ *    标题下面」，那种节取不到摘要，`flushRelease` 就把整条丢掉。
+ * ③ 原来还要求**至少一个小节**；0.15.0–0.15.3 那几节通篇没有 `###`（`##` + 正文 + `*` 条目），
+ *    于是 `sections` 是空的、整条被丢掉。判据改成与客户端同一条：有摘要就能展示。
+ * 三处叠起来的结果：玩家看到的公告最新一条停在 0.14.0，而当时发的就是 0.16.0。
  * @param {{ changelogPath: string, limit?: number }} opts
  * @returns {Array<{ version: string, date: string, summary: string, sections: Array<{ name: string, items: string[] }> }>}
  */
@@ -58,11 +67,15 @@ export function engineAnnouncements({ changelogPath, limit = NOTICE_LIMITS.annou
   const flushRelease = () => {
     flushSection();
     if (!cur) return;
-    if (cur.summary && cur.sections.length && out.length < limit) out.push(cur);
+    // 一条公告要有可展示的东西 = **摘要**（客户端 `public/js/ui/notices.js` 的同一条判据：`version` + `summary`
+    // 缺一就不画）。**不要求「至少一个小节」** —— 0.15.0–0.15.3 那几节通篇没有 `###`（`##` + 正文 + `*` 条目），
+    // 原来因为 `sections` 是空的被整条丢掉。这类节的条目直接挂在 `##` 下，不属于任何小节，所以
+    // `sections` 留空、公告只展示那一段摘要 —— 不替它编一个小节名（那是猜）。
+    if (cur.summary && out.length < limit) out.push(cur);
     cur = null;
   };
   for (const line of lines) {
-    const release = /^##\s+(\d+\.\d+\.\d+)\s+—\s+(\d{4}-\d{2}-\d{2})\s*$/.exec(line);
+    const release = /^##\s+(\d+\.\d+\.\d+)(?:-\d+\.\d+\.\d+)?\s+—\s+(\d{4}-\d{2}-\d{2})\s*$/.exec(line);
     if (release) {
       flushRelease();
       cur = { version: release[1], date: release[2], summary: '', sections: [] };
@@ -90,11 +103,15 @@ export function engineAnnouncements({ changelogPath, limit = NOTICE_LIMITS.annou
       if (joined) section.items[section.items.length - 1] = joined;
       continue;
     }
-    if (section) continue;
     if (!cur.summary) {
+      // 节内**第一段正文**就是摘要 —— 不管它前面有没有 `###`。0.16.0 起有几节写成
+      // 「`##` 紧跟 `###`、正文在小节标题下面」，而这里原来是 `if (section) continue;`：
+      // 那种节取不到摘要，`flushRelease` 就把整条丢掉（玩家看到的公告最新一条停在 0.14.0）。
+      // 条目行与缩进续行在上面已经 `continue` 掉了，所以走到这里的只可能是正文行或空行。
       const body = cleanText(line, NOTICE_LIMITS.summaryChars);
       if (body) cur.summary = body;
     }
+    if (section) continue;
   }
   flushRelease();
   return out;

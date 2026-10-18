@@ -36,6 +36,8 @@ describe('extract.py helpers (no UnityPy needed)', { skip: !PY && 'no python3' }
     assert.deepEqual(mesh.map((j) => j.bundle), [
       'arts/maps/map_autochess/bkg_mesh.ab', 'arts/maps/common/meshes/s_background_common.ab',
       'arts/maps/common/meshes/s_common_box_01.ab', 'arts/maps/common/meshes/s_wind_device.ab',
+      // the official 射击台 model (round 40, DESIGN §34.14.10): only trap_1106_achplat of the 卫戍协议 device bundle
+      'arts/maps/common/trap/trap_110.ab',
     ]);
     for (const j of mesh) assert.deepEqual(j.kinds, ['GameObject', 'Material', 'Mesh', 'Texture2D']);
     assert.equal(new Set(jobs.map((j) => j.sub)).size, jobs.length, 'one output dir per job');
@@ -50,7 +52,7 @@ describe('extract.py helpers (no UnityPy needed)', { skip: !PY && 'no python3' }
     assert.equal(enemySpines.sub, 'spine/enemy');
     // every listed id is a token of the game data without a web model (data/assets.json tokens[id].spine), sorted, unique
     const ids = tokenSpines.ids;
-    assert.equal(ids.length, 39);
+    assert.equal(ids.length, 40);
     assert.deepEqual([...ids].sort(), ids);
     assert.equal(new Set(ids).size, ids.length);
     const tokens = JSON.parse(readFileSync(path.join(ROOT, 'data/tokens.json'), 'utf8'));
@@ -58,7 +60,8 @@ describe('extract.py helpers (no UnityPy needed)', { skip: !PY && 'no python3' }
     const web = JSON.parse(readFileSync(path.join(ROOT, 'data/assets.json'), 'utf8')).tokens;
     for (const id of ids) {
       assert.ok(tokens[id] || backups.tokens[id], `${id}: a token of the game data`);
-      assert.equal(web[id]?.spine, undefined, `${id}: no web model`);
+      if (id === 'token_10031_swire2_gdtrap') assert.ok(web[id]?.spine, 'champagne has a web skin fallback');
+      else assert.equal(web[id]?.spine, undefined, `${id}: no web model`);
     }
     // the 自选 summons whose prefab draws nothing (an EmptyAnimator: displayType HIDDEN / an effect) are left out
     for (const id of ['token_10039_ulpia_block', 'token_10055_phatm2_mndclv', 'token_10058_sbell2_icetgt', 'token_10065_demetr_dmtpos',
@@ -233,7 +236,8 @@ describe('extracted board-scene files (when a local client was extracted)', { sk
 
   test('mesh/*: OBJ files with their vertex counts and a prefab.json each', { skip: !Object.keys(manifest?.groups || {}).some((k) => k.startsWith('mesh/')) && 'not extracted' }, () => {
     const groups = Object.entries(manifest.groups).filter(([k]) => k.startsWith('mesh/'));
-    assert.deepEqual(groups.map(([k]) => k).sort(), ['mesh/map_autochess_bkg', 'mesh/s_background_common', 'mesh/s_common_box_01', 'mesh/s_wind_device']);
+    // mesh/trap_110 (the 射击台 model, round 40) is there once the local art was extracted with 0.3.0's extract.py
+    assert.deepEqual(groups.map(([k]) => k).filter((k) => k !== 'mesh/trap_110').sort(), ['mesh/map_autochess_bkg', 'mesh/s_background_common', 'mesh/s_common_box_01', 'mesh/s_wind_device']);
     for (const [name, g] of groups) {
       assert.equal(g.prefab?.kind, 'Prefab', name);
       const meshes = Object.values(g).filter((x) => x.kind === 'Mesh');

@@ -2,26 +2,32 @@
 //
 // `loadoutStore` holds the per-browser loadout (`entries`, persisted in localStorage through store.js savePref), the
 // per-browser not-owned list of the 干员持有 tab (`notOwned`, likewise), the 自选编队 picks (`diy`, likewise; with
-// `diyKitted` = the operators the server lets a DIY slot field, from every `welcome`) and the overlay's screen state
-// (open / origin / tab / selection / filters). `installLoadoutSync()` / `installOwnershipSync()` / `installDiySync()`
-// (called once by main.js) keep the server's copies current — one sync engine (installPrefSync), three settings: after
-// every `welcome` (new or resumed
-// session — the server keeps them on the session and on the seat, so joining a room needs no resend) and after every
-// edit (debounced; a pending edit goes out at once when the overlay closes), they send `room.loadout { entries, ops }`
+// `diyKitted` = the operators the server lets a DIY slot field, from every `welcome`), the 干员冲突兼容 picks
+// (`conflict`, likewise; with `conflicts` = the read-only conflict index fetched from /workshop-conflicts.json) and the
+// overlay's screen state (open / origin / tab / selection / filters). `installLoadoutSync()` / `installOwnershipSync()` /
+// `installDiySync()` / `installConflictSync()` (called once by main.js) keep the server's copies current — one sync engine
+// (installPrefSync), four settings: after every `welcome` (new or resumed session — the server keeps them on the session
+// and on the seat, so joining a room needs no resend) and after every edit (debounced; a pending edit goes out at once
+// when the overlay closes), they send `room.loadout { entries, ops }`
 // (sanitised against the loaded data/chess.json: ui/loadoutModel.js sanitizeEntries — a stale entry is dropped, never
 // the whole loadout; `ops` = the per-operator 潜能 / 练度 of 0.2.2, sanitizeOps against chess.json + backups.json), `room.ownership { notOwned }` (sent as stored: the server keeps the droppable chess and drops
-// the rest, so no data is needed) and `room.diy { picks }` (sent as stored, structurally clean: the server keeps the
-// legal picks). Replies: RATE → retried later; WRONG_PHASE / ROOM_STARTED → the running match keeps what it took (the
-// loadout locks when INFO_CHECK ends; the ownership and the 自选 picks never change during a match) — stored for the
-// next match, not an error for the player; anything else is logged. `sync` / `ownSync` / `diySync` ∈ 'idle' |
-// 'pending' | 'sending' | 'synced' | 'locked' | 'error' are mirrored into the store for the screen's status line.
+// the rest, so no data is needed), `room.diy { picks }` (sent as stored, structurally clean: the server keeps the
+// legal picks) and `room.conflict { picks }` (likewise: the server keeps the conflicted ids of this match's data).
+// Replies: RATE → retried later; WRONG_PHASE / ROOM_STARTED → the running match keeps what it took (the
+// loadout locks when INFO_CHECK ends; the ownership, the 自选 picks and the conflict picks never change during a
+// match) — stored for the next match, not an error for the player; anything else is logged.
+// `sync` / `ownSync` / `diySync` / `conflictSync` ∈ 'idle' | 'pending' | 'sending' | 'synced' | 'locked' | 'error' are
+// mirrored into the store for the screen's status line.
 
 import { createStore, loadPref, savePref } from '../store.js';
 import { data } from '../data.js';
 import { LOADOUT_PREF, parseStored, parseStoredOps, toStored, sanitizeEntries, sanitizeOps } from './loadoutModel.js';
-import { cultivationCharIds } from '../../../shared/protocol.js';
+import { cultivationCharIds, charPotentialChanges } from '../../../shared/protocol.js';
+import { contentSet as appContentSet } from '../content.js';
+import { PHASE } from '../../../shared/constants.js';
 import { OWNERSHIP_PREF, parseStoredOwnership, toStoredOwnership, cleanIds, sanitizeNotOwned } from './ownershipModel.js';
 import { DIY_PREF, parseStoredDiy, toStoredDiy, cleanPicks, sanitizeDiyPicks } from './diyModel.js';
+import { CONFLICT_PREF, parseStoredConflict, toStoredConflict, cleanConflictPicks, withConflictPick, conflictWinner, sanitizeConflictPicks } from './conflictModel.js';
 import { toast } from './toasts.js';
 import { t, N_ } from '../../../shared/i18n.js';
 
@@ -40,6 +46,57 @@ function readStoredOwnership() {
 function readStoredDiy() {
   try { return parseStoredDiy(loadPref(DIY_PREF, null)); } catch { return {}; }
 }
+function readStoredConflict() {
+  try { return parseStoredConflict(loadPref(CONFLICT_PREF, null)); } catch { return {}; }
+}
+
+/**
+ * 行为开关 `prepLoadout` 的**客户端半**（DESIGN §28.43.3）。
+ *
+ * 服务端那一半早就落了（`Match.setLoadout` 读 `LOADOUT_PHASES`：`locked`（缺省）只收 `INFO_CHECK`，`prep` 另收
+ * `PREP`）。而客户端这一半原来写死在 `screens/loadout.js` 的
+ * `phase !== PHASE.INFO_CHECK && phase !== PHASE.LOBBY` 里 ⇒ **只要在局中、非 `INFO_CHECK` 就一律算"锁定"** ⇒
+ * 声明了 `prep` 的房间会出现「**服务端收得下、界面却在说锁着**」的自相矛盾。
+ *
+ * 这里把那份相位判据收成**一份两档的表 + 一个纯函数**，屏幕只读它、不再自己比相位：
+ *   * `locked`（缺省）⇒ `[INFO_CHECK]`；
+ *   * `prep` ⇒ `[INFO_CHECK, PREP]`。
+ *
+ * ⚠️ **方向（这一处最容易写反）**：这张表列的是**这一档下 `room.loadout` 收得下**的相位 —— 与服务端
+ * `LOADOUT_PHASES` **同名同义**（缺省 `[INFO_CHECK]` 就是"只有简报里改才算本局的"）。所以界面那个
+ * 「本局已锁定」徽标是它的**取反**：`locked = !currentLoadoutLockPhases().includes(phase)`。
+ * 半成品的第一版把它写成了正读（`includes`）⇒ 缺省档下徽标**只在 `INFO_CHECK` 画**，正好把"能改"的那一段标成
+ * "已锁定"、把"改不了"的那几段反而不标 —— 那是**缺省路径的行为改变**。`test/prepLoadoutClient.test.js` 现在用
+ * **真实的相位枚举**逐相位钉方向（旧的那条遍历把 `Object.values(PHASE)` 按 `typeof === 'number'` 过滤，而
+ * `PHASE` 的值**全是字符串** ⇒ 那个循环空转、一个相位都没钉住）。
+ *
+ * ⚠️ **与 `server/match/match/platform.js` 的 `LOADOUT_PHASES` 是两张表**：客户端不能 import `server/**`（导入边界），
+ * 所以这是这一层既有的"客户端副本 + 一个测试把两张表钉在一起"的做法（与
+ * `CLIENT_WRAP_COMPONENTS`↔`MOD_COMPONENT_IDS`、`CLIENT_PANEL_SLOTS`↔`MOD_PANEL_SLOTS` 同一条）。
+ * 钉它的测试是 `test/prepLoadoutClient.test.js` 里那条"逐档逐字相等"。
+ */
+export const LOADOUT_CLIENT_PHASES = Object.freeze({
+  locked: Object.freeze([PHASE.INFO_CHECK]),
+  prep: Object.freeze([PHASE.INFO_CHECK, PHASE.PREP]),
+});
+/** 这一页拿到的档位（由 `roomMods.js` 从 `welcome.mods` 合成后写入；缺省 `'locked'` = 引擎今天的行为）。 */
+let prepLoadoutOption = 'locked';
+/** 记下这一页的有效档位（`roomMods.js` 调；非 `'prep'` 一律当作缺省）。 */
+export function setPrepLoadout(option) { prepLoadoutOption = option === 'prep' ? 'prep' : 'locked'; }
+/** 这一页允不允许在 `PREP` 里改调配（诊断 / 测试面）。 */
+export function prepLoadoutAllowed() { return prepLoadoutOption === 'prep'; }
+/**
+ * 这一档下 `room.loadout` **收**的相位（纯函数：入参是档位，不是这一页的状态 —— 于是两档都能直接断言）。
+ * **要判「锁定」就取反**（见上）。返回的数组里**没有** `LOBBY`：`LOBBY` 那一半由屏幕那句 `phase !== PHASE.LOBBY`
+ * 与 `inMatch && phase` 挡着，这一格不负责它。
+ * @param {'locked'|'prep'|null|undefined} option
+ * @returns {readonly string[]}
+ */
+export function loadoutLockPhases(option) {
+  return option === 'prep' ? LOADOUT_CLIENT_PHASES.prep : LOADOUT_CLIENT_PHASES.locked;
+}
+/** 这一页当前档位下 `room.loadout` **收**的相位（屏幕读它；判「锁定」时取反）。 */
+export function currentLoadoutLockPhases() { return loadoutLockPhases(prepLoadoutOption); }
 
 /** Loadout + ownership + screen state (separate from the app store: it must survive room / match resets). */
 export const loadoutStore = createStore({
@@ -48,6 +105,8 @@ export const loadoutStore = createStore({
   notOwned: readStoredOwnership(), // 干员持有: base chess ids marked 未持有 (sorted; [] = every operator owned)
   diy: readStoredDiy(), // 自选编队: { [slotBaseId]: { charId, skillIndex?, uniEquipId? } } ({} = every slot empty)
   diyKitted: null,     // the operators a DIY slot may field (welcome.diyKitted; null before the first welcome)
+  conflict: readStoredConflict(), // 干员冲突兼容: { [chessId]: packId } ({} = every conflicted chess uses the merged winner)
+  conflicts: undefined, // the conflict index fetched from the read-only route; undefined = not fetched yet, null = no conflict
   open: false,
   from: null,          // 'lobby' | 'room' | 'briefing'
   tab: 'loadout',      // 'loadout' (干员调配) | 'ownership' (干员持有) | 'diy' (自选编队)
@@ -56,6 +115,7 @@ export const loadoutStore = createStore({
   sync: 'idle',
   ownSync: 'idle',
   diySync: 'idle',
+  conflictSync: 'idle',
 });
 
 /** Replace the stored entries (persisted at once with the settings; the sync picks the change up). */
@@ -142,6 +202,55 @@ export function applyDiyImport(picks, data, kitted) {
 }
 
 /**
+ * Choose which pack's record one conflicted chess uses (干员冲突兼容): `packId` null (or the winner) = use the merged
+ * one. Persisted at once; the sync picks the change up. The winner is never stored (the map holds only the deviations).
+ * @param {string} chessId @param {string|null} [packId]
+ */
+export function setConflictPick(chessId, packId = null) {
+  const conflicts = loadoutStore.get().conflicts;
+  // the id is in the index: `conflictWinner` names the default, so picking it is the same as clearing the entry
+  const next = withConflictPick(loadoutStore.get().conflict, chessId, packId, conflictWinner(conflicts, chessId));
+  try { savePref(CONFLICT_PREF, toStoredConflict(next)); } catch { /* private mode: the session keeps it */ }
+  loadoutStore.set({ conflict: next });
+}
+
+/** The read-only route that answers "which chess have more than one source, and who are they" (server/http/routes.js). */
+export const CONFLICT_URL = '/workshop-conflicts.json';
+/** One fetch at a time: opening the overlay twice in a row must not put two requests on the wire. */
+let conflictFetch = null;
+
+/**
+ * Fetch the conflict index once per overlay open (`store.conflicts`; `undefined` before, `null` when this server has no
+ * conflict). Stale picks are dropped against the fresh index — a pack that is gone from this build must not keep
+ * claiming a chess the server no longer offers a choice for. A failed fetch leaves the previous value alone: the switch
+ * simply does not render.
+ * @returns {Promise<any>} the index (or null)
+ */
+export function loadConflicts() {
+  if (conflictFetch) return conflictFetch;
+  const p = (async () => {
+    try {
+      const r = await fetch(CONFLICT_URL, { cache: 'no-store' });
+      const body = r.ok ? await r.json() : null;
+      const index = body && typeof body === 'object' && body.chess ? body : null;
+      loadoutStore.set({ conflicts: index });
+      const stored = loadoutStore.get().conflict;
+      const clean = sanitizeConflictPicks(stored, index);
+      if (JSON.stringify(clean) !== JSON.stringify(stored)) {
+        try { savePref(CONFLICT_PREF, toStoredConflict(clean)); } catch { /* ignore */ }
+        loadoutStore.set({ conflict: clean });
+      }
+      return index;
+    } catch (e) {
+      console.warn('[conflict] index fetch failed', e);
+      return null;
+    } finally { conflictFetch = null; }
+  })();
+  conflictFetch = p;
+  return p;
+}
+
+/**
  * Open the 干员调配 overlay. @param {'lobby'|'room'|'briefing'} from @param {string|null} [sel]
  * @param {'loadout'|'ownership'|'diy'|null} [tab] the tab to show (default: the last one)
  */
@@ -163,12 +272,13 @@ export const closeLoadout = () => loadoutStore.set({ open: false });
  * is the message body), `prepare()` → the payload to send (may await data; null = the data is missing: nothing is sent,
  * state 'error'), `lockedText` = what a refused edit tells the player.
  */
-function installPrefSync({ net, timers, target, notify, key, stateKey, msgType, field, prepare, lockedText, tag }) {
+function installPrefSync({ net, timers, target, notify, key, stateKey, msgType, field, prepare, lockedText, tag, content = appContentSet }) {
   const T = timers || { setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms), clearTimeout: (id) => globalThis.clearTimeout(id) };
   // (`lockedText` is a msgid: the toast is translated when it shows — docs/I18N.md)
   const tell = notify || ((text) => toast(t(text), 'warn'));
   let timer = null;
   let seq = 0;            // requests sent (the reply of an older one never overrides a newer one's state)
+  let revision = 0;       // edits and welcome invalidate a preparation still awaiting game data (GitHub #540)
   let pendingJson = null; // JSON of the newest request still awaiting its reply
   let lastSent = null;    // JSON of the last payload the server accepted (on this session)
   let edited = false;     // an edit is waiting to be sent (a lock refusal is then worth telling the player)
@@ -189,9 +299,12 @@ function installPrefSync({ net, timers, target, notify, key, stateKey, msgType, 
   async function flush() {
     if (disposed) return;
     if (net.status !== 'online') { setState('idle'); return; } // the next welcome resends
+    const preparing = revision;
     try {
       const payload = await prepare();
-      if (disposed) return;
+      // a newer edit or welcome happened while prepare awaited chess/backups: do not send, and do not touch the
+      // sync state that newer flush owns (an older skill must not overwrite a restore-defaults)
+      if (disposed || preparing !== revision) return;
       // never sanitise against missing data: every entry would be dropped and the server's copy cleared
       if (payload == null) { setState('error'); return; }
       const json = JSON.stringify(payload);
@@ -221,15 +334,16 @@ function installPrefSync({ net, timers, target, notify, key, stateKey, msgType, 
         else { console.warn(`[${tag}] ${msgType} refused`, code, err && err.detail); setState('error'); }
       }
     } catch (e) {
+      if (disposed || preparing !== revision) return;
       console.warn(`[${tag}] sync failed`, e);
       setState('error');
     }
   }
 
-  const offWelcome = net.on('welcome', () => { lastSent = null; pendingJson = null; seq++; schedule(50); });
+  const offWelcome = net.on('welcome', () => { revision++; lastSent = null; pendingJson = null; seq++; schedule(50); });
   const keys = Array.isArray(key) ? key : [key];
   const offStore = target.subscribe((s, prev) => {
-    if (keys.some((k) => s[k] !== prev[k])) { edited = true; schedule(); }
+    if (keys.some((k) => s[k] !== prev[k])) { revision++; edited = true; schedule(); }
     // closing the overlay sends a pending edit at once (review fix): the player's next click — 准备就绪 in the solo
     // briefing, 开始模拟 in the room — must not overtake the debounced message (the match locks its loadout when
     // INFO_CHECK ends, so a late edit would silently only apply to the next match). Same socket ⇒ ordered.
@@ -237,6 +351,14 @@ function installPrefSync({ net, timers, target, notify, key, stateKey, msgType, 
   });
   // a match leaving INFO_CHECK locks the loadout; a new match (the room back in LOBBY / a new INFO_CHECK) accepts it again
   const offRoom = net.on('room.state', (msg) => { if (msg && !msg.inMatch && target.get()[stateKey] === 'locked') { lastSent = null; schedule(); } });
+  // the room's content set arrived or went (DESIGN §34.6): sent again, checked against the data the room plays now
+  let contentKey = content ? `${content.get().cs}|${content.get().status}` : '';
+  const offContent = content ? content.subscribe((c) => {
+    const k = `${c.cs}|${c.status}`;
+    if (k === contentKey) return;
+    contentKey = k;
+    if (c.status === 'ready' || c.status === 'idle') { revision++; lastSent = null; schedule(50); }
+  }) : null;
 
   return {
     flush,
@@ -246,6 +368,7 @@ function installPrefSync({ net, timers, target, notify, key, stateKey, msgType, 
       offWelcome?.();
       offStore?.();
       offRoom?.();
+      offContent?.();
     },
   };
 }
@@ -278,7 +401,7 @@ export function installLoadoutSync({ net, getChessReady, getBackupsReady, lookup
       if (!hasOps) return { entries, ops: {} };
       if ((await readyBackups()) == null) return null;
       const ids = opIds();
-      return { entries, ops: sanitizeOps(target.get().ops, (id) => ids.has(id)) };
+      return { entries, ops: sanitizeOps(target.get().ops, (id) => ids.has(id), (id) => charPotentialChanges({ chess: data.get('chess'), backups: data.get('backups') }, id)) };
     },
   });
 }
@@ -306,15 +429,41 @@ export function installOwnershipSync({ net, timers, target = loadoutStore, notif
  * @param {{ net: any, timers?: { setTimeout: Function, clearTimeout: Function }, target?: ReturnType<typeof createStore>,
  *   notify?: (text: string) => void }} deps
  */
-export function installDiySync({ net, timers, target = loadoutStore, notify } = {}) {
+export function installDiySync({ net, timers, target = loadoutStore, notify, content = appContentSet } = {}) {
+  // the picker's list: welcome's, and the operators the room's content set adds while it plays one (DESIGN §34.6)
+  let welcomeList = null;
+  let joined = { base: null, extra: null, list: null };
+  const pickList = () => {
+    const extra = content?.get().status === 'ready' ? content.get().kitted : null;
+    if (!welcomeList || !Array.isArray(extra) || !extra.length) return welcomeList;
+    if (joined.base !== welcomeList || joined.extra !== extra) joined = { base: welcomeList, extra, list: [...new Set([...welcomeList, ...extra])] };
+    return joined.list;
+  };
   const offKit = net.on('welcome', (msg) => {
-    const list = msg && Array.isArray(msg.diyKitted) ? msg.diyKitted.filter((x) => typeof x === 'string') : null;
-    target.set({ diyKitted: list });
+    welcomeList = msg && Array.isArray(msg.diyKitted) ? msg.diyKitted.filter((x) => typeof x === 'string') : null;
+    target.set({ diyKitted: pickList() });
   });
+  const offKitContent = content ? content.subscribe(() => { const l = pickList(); if (l !== target.get().diyKitted) target.set({ diyKitted: l }); }) : null;
   const sync = installPrefSync({
     net, timers, target, notify, key: 'diy', stateKey: 'diySync', msgType: 'room.diy', field: 'picks', tag: 'diy',
     lockedText: N_('自选编队是局外设置，修改将在下一局生效'),
     prepare: async () => cleanPicks(target.get().diy),
   });
-  return { flush: sync.flush, dispose() { offKit?.(); sync.dispose(); } };
+  return { flush: sync.flush, dispose() { offKit?.(); offKitContent?.(); sync.dispose(); } };
+}
+
+/**
+ * Wire the 干员冲突兼容 sync once (2026-10-16): `room.conflict { picks }` after every welcome and edit. The picks go as
+ * stored (structurally clean); the server keeps the ids that really are conflicted in this room's data and the packs that
+ * really contributed them (`checkConflictPicks`, lenient). During a match the server stores them for the next one
+ * (ROOM_STARTED → 'locked'): the setting is out of match, like 干员持有 / 自选编队.
+ * @param {{ net: any, timers?: { setTimeout: Function, clearTimeout: Function }, target?: ReturnType<typeof createStore>,
+ *   notify?: (text: string) => void }} deps
+ */
+export function installConflictSync({ net, timers, target = loadoutStore, notify } = {}) {
+  return installPrefSync({
+    net, timers, target, notify, key: 'conflict', stateKey: 'conflictSync', msgType: 'room.conflict', field: 'picks', tag: 'conflict',
+    lockedText: N_('干员冲突兼容是局外设置，修改将在下一局生效'),
+    prepare: async () => cleanConflictPicks(target.get().conflict),
+  });
 }

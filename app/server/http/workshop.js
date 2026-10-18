@@ -15,8 +15,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { WORKSHOP_MEDIA_PREFIX, WORKSHOP_RESOURCE_PREFIX, byPackId, workshopI18nFiles } from '../../shared/workshop.js';
+import { WORKSHOP_MEDIA_PREFIX, WORKSHOP_RESOURCE_PREFIX, byPackId, workshopAssetUrl, workshopI18nFiles } from '../../shared/workshop.js';
 import { workshopTouchedFiles, readUiLangFile } from '../workshop.js';
+// 保留表只此一处真相：静态 `pack.json.routes` 与动态 `host.route` 两条通道判的都是 routeMount.js 里的那两张表。
+import { coreRouteShadow } from './routeMount.js';
 
 /**
  * The `/i18n/<code>.json` bodies the HTTP layer must serve MERGED for a 创意工坊 pack (fanpack G-04,
@@ -242,12 +244,21 @@ export const ROUTE_CACHE_HEADERS = Object.freeze({
  * have at that path. Two packs declaring the same path: the smaller pack id wins (DESIGN §28.3's rule), and the loser
  * is reported — the same ordering rule the data overlay and the kit loader use.
  *
+ * **核心先吃（DESIGN §28.35）。** `static.js` asks this table *before* the core mounts, so a declaration can answer a
+ * path the engine itself serves. That is no longer allowed: `coreRouteShadow` (routeMount.js — the same table the
+ * dynamic `host.route` channel judges with) decides whether a declared path is one the engine really serves, and such
+ * a declaration is **dropped from the map** — the core mount answers, exactly as if the pack had declared nothing. The
+ * pack is **not** refused: a published pack that carries a shadowing declaration still installs and runs, only that one
+ * declaration stops taking effect, and it is named in `errors` and in a `log.warn` line (never a silent drop). A
+ * declaration that merely *sits in* a core namespace without a core file occupying it is kept and reported as a
+ * pre-announced displacement.
+ *
  * @param {{ packs?: Array<{ id: string, dir?: string, routes?: Array<{ path: string, file: string, cache?: string }> }> }} loaded
  * @param {string|null} workshopDir
- * @param {{ log?: object|null }} [opts]
+ * @param {{ log?: object|null, mount?: Array<{ prefix: string, name?: string, dir?: string }> }} [opts]
  * @returns {{ routes: Map<string, { file: string, cache: string, pack: string }>, errors: Array<{ pack: string, path: string, reason: string }> }}
  */
-export function workshopRoutesFor(loaded, workshopDir, { log = null } = {}) {
+export function workshopRoutesFor(loaded, workshopDir, { log = null, mount = [] } = {}) {
   /** @type {Map<string, { file: string, cache: string, pack: string }>} */
   const routes = new Map();
   /** @type {Array<{ pack: string, path: string, reason: string }>} */
@@ -277,6 +288,21 @@ export function workshopRoutesFor(loaded, workshopDir, { log = null } = {}) {
       }
       if (routes.has(route.path)) {
         errors.push({ pack: p.id, path: at, reason: `already declared by pack "${routes.get(route.path).pack}" (the smaller pack id wins, DESIGN §28.3)` });
+        continue;
+      }
+      // 核心先吃（DESIGN §28.35）：引擎真的会服务这条路径 ⇒ 这条声明**不生效**（核心挂载照旧回答），但**不拒包**，
+      // 并且响亮点名。判据只此一处（routeMount.js），与动态 `host.route` 通道读同一张保留表。
+      //
+      // 只有**真的撞上**（`exact` / `file`）才点名。`reserved`（落在引擎命名空间里、而核心今天没有那个文件，例如
+      // 已发布的 ws-compression-reference 那条 `/data/ws-compression.json`）刻意**不报**：它今天一切照旧服务，
+      // 报它只会让每一次 `/data/<自己的名字>.json` 声明都吐一行，把真正要紧的那一条淹掉 —— 而「将来核心长出这个
+      // 文件就让位」是 `coreRouteShadow` 求值的**自动**结果，不需要作者现在做什么。这条立场写在 DESIGN §28.35。
+      const shadow = coreRouteShadow(route.path, { mount });
+      if (shadow && shadow.kind !== 'reserved') {
+        const where = shadow.kind === 'file'
+          ? `the core mount "${shadow.mount}" already serves ${shadow.file}`
+          : 'the engine answers that exact path before any pack';
+        errors.push({ pack: p.id, path: at, reason: `the engine answers this path first — ${where}; the declaration is ignored and the engine's own route serves it (a pack may not shadow a core path, DESIGN §28.35). The pack still loads.` });
         continue;
       }
       let exists = false;
@@ -435,9 +461,44 @@ export function workshopModAssetsFrom(files, packs) {
       digest,
       serverPolicy: pack.assets.serverPolicy,
       verify: pack.assets.verify,
+      // 作者自备 CDN 的镜像（DESIGN §28.40）：**只在真的声明过时才存在** —— 与 `modPanels` 同一条纪律，没声明
+      // `mirrors` 的包这一条 `welcome` 帧与从前逐字节相同。与包内容器摘要不符的那几条已经在装载期被摘掉
+      // （`server/workshop.js assetsMirrorIssues`），所以这里交出去的每一条都是**可用的**声明；
+      // 至多 `ASSETS_MIRROR_MAX` 条，字段就是形状层判过的那三个。
+      ...(Array.isArray(pack.assets.mirrors) && pack.assets.mirrors.length
+        ? { mirrors: pack.assets.mirrors.map((m) => ({ id: m.id, base: m.base, sha256: m.sha256 })) }
+        : {}),
     });
   }
   return out;
+}
+
+/**
+ * `welcome.modFx` —— 声明了 `fx.manifest` 的包的**特效清单 URL**（docs/WORKSHOP.md §1.19.2，DESIGN §35.1）。
+ *
+ * 它是 `modPanels` / `modAssets` 的同构物，就同一个理由：客户端要把「哪个包带了一批官方战斗特效、去哪儿取那张
+ * 文件表」搞清楚，而这条信息只有服务端有 —— `pack.json.fx.manifest` 是**包内**相对路径，URL 是引擎拼的。
+ *
+ * **只有读者才加**：没有任何包声明 `fx.manifest` 时它是空数组 ⇒ `welcome` 里没有这个字段、客户端不 import
+ * 特效清单那一段、不多一个请求（与 `modPanels` / `modAssets` 同一条不变量）。URL 走 `workshopAssetUrl` ——
+ * 与外观素材的覆盖层、`/workshop-assets` 那条路由**同一个**拼法，所以一张清单只可能出现在一个地方。
+ *
+ * 路径的形状与那份文件是否真的存在，装载期都判过了（`shared/workshop.js` 的 `parseFxDecl` 判形状、
+ * `server/workshop.js` 的 `fxManifestIssues` 判字节，判不过的包根本进不了 `packs`）；这里只把声明翻成 URL。
+ * @param {Array<{ id: string, fx?: { manifest?: string|null }|null }>} packs `loadWorkshop(...).packs`
+ * @returns {Array<{ pack: string, manifest: string }>}
+ */
+export function workshopModFxFrom(packs) {
+  /** @type {Array<{ pack: string, manifest: string }>} */
+  const out = [];
+  for (const p of Array.isArray(packs) ? packs : []) {
+    if (!p || typeof p.id !== 'string' || !p.id) continue;
+    const rel = p.fx && typeof p.fx.manifest === 'string' ? p.fx.manifest : '';
+    if (!rel) continue;
+    out.push({ pack: p.id, manifest: workshopAssetUrl(p.id, rel) });
+  }
+  // 包 id 次序（DESIGN §28.3 的同一条规则）：清单的顺序不随装载器给的数组顺序变 —— 客户端按它定「哪一份优先」。
+  return out.sort((a, b) => (a.pack < b.pack ? -1 : a.pack > b.pack ? 1 : 0));
 }
 
 /** `/assets/` 与 `/fonts/` —— `cache-only` 只对这两棵树短路：它们正是 `tools/fetch-assets.mjs` 落到

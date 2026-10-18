@@ -1,8 +1,8 @@
 // server/match/player/round.js — PlayerState methods: the round lifecycle the match calls — startRound (income, pending
 // coins, the shop, summon stacks topped up), endPrep, eliminate (every copy back to the pool), recompute (legality,
-// out-of-range summons, temp pieces into free hand slots, bonds), the bond views — and battleInput (the player's
-// PlayerBattleInput: board units with their loadout, their 补位 mark or their 自选 pick, carried 联防 state, the reached
-// layers).
+// out-of-range summons, temp pieces into free hand slots, bonds; onActiveBonds when the set of active bonds changed),
+// the bond views — and battleInput (the player's PlayerBattleInput: board units with their loadout, their 补位 mark or
+// their 自选 pick, carried 联防 state, the reached layers).
 // Installed on PlayerState.prototype by server/match/PlayerState.js (a method container: never instantiated; `this` is
 // the player state).
 
@@ -22,8 +22,9 @@ export class PlayerRound {
     this.addFunds(nonNeg(ev.income) + nonNeg(ev.pending), { reason: 'income' });
     // temp is NOT wiped here: the last prep's deadline resolved what the player could act on (endPrep); what overflowed
     // after it (battle-result grants, SETTLE merges, returned equipment) is shown and usable in this prep (tempDue).
-    // Likewise reward offers of the last prep already expired at its end; what is still queued was earned after it —
-    // a merge completed during SETTLE / the Final Assault (突变细胞, battle-result grants) — and is shown in this prep
+    // Queued reward offers (a promotion's pick, a strategy's special refresh, an item offer) are kept until picked —
+    // they do not lapse at the prep deadline (PRTS 卫戍协议/帮助: the temporary shop leaves its state when one is bought;
+    // community report relayed by the maintainer on 2026-10-15) — so an offer left with 稍后 is shown again in this prep
     this.ready = false;
     // summon stacks removed from temp at the last prep deadline come back (PRTS 卫戍协议/帮助 §手牌区); full hand ⇒ temp
     for (const p of [...this.board.values()]) if (p.kind === 'chess') this.grantTokensFor(p);
@@ -41,7 +42,7 @@ export class PlayerRound {
     this.resolveTemp();
     this.prepsEnded++;
     for (const uid of [...this._tempDue.keys()]) if (!this.temp.some((p) => p && p.uid === uid)) this._tempDue.delete(uid);
-    this.offers = [];
+    // (queued reward offers stay: they last until picked, startRound)
     this.clearUnfrozenShop();
     if (!this.gd.leftoverKeptBands.includes(this.bandId)) this.funds = 0;
     this.ready = true;
@@ -58,7 +59,11 @@ export class PlayerRound {
     for (const p of this.board.values()) all.push(p);
     for (const p of this.hand) if (p) all.push(p);
     for (const p of this.temp) if (p) all.push(p);
-    for (const p of all) this.returnCopies(p);
+    for (const p of all) {
+      this.returnCopies(p);
+      if (p.kind === 'item') this.releaseItemStock(p);
+      for (const it of p.items || []) this.releaseItemStock(it);
+    }
     this.board.clear();
     this.hand.fill(null);
     this.temp.fill(null);
@@ -78,8 +83,49 @@ export class PlayerRound {
     this._liftOutOfRange();
     // a free regular hand slot pulls a temp piece in (PRTS 卫戍协议/帮助 §手牌区 "常规手牌区出现空位时自动移入")
     this._fillHandFromTemp();
+    const prev = this.bonds;
     this.bonds = computeBonds(this.gd, this);
     this.dirty();
+    // A bond state change fires a hook so handlers react the moment it happens — placement/recall has no other event:
+    //   onBondActivate — inactive → active (e.g. 开拓大地 grants its golden member the moment the 3rd member is
+    //     deployed, not at the prep deadline; layer-gain activation is covered too: addLayers recomputes before onLayers)
+    //   onBondChange   — any count / tier change, active or not (e.g. 颂乐人偶 4-member deploy-slot +1 the moment the
+    //     4th member is placed mid-prep, and back down when one is recalled)
+    if (this.m && typeof this.m.dispatch === 'function') {
+      for (const [bondId, b] of Object.entries(this.bonds)) {
+        const p = prev ? prev[bondId] : null;
+        const isActive = !!(b && b.active);
+        const wasActive = !!(p && p.active);
+        if (isActive && !wasActive) this.m.dispatch(this, 'onBondActivate', { bondId });
+        if (b && (b.count !== (p ? p.count : 0) || b.tier !== (p ? p.tier : 0) || isActive !== wasActive)) {
+          this.m.dispatch(this, 'onBondChange', { bondId, prev: p ?? null });
+        }
+      }
+    }
+    this._reportActiveBonds(prev, this.bonds);
+  }
+
+  /**
+   * onActiveBonds (docs/META.md §2.2): the set of active bonds differs between `before` and `after` — every path that
+   * changes what the bonds count ends in recompute (a board edit in prep: place, move, swap, withdraw; buys, sells,
+   * merges, transformations, temp moves, equipment, effects, an eviction). Bonds that light up pay their owed layer
+   * milestones at once (维多利亚's hammers, 远见 / 奇迹's funds — the maintainer's report of 2026-10-15). Each recompute
+   * reports the difference to the previous computed state, so a handler's own recompute (a hammer's onGain) reports
+   * only what changed after it, and nothing twice. Never for an eliminated player (eliminate clears the board) nor a
+   * detached copy (preview.js previewPlayer).
+   */
+  _reportActiveBonds(before, after) {
+    if (!this.alive || typeof this.m.dispatch !== 'function') return;
+    if (this.m.players && this.m.players.get(this.playerId) !== this) return;
+    const activated = [];
+    const deactivated = [];
+    for (const id of this.gd.bondIds) {
+      const was = !!(before && before[id] && before[id].active);
+      const is = !!(after && after[id] && after[id].active);
+      if (is && !was) activated.push(id);
+      else if (was && !is) deactivated.push(id);
+    }
+    if (activated.length || deactivated.length) this.m.dispatch(this, 'onActiveBonds', { activated, deactivated });
   }
 
   activatedLayers() { return activatedLayers(this.bonds); }
@@ -104,6 +150,9 @@ export class PlayerRound {
     for (const { r, c, piece } of boardOrder(this.board)) {
       if (piece.kind === 'chess') {
         const u = { uid: piece.uid, kind: 'chess', chessId: piece.id, row: r, col: c, dir: pieceDir(piece), items: (piece.items || []).map((i) => i.id) };
+        // engine-level per-piece data an effect attached (ctx.setPieceData): e.g. 哥伦比亚 mod 的源石辅助仪 — its inherited
+        // numbers and the 变形同构体 grants it carries on (`bondGrants`). Read-only copy for the sim.
+        if (piece.meta && piece.meta.data && typeof piece.meta.data === 'object') u.pieceData = { ...piece.meta.data };
         const pick = this.diyPickOf(piece.id);
         if (pick) {
           // 0.2.0 自选编队: a slotted DIY slot fights as its pick (sim getChess(id, { diy }): the operator's body, the pick's
@@ -139,8 +188,9 @@ export class PlayerRound {
       units,
       bonds: bondSnapshot(reached ? this.bondsView() : this.bonds),
       bandId: this.bandId,
-      // 最后摆上场的【雷姆必拓】干员（board 插入顺序 = 摆放顺序；开拓心 holder 用它，战斗初始部署按列序会与摆放顺序不同）
-      rbLastDeploy: this._rbLastDeploy(),
+      // 棋子**摆放顺序**的 uid 表（board 插入序 = 摆放顺序）：包侧战斗逻辑据此自行算「最后上场的某盟约成员」
+      // 之类的东西 —— 战斗初始部署按列序，与玩家的摆放顺序不同，所以这条顺序必须显式带进战场。
+      placementOrder: this._placementOrder(),
       playerEffects: this.effects.filter((e) => e.battle !== false).map((e) => ({
         id: e.id, key: e.key ?? null, source: e.iconKind ?? null, params: e.params ?? null, counter: e.counter ?? null, data: e.data ?? null,
       })),
@@ -148,14 +198,12 @@ export class PlayerRound {
     };
   }
 
-  /** uid of the 雷姆必拓 operator placed last on the board (in board insertion order), or null. */
-  _rbLastDeploy() {
-    let uid = null;
-    for (const { piece } of boardOrder(this.board)) {
-      if (piece.kind !== 'chess') continue;
-      const rec = this.gd.chess(piece.id);
-      if (rec && Array.isArray(rec.bonds) && rec.bonds.includes('rimBilliton')) uid = piece.uid;
-    }
-    return uid;
+  /** uids of the board's chess pieces in **placement order** (empty when nothing is placed).
+   *  The board Map's insertion order IS the placement order: placing/moving a piece sets a fresh tile key (appended),
+   *  while a set on an existing key keeps its position (board.js boardOrder is reading order — NOT this). */
+  _placementOrder() {
+    const out = [];
+    for (const piece of this.board.values()) if (piece.kind === 'chess') out.push(piece.uid);
+    return out;
   }
 }

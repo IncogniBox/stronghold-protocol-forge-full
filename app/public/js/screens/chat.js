@@ -107,9 +107,15 @@ export function ChatPanel() {
   };
   const quick = (id) => { net.request('room.quickMsg', { ids: id }).catch(() => {}); };
 
+  // 房内聊天面板**标题行**上的宿主（`screen.room.chat`，docs/WORKSHOP.md §1.9.3）：容器由**组件自己**渲染
+  // （`[data-mod-slot]`），落在 `Panel` 的 `actions` 里 —— 也就是「房内聊天」这个标题旁边那一格，**不在**
+  // `extensions.js MOD_PANEL_CREATED` 的浮层里；注册点对这一格只查不造（`test/modClientHosts.test.js` 逐槽位
+  // 钉住「枚举里每一个组件渲染的宿主都必须真的有人渲染它」）。`.mod-host` 是 `display: contents`：引擎只给地址、
+  // 不给样子（与 `screens/room.js` 的 `screen.room.aside` 同一种写法）。
   return html`
     <${Panel} title=${t('房内聊天')} class="chatp"
-      micro=${t(mode === 'open' ? '允许打字与快捷短语' : mode === 'quick' ? '只允许快捷短语' : '关闭聊天')}>
+      micro=${t(mode === 'open' ? '允许打字与快捷短语' : mode === 'quick' ? '只允许快捷短语' : '关闭聊天')}
+      actions=${html`<div class="mod-host" data-mod-slot="screen.room.chat"></div>`}>
       <div class="chatp__list" ref=${listRef}>
         ${lines.length === 0
           ? html`<div class="chatp__empty">${t('说点什么…')}</div>`

@@ -1,4 +1,4 @@
-// test/promptCitations.test.js — docs/prompts/*.md 里的每一处代码引用都必须**真的指得到**。
+// test/promptCitations.test.js — 文档里的每一处代码引用都必须**真的指得到**。
 //
 // 这几份文档是创作者（与人、与 AI）写第一份内容的唯一依据，而它们靠**手写的 `文件:行号`** 把读者带到引擎的真实现场。
 // 上游基线一换、引擎一挪行号，文档就变成「看起来很具体、点进去是别的东西」——这种腐烂不会有任何东西报错，
@@ -7,6 +7,18 @@
 //   ① 带 `:行号` 的引用：文件要在、行号要在范围内、被指的那一行要有内容（不是空行或孤零零的括号）；
 //   ② 不带行号的文件引用：只要它以仓库的顶层目录开头（server/ shared/ public/ …），就必须真的存在。
 // 引用的事实对不对（那一行是不是真在做文档说的事）判不了，那要靠人；能判的是「点进去有没有东西」。
+//
+// **覆盖面 2026-10 扩过一次（`docs/prompts` → 加上 `docs/design`）**：原来只扫 `docs/prompts`，于是
+// `docs/design/mod-layer.md` 里那 **162 处**手写 `文件:行号` **完全在门禁外** —— 而它偏偏是漂移面最大的一份
+// （0.16.0 那一刀就手工重指过 28 处）。这正是「引用会烂而没人知道」的根因：判据存在，但没看着那一份。
+//
+// 扩完当场报 19 处，逐条查下来是**两类**，而且一半以上不是文档的错：
+//   * **10 处文档真错**（`docs/design/mod-layer.md` 9 处 + `overview.md` 1 处）：按**内容**重指到那一行现在真的
+//     在哪（不是加偏移）—— 例：`docs/WORKSHOP.md` 那张「未实现」表从 `:447` 挪到了 `:597`；`KIT_ID_COLLISION`
+//     从 `server/workshop.js:392` 挪到了 `:1229`；`this.flags` 从 `Battle.js:124` 挪到了 `:149`。
+//   * **9 处判据自己的假红**：4 处是**扩展名顺序**（`js` 排在 `json` 前 ⇒ `….json` 被读成 `….js`；见下面 `CITATION`
+//     那一段注释）、5 处是**包内路径**被当成仓库路径（§28.14/§28.15 引的社区包自己的 `server/ops.js` 等；
+//     见 `PACK_INTERNAL_PATHS`）。判据修对了，这 9 处一条文档都没改。
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -14,16 +26,49 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DIR = join(ROOT, 'docs/prompts');
-const FILES = readdirSync(DIR).filter((n) => n.endsWith('.md')).sort();
+/**
+ * 扫哪些目录。`docs/prompts` 是创作者照抄的唯一依据；`docs/design` 是规则本身、也是手写行号最多的一份。
+ * 两个都要看 —— 只扫前者时后者那 162 处引用无人看守（见文件头）。
+ */
+const DIRS = ['docs/prompts', 'docs/design'];
+/** 每份文档的**仓库相对路径**（报告里的 `name` 就是它），稳定排序。 */
+const FILES = DIRS
+  .flatMap((d) => readdirSync(join(ROOT, d)).filter((n) => n.endsWith('.md')).map((n) => `${d}/${n}`))
+  .sort();
 
 /** 仓库里真实存在的顶层目录：只有这些开头的裸引用才当作「应该存在」。 */
 const TOP_DIRS = ['server/', 'shared/', 'public/', 'tools/', 'docs/', 'editor/', 'test/', 'scripts/'];
 
-const CITATION = /`([A-Za-z0-9_./-]+\.(?:js|mjs|json|md|css|html)):(\d+)(?:-(\d+))?`/g;
-const BARE = /[A-Za-z0-9_./-]+\.(?:js|mjs|json|md|css|html)/g;
+// ⚠️ **扩展名的顺序有意义**：把 `js` 写在 `json` 前面时，正则会在 `…spines.json` 上先吃掉 `.js` 就收工 ——
+// 于是 `.json` 的文件被读成 `.js` 的文件，门禁凭空报「不存在」（扩到 docs/design 那天实测 4 处假红）。
+// 长的排前面，这条陷阱就没了。
+const CITATION = /`([A-Za-z0-9_./-]+\.(?:json|mjs|js|md|css|html)):(\d+)(?:-(\d+))?`/g;
+const BARE = /[A-Za-z0-9_./-]+\.(?:json|mjs|js|md|css|html)/g;
 
 const lines = (rel) => readFileSync(join(ROOT, rel), 'utf8').split('\n');
+
+/**
+ * 装出来 / git 忽略的东西：新检出里本来就没有它，要求它「存在」是错的（与 `test/docs-paths.test.js` 同一份名单）。
+ * `public/assets/` 是 `npm run setup` 下载的、`.gitignore` 挡着的（AGENTS.md「No game art in git」）。
+ */
+const NOT_IN_A_FRESH_CHECKOUT = ['public/assets/', 'public/vendor/', 'data/local-assets.json'];
+
+/**
+ * **看起来像本仓库的路径、其实不是。** 这几条是**包内**的文件名 —— 社区包自己的 `server/ops.js`、
+ * `server/stats.js`、`server/healthz.js`（§28.14 引它们说明「包的哪些改动这一层表达不了」）、
+ * 包自己的 `public/js/ui/announcementData.js`（§28.15），以及 §28.2 举的「包目录里没人声明的文件」
+ * （`server/rules.mjs`）。判据看不出「这个字符串属于谁」，所以逐条列出来。
+ *
+ * **这份名单只许放这种** —— 不许拿它藏本仓库的真路径；门禁的牙在「真路径必须存在」那一半。
+ * 下面有一条测试核「名单里每一条仍然出现在被扫的文档里」，所以它不会烂在这里。
+ */
+const PACK_INTERNAL_PATHS = Object.freeze([
+  'server/rules.mjs',
+  'server/ops.js',
+  'server/stats.js',
+  'server/healthz.js',
+  'public/js/ui/announcementData.js',
+]);
 
 // ---- 「点进去是别的东西」的判据（见下面那条测试的注释：窄，宁可漏不可误报）-----------------------------------------
 /** 只判这五个引擎语境的根，值 = 该根允许离引用多远（字符）。 */
@@ -94,61 +139,71 @@ function staleMemberClaims(text, name) {
   return bad;
 }
 
-describe('docs/prompts 的代码引用（点进去必须有东西）', () => {
+/**
+ * 三条判据共用的收尾断言：**一处都不许有**。
+ * @param {Array<{doc: string, msg: string}>} bad
+ * @param {string} what
+ */
+function assertNone(bad, what) {
+  assert.deepEqual(bad.map((b) => b.msg), [], `${what}：\n${bad.map((b) => b.msg).join('\n')}`);
+}
+
+describe('文档里的代码引用（docs/prompts + docs/design，点进去必须有东西）', () => {
   test('每个 `文件:行号` 引用都存在、行号在范围内、那一行有内容', () => {
-    assert.ok(FILES.length >= 3, `docs/prompts 下应当有几份 prompt，实际找到 ${FILES.length} 份`);
+    assert.ok(FILES.length >= 11, `两份文档目录下的 .md 应当不止几份，实际找到 ${FILES.length} 份`);
     const bad = [];
     let total = 0;
-    for (const name of FILES) {
-      const text = readFileSync(join(DIR, name), 'utf8');
+    for (const docRel of FILES) {
+      const text = readFileSync(join(ROOT, docRel), 'utf8');
       for (const m of text.matchAll(CITATION)) {
         const [, rel, from, to] = m;
         total += 1;
         const docLine = text.slice(0, m.index).split('\n').length;
+        const push = (msg) => bad.push({ doc: docRel, msg: `${docRel}:${docLine} ${msg}` });
         if (!existsSync(join(ROOT, rel))) {
-          bad.push(`${name}:${docLine} 引用的 ${rel} 不存在`);
+          push(`引用的 ${rel} 不存在`);
           continue;
         }
         const src = lines(rel);
         if (Number(to ?? from) > src.length) {
-          bad.push(`${name}:${docLine} 引用的 ${rel}:${to ?? from} 超出范围（该文件只有 ${src.length} 行）`);
+          push(`引用的 ${rel}:${to ?? from} 超出范围（该文件只有 ${src.length} 行）`);
           continue;
         }
         const cited = src[Number(from) - 1].trim();
         // 指向空行 / 只有括号的行 = 行号漂了，读者点进去看不到文档在说的东西
         if (!cited || /^[)}\]);,]+$/.test(cited)) {
-          bad.push(`${name}:${docLine} 引用的 ${rel}:${from} 那一行是空的（行号漂了）`);
+          push(`引用的 ${rel}:${from} 那一行是空的（行号漂了）`);
         }
       }
     }
-    assert.ok(total > 100, `引用数量看起来不对（只有 ${total} 处）—— 正则是不是失效了？`);
-    assert.deepEqual(bad, [], '这些引用点不到东西：\n' + bad.join('\n'));
+    assert.ok(total > 300, `引用数量看起来不对（只有 ${total} 处）—— 正则是不是失效了？`);
+    assertNone(bad, '这些引用点不到东西');
   });
 
   test('以仓库顶层目录开头的裸引用（不带行号的那些）也必须存在', () => {
     const bad = [];
-    for (const name of FILES) {
-      const text = readFileSync(join(DIR, name), 'utf8');
+    for (const docRel of FILES) {
+      const text = readFileSync(join(ROOT, docRel), 'utf8');
       const seen = new Set();
       for (const m of text.matchAll(BARE)) {
         const rel = m[0].replace(/^\.\//, '');
         if (!TOP_DIRS.some((d) => rel.startsWith(d))) continue;
         if (seen.has(rel)) continue;
         seen.add(rel);
-        if (!existsSync(join(ROOT, rel))) bad.push(`${name}: ${rel}`);
+        // 装出来的目录（判不了它存在）与**包内**路径（不是本仓库的文件）都不判 —— 见上面两份名单的注释。
+        if (NOT_IN_A_FRESH_CHECKOUT.some((e) => rel === e || rel.startsWith(e) || `${rel}/` === e)) continue;
+        if (PACK_INTERNAL_PATHS.includes(rel)) continue;
+        if (!existsSync(join(ROOT, rel))) bad.push({ doc: docRel, msg: `${docRel}: 裸引用 ${rel} 不存在` });
       }
     }
-    assert.deepEqual(bad, [], '这些路径不存在：\n' + bad.join('\n'));
+    assertNone(bad, '这些路径不存在');
   });
 
   // 上面那条只查「点进去有没有东西」。还差一类：**点进去是别的东西** —— 引用指着 `Battle.js:113`，而作者说的事实
-  // （`battle.flags` 是构造期输入）在 `:124`，于是文档「看起来很具体、点进去是另一行」，没有任何东西会报错。
-  // 2026-10 抓到 3 处（都在 `docs/prompts/kit.md`），而 0.2.2 移植会把 server 侧行号整体挪一遍，这类引用会成片失效
-  // —— 所以这里把「**句子里点名的成员必须真出现在被引的那一行**」变成门禁。
-  //
-  // 这 3 处**故意留给 0.2.2 移植线修**（两条线不改同一个文件，业主 2026-10-09 的协调）：所以这条测试此刻是**红的**，
-  // 报出来正是那 3 处，每一条都带「这个成员真正在哪一行」。移植线改完 `docs/prompts/kit.md` 的 `Battle.js:113` →
-  // `:124` 之后，它会自己转绿 —— 不需要动这里的任何一行。若一条**新**的失效引用出现，同一个失败列表里会出现第 4 条。
+  // （`battle.flags` 是构造期输入）在 `:143`，于是文档「看起来很具体、点进去是另一行」，没有任何东西会报错。
+  // 2026-10 抓到 3 处（都在 `docs/prompts/kit.md`，0.11.0 已修）；0.12.0 的 W-B 把 Battle.js 的构造期挪了十几行，
+  // 同一批引用又一次失效 —— 这正是这条门禁存在的理由，所以这里把「**句子里点名的成员必须真出现在被引的那一行**」
+  // 变成门禁。
   //
   // 判据刻意很窄（宁可漏，不可误报；误报会让这条门禁被关掉）：
   //   * 只判**带点的成员引用**，且根只有 `battle` / `this` / `flags` / `bb` / `ctx` 这五个引擎语境词 —— 裸名字
@@ -156,23 +211,34 @@ describe('docs/prompts 的代码引用（点进去必须有东西）', () => {
   //   * 只判**离引用足够近**的成员（`battle.x` / `this.x` ≤ 45 字符，`flags.x` ≤ 90），跨过 `|`（表格单元）、句号、
   //     换行就重新开始 —— 同一格里更早的那句话不算；
   //   * 只要求**任一**被点名的成员出现在被引的**整段行号区间**里（`x:12-14` 逐行拼起来查）。
-  // 实测覆盖面：`docs/prompts/kit.md` 181 处引用里判 10 处 —— 这就是这条规则的代价与收益。
+  // 实测覆盖面：两份目录共 355 处引用里判 11 处（`kit.md` 181 处里判 10，`mod-layer.md` 162 处里判 1）
+  // —— 这就是这条规则的代价与收益。
   test('引用点名的成员必须真的出现在被引的那一行（只判引擎语境里的成员引用）', () => {
     const bad = [];
     let judged = 0;
-    for (const name of FILES) {
-      const text = readFileSync(join(DIR, name), 'utf8');
+    for (const docRel of FILES) {
+      const text = readFileSync(join(ROOT, docRel), 'utf8');
       judged += judgedClaims(text);
-      bad.push(...staleMemberClaims(text, name));
+      for (const s of staleMemberClaims(text, docRel)) bad.push({ doc: docRel, msg: s });
     }
     assert.ok(judged >= 8, `只判到 ${judged} 处引用 —— 抽取是不是失效了？`);
-    assert.deepEqual(bad, [], '这些引用点进去是别的东西（`docs/prompts/kit.md` 的 3 处已交给 0.2.2 移植线修，改完即绿）：\n' + bad.join('\n'));
+    assertNone(bad, '这些引用点进去是别的东西');
+  });
+
+  // 上面那份「看起来像本仓库、其实是包内路径」的名单不许烂：每一条都得仍然出现在被扫的文档里。
+  // 文档改了、那条不见了 ⇒ 这里红 ⇒ 名单跟着删（否则它会变成一份没人敢碰的豁免表）。
+  test('包内路径名单里的每一条都仍然出现在被扫的文档里', () => {
+    const all = FILES.map((rel) => readFileSync(join(ROOT, rel), 'utf8')).join('\n');
+    const gone = PACK_INTERNAL_PATHS.filter((p) => !all.includes(p));
+    assert.deepEqual(gone, [], '这些已经不在任何被扫文档里了，请从 PACK_INTERNAL_PATHS 删掉');
   });
 
   test('这条判据本身有牙：指错一行的合成引用会被抓出来', () => {
-    // 拿真实文件当靶子：`:113` 与 `:124` 现在都指向 Battle.js，只有一处写着 flags
-    const stale = '`battle.flags` 是构造期输入（`server/sim/Battle.js:113`）';
-    const right = '`battle.flags` 是构造期输入（`server/sim/Battle.js:124`）';
+    // 拿真实文件当靶子：`:124` 与 `:150` 现在都指向 Battle.js，只有一处写着 flags
+    // （第 8 刀在 Battle.js 上给 morphPairing 的作用域加了一行，`flags` 由 149 位移到 150；
+    //  这一对合成引用是**靶子**，跟着真实行号走 —— 断言本身一字不放松。）
+    const stale = '`battle.flags` 是构造期输入（`server/sim/Battle.js:124`）';
+    const right = '`battle.flags` 是构造期输入（`server/sim/Battle.js:150`）';
     assert.equal(staleMemberClaims(stale, 'fixture').length, 1, '指错一行必须报出来');
     assert.deepEqual(staleMemberClaims(right, 'fixture'), [], '指对了不许报');
     // 裸名字不判：`inRect` 的引用常常是在说调用点，不是在说声明（误报会让这条门禁被关掉）

@@ -1,6 +1,7 @@
 {
   "name": "stronghold-protocol-alliance",
-  "version": "0.14.0",
+  "version": "0.19.1",
+  "release": "0.19.1-0.3.0",
   "private": true,
   "description": "明日方舟「卫戍协议：盟约」非官方同人联机网页复刻（1–4 人合作，Node.js 服务器 + 浏览器客户端）",
   "license": "GPL-3.0-or-later",
@@ -43,7 +44,8 @@
     "package:lite": "node tools/package.mjs --lite",
     "editor": "node tools/workshop-editor.mjs",
     "workshop:validate": "node tools/workshop-validate.mjs",
-    "workshop:scaffold": "node tools/workshop-scaffold.mjs"
+    "workshop:scaffold": "node tools/workshop-scaffold.mjs",
+    "forms:names": "node tools/build-form-names.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -53,8 +55,10 @@
     "pixi-spine": "^4.0.6",
     "pixi.js": "^7.4.2",
     "preact": "^10.29.8",
+    "ses": "2.3.0",
     "three": "^0.186.1",
-    "ws": "^8.22.0"
+    "ws": "^8.22.0",
+    "acorn": "8.18.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

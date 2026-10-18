@@ -33,9 +33,21 @@
 //                    the match; the slotted operators join the human's own shop (PlayerState setDiy / initDiyStock).
 //   opts.spectators  string[] (optional)        the room's spectator seats (remake feature, community report #26;
 //                                              server/lobby.js): never players — see addSpectator below
+//   opts.hostId      string (optional)          the room's current host (server/lobby.js room.hostId): the executor a
+//                                              bot layout rehearsal is delegated to (DESIGN §14, botRehearsalDelegate);
+//                                              setHost follows a migration while the match runs
 //   opts.seed        uint32                     master seed for all match randomness
 //   opts.matchNo     integer ≥ 1 (optional)     the room's match number (lobby: room.matchCount + 1); with the seed it
 //                                              makes this match's battleIds unique within the room (DESIGN §14)
+//   opts.cs          string (optional)          the content hash of the room's content set (DESIGN §34,
+//                                              server/plugins/identity.js; 64 hex digits): copied into every BattleSpec
+//                                              as `cs` — the sim never reads it; absent (or malformed) ⇒ specs carry none
+//   opts.vs          string (optional)          the room's visual set of cosmetic plugins (DESIGN §34.6; 64 hex digits):
+//                                              copied into every BattleSpec as `vs` (replays name the art) — never read
+//   opts.requireCs   boolean (optional)         a room with gameplay plugins (DESIGN §34.6; the lobby sets it, the match
+//                                              then runs in a match host, server/match/host/): a b.result whose
+//                                              `cs` is missing or not opts.cs is refused like an implausible one — the
+//                                              server simulates that battle itself
 //   opts.data        frozen game data (server/data.js getData()); may lack keys while data is generated
 //   opts.log         { info, warn, error, debug }
 //   opts.now         () => ms epoch             injectable clock (Date.now in production)
@@ -80,6 +92,9 @@
 //                           handle(id, msg) answers only its 'g.watch' (anything else → SPECTATOR; the platform routes
 //                           nothing else of it).
 // removeSpectator(id)       The spectator left (room.leave / g.leave, removed by the host, reconnect window expired).
+// setHost(playerId)         The room's host changed (server/lobby.js migrateHost; optional for the platform): the
+//                           current executor of a delegated bot rehearsal (opts.hostId / opts.botRehearsalDelegate) —
+//                           a running task of the previous host falls back to the server, later ones ask the new host.
 //
 // Bot seats never produce intents or hooks: the match drives bots itself (server/match/bot.js).
 // Messages the match emits are the S2C 'm.*' / 'b.*' frames of DESIGN §8.2 (room.* frames are platform-owned).
@@ -99,6 +114,11 @@
 // this mode; g.watch hands out specs. battleIds are `<seed36>[-<matchNo36>].<round>.<seq>[.<fieldId>]` (≤ 64 chars):
 // unique across the matches of a room, so a report that crossed into the next match is ignored like any stale one; a
 // duplicate b.result (a browser re-sending one it believes lost) is answered ok and changes nothing.
+// Bot layout rehearsals (opts.botRehearsalDelegate, off by default): a bot prep's candidate layouts go to the current
+// host's browser as one b.rehearsal frame — its module Worker simulates them off the page's main thread with the same
+// sim, seeds and scoring and answers b.rehearsalResult with the index of its pick (server/sim/rehearsal.js). A timeout,
+// a host that changed / disconnected / left or a task this client cannot run makes the server simulate the very same
+// candidates itself; the task is dropped either way, so a late answer is ignored (server/match/match/rehearsal.js).
 // Solo pause (g.pause { on }, setPause): freezes the field clocks, result deadlines, server release timers, the boss
 // clock and the server pacers; m.public.paused; resume shifts every clock / deadline by the pause.
 // Live LP (user playtest #3 item 2): during COMBAT / 联防 m.public players[].pendingLp = min(lpCapPerRound, the counted
@@ -128,6 +148,11 @@
 //                      a whole battle per candidate: ~20–300 ms of CPU each, see server/match/bot.js createRehearsal)
 //   opts.botSliceMs    wall-clock ms of rehearsal per scheduler callback (default 8 with a real scheduler, unbounded
 //                      with a virtual one); the rest runs in later callbacks (scheduleBotPrep)
+//   opts.botRehearsalDelegate  offer each bot prep's layout rehearsal to the current host's browser instead (DESIGN §14;
+//                      default off, env SP_BOT_REHEARSAL=host; MatchRehearsal — the server simulates a rehearsal the
+//                      host did not answer with the same candidates, seeds and scoring)
+//   opts.botRehearsalDelegateMs  wall-clock ms the host has to answer a delegated rehearsal (default 3000) — never an
+//                      extension of the phase: the prep deadline stays the phase's own (MatchPrep.endPrep)
 //   opts.headlessSliceMs  wall-clock ms per callback of a server-run normal / 联防 field (client-side combat: bots,
 //                      takeovers, result verification; default 8 with a real scheduler, at once with a virtual one)
 // Seats may be all bots (tools/matchrun.mjs); the lobby always has ≥ 1 human.
@@ -164,6 +189,8 @@
 //   combat.js        battle construction, COMBAT (both modes), the per-field results, then 联防 or SETTLE
 //   clientCombat.js  client-side combat bookkeeping: field records, the field clock, authority, b.start, result
 //                    deadlines and releases, server runs, field completion
+//   rehearsal.js     the bot layout rehearsal delegated to the current host's browser: the b.rehearsal task, its answer,
+//                    its timeout and the server takeover (DESIGN §14)
 //   reports.js       b.progress / b.result (validation, held boss results), SP_VERIFY
 //   unitePhase.js    联防 (UNITE) in both modes and the leakers' live counts
 //   bossRounds.js    FINAL_ASSAULT / HIDDEN_CORE: boss fields, the shared pool, plausibility budgets, the boss clock,
@@ -172,14 +199,22 @@
 //   common.js        what the modules share (FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS — re-exported here, OK,
 //                    fail, BOSS_CLOCK_MS)
 
-import { PHASE, modeIdFor } from '../../shared/constants.js';
+import { PHASE, modeIdFor, bossHitLimitFrom, MAX_SEATS } from '../../shared/constants.js';
+// 变体 / 口径层（DESIGN §28.39）：本局的轴表由各包的归一化声明合成，规则就是既有的「包 id 字典序小的赢」。
+import { mergeVariantDecls, variantValue } from '../../shared/variants.js';
+// 行为开关层（DESIGN §28.43）：同一张合成规则（包 id 小的赢），另一张表。空数组 ⇒ 每一格的读取点走缺省路径。
+import { mergeBehaviourDecls } from '../../shared/behaviour.js';
+// 行为开关 `morphPairing` 的档位（DESIGN §28.43.1）：判据本体在 `shared/morph.js`，这一行只把这一局的档位算出来，
+// 往下交给 `GameData`（prep）、`battleOpts`（战斗）与 BattleSpec（客户端）。
+import { morphPairingOf } from '../../shared/morph.js';
+import { formView, isEliteForm } from '../../shared/formProjection.js';
 import { layoutOf } from '../../shared/layout.js';
 import { Battle } from '../sim/Battle.js';
 import { DataSource } from '../sim/simdata.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
 import { GameData } from './gamedata.js';
 import { RealScheduler } from './scheduler.js';
-import { SharedPool, drawDisabledBonds } from './pool.js';
+import { SharedPool, SharedItemPool, drawDisabledBonds } from './pool.js';
 import { PlayerState } from './PlayerState.js';
 import { EffectDispatcher, getDefaultRegistry } from './effectsMeta.js';
 import { setupMatchWaves } from './waves.js';
@@ -197,6 +232,8 @@ import { MatchSpDraft } from './match/spDraft.js';
 import { MatchPrep } from './match/prep.js';
 import { MatchCombat } from './match/combat.js';
 import { MatchClientCombat } from './match/clientCombat.js';
+import { MatchRehearsal, REHEARSAL_ANSWER_MS } from './match/rehearsal.js';
+import { isContentHash } from '../../shared/plugins/identity.js';
 import { MatchReports } from './match/reports.js';
 import { MatchUnite } from './match/unitePhase.js';
 import { MatchBoss } from './match/bossRounds.js';
@@ -209,19 +246,32 @@ const BOT_REHEARSAL_DEFAULT = 3;
 const BOT_SLICE_MS = 8;
 const env = (k) => (typeof process !== 'undefined' && process.env ? process.env[k] : undefined);
 /** Default combat mode: client-side unless SP_COMBAT=server. */
-const envClientCombat = () => String(env('SP_COMBAT') || '').toLowerCase() !== 'server';
-/** SP_VERIFY → 'off' | 'sample' | 'all'. */
+const envClientCombat = () => String(env('SP_COMBAT') || '').toLowerCase() !== 'server';/** SP_VERIFY → 'off' | 'sample' | 'all'. */
 export function parseVerify(v) {
   const s = String(v ?? '').trim().toLowerCase();
   return s === 'all' || s === 'sample' ? s : 'off';
 }
+/** Default of the bot rehearsal delegation: off — SP_BOT_REHEARSAL=host offers it to the room's host (DESIGN §14). */
+const envBotRehearsal = () => String(env('SP_BOT_REHEARSAL') || '').trim().toLowerCase() === 'host';
 const noopLog = { info() {}, warn() {}, error() {}, debug() {} };
 
 const dsCache = new WeakMap();
-function dataSourceFor(data) {
+/**
+ * 这一局的 `DataSource`，按 `[口径, data]` 取。缓存键**必须并进 `form` 口径**（DESIGN §28.41）：同一份 data 的
+ * 两个房间，一个声明 `form: "elite"`、一个不声明，共用一份 `DataSource` 会让面板与战斗对同一条 `_a` 给出两套
+ * 数值 —— 那就是分叉。缺省那一格（`elite === false`）建出来的对象与从前**逐字相同**（`new DataSource(data, null)`，
+ * 没有第三个参数），所以没声明这个轴的路径一个字节都没变，只是同一份 data 现在按口径各缓一格。
+ */
+function dataSourceFor(data, forms = null, elite = false) {
   if (!data || typeof data !== 'object' || !data.chess) return undefined;
-  let ds = dsCache.get(data);
-  if (!ds) { ds = new DataSource(data, null); dsCache.set(data, ds); }
+  let byForm = dsCache.get(data);
+  if (!byForm) { byForm = new Map(); dsCache.set(data, byForm); }
+  const key = elite ? 'elite' : 'official';
+  let ds = byForm.get(key);
+  if (!ds) {
+    ds = elite ? new DataSource(data, null, { forms }) : new DataSource(data, null);
+    byForm.set(key, ds);
+  }
   return ds;
 }
 
@@ -237,17 +287,114 @@ export class Match {
     this.mode = opts.mode === 'solo' ? 'solo' : 'coop';
     this.difficulty = opts.difficulty;
     this.modeId = opts.modeId || modeIdFor(this.mode, opts.difficulty);
+    /**
+     * 开发者模式（工坊包 dev-ext 的「全量模拟」，`room.create.dev`）：`dev` 让这一局**跳过 INFO_CHECK / BAND_DRAFT**
+     * （`platform.js start()` 走 `skipToBattle()`），`devStage` 强制这一局打那张图（下面的 stage 覆盖块，与 `SP_STAGE` 同一条路）。
+     */
+    this.dev = opts.dev === true;
+    this.devStage = typeof opts.devStage === 'string' && opts.devStage ? opts.devStage : null;
+    /**
+     * 开发者面板（「全量模拟」的局内开发者面板，`g.dev` 的 action 化形状）追加的东西：
+     *   * `devExtraEnemies`：追加敌人（下一个回合的**预览**与**战斗**用同一份列表）；
+     *   * `devEnemyOverrides`：追加敌人的数值覆盖（并进 `enemyOverrides`，与 wave 自带的合并）；
+     *   * `devShopSlots`：调度中心的槽位覆盖（`{ [level]: { chess, item } }`，`GameData.shopSlots` 优先读它）。
+     */
+    this.devExtraEnemies = [];
+    this.devEnemyOverrides = Object.create(null);
+    this.devShopSlots = null;
+    /**
+     * 开发者面板「场景相关」**替换首领**时填的数值覆盖（`g.dev` action `'boss'` 的 `overrides`）：按 bossId 存、
+     * 不随回合清空（下一个首领回合还要用）。`startFinalAssault` 把它并进这一场的 `enemyOverrides`（键 = 该首领的
+     * `enemyKey`），并把 `stats.maxHp` 当作**共享血量池**的上限 —— 领袖单位的生命上限在战斗里被池同步覆盖
+     * （server/sim/battle/spawns.js `_syncBossHp`），所以池才是首领血量的唯一口径。
+     */
+    this.devBossOverrides = Object.create(null);
+    /** 开发者面板「场景相关」：「下一回合」强制的战斗类型（`'normal'` / `'boss'`），`phases.startRound` 消费一次后清空。 */
+    this.devRoundKind = null;
+    /**
+     * 开发者面板强制的**首领回合号**（`startRound` 记下，`endPrep` / `_planBossWaves` / `m.public` 都读它）：
+     * 首领场景的每一个判定（服务端进 `FINAL_ASSAULT`、客户端按 `pub.bossRound` 分场）都按**回合号**走，
+     * 所以「强制首领」必须让这一整个回合看起来就是官方首领回合，否则只会计划出一场没有首领的普通战斗。
+     * @type {number|null}
+     */
+    this.devBossRound = null;
     this.seed = (Number(opts.seed) >>> 0) || 1;
     this.log = opts.log || noopLog;
     this.sendFn = opts.send;
     this.broadcastFn = opts.broadcast;
     this.onEndFn = opts.onEnd;
     this.data = opts.data && typeof opts.data === 'object' ? opts.data : {};
-    this.gd = new GameData(this.data, this.modeId);
+    /** the room's content hash (opts.cs, DESIGN **§34**，上游原文 `§32`): every BattleSpec carries it */
+    this.cs = isContentHash(opts.cs) ? opts.cs : null;
+    /** the room's visual set (opts.vs, DESIGN **§34.6**，上游原文 `§32.6`): every BattleSpec names it */
+    this.vs = isContentHash(opts.vs) ? opts.vs : null;
+    /** a room with gameplay plugins (opts.requireCs): a client result must name this match's cs (reports.js) */
+    this.requireCs = opts.requireCs === true && !!this.cs;
+    /**
+     * The content this match runs with (DESIGN §28.2): `{ digest, packs }`, or null for a plain install. It goes into
+     * every BattleSpec (`spec.mods`) so a field's result is always attributable to the content that produced it.
+     *
+     * 它同时是**口径**的来源（DESIGN §28.39）：`packs[].variants` 是每个包的归一化声明，`mergeVariantDecls`
+     * 按既有的「包 id 字典序小的赢」（DESIGN §28.3）合成出这一局的轴表。没有包、或没有包声明口径 ⇒ `[]`，
+     * 于是 `GameData` 的每一处读点都走今天那条缺省路径（逐字节不变）。
+     * @type {{ digest: string, packs: Array<object> }|null}
+     */
+    this.mods = opts.mods && typeof opts.mods === 'object' && typeof opts.mods.digest === 'string' ? opts.mods : null;
+    /** @type {Array<{ axis: string, default: string, by: string }>} */
+    this.variants = mergeVariantDecls(this.mods && Array.isArray(this.mods.packs) ? this.mods.packs : []).decl;
+    /**
+     * 行为开关的来源（DESIGN §28.43），与 `variants` **同一个投影点、同一个合并规则**（包 id 字典序小的赢）：
+     * `this.behaviour` 是这一局合成后的归一化声明。没有包、或没有包声明任何开关 ⇒ `[]`，于是每一格的读取点
+     * （`shopBiasBonds` 与将来的那些）都走今天那条缺省路径。**漏掉这一行 = 引擎读到 `undefined`、开关静默不生效**
+     * —— §28.39/§28.43 把这一处记成「这一层最容易做坏的地方」。
+     * @type {Array<{ switch: string, option: string, by: string }>}
+     */
+    this.behaviour = mergeBehaviourDecls(this.mods && Array.isArray(this.mods.packs) ? this.mods.packs : []).decl;
+    /**
+     * 行为开关 `morphPairing` 的档位（DESIGN §28.43.1）：prep 侧由 `GameData`（下面建 `this.gd` 时传进去）读，
+     * 战斗侧由 `battleOptsFromMatch` 递给每一场 Battle（`Battle` 再把它压进 `withMorphPairing` 的作用域），
+     * 客户端由 BattleSpec 上那一个键读。**三处读的是同一个值**，判据本体只有一份（`shared/morph.js`）。
+     * 没声明这一格 ⇒ `'official'` = 引擎今天的行为。
+     * @type {'official'|'plus'}
+     */
+    this.morphPairing = morphPairingOf(this.behaviour);
+    /**
+     * Seat slots of this match (opts.seatCap, or how many seats the caller handed in). Only the boss-pool ceiling
+     * reads it: a room bigger than the official 4 must not clamp its leader pool to the 4-seat `aliveFull`
+     * (gamedata.js bossPoolShareOf; 百卫补丁 v0.3, docs/PS100-MIGRATION.md §2.4). It is NOT the variant switch — see
+     * `variant` below.
+     */
+    this.seatCap = Number.isFinite(opts.seatCap) && opts.seatCap >= 1 ? Math.floor(opts.seatCap)
+      : (Array.isArray(opts.seats) && opts.seats.length >= 1 ? opts.seats.length : undefined);
+    /**
+     * 形态投影（口径轴 `form`，DESIGN §28.41）：`form: "elite"` 时普通（`_a`）干员按精锐（`_b`）的战斗职能出战。
+     * **一份视图、两个消费者**（`GameData.chess()` 与这一局的 `DataSource`）：两边分叉就是 bug，所以这里建一次，
+     * 往下传。没声明这个轴时视图的 `chess(id)` 逐字返回 `data.chess[id]` 那个对象本身。
+     */
+    this.eliteForm = isEliteForm(variantValue(this.variants, 'form'));
+    this.formView = formView(this.data && this.data.chess, this.eliteForm, { tokens: this.data && this.data.tokens });
+    this.gd = new GameData(this.data, this.modeId, {
+      ...(this.seatCap ? { seatCap: this.seatCap } : {}),
+      // 本局的口径（DESIGN §28.39）。空数组 = 没有包声明口径 ⇒ `GameData` 一个字节都不动。
+      variants: this.variants,
+      // 本局的行为开关（DESIGN §28.43.1）：prep 侧的 `pieceBonds` 从这一份读取视图里读 `morphPairing`。
+      behaviour: this.behaviour,
+      // 形态投影的那一份视图（与 `this.ds` 共用）。
+      forms: this.formView,
+    });
     if (!this.difficulty) this.difficulty = this.gd.difficulty;
     this.isSolo = this.mode === 'solo' || this.gd.isSolo;
     /** 「AI 队友最后选择」 (opts.aiPicksLast, GitHub #338): humans draft before AI seats (MatchPhases.humansFirst) */
     this.aiPicksLast = !this.isSolo && opts.aiPicksLast === true;
+    /**
+     * 限伤 override for this match's battles (`SP_BOSS_HIT_LIMIT`, shared/constants.js bossHitLimitFrom; opts wins).
+     * `undefined` = keep the official `BOSS_HIT_LIMIT` — the default of every existing deployment, in which case the
+     * battles are built with no `bossHitLimit` key at all (byte-for-byte the old behaviour). A number (or Infinity for
+     * "off") is passed to every field this match builds, server-run and client-side alike (the client reads it off the
+     * battle spec, so both sides cancel the same hits).
+     * @type {number|undefined}
+     */
+    this.bossHitLimit = opts.bossHitLimit !== undefined ? opts.bossHitLimit : bossHitLimitFrom(typeof process !== 'undefined' && process.env ? process.env : {});
     this.ownsScheduler = !opts.scheduler;
     this.sched = opts.scheduler || new RealScheduler({ now: opts.now || Date.now, onError: (e) => this.reportError('timer', e) });
     this.registry = opts.registry || getDefaultRegistry();
@@ -260,6 +407,24 @@ export class Match {
      * @type {Record<string, Function>|null}
      */
     this.workshopKits = opts.workshopKits && typeof opts.workshopKits === 'object' ? opts.workshopKits : null;
+    /**
+     * 召唤物的行为层（docs/WORKSHOP.md §4.7）: the same two halves for the SECOND kit key space — a summon kit is keyed
+     * by the token record id and is injected as `Battle opts.tokenKits`. `null` on a plain install, so the battle never
+     * sees the key (behaviour byte-for-byte as before).
+     * @type {Record<string, Function>|null}
+     */
+    this.workshopTokenKits = opts.workshopTokenKits && typeof opts.workshopTokenKits === 'object' ? opts.workshopTokenKits : null;
+    /**
+     * kit 的**归属**与**预算**（DESIGN §28.52 的 kit 那一半）：`kits` / `tokenKits` 只是 `id → 函数`，不带所属包，而
+     * 「这个 kit 的逐单位回调归到哪本账上」正是靠这两张表。两张 owner 表与一张「包 id → 生效 max」表都在**装载期**
+     * 由 `server/workshop.js loadWorkshopKits` 产出一次；干净安装时它们是 `null` ⇒ 战斗拿不到这几个键，行为逐字节同前。
+     * @type {Map<string, string>|null}
+     */
+    this.workshopKitOwners = opts.workshopKitOwners instanceof Map ? opts.workshopKitOwners : null;
+    /** @type {Map<string, string>|null} 召唤物那一半（第二个键空间，与 `tokenKits` 逐字对称）。 */
+    this.workshopTokenKitOwners = opts.workshopTokenKitOwners instanceof Map ? opts.workshopTokenKitOwners : null;
+    /** @type {Map<string, number>|null} 包 id → 生效的每局调用上限（只装带 kit 的包）。 */
+    this.workshopKitBudgets = opts.workshopKitBudgets instanceof Map ? opts.workshopKitBudgets : null;
     /** @type {Array<{ id: string, pack: string, hash?: string, url: string }>} */
     this.workshopKitModules = Array.isArray(opts.workshopKitModules) ? opts.workshopKitModules : [];
     /**
@@ -269,21 +434,40 @@ export class Match {
      * @type {Array<{ id: string, install: Function }>|null}
      */
     this.battleInstallers = Array.isArray(opts.battleInstallers) && opts.battleInstallers.length ? opts.battleInstallers : null;
+    /**
+     * 包声明的**本局盟约抽签策略**（`server.battle` 模块的可选 `matchBondPolicy(ctx)` 导出，
+     * `server/match/pool.js drawDisabledBonds`）：**引擎通用**的一层 —— 引擎不认识任何具体盟约，只在抽签前把它们依次
+     * 跑一遍，收下「接管的盟约 / 本局禁用的盟约 / 要从棋子身上摘除的盟约」。没有包声明时是 null，抽签与从前逐字节相同。
+     * @type {Array<(ctx: object) => any>|null}
+     */
+    this.battleBondPolicies = Array.isArray(opts.battleBondPolicies) && opts.battleBondPolicies.length ? opts.battleBondPolicies : null;
     /** @type {Array<{ id: string, pack: string, hash?: string, url: string }>} */
     this.workshopBattleModules = Array.isArray(opts.workshopBattleModules) ? opts.workshopBattleModules : [];
-    /**
-     * The content this match runs with (DESIGN §28.2): `{ digest, packs }`, or null for a plain install. It goes into
-     * every BattleSpec (`spec.mods`) so a field's result is always attributable to the content that produced it.
-     * @type {{ digest: string, packs: Array<object> }|null}
-     */
-    this.mods = opts.mods && typeof opts.mods === 'object' && typeof opts.mods.digest === 'string' ? opts.mods : null;
+    /** 本局被摘除的盟约（`drawDisabledBonds` 的 `removed`，进 m.public.removedBonds；空数组 = 一个都没有） */
+    this.removedBonds = [];
+    /** @type {Set<string>} `removedBonds` 的查询集（PlayerState.removedBonds 指向它） */
+    this.removedBondsSet = new Set();
     this.timerScale = Number.isFinite(opts.timerScale) && opts.timerScale >= 0 ? opts.timerScale : 1;
     this.gameSpeed = Number.isFinite(opts.combatSpeed) && opts.combatSpeed > 0 ? Math.min(opts.combatSpeed, 200) : GAME_SPEED;
     /** layouts a bot rehearses per prep with the real simulation (bot.js; 0 = heuristic placement only) */
     this.botRehearsal = Number.isInteger(opts.botRehearsal) && opts.botRehearsal >= 0 ? Math.min(opts.botRehearsal, 8) : BOT_REHEARSAL_DEFAULT;
     /** wall-clock budget of one rehearsal slice (scheduleBotPrep) */
     this.botSliceMs = Number.isFinite(opts.botSliceMs) && opts.botSliceMs > 0 ? opts.botSliceMs : this.sched.virtual ? Infinity : BOT_SLICE_MS;
-    this.ds = dataSourceFor(this.data);
+    /**
+     * Offer a bot's layout rehearsal to the current host's browser (DESIGN §14): `opts.botRehearsalDelegate`, default
+     * off, env SP_BOT_REHEARSAL=host. The server simulates a rehearsal the host did not answer (see MatchRehearsal).
+     */
+    this.botRehearsalDelegate = opts.botRehearsalDelegate != null ? !!opts.botRehearsalDelegate : envBotRehearsal();
+    /** wall-clock ms the host has to answer a delegated rehearsal (engine option: tests shorten it) */
+    this.botRehearsalDelegateMs = Number.isFinite(opts.botRehearsalDelegateMs) && opts.botRehearsalDelegateMs > 0 ? opts.botRehearsalDelegateMs : REHEARSAL_ANSWER_MS;
+    /** the room's current host (opts.hostId; server/lobby.js room.hostId — setHost follows a migration) */
+    this.hostId = typeof opts.hostId === 'string' ? opts.hostId : null;
+    /** @type {Map<string, { id: string, job: any, executor: string, timer: any }>} delegated rehearsals in flight */
+    this._rehearsalTasks = new Map();
+    this._rehearsalSeq = 0;
+    /** how this match's delegated rehearsals ended (the log lines above; the tests read it) */
+    this.rehearsalStats = { delegated: 0, answered: 0, takeovers: 0 };
+    this.ds = dataSourceFor(this.data, this.formView, this.eliteForm);
     /** client-side combat (DESIGN §14) — see the header */
     this.clientCombat = opts.clientCombat != null ? !!opts.clientCombat : envClientCombat();
     this.verifyMode = parseVerify(opts.verify ?? env('SP_VERIFY'));
@@ -343,6 +527,22 @@ export class Match {
      * (draft order and skip, 6 机变 cards, 联防 …) stay.
      */
     this.loneHuman = this.order.filter((p) => !p.isBot).length === 1;
+    /**
+     * 超容变体的闸门 (业主裁令 2026-10-12)。**闸门读的是在场参与者数，不是房间容量 —— 容量 20 只坐 4 人走原路径。**
+     *
+     * `participants` = the seats this match actually fields (humans + AI, `order.length`; spectators are NOT
+     * participants — they are stored separately below and never take a seat). The default ceiling became 20, so a room's
+     * CAPACITY no longer says anything about how many players are in it: the official 4-player game must keep the
+     * room-wide code path (shared pool, one room-wide 联防 plan), and only a match with MORE than the official
+     * `MAX_SEATS` participants needs a pool per player / per-squad planning (百卫补丁 v0.3, docs/PS100-MIGRATION.md §10).
+     *
+     * Computed ONCE, here, and read (never re-derived) by every gate: `PlayerState.variantOn` (server/match/player/
+     * rules.js), `planUnite` (server/match/unite.js) and the invariant checker (server/match/invariants.js). Deriving it
+     * per call from `seatCap` is what a mid-match path flip would look like — the seat list is fixed at start, so this
+     * boolean is too.
+     */
+    this.participants = this.order.length;
+    this.variant = this.participants > MAX_SEATS;
 
     // per-match setup (DESIGN §6.5)
     const setup = setupMatchWaves(this.gd, this.rngSetup);
@@ -361,23 +561,29 @@ export class Match {
      * 编辑器在点试玩之前会先提示这件事，这里只留一条日志当线索。
      */
     const forcedStage = String(process.env.SP_STAGE || '').trim();
-    if (forcedStage && this.gd.stage(forcedStage)) {
-      this.stageId = forcedStage;
-      this.stage = this.gd.stage(forcedStage);
+    // 开发者模式（「全量模拟」的 `room.create.stage`）与编辑器的 `SP_STAGE` 走**同一条覆盖**：房间字段优先。
+    const stageOverride = this.devStage || forcedStage;
+    if (stageOverride && this.gd.stage(stageOverride)) {
+      this.stageId = stageOverride;
+      this.stage = this.gd.stage(stageOverride);
       this.layout = layoutOf(this.stage);
       // 部署图是按当时那张图算出来的：换了图必须让它重算，否则试玩里能放的位置还是上一张图的
       for (const ps of this.players.values()) ps.invalidateDeployMap?.();
       if (!this.stage.rounds || !Object.keys(this.stage.rounds).length) {
-        this.log?.warn?.(`[match] SP_STAGE=${forcedStage}：这张图没有绑定任何出怪表，回合会退回模式模板的路线`);
+        this.log?.warn?.(`[match] stage override ${stageOverride}：这张图没有绑定任何出怪表，回合会退回模式模板的路线`);
       }
     }
     this.factions = setup.factions;
     this.bossId = setup.bossId;
     this.hiddenBossId = setup.hiddenBossId;
-    const bans = drawDisabledBonds(this.gd, this.rngSetup);
+    const bans = drawDisabledBonds(this.gd, this.rngSetup, this.battleBondPolicies);
     this.disabledBonds = bans.drawn;
     this.staticInactiveBonds = bans.staticOff;
     this.bannedChess = bans.banned;
+    // 包策略判定要**摘除**的盟约（本局对任何棋子都不算数）：查询集挂到每个玩家状态上，bondsMeta.pieceBonds 据此过滤。
+    this.removedBonds = bans.removed;
+    this.removedBondsSet = new Set(bans.removed);
+    for (const ps of this.order) ps.removedBonds = this.removedBondsSet;
     /**
      * 助战供给 (shared/support.js): the operators the HUMAN seats brought. Each gets one extra pool copy for this match
      * and is in the pool even when the random bans took it out — a brought operator must be purchasable, because that is
@@ -390,7 +596,10 @@ export class Match {
       .flatMap((s) => s.support.map((id) => String(id || ''))))]
       .filter((id) => id && this.gd.isSupportChess(id))
       .sort();
+    // 上游 0.2.4（DESIGN §31.8 共享库存）与我们的助战供给落在同一行，两者互不相干，故并存：
+    // 助战多一份拷贝走 SharedPool 的 support 选项；共享装备库存是另一个池，由 SharedItemPool 表达。
     this.pool = new SharedPool(this.gd, { banned: bans.banned, support: this.supportSupply });
+    this.itemPool = new SharedItemPool(this.gd, () => this.order);
     // 自选编队 (0.2.0): each human's slotted DIY pieces get their own stock — none for one whose bonds are all off this
     // match (player/diy.js initDiyStock); no randomness is drawn here
     const off = new Set([...bans.drawn, ...bans.staticOff]);
@@ -418,6 +627,17 @@ export class Match {
     this._pubTimer = null;
     this._lastPubAt = -Infinity;
     this._lastPubJson = '';
+    /**
+     * The full m.public view the room's clients are believed to hold — the baseline of the incremental frame
+     * (DESIGN §8.2, incremental frame; matchMessaging _maybeSendPublic, server/viewsDelta.js). null until the first
+     * frame went out, which is what makes that first frame a full one.
+     * @type {Record<string, any> | null}
+     */
+    this._pubPrev = null;
+    /** The next m.public is sent in its full form (a membership change, a failed delivery, the keepalive). */
+    this._pubFull = true;
+    /** Consecutive delta frames since the last full one (the keepalive counter, PUBLIC_FULL_EVERY). */
+    this._pubFrames = 0;
     /** @type {Set<PlayerState>} */
     this._privDirty = new Set();
     this.errors = [];
@@ -431,6 +651,7 @@ export class Match {
     this.sp = null;
     this.wave = null;
     this.bossWaves = null;
+    this.bossPairs = null; // drawn once per match; the hidden round retains partners and sides
     this.fields = [];
     this.runner = null;
     /** playerId → fieldId */
@@ -443,6 +664,20 @@ export class Match {
     this.watchPref = new Map();
     this.lastResults = new Map();
     this.unitePlan = null;
+    /**
+     * 100-seat variant ONLY (design-level item C, docs/PS100-MIGRATION.md §10-C): the per-squad plans of the running
+     * 联防 round (`unitePlans`), its round number (`uniteRound`: 1 阶段 1 队内兜底 / 2 阶段 2 跨队兜底) and the
+     * re-entrancy tokens of the two-round hand-off. They stay AT REST (`null` / `1` / `0` / `null`) whenever the switch
+     * is off — a match with ≤ MAX_SEATS PARTICIPANTS never reads or writes them, because `planUnite` only returns an array
+     * `MAX_SEATS` and `MatchUnite.startUnite` branches on that shape (test/ps100-variant-ac.test.js pins the rest).
+     */
+    this.unitePlans = null;
+    this.uniteRound = 1;
+    this._uniteToken = 0;
+    this._uniteHandoff = null;
+    this._phase1Settle = null;
+    this._phase1Driven = 0;
+    this._relayToken = 0;
     /** 联防 outcome for the SETTLE view: { through, helpers, leakers, losses } (settle()), null when no 联防 resolved */
     this.uniteResultView = null;
     /** server-run 联防: the leakers' counts last published (_uniteTick) */
@@ -459,7 +694,7 @@ export class Match {
 }
 
 // the method modules, in this order (a name defined twice is an error, never a silent override)
-for (const part of [MatchPlatform, MatchInfra, MatchMessaging, MatchViews, MatchWatch, MatchIntents, MatchPause, MatchPhases, MatchSetupVote, MatchSpDraft, MatchPrep, MatchCombat, MatchClientCombat, MatchReports, MatchUnite, MatchBoss, MatchSettle]) {
+for (const part of [MatchPlatform, MatchInfra, MatchMessaging, MatchViews, MatchWatch, MatchIntents, MatchPause, MatchPhases, MatchSetupVote, MatchSpDraft, MatchPrep, MatchCombat, MatchClientCombat, MatchRehearsal, MatchReports, MatchUnite, MatchBoss, MatchSettle]) {
   for (const key of Reflect.ownKeys(part.prototype)) {
     if (key === 'constructor') continue;
     if (Object.prototype.hasOwnProperty.call(Match.prototype, key)) throw new Error(`Match.${String(key)} is defined twice`);

@@ -18,11 +18,12 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 
 import {
-  KIT_IMPORT_FILES, KIT_IMPORT_PREFIXES, KIT_IMPORT_TARGETS, kitImportAllowedText, kitImportBrowserUrl,
+  BATTLE_IMPORT_PREFIXES, KIT_IMPORT_FILES, KIT_IMPORT_PREFIXES, KIT_IMPORT_TARGETS, kitImportAllowedText, kitImportBrowserUrl,
   kitImportDeclarations, kitImportIssues, kitImportMap, rewriteKitImports,
 } from '../shared/kitImports.js';
 import { validateKit, kitErrors } from '../shared/kitAuthoring.js';
 import { identifyPack, loadWorkshop, loadWorkshopKits } from '../server/workshop.js';
+import { battleSourceIssues } from '../server/battlePack.js';
 import { startServer } from '../server/index.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -91,11 +92,14 @@ after(() => { if (fx) fs.rmSync(fx.dir, { recursive: true, force: true }); });
 // ---------------------------------------------------------------------------------------------------
 // ① 白名单表：它是两端唯一的真相，所以先钉住表本身
 // ---------------------------------------------------------------------------------------------------
+/** kit 与 battle 两份前缀的并集：表是共用的，解析时的前缀也要一起看。 */
+const ALL_PREFIXES = Object.freeze([...new Set([...KIT_IMPORT_PREFIXES, ...BATTLE_IMPORT_PREFIXES])]);
+
 describe('kit import 白名单：表与两端解析', () => {
   test('每个白名单 specifier 都指向一个真实存在的文件，且浏览器 URL 落在 /sim/ 挂载里', () => {
     assert.ok(KIT_IMPORT_FILES.length > 0);
     for (const { specifier, file } of KIT_IMPORT_FILES) {
-      assert.ok(KIT_IMPORT_PREFIXES.some((p) => specifier.startsWith(p)), `${specifier} 必须带一个白名单前缀`);
+      assert.ok(ALL_PREFIXES.some((p) => specifier.startsWith(p)), `${specifier} 必须带一个白名单前缀`);
       assert.ok(fs.existsSync(path.join(ROOT, file)), `${specifier} → ${file} 不存在`);
       // 浏览器侧：/sim/ → server/sim/（server/http/static.js 的挂载），只服务 .js
       const url = kitImportBrowserUrl(file);
@@ -117,7 +121,7 @@ describe('kit import 白名单：表与两端解析', () => {
     }
     // 前缀映射必须真的把 specifier 落到表里那个文件上：把每个 specifier 按 import map 解析一遍
     for (const { specifier, file } of KIT_IMPORT_FILES) {
-      const prefix = KIT_IMPORT_PREFIXES.find((p) => specifier.startsWith(p));
+      const prefix = ALL_PREFIXES.find((p) => specifier.startsWith(p));
       const resolved = imports[prefix] + specifier.slice(prefix.length);
       assert.equal(resolved, kitImportBrowserUrl(file), `${specifier} 经 import map 解析后不是 ${file}`);
       assert.ok(fs.existsSync(path.join(ROOT, 'server', resolved.replace(/^\/sim\//, 'sim/'))), `${resolved} 不存在`);
@@ -199,10 +203,6 @@ const KIT_IMPORT_EXPORTS = {
   "server/sim/content/kits/shared/summoner.js": [
     "DECK_RETRY", "holdBuff", "summonDeck", "summonTriggerArea", "tokenStat",
   ],
-  "server/sim/content/kits/ops/op-shwaz.js": ["default"],
-  "server/sim/content/kits/ops/op-ray.js": ["SANDBEAST", "SPECIAL_TAG", "default"],
-  "server/sim/content/kits/ops/op-aglna2.js": ["MARKER", "default"],
-  "server/sim/content/kits/ops/op-thumpy.js": ["default"],
   "server/sim/constants.js": [
     "ALLY_COLLIDER_RADIUS", "ASPD_MAX", "ASPD_MIN", "ATTACK_ANIM_TIME", "ATTACK_PAUSE", "AUTO_OP_COOLDOWN",
     "BLOCK_RADIUS", "BLOCK_RADIUS_SQ", "BOOMERANG_RETURN_SPEED", "BOSS_POOL_MIN_HP", "BOSS_ROW_OFFSET",
@@ -223,6 +223,52 @@ const KIT_IMPORT_EXPORTS = {
     "absoluteRangeKeys", "aggroCmp", "areaSelectable", "auraSelectable", "canTargetAlly", "canTargetEnemy",
     "enemyStealthed", "evadesGround", "extendedGrid", "sortAllyTargets", "sortEnemyTargets", "stealthOffKey",
     "tileKeyOf",
+  ],
+  // 2026-10-15 新开两格。记的是当前**全部**具名导出，判据仍是超集 —— 加导出不打断任何包，删名或改名才会。
+  // 两格都按「按文件指名、不开前缀」放开：`@sim/` 下别的文件（`ai.js`、`pairing.js` 等）仍然被拒。
+  "server/sim/body.js": [
+    "bodyDist", "bodyInKeys", "bodyInRadius", "bodyInRange", "bodyInRangeTile", "bodyKeys", "bodyOnTile",
+    "bodyTileReach", "colliderKeys", "hitRect", "normHitArea",
+  ],
+  "server/sim/professions.js": [
+    "BARD_REGEN_DUR", "BARD_REGEN_IV", "DOLL_SWITCH", "KNOWN_SUBPROFESSIONS", "PROFESSION_DEFAULTS", "SUB",
+    "bardRegen", "resolveProfile",
+  ],
+  // 战斗逻辑模块（`server.battle`, DESIGN §28.17）的 SDK：官方内容模块用的那一份辅助函数。
+  "server/sim/content/kits/ops/op-shwaz.js": ["default"],
+  "server/sim/content/kits/ops/op-ray.js": ["SANDBEAST", "SPECIAL_TAG", "default"],
+  "server/sim/content/kits/ops/op-aglna2.js": ["MARKER", "default"],
+  "server/sim/content/kits/ops/op-thumpy.js": ["default"],
+  "server/sim/content/kits/ops/op-aphris.js": ["default"],
+  "server/sim/content/kits/ops/op-nasti.js": ["NSTBLD", "NSTCHR", "NSTDEF", "default"],
+  "server/sim/content/kits/ops/op-jesca2.js": ["SHIELD", "default"],
+  "server/sim/content/kits/ops/op-heyak.js": ["default"],
+  // 多索雷斯 mod: 假日威龙陈（复用的散射手 kit）/ 林（阵法术师 kit）
+  "server/sim/content/kits/ops/op-chen2.js": ["default", "holidayLines", "slimeKey", "slimeOf", "spareChance", "waterOn"],
+  "server/sim/content/kits/ops/op-lin.js": ["default"],
+  // `@sim/detmath.js`（2026-10-15 加进白名单）：确定性数学的**唯一**入口（`Math.sin` 这类在两端可能不一致，
+  // `tools/check-imports.mjs` 与 `test/sim/detmath.test.js` 一起钉这件事）。它导出的是 6 个纯函数。
+  "server/sim/detmath.js": ["atan2", "cos", "hypot", "powi", "roundHalfEven", "sin"],
+  "server/sim/content/support/index.js": [
+    "COLS", "activeBondIds", "alliesAround", "allyAt", "bandRecord", "baseChessId", "battleStore", "bodyDist",
+    "bodyInKeys", "bodyInRadius", "bodyOnTile", "bodyTileReach", "bondActive", "bondLayers", "bondMembers",
+    "bondRecord", "bondState", "bondTier", "buffParams", "buffsOf", "chessRecord", "contentInfo", "coreBondIds",
+    "directMods", "effectRecord", "frontTile", "fxOn", "gainLayers", "gameData", "garrisonRecord", "goldenItemCount",
+    "hasItemKey", "inRange", "isCoreBond", "isElite", "isGoldenId", "isGroundOp", "isMember", "isOp", "itemKeyOf",
+    "itemRecord", "itemsOf", "layersUsed", "matchBands", "num", "onField", "onKeys", "passiveBuff", "player",
+    "playerOps", "rowMates", "setGameData", "sideTiles", "tierOf", "tileKey", "topActiveBond", "unitBonds",
+    "withGameData",
+  ],
+  // 战斗逻辑模块的**注册面 SDK**（`@battle/mod.js`）：在 `@battle/index.js` 的全集之上再加 register* 与 wave-B 读法。
+  // 这一份是工坊 mod 把自己接进官方表的唯一入口，所以把关键名字钉住（删/改名 = 打断所有用它的包）。
+  "server/sim/content/support/mod.js": [
+    "registerBondInstaller", "registerGarrisonInstaller", "registerGarrisonReader", "registerItemBehaviour",
+    "reached", "onLayers", "onUnitDamaged", "isEnemyTarget", "ownTag", "bondBb", "byUnit",
+    "fireGain", "garrisonIdsOf", "bp", "isProc", "procTags", "memberOf", "addShieldLayer", "ids", "bondOrder",
+    "chessOnBoard", "metaBonds", "frontPiece", "num", "battleStore", "bondLayers", "bondMembers", "bondActive",
+    "bondTier", "bondState", "bondRecord", "buffParams", "buffsOf", "directMods", "passiveBuff", "gainLayers",
+    "playerOps", "player", "isMember", "isOp", "onField", "itemsOf", "itemKeyOf", "itemRecord", "garrisonRecord",
+    "allyAt", "alliesAround", "frontTile", "fxOn", "contentInfo",
   ],
 };
 
@@ -249,6 +295,72 @@ describe('kit import 白名单：每个文件的导出名下限（⊇，不是�
 });
 
 // ---------------------------------------------------------------------------------------------------
+// ①c 白名单文件的**可变状态不出边界**守卫
+//
+// 为什么需要这一条：白名单（`shared/kitImports.js`）决定「包能 import 什么」，它是一道**安全边界**。
+// 放开 `@sim/body.js` 与 `@sim/professions.js` 之前做的那次审计结论是：
+//   · `body.js` —— 模块级 `let`/`var` = 0、可变容器 = 0，导出全是纯函数（文件自述
+//     「Pure functions of (x, y, hitArea); no battle state」，`body.js:29`）⇒ 放开它是安全的，无需守卫。
+//   · `professions.js` —— **确实有** 3 个模块级容器/对象：`DOLL_SWITCH_IMMUNE`（`new Set`）、`TUNE`、
+//     `PRIORITY_ALIASES`（后两个连 `Object.freeze` 都没有）。放开它**之所以仍然安全**，靠三条实测事实：
+//     ① 三者**全部不是导出**（ESM 里非导出绑定没有外部句柄，包拿不到引用）；
+//     ② 三者**从未被写**（源码里只在 `:284` / `:681` / `:698` 被读）；
+//     ③ 能到包的那一侧全是不可变形态（`PROFESSION_DEFAULTS` / `SUB` / `KNOWN_SUBPROFESSIONS` 都 frozen，
+//        其余是数值常量）。
+//
+// ⚠️ 这三条是**放开白名单的安全前提**，而「前提今天成立」不能靠记性：白名单是永久开放的入口，
+// 将来任何人顺手写一个 `export` 就会把可变容器递到包手里、且没有任何东西会红。
+// 所以把前提钉成判据 —— 与 ①b「导出名下限」同一种做法，只是这条守的是**不该出现的东西**。
+// 判据是能给红的：把 `DOLL_SWITCH_IMMUNE` 临时加进 `professions.js` 的导出表，本用例即 `not ok`。
+// ---------------------------------------------------------------------------------------------------
+/** 白名单里**含模块级可变状态**的文件，以及「让它保持安全」必须成立的三件事。 */
+const KIT_IMPORT_MUTABLE_GUARD = {
+  'server/sim/professions.js': {
+    /** ① 这些名字带可变状态（`Set` / 未 freeze 的对象），**不得**被导出。 */
+    notExported: ['DOLL_SWITCH_IMMUNE', 'TUNE', 'PRIORITY_ALIASES'],
+    /** ② 它们在源码里的写入形态一个都不许出现。 */
+    writePatterns: [
+      /\bDOLL_SWITCH_IMMUNE\s*\.\s*(?:add|delete|clear|set)\b/,
+      /\bTUNE\s*\[[^\]]*\]\s*=/,
+      /\bPRIORITY_ALIASES\s*\[[^\]]*\]\s*=/,
+    ],
+    /** ③ 能到包的那一侧必须冻结。 */
+    frozen: ['PROFESSION_DEFAULTS', 'SUB', 'KNOWN_SUBPROFESSIONS'],
+  },
+};
+
+describe('kit import 白名单：可变状态不出边界（放开 professions.js 的安全前提）', () => {
+  for (const [file, guard] of Object.entries(KIT_IMPORT_MUTABLE_GUARD)) {
+    test(`${file} 的模块级可变绑定不被导出`, async () => {
+      const mod = await import(new URL(`../${file}`, import.meta.url).href);
+      const leaked = guard.notExported.filter((name) => name in mod);
+      assert.deepEqual(
+        leaked,
+        [],
+        `${file} 导出了带可变状态的 ${leaked.join('、')} —— 白名单一放开，包就拿到了一个**共享可写句柄**`
+        + '（改一次影响所有对局）。要么不给它加 export，要么先把它改成 Object.freeze 后的只读形态。',
+      );
+    });
+
+    test(`${file} 的模块级可变绑定从未被写（源码里没有写入形态）`, () => {
+      const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      const hits = guard.writePatterns.flatMap((re) => src.match(re) ?? []);
+      assert.deepEqual(hits, [], `${file} 出现了写入形态：${hits.join('、')} —— 模块级共享状态被就地改写会跨对局串味`);
+    });
+
+    test(`${file} 能到包的那一侧全是不可变形态（frozen 或数值常量）`, async () => {
+      const mod = await import(new URL(`../${file}`, import.meta.url).href);
+      const mutable = guard.frozen.filter((name) => !Object.isFrozen(mod[name]));
+      assert.deepEqual(
+        mutable,
+        [],
+        `${file} 的 ${mutable.join('、')} 不是 frozen —— 包拿到它就能就地改写引擎的默认值表`,
+      );
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------
 // ② 校验器口径（编辑器/CLI 走这一条）
 // ---------------------------------------------------------------------------------------------------
 describe('kit import：校验器口径', () => {
@@ -268,6 +380,29 @@ describe('kit import：校验器口径', () => {
       assert.match(hit.message, /白名单/, `${spec} 的 reason 必须点名白名单`);
       assert.match(hit.hint, /@kit\/tier1\.js/, `${spec} 的 hint 必须给出可用的写法`);
     }
+  });
+
+  // §28.18 把「相对路径一律不行」改成「**向下**相对（`./…`）可以，用来 import 自己包 kits/ 下的兄弟文件」：
+  // 白名单之外仍然全是 KIT_IMPORT，但 `./…` 这一族里哪些成立、哪些不成立有了明确分界。
+  test('§28.18：./… 放行，其余相对与畸形形式仍被拒，且每条理由都给得出可用的写法', () => {
+    for (const spec of ['./helpers.js', './lib/bonds.js']) {
+      assert.deepEqual(kitErrors(validateKit(kit(`import { x } from '${spec}';`), OPTS)), [], `${spec} 必须放行`);
+    }
+    for (const spec of ['../x.js', './../x.js', '/abs/x.js', 'x.js', './x.mjs', './x', './', './%2e%2e/x.js', './x.js?1', './sub\\x.js', './x//y.js']) {
+      const hit = kitErrors(validateKit(kit(`import { x } from '${spec}';`), OPTS)).find((e) => e.code === 'KIT_IMPORT');
+      assert.ok(hit, `${spec} 必须被拒`);
+      assert.ok(hit.hint.includes(kitImportAllowedText()), `${spec} 的 hint 必须给出白名单写法`);
+      // 每个拒绝理由都要顺带告诉作者「自己包里的 ./… 也能写」—— 否则唯一的出路是把代码塞回一个文件
+      assert.match(hit.message, /\.\/…/, `${spec} 的 reason 必须提到包相对写法`);
+    }
+  });
+
+  test('§28.18：战斗逻辑模块（server.battle）刻意不接受 ./…（data: 没有目录），理由指向 @battle/', () => {
+    const issue = battleSourceIssues("import h from './lib/util.mjs';\nexport function install() { return h; }\n", 'p')[0];
+    assert.ok(issue, '战斗模块里 ./… 必须被拒');
+    assert.equal(issue.code, 'BATTLE_BAD_IMPORT');
+    assert.match(issue.reason, /data:/);
+    assert.match(issue.reason, /@battle\//);
   });
 
   test('require 与动态 import() 都被拒，理由各自说得通', () => {
@@ -451,5 +586,120 @@ describe('kit import：验收 —— 社区 kit 的 5 条 import 等价改写', 
     const msg = kitImportIssues("import { x } from '@kit/evil.js';\n")[0].reason;
     assert.ok(msg.includes(kitImportAllowedText()), 'reason 必须内嵌白名单文本');
     assert.match(msg, /evil\.js/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// ⑥ 复用官方 ops kit：**按文件**开表（不是把 `@ops/` 前缀整个放开）
+//
+// 背景（2026-10-14，工坊包 `rimbilliton` 雷姆必拓）：包里有 4 个 kit 想复用引擎自带的官方 ops kit
+// （同一名官方干员的实现，换一张 mod 棋子卡）。此前唯一的出路是把引擎子系统复制进包 ——
+// 实测那条路要内联 18 个文件 / 513 KB，其中包含 `content/tokens.js`（召唤物注册表）、`ai.js`（索敌）、
+// `simdata.js`、`professions.js`、`shared/i18n.js`（浏览器 i18n 运行时）：那是**包内一份冻结副本**，
+// 引擎日后更新这些模块时它会静默漂移。业主裁定改为**在表里按文件指名这 4 个 file**。
+//
+// 本节就是那次裁定的**有牙齿的判据**（改前必红、加完必绿），并且把「按文件」与「开前缀」的分界线钉住：
+//   · `KIT_IMPORT_PREFIXES` 里会出现 `@ops/`（浏览器 import map 需要它、错误文案也需要它），
+//   · 但**准入判据始终是 `KIT_IMPORT_FILES`**（`kitImportIssues` 走 `targets.has(specifier)`）——
+//     所以 `@ops/op-siege.js` 这类**同前缀、未列名**的文件今天仍然被拒，第 2 条测试盯着这件事。
+// ---------------------------------------------------------------------------------------------------
+describe('kit import 白名单：按文件开放官方 ops kit（复用官方干员的唯一通道）', () => {
+  /** specifier → 引擎里的真实文件。这就是"按文件"的全部内容：10 条，一条不多。 */
+  const OPS_REUSE = [
+    ['@ops/op-shwaz.js', 'server/sim/content/kits/ops/op-shwaz.js'],
+    ['@ops/op-ray.js', 'server/sim/content/kits/ops/op-ray.js'],
+    ['@ops/op-aglna2.js', 'server/sim/content/kits/ops/op-aglna2.js'],
+    ['@ops/op-thumpy.js', 'server/sim/content/kits/ops/op-thumpy.js'],
+    // 2026-10-15：`rimbilliton` 投稿还要这 4 个（它自己那 8 个 kit 里有 4 个是「同一名官方干员换一张 mod 棋子卡」）
+    ['@ops/op-aphris.js', 'server/sim/content/kits/ops/op-aphris.js'],
+    ['@ops/op-heyak.js', 'server/sim/content/kits/ops/op-heyak.js'],
+    ['@ops/op-jesca2.js', 'server/sim/content/kits/ops/op-jesca2.js'],
+    ['@ops/op-nasti.js', 'server/sim/content/kits/ops/op-nasti.js'],
+    // 2026-10-15：多索雷斯 mod 复用官方的散射手 / 阵法术师 kit（假日威龙陈 / 林）
+    ['@ops/op-chen2.js', 'server/sim/content/kits/ops/op-chen2.js'],
+    ['@ops/op-lin.js', 'server/sim/content/kits/ops/op-lin.js'],
+  ];
+
+  test('这 10 个官方 ops kit 逐条在表里、指向真实文件、浏览器 URL 落在 /sim/ 上', () => {
+    for (const [spec, file] of OPS_REUSE) {
+      assert.equal(KIT_IMPORT_TARGETS.get(spec), file, `${spec} 必须在 KIT_IMPORT_FILES 里指向 ${file}`);
+      assert.ok(fs.existsSync(path.join(ROOT, file)), `${file} 不存在`);
+      assert.equal(kitImportBrowserUrl(file), `/sim/content/kits/ops/${spec.slice('@ops/'.length)}`);
+    }
+  });
+
+  test('白名单加后总条数就是 25：这个数是契约，加一行必须是有意为之（连这条一起改）', () => {
+    // 为什么断言一个**硬数字**：白名单是「两端唯一的真相」，也是这个格式**唯一**的准入面。一个没有条数的表
+    // 会在下一次「顺手加一行」时静默变宽 —— 而白名单每宽一格，第三方包能碰到的引擎面就多一格。
+    // 所以加行这件事必须是**改了这条断言**的有意行为（本节 §⑥ 与 `docs/WORKSHOP.md` 的白名单表同步改）。
+    // 25 = 7（`@kit/`：tier1..tier6 + summoner）+ 6（`@sim/`：constants / dir / targeting / detmath
+    //      / body / professions）+ 2（`@battle/`：support/index + support/mod）+ 10（`@ops/`：4 雷姆必拓
+    //      + 4 哥伦比亚 + 2 多索雷斯）。
+    // ⚠️ `@sim/` 从 4 涨到 6 是 2026-10-15 有意为之（`body.js` + `professions.js`，理由见
+    // `shared/kitImports.js` 里「包已经在整份复制它们了」那两段）：这个数**不是**「取一边」，两边加起来才是它。
+    assert.equal(KIT_IMPORT_FILES.length, 25, `白名单条数变了（现在 ${KIT_IMPORT_FILES.length}）—— 加/删一行都要连这条与文档一起改`);
+    const byPrefix = (p) => KIT_IMPORT_FILES.filter((e) => e.specifier.startsWith(p)).length;
+    assert.deepEqual(
+      { '@kit/': byPrefix('@kit/'), '@sim/': byPrefix('@sim/'), '@battle/': byPrefix('@battle/'), '@ops/': byPrefix('@ops/') },
+      { '@kit/': 7, '@sim/': 6, '@battle/': 2, '@ops/': 10 },
+      '按前缀的分布也是契约的一部分（`@ops/` 只是命名空间，不是整体放行）',
+    );
+  });
+
+  test('没有把 @ops/ 整个前缀放开：这 10 个之外，@ops/ 下任何文件仍被拒', () => {
+    const others = ['@ops/op-siege.js', '@ops/op-chen.js', '@ops/op-shining.js', '@ops/index.js', '@ops/op-shwaz.mjs'];
+    for (const spec of others) {
+      assert.equal(KIT_IMPORT_TARGETS.has(spec), false, `${spec} 不该在表里`);
+      const issues = kitErrors(validateKit(`import * as m from '${spec}';\nexport default () => ({});\n`, OPTS));
+      const hit = issues.find((e) => e.code === 'KIT_IMPORT');
+      assert.ok(hit, `${spec} 必须仍被拒`);
+      // 理由必须说"前缀合法、这个文件没开"，而不是"未知前缀"——后者会让作者以为整个命名空间都不存在
+      assert.match(hit.message, /前缀合法/, `${spec} 的 reason 必须说"前缀合法、模块没开"，今天说的是：${hit.message}`);
+      assert.ok(hit.hint.includes('@ops/op-shwaz.js'), `${spec} 的 hint 必须给出真正可用的写法`);
+    }
+  });
+
+  test('两端一致：这 10 条经 kitImportMap() 解析后落到同一个文件', () => {
+    const map = kitImportMap();
+    assert.equal(map['@ops/'], '/sim/content/kits/ops/', 'import map 必须为 @ops/ 声明前缀（index.html 与它同源）');
+    for (const [spec, file] of OPS_REUSE) {
+      assert.equal(map['@ops/'] + spec.slice('@ops/'.length), kitImportBrowserUrl(file), spec);
+    }
+  });
+
+  test('包真正调用的那个 default 成员仍在（改导出形状 = 静默打断所有复用它的包）', async () => {
+    // 这些 ops kit 的具名导出很少（四个甚至是空的），**对外接口全在 `default` 上**：
+    // 包写的是 `opShwaz.char_340_shwaz(bb, chess)`。所以下限必须记在 default 的成员上，
+    // 否则 §①b 那条具名导出守卫对这些文件等于空转。
+    const USED = [
+      ['server/sim/content/kits/ops/op-shwaz.js', 'char_340_shwaz'],
+      ['server/sim/content/kits/ops/op-ray.js', 'char_4117_ray'],
+      ['server/sim/content/kits/ops/op-aglna2.js', 'char_1015_aglna2'],
+      ['server/sim/content/kits/ops/op-thumpy.js', 'char_4235_thumpy'],
+      ['server/sim/content/kits/ops/op-aphris.js', 'char_4229_aphris'],
+      ['server/sim/content/kits/ops/op-heyak.js', 'char_4027_heyak'],
+      ['server/sim/content/kits/ops/op-jesca2.js', 'char_1034_jesca2'],
+      ['server/sim/content/kits/ops/op-nasti.js', 'char_4212_nasti'],
+      ['server/sim/content/kits/ops/op-chen2.js', 'char_1013_chen2'],
+      ['server/sim/content/kits/ops/op-lin.js', 'char_4080_lin'],
+    ];
+    for (const [file, member] of USED) {
+      const mod = await import(new URL(`../${file}`, import.meta.url).href);
+      assert.equal(typeof mod.default?.[member], 'function',
+        `${file} 的 default.${member} 必须仍是函数 —— 复用它的包调用的就是这个成员`);
+    }
+  });
+
+  test('加载器口径与校验器同源：@ops/ 这 10 条零错误，同前缀未列名的仍被拒', async () => {
+    const good = makePack("import opShwaz from '@ops/op-shwaz.js';\nexport default () => ({});\n");
+    const bad = makePack("import opSiege from '@ops/op-siege.js';\nexport default () => ({});\n");
+    try {
+      assert.deepEqual((await loadOne(good)).errors, [], '包 kit import @ops/op-shwaz.js 必须零错误');
+      const badInfo = await loadOne(bad);
+      assert.ok(badInfo.errors.some((e) => e.code === 'KIT_IMPORT'), JSON.stringify(badInfo.errors));
+    } finally {
+      fs.rmSync(good.dir, { recursive: true, force: true });
+      fs.rmSync(bad.dir, { recursive: true, force: true });
+    }
   });
 });

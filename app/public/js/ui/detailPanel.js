@@ -37,7 +37,8 @@
 import { useEffect } from '../../vendor/hooks.module.js';
 import { html, Icon, TierChip, MicroLabel, Button, confirmDialog, useTicker } from './components.js';
 import { Img, RichText, UnitThumb, BondGlyph, GIcon, diyToken } from './gameComponents.js';
-import { attackInterval, rangeGridBox, fmtNum, tileKey, chessLoadout, nextThreshold, bondTier, briefingBondTip, pieceBondIds, grantedBonds, morphPairings, ownStandIn, standInOf, standInLoadout, standInLabel, standInTip, standInForText, ownDiyRecord, ownDiyPick, diyRecordFor, pickGetter, availableVoiceLangs, unitPick, unitCultivation } from './gameLogic.js';
+import { itemDescText, mergeItemDescs } from './richText.js';
+import { attackInterval, rangeGridBox, fmtNum, tileKey, chessLoadout, nextThreshold, bondTier, briefingBondTip, pieceBondIds, grantedBonds, morphPairings, slotPolicy, ownStandIn, standInOf, standInLoadout, standInLabel, standInTip, standInForText, ownDiyRecord, ownDiyPick, diyRecordFor, pickGetter, availableVoiceLangs, unitPick, unitCultivation } from './gameLogic.js';
 import { updateSettings, settingsStore, useSettings } from './settings.js';
 import { dubsInstalled } from '../voiceDubs.js';
 import { VOICE_LANG_NAMES } from '../../../shared/constants.js';
@@ -51,11 +52,14 @@ import { voiceLangOverrideOf, withVoiceLang } from '../voicePrefs.js';
 import { abilityRows } from './abilityLines.js';
 import { data } from '../data.js';
 import { attackRangeGrid } from '../../../shared/loadoutRecord.js';
+import { equipCapacity, DEFAULT_EQUIP_PER_CHESS } from '../../../shared/equipSlots.js';
 import { SKILL_SUMMON_START_DEPLOY } from '../../../shared/constants.js';
 import { moduleBadge, fullTraitText } from './loadoutModel.js';
 import { t, tc, N_ } from '../../../shared/i18n.js';
 import { audio } from '../audio.js';
 import { tokenVariantFor } from './gameLogic/loadout.js';
+// 行为开关 `unequip` 的读数（画不画「卸下」按钮）：与发送点同一处（ui/gameActions.js），避免 UI 模块之间多一条 import。
+import { unequipAllowed } from './gameActions.js';
 // 组件级改写（DESIGN §28.19）：`loadout.detail` 是引擎的具名组件之一（干员详情面板本身），包声明的 wraps 就长在它上面。
 import { modComponent } from './modComponents.js';
 
@@ -234,13 +238,78 @@ export function MorphGrantLine({ item, off = null, carried = null }) {
   </p>`;
 }
 
-/** An equipped item of the card: icon, name, effect — and for 变形同构体 / a bond item its pairing (`carried`: the wearer's items). */
-function ItemRow({ itemId, carried = null, off = null }) {
+/** The layers of one bond in the card's `bonds` list (m.private.bonds: `{ bondId, layers, … }`), or null. */
+const bondLayers = (bonds, bondId) => {
+  const b = (Array.isArray(bonds) ? bonds : []).find((x) => x && x.bondId === bondId);
+  return b && Number.isFinite(b.layers) ? b.layers : null;
+};
+
+/**
+ * The layers an item's runtime ratio is computed against: the bond the item itself names
+ * (`item.params.ratio_bond` — the id of the bond whose layers the battle scales the same ratio by).
+ * null when the item names none (its description's `{0}` is then never touched).
+ */
+const ratioLayers = (item, bonds) => {
+  const bid = item && item.params && typeof item.params.ratio_bond === 'string' ? item.params.ratio_bond : null;
+  return bid ? bondLayers(bonds, bid) : null;
+};
+
+/**
+ * The items a piece inherited from / absorbed into one of the items it carries, as the view sends them
+ * (`piece.itemData[<ns>].items`, `<ns>` = the item's own `params.inherited_key`). Empty when the item declares none.
+ */
+const inheritedItems = (item, itemData) => {
+  const ns = item && item.params && typeof item.params.inherited_key === 'string' ? item.params.inherited_key : null;
+  return ns && itemData && Array.isArray(itemData[ns]?.items) ? itemData[ns].items : [];
+};
+
+/**
+ * 装备的「已继承的装备」：吸收进来的装备 id 列表（`item.params.inherited_key` 声明的 `piece.meta.data[<键>].items`），
+ * **同名装备合并成一条**（基础 / 进阶两个形态的数值直接叠加，不做两条）。携带者身上与整备区里的那件（`ItemDetail`）
+ * 都用这一块。
+ * @param {{ inherited?: string[]|null }} props
+ */
+function InheritedItems({ inherited = null }) {
+  const groups = (() => {
+    const g = new Map();
+    for (const id of Array.isArray(inherited) ? inherited : []) {
+      const sub = data.lookup('items', id) || { name: id, desc: id };
+      const key = sub.name || id;
+      if (!g.has(key)) g.set(key, []);
+      g.get(key).push(sub);
+    }
+    return [...g.entries()];
+  })();
+  if (!groups.length) return null;
+  return html`<div class="ditem__inherit">
+    <span class="ditem__inherit-h">${t('已继承的装备：')}</span>
+    ${groups.map(([name, recs]) => html`<span key=${name} class="ditem__inherit-i"><b>${name}</b>：<${RichText} as="span" text=${mergeItemDescs(recs)} /></span>`)}
+  </div>`;
+}
+
+/**
+ * An equipped item of the card: icon, name, effect — and for 变形同构体 / a bond item its pairing (`carried`: the
+ * wearer's items). An item that declares `params.inherited_key` (源石辅助仪: 已继承的装备) additionally lists what it
+ * took over (`itemData[ns].items`, written by its prep hook) and, with `params.ratio_bond`, its live ratio.
+ * 第 7 段：`plus` 档下变形同构体**不占装备位**，所以它的行上多一个「不占装备格」标签（缺省档不画 ⇒ 界面逐字不变）；
+ * 装备拆卸（行为开关 `unequip: "allow"`，DESIGN §28.43.1）：`onUnequip` 只在**可编辑的自己人**身上传进来，而
+ * `unequipAllowed()` 是这一页从 `welcome.mods` 派生的有效档位 ⇒ **缺省档一个按钮都不画**（缺省界面逐字节不变）。
+ */
+function ItemRow({ itemId, uid = null, carried = null, off = null, itemData = null, bonds = null, onUnequip = null }) {
   const it = data.lookup('items', itemId);
+  const inherited = inheritedItems(it, itemData);
+  const canDetach = typeof onUnequip === 'function' && Number.isInteger(uid) && unequipAllowed();
+  const slotless = slotPolicy().isSlotless(it);
+  // 变形同构体的配对列表：被**已继承**进来的装备也算「与它一同携带」（它们已被吸收销毁，不在 `carried` 里），
+  // 所以这些盟约同样显示「生效中」（业主 2026-10-12 报告）。
+  const pairingCarried = it?.canGiveBond && Array.isArray(carried) && inherited.length
+    ? [...carried, ...inherited] : carried;
   return html`<div class="ditem">
     <${UnitThumb} kind="item" id=${itemId} size="sm" />
-    <div class="ditem__text"><b>${it?.name || itemId}</b><${RichText} text=${it?.descRaw || it?.desc || ''} class="ditem__desc" />
-      ${it?.canGiveBond ? html`<${MorphPairings} off=${off} carried=${carried || []} />` : it?.giveBondId ? html`<${MorphGrantLine} item=${it} off=${off} carried=${carried} />` : null}</div>
+    <div class="ditem__text"><b>${it?.name || itemId}</b>${slotless ? html`<span class="dtag dtag-slotless">${t('不占装备格')}</span>` : null}<${RichText} text=${itemDescText(it, ratioLayers(it, bonds))} class="ditem__desc" />
+      <${InheritedItems} inherited=${inherited} />
+      ${it?.canGiveBond ? html`<${MorphPairings} off=${off} carried=${pairingCarried} />` : it?.giveBondId ? html`<${MorphGrantLine} item=${it} off=${off} carried=${pairingCarried} />` : null}</div>
+    ${canDetach ? html`<${Button} variant="ghost" size="sm" class="ditem__detach" title=${t('卸下')} aria-label=${t('卸下')} onClick=${() => onUnequip(uid)}>${t('卸下')}<//>` : null}
   </div>`;
 }
 
@@ -406,7 +475,9 @@ function skillTextNote(sk) {
   return note ? html`<p class="dhint dhint--rule" data-skill-note=${sk.skillId}><${Icon} name="info" />${t(note)}</p>` : null;
 }
 
-export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bonds, offBonds = null, loadout, onBond, live = null, hint = null, unitItems = null, standIn = null, diy = null, voiceSettings = null, cultOpts = null }) {
+// `owner` = 这张卡画的是**谁的**棋子（换装 / 时装）：`undefined` = 自己；一个 playerId = 那位队友（看他的卡时用他
+// 选的时装）；`null` = 归属未知 → 不套用任何选择。多数调用点（含全部测试）不传 = 自己，输出与从前逐字相同。
+export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bonds, offBonds = null, removedBonds = null, loadout, onBond, live = null, hint = null, unitItems = null, standIn = null, diy = null, voiceSettings = null, cultOpts = null, owner = undefined, onUnequip = null }) {
   const m = data.get('assets');
   const hp = hpOf(live, snapHp);
   // 0.2.0 自选编队: `chess` is then the composed 自选 record (the operator, the slot's tier / price); its skill and module are
@@ -435,14 +506,17 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
   // teammate's unit's UnitInfo items, a bond popup 同构 row's wearer's)
   const carried = piece ? items : (Array.isArray(unitItems) ? unitItems : []);
   const getItem = (id) => data.lookup('items', id);
-  const bondIds = pieceBondIds(c, carried, getItem);
+  // `hasBond`：数据里不存在的盟约 id 一个都不画（与 prep / 战斗同一条约定，`shared/morph.js` 的
+  // `grantedBondsByTrait` 的 `hasBond`）—— 一张卡片上出现一条不存在的盟约，与计数对不上是同一类谎话。
+  // 本局被摘除的盟约不算作这名干员的盟约（gameLogic pieceBondIds 的 `removedBonds`，第 5 个参数）—— 芯片里直接不出现。
+  const bondIds = pieceBondIds(c, carried, getItem, (id) => !!data.lookup('bonds', id), removedBonds);
   const grantedIds = bondIds.filter((b) => !(Array.isArray(c.bonds) && c.bonds.includes(b)));
   const sell = c.sellPrice ?? 1;
   const blocks = {};
   blocks.head = html`
     <div key="head" class="dhead">
       <div class=${cx('dhead__art', golden && 'is-golden', `dhead__art--t${c.tier}`)}>
-        <${Img} src=${portraitUrlOf(m, body, { lookup: currentAppearanceLookup() })} fallback=${html`<${UnitThumb} kind="chess" id=${c.chessId} size="lg" rec=${si} />`} />
+        <${Img} src=${portraitUrlOf(m, body, { lookup: currentAppearanceLookup(), owner })} fallback=${html`<${UnitThumb} kind="chess" id=${c.chessId} size="lg" rec=${si} />`} />
       </div>
       <div class="dhead__info">
         <div class="dhead__chips">
@@ -491,12 +565,22 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
       </div>
     <//>` : null;
   // (a 变形同构体 / bond item row shows its pairing against what this operator carries: ItemRow `carried`)
-  blocks.equip = piece?.kind === 'chess' ? html`<${Section} key="equip" title=${t('装备')} micro=${`EQUIP ${items.length}/2`} class="dsec--equip">
-      ${items.length ? items.map((it) => html`<${ItemRow} key=${it.uid} itemId=${it.id} carried=${items} off=${offBonds} />`) : html`<p class="t-dim dempty">${t('拖拽装备至该干员以配发（最多 2 件）')}</p>`}
+  // 装备格上限 = 官方 2 + 携带装备的 params.slot_cap（源石辅助仪 +2/+4，shared/equipSlots.js 两端同源）；
+  // 「占了几格」走这一页的装备位策略（`shared/morph.js` 的 `slotPolicy()`：`plus` 档下变形同构体不占格，
+  // 缺省档就是 `items.length`）。两者相合，缺省档下与官方那条算术逐字相同。
+  const slot = slotPolicy();
+  const equipCap = equipCapacity(DEFAULT_EQUIP_PER_CHESS, carried, getItem);
+  const equipUsed = slot.slotsUsed(items, getItem);
+  const carriedUsed = slot.slotsUsed(carried, getItem);
+  // 装备自己声明要看的那份「已继承」数据（`params.inherited_key` → 视图里的 `piece.itemData[<键>]`）：源石辅助仪
+  // 靠它列出「已继承的装备」；没有装备声明 `inherited_key` 时这里是 null，装备行看不到任何东西。
+  const itemData = piece && piece.itemData ? piece.itemData : null;
+  blocks.equip = piece?.kind === 'chess' ? html`<${Section} key="equip" title=${t('装备')} micro=${`EQUIP ${equipUsed}/${equipCap}`} class="dsec--equip">
+      ${items.length ? items.map((it) => html`<${ItemRow} key=${it.uid} itemId=${it.id} uid=${it.uid} carried=${items} off=${offBonds} itemData=${itemData} bonds=${bonds} onUnequip=${editable ? onUnequip : null} />`) : html`<p class="t-dim dempty">${t('拖拽装备至该干员以配发（最多 2 件）')}</p>`}
     <//>`
     // no own piece (a teammate's unit, a bond popup's 变形同构体 row): what it carries, read-only
-    : !piece && carried.length ? html`<${Section} key="equip" title=${t('装备')} micro=${`EQUIP ${carried.length}/2`} class="dsec--equip">
-      ${carried.map((id, i) => html`<${ItemRow} key=${`${i}:${id}`} itemId=${id} carried=${carried} off=${offBonds} />`)}
+    : !piece && carried.length ? html`<${Section} key="equip" title=${t('装备')} micro=${`EQUIP ${carriedUsed}/${equipCap}`} class="dsec--equip">
+      ${carried.map((id, i) => html`<${ItemRow} key=${`${i}:${id}`} itemId=${id} carried=${carried} off=${offBonds} itemData=${itemData} bonds=${bonds} />`)}
     <//>` : null;
   const talents = chessTalents(fr);
   blocks.talents = talents.length ? html`<${Section} key="talents" title=${t('天赋')} micro="TALENT" class="dsec--talent">
@@ -535,7 +619,7 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
  * 变形同构体 lists its pairings (its 天赋栏: MorphPairings, `offBonds` marks 本局禁用); a bond item says which bond it gives
  * a 变形同构体 wearer (MorphGrantLine). (An equipped item is shown on its wearer's card: ChessDetail's 装备 rows.)
  */
-export function ItemDetail({ item, piece, editable, onDestroy, offBonds = null }) {
+export function ItemDetail({ item, piece, editable, onDestroy, offBonds = null, itemData = null, bonds = null }) {
   const m = data.get('assets');
   return html`
     <div class="dhead dhead--item">
@@ -547,13 +631,17 @@ export function ItemDetail({ item, piece, editable, onDestroy, offBonds = null }
         ${item.flavor ? html`<span class="dhead__flavor">${item.flavor}</span>` : null}
       </div>
     </div>
-    <${Section} title=${t('效果')} micro="EFFECT"><${RichText} as="p" text=${item.descRaw || item.desc} class="dtext" /><//>
+    <${Section} title=${t('效果')} micro="EFFECT"><${RichText} as="p" text=${itemDescText(item, ratioLayers(item, bonds))} class="dtext" /><${InheritedItems} inherited=${piece ? inheritedItems(item, itemData) : null} /><//>
     ${item.canGiveBond ? html`<${Section} title=${t('天赋')} micro="TALENT" class="dsec--morph"><${MorphPairings} off=${offBonds} /><//>` : null}
     ${!item.canGiveBond && item.giveBondId ? html`<${MorphGrantLine} item=${item} off=${offBonds} />` : null}
     ${item.note ? html`<p class="dhint dhint--rule"><${Icon} name="info" />${item.note}</p>` : null}
     ${item.itemType === 'MAGIC'
       ? html`<p class="dhint"><${Icon} name="info" />${t('将其拖拽至战场上的格子使用')}</p>`
-      : html`<p class="dhint"><${Icon} name="info" />${t('拖拽至干员身上进行配发（每名干员最多 2 件，配发后无法取下）')}${item.mergeable ? t('；2 件相同装备自动合成进阶装备') : ''}</p>`}
+      // 装备拆卸（行为开关 `unequip: "allow"`）：**只有 `allow` 档**才去掉「配发后无法取下」那句 —— 官方档下那句话
+      // 是对的（`g.destroy` / `g.unequip` 都回 `'equipped items are locked'`），所以缺省档逐字不变。
+      : html`<p class="dhint"><${Icon} name="info" />${unequipAllowed()
+      ? t('拖拽至干员身上进行配发（每名干员最多 2 件）')
+      : t('拖拽至干员身上进行配发（每名干员最多 2 件，配发后无法取下）')}${item.mergeable ? t('；2 件相同装备自动合成进阶装备') : ''}</p>`}
     ${item.shopExcluded ? html`<p class="dhint dhint--source"><${Icon} name="info" />${t('调度中心不出售 · 获取途径：{source}', { source: item.shopExcludedBy || t('效果获得') })}</p>` : null}
     ${piece && editable ? html`<div class="dactions"><${Button} variant="danger" onClick=${() => onDestroy(piece, item)}>${t('销毁道具')}<//></div>` : null}`;
 }
@@ -884,7 +972,7 @@ export function selectVoiceKey(detail) {
  *   (the owner's request of 2026-10-08 「添加一下干员点击上去的语气一样的语音」 lifted 2026-10-03's 「整备阶段不需要干员语音」
  *   for this line only; [ASSUMED] the official prep tap says 选中干员 like the battle's FOCUS_CHAR)
  */
-export const DetailPanel = modComponent('loadout.detail', function DetailPanel({ detail, editable, snapHp, onClose, onSell, onDestroy, bonds = [], offBonds = null, loadout = null, ops = null, onBond = null, side = 'left', shopOpen = false, live = null, voice = false }) {
+export const DetailPanel = modComponent('loadout.detail', function DetailPanel({ detail, editable, snapHp, onClose, onSell, onDestroy, onUnequip = null, bonds = [], offBonds = null, removedBonds = null, loadout = null, ops = null, onBond = null, side = 'left', shopOpen = false, live = null, voice = false, owner = undefined }) {
   const getter = typeof live === 'function' ? live : null;
   useTicker(detail && getter ? 250 : 0);
   // 配音语言 (v0.7.1): the panel is the component that subscribes to the settings store, so picking a dub in the card
@@ -921,9 +1009,9 @@ export const DetailPanel = modComponent('loadout.detail', function DetailPanel({
     <button type="button" class="dpanel__close" aria-label=${t('关闭')} onClick=${onClose}><${Icon} name="close" /></button>
     <div class="dpanel__scroll">
       ${detail.type === 'chess' ? html`<${ChessDetail} chess=${detail.chess} piece=${detail.piece} snapHp=${snapHp} editable=${editable} onSell=${sellIt}
-        bonds=${bonds} offBonds=${offBonds} loadout=${loadout} onBond=${onBond} live=${liveNow} hint=${detail.hint || null} unitItems=${detail.unitItems || null}
-        standIn=${detail.standIn || null} diy=${detail.diy || null} voiceSettings=${voiceSettings} cultOpts=${detail.cultOpts || { ops }} />` : null}
-      ${detail.type === 'item' ? html`<${ItemDetail} item=${detail.item} piece=${detail.piece} editable=${editable} onDestroy=${destroyIt} offBonds=${offBonds} />` : null}
+        bonds=${bonds} offBonds=${offBonds} removedBonds=${removedBonds} loadout=${loadout} onBond=${onBond} live=${liveNow} hint=${detail.hint || null} unitItems=${detail.unitItems || null}
+        standIn=${detail.standIn || null} diy=${detail.diy || null} voiceSettings=${voiceSettings} cultOpts=${detail.cultOpts || { ops }} owner=${owner} onUnequip=${onUnequip} />` : null}
+      ${detail.type === 'item' ? html`<${ItemDetail} item=${detail.item} piece=${detail.piece} editable=${editable} onDestroy=${destroyIt} offBonds=${offBonds} itemData=${detail.piece?.itemData ?? null} bonds=${bonds} />` : null}
       ${detail.type === 'enemy' ? html`<${EnemyDetail} enemy=${detail.enemy} snapHp=${snapHp} count=${detail.count} live=${liveNow} />` : null}
       ${detail.type === 'token' ? html`<${TokenDetail} token=${detail.token} piece=${detail.piece} ownerId=${detail.ownerId ?? null} snapHp=${snapHp} live=${liveNow} />` : null}
       ${detail.type === 'terrain' ? html`<${TerrainDetail} terrain=${detail.terrain} />` : null}

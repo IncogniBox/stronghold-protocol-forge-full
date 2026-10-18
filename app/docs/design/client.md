@@ -65,7 +65,7 @@ Audio: autochess BGM per phase, UI SFX (buy/sell/refresh/level/merge/ready/timer
 - `guide/autochess_{home,shop,handbook}_N.png` — the 19 official tutorial pages; stored squashed to 1024² — **display at 16:9** (the mirror copies too, §22.5).
 - `projectiles/*` — battle projectile sprites.
 - `spine/enemy/<id>/` — enemy models no web dump carries (灼热 / 炽焰源石虫, `extract.py ENEMY_SPINES`): manifest `enemies[id].spineLocal` (metadata from the committed `tools/assets/local-enemy-spines.json`); drawn instead of the tinted web alias when every file is listed (§21.14).
-- `spine/token/<id>/` — token (summon) models no web dump carries (39: most 自选 summons, 凯瑟琳's 爬行号·防护单元, 凛御银灰's 风雪之眼; `extract.py TOKEN_SPINES`, the Front renderer's skeleton of each battle token prefab): manifest `tokens[id].spineLocal` (metadata from the committed `tools/assets/local-token-spines.json`); drawn instead of the avatar diamond when every file is listed (docs/ASSETS.md "Token models from the local client").
+- `spine/token/<id>/` — token (summon) models no web dump carries (40: most 自选 summons, 凯瑟琳's 爬行号·防护单元, 凛御银灰's 风雪之眼; `extract.py TOKEN_SPINES`, the Front renderer's skeleton of each battle token prefab): manifest `tokens[id].spineLocal` (metadata from the committed `tools/assets/local-token-spines.json`); drawn instead of the avatar diamond when every file is listed (docs/ASSETS.md "Token models from the local client").
 - `module/<TYPE>` — the official module (uniequip) TYPE icons (white glyphs; keys are the client's mixed-case file names, e.g. `PRI-X`, `mar-x`, `isw-a`), matched **case-insensitively** against a ModuleRecord's `typeName` by `assetUrls.moduleTypeIconUrl(local, typeName)` (Greek type letters map to the file's Latin letter: `ISW-α` → `isw-a`) — shown on the 干员调配 module cards / module info, the detail panel's 模组 row and the shop card's module tag; lettered tiles / type text without them.
 
 ---
@@ -94,12 +94,14 @@ Explicit false and unmarked raw displacements face the travel direction. Normal 
 
 ### Local preferences and recovery (§28.14, §28.18–20)
 
-Settings persist `textSize` (sm/md/lg/xl; default sm) and `voiceOverrides` (charId → cn/jp; default empty) alongside the
-existing global `voiceLang`. CSS text uses `--t`; the layout rem, camera and board geometry stay unchanged. Larger text
-and translated controls wrap within the settings modal. The normal roster detail and chosen DIY cards expose each
-operator's voice preference, shared across that charId's forms. An absent override follows the global preference;
-missing Japanese lines retain the existing Chinese fallback. Overrides are local listening preferences, absent from
-room loadouts and their exports.
+Settings persist `textSize` (sm/md/lg/xl; default sm), `voiceLang` (cn/jp/en/kr; default cn), `voiceNative` (the
+本土语言 switch; default false) and `voiceOverrides` (charId → cn/jp/en/kr/native; default empty). CSS text uses `--t`;
+the layout rem, camera and board geometry stay unchanged. Larger text and translated controls wrap within the settings
+modal. The normal roster detail and chosen DIY cards expose each operator's voice preference, shared across that
+charId's forms, listing only the dubs this server has and offering a preview. An absent override follows the global
+preference, then the own-language dub when the switch is on and the operator has one, then Chinese. A missing line
+falls back to the Chinese file of the same name. Changing the global language does not clear per-operator choices.
+Overrides are local listening preferences, absent from room loadouts and their exports.
 
 The title and lobby offer explicit recovery of a previously saved local match seat. `sp.matches` stores bounded name /
 room-code metadata indexed by token hash; the existing four-entry `sp.tokens` ring remains the authority. Recovery
@@ -128,8 +130,10 @@ The same master supplies 16/32/48 px PNG / ICO favicons and the 180 px Apple tou
 These project-owned assets live in `public/icons/` and ship in full and lite packages; ASSETS.md records their provenance.
 The install button appears only for a live browser install offer and hides
 in standalone/fullscreen windows or after installation. Every offer is consumed before awaiting the prompt, including
-cancellation or failure. No service worker, offline cache or persistent server is introduced; HTTPS or localhost and
-browser support still govern installation.
+cancellation or failure. The install button does not register a service worker and does not make the server available
+offline. A separate asset-only worker (`public/sw.js`) may be registered on HTTPS or localhost to serve imported
+hashed art from Cache Storage; it does not intercept the page, scripts, `/data/`, `/sim/` or `/ws`. HTTPS or
+localhost and browser support still govern installation.
 
 ### Skill-mode sound and delayed models (§28.17, §28.22)
 
@@ -143,5 +147,71 @@ shows the current base pose. A subsequent attack/death supersedes that pending e
 or per-phase animation schedule is added by this change.
 
 The simplified-view notice describes a renderer load failure, rather than declaring the device incapable of 3D.
+On same-battle metadata refresh, remembered once-spawned device records also seed the renderer's new entry (§31.14).
+This preserves device tile picking and live-HP cards; records explicitly supplied by the refresh take precedence,
+and a different field never inherits the previous field's devices.
 The same fallback covers import failure, timeout and WebGL initialization errors; a reload can retry.
 It does not diagnose a particular user's GPU or persist a disabled renderer preference (§28.25).
+
+Community UI and recovery (§31.6): DIY reuses roster stats and skill previews; Swire's coins show current/cap. The lobby player chip opens statistics and the responsive header keeps optional controls from overlapping its title. Settlement's summary scrolls separately from Return. Failed board art can retry, and failed three.js imports use two bounded fresh URLs. Failed engine initialization can remount on online/visibility, at most twice consecutively, cleaning up each previous view; explicit fallback/2D stays selected.
+
+Replacing a field renderer also resets the game screen's entered-view identity. Frames are buffered while the replacement loads; after subscribing, the local runner re-shows full current metadata/snapshot, or the server resends the watched field. Real local and server-streamed battles preserve the same simulation object and clock through recovery, including enemies spawned before the new renderer existed.
+
+### UI-Hub port (ui-hub-package-20261013): shim disposition and what is not enabled (§10)
+
+The lobby's new layer comes from `ui-hub-package-20261013` (a third-party UI replacement package, QQ download, sha256
+`963ff83b…`). It is **not** installed as a package: its five new modules (`ui/transitions.js`, `ui/protocolScene.js`,
+`ui/matchFlow.js`, `ui/hubBackdrop.js`, `screens/sweep.js`), its stylesheets (appended whole to `screens/lobby.css` /
+`screens/loadout.css`) and its i18n keys were brought in one paragraph at a time, and the engine's own exports and
+features were never replaced. The package's own installer is **never** run.
+
+**Its seven compat shims are deliberately not installed.** Each one would be dead code here: this repository imports
+none of the package's `accounts` / `ownerName` / `skins` / `skinPicker` / `federation` / `matchmaking` /
+`randomMode` modules (0 imports each; the package's own `lobby.js` / `room.js` / `loadout.js`, which do import
+them, are not merged body-for-body). Per shim:
+
+| shim | disposition | why |
+|---|---|---|
+| `ui/accounts.js` | not installed; if the room's seat-portrait paragraph is ever merged, install it **with the package's honest semantics** | this engine has no account system (seats carry `name` / `playerId` only): `useAccount()` would return `null` and `AccountTag()` `null` — reporting "unknown", never made-up data |
+| `ui/ownerName.js` | same as `accounts` | there is no "server owner nickname" concept here (the host is `roomFacts(room, myId).isHost`); `isOwnerName()` would return `false` honestly |
+| `federation.js` | **not enabled** | no federation / node data source exists anywhere in this repository — the capability is absent, not merely unwired |
+| `ui/matchmaking.js` | **not enabled** | the package only uses it for a 缺人同盟 online count; this engine has its own quick match (`QuickMatchPanel`) and room list, and that board is not ported |
+| `randomMode` | **not enabled** | the 无限火力 mode does not exist here, so its entry point is not ported |
+| `ui/skins.js`, `ui/skinPicker.js` | pending evidence | to be decided by whether a real skin/appearance data source exists (see the loadout paragraph below) |
+
+**Declared but not enabled.** `matchFlow`'s `SearchPanel` / `FoundPanel` are mounted **in the lobby only**; their
+room-page use (the package's `rs-searchpanel`) is not enabled. `ui/transitions.js`'s `afterLeave` and `useRise` are
+imported nowhere yet (the package uses them for the room's seat rise and a waiting overlay) — only `useLeave` (the
+S.W.E.E.P. report) and `usePresence` (the 大厅背景 dialog's leave) are live. No shim has a single import.
+
+**Sync discipline.** When a later paragraph of the package's `room.js` / `loadout.js` is merged, follow the table
+above: install a shim only when that paragraph actually imports it, keep the honest `null` / `false` semantics rather
+than inventing data, and record any newly enabled or newly excluded capability in this section.
+
+### UI package 20261014: the base/append rule and the one narrowed assertion (§10)
+
+`ui-package-20261014.zip` (`MANIFEST.basedOn = 0.2.6`) replaced the same five files again. Two rules are worth keeping
+in the design record.
+
+**The package's stylesheet is the BASE; this repository's increment is appended at its END** — the rule the package's own
+`AGENTS.md` §4 states (named without a line number: that file ships inside the package, and this repository's root
+`AGENTS.md` is a different, much shorter document). The 0.18.4 symptom (the lobby's columns collapsing, `.section-label` heights 243/115/25, the seat
+slider down to 217.9 px) came from doing it the other way round: the package's whole stylesheet appended *after* the
+engine's rules, so its `.lobby-body{grid-template-columns:minmax(0,1fr)}` outranked the engine's columns. The increment
+this round is 50 lines at the end of `screens/lobby.css`, plus two mechanical passes over the package's OWN
+declarations: `font-size` onto the four text steps (150 declarations, `max(<n>rem, <m>px)` and bare `<n>rem` →
+`calc(<n> * var(--t))`, the shape `test/ui/text-scale.test.js` requires of every stylesheet outside
+`NOT_SCALED_FILES`), and the `color-mix()` / `-webkit-backdrop-filter` fallbacks `test/client-static.test.js` requires.
+
+**One assertion was narrowed, never relaxed.** `test/ui/text-scale.test.js` used to forbid *any* definition of `--t`
+outside `theme.css`. The new package pins `--t: 1rem` **inside one subtree**: `screens/lobby.css`'s `.ach__box`, the
+成就统计 panel, which is laid out to the design's own pixel sizes (its own comment records why: the 文字大小 boost made
+the plate and the mode table overlap). The assertion now forbids a definition only on a whole-document selector
+(`:root` / `html` / `body`). What it guards is unchanged — no second stylesheet may move the text root for the whole page.
+
+**Capability gaps are recorded, not papered over.** `ui/seatArt.js` reads `room.card` / `room.state.seats[].card`, and
+this repository's `shared/protocol.js` has no `room.card`: the module loads and stays inert rather than erroring (the
+local `CARD_PREF` preference is still written; the fallback portrait is picked from the player id). `ui/trophies.js`
+needs the medal art (`data/assets.json` `ui['medalIcon/trophy_level<n>_icon']`) and falls back to its inline SVG rook
+when the pack lacks it. `ui/lobbyMusic.js` (IndexedDB `sp-lobby-music`) and the package's new video backdrop ask the
+server for nothing.

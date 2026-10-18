@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 
 import {
   normalizePackManifest, WORKSHOP_CONTENT_FILES,
-  ASSETS_SERVER_POLICIES, ASSETS_VERIFY_ALGORITHMS, CLIENT_PANEL_SLOTS, CLIENT_REQUIRES, ROUTE_CACHE_POLICIES,
+  ASSETS_SERVER_POLICIES, ASSETS_VERIFY_ALGORITHMS, CLIENT_PANEL_SLOTS, CLIENT_PANEL_REPEATABLE, CLIENT_REQUIRES, ROUTE_CACHE_POLICIES,
 } from '../shared/workshop.js';
 import { loadWorkshop } from '../server/workshop.js';
 import { MOD_API_VERSION } from '../shared/constants.js';
@@ -129,10 +129,19 @@ describe('四组声明: 默认缺省 = 今天逐字节不变（本刀最重要�
   test('仓库里三份真实包的 `identifyPack` 哈希与 manifest 逐字节不变（值取自 450e9ea 的装载器实测）', () => {
     // 这三个数字是**基线快照**：本刀之前（450e9ea）用同一份包字节跑出来的 hash。它们只在包目录的内容真的
     // 变了、或哈希算法真的变了时才应当移动 —— 前者由包自己的作者负责，后者是有意为之的设计变更。
-    const BASELINE = {
-      clementia: '96ebc2d4998c5897b25b6b7dbc0e497f84e7e45c974b68d7eb661f93a28d4e58',
+    // clementia 那一个在 0.2.3 那一轮**移过**：上游把克莱门莎收成了官方干员（官方 id `char_4231_clemnt`），
+// 本仓库的示例夹具再用那个 id 会被加载器按 OFFICIAL_ID_COLLISION 拒掉，于是 id 换成工坊保留前缀的
+// `char_ws_clemnt`（docs/examples/clementia/README.md）—— 包的内容真的变了，基线随之移动。
+//
+// **2026-10-11 再移一次，理由同样是"身份的定义变了"**（业主裁决 B，DESIGN §28.2）：清单从"pack.json + 内容文件 +
+// kits/*.js + assets/** + 声明过的模块"扩成**包目录下的每一个普通文件**（`server/packFiles.js listPackFiles`），
+// 因为一份"被声明模块 import、自己却没被声明"的文件从前既不在摘要里、也不在下载清单里 —— 干净的客户端根本下不到它。
+// 于是 clementia 与 kit-demo 各自多出一条 `README.md`（它们真的在包里），哈希随之移动；demo-workshop 目录里
+// 本来就只有 `pack.json` 与 `chess.json`，两条都在旧清单里，所以它**一个字没变**（下面一并钉住）。
+const BASELINE = {
+      clementia: 'e89533a3624bc5260e15c421768f416c0ccea8b27a428a09ea6af52fb3cfc2cc',
       'demo-workshop': '15092019fd1dbc85589af4b89102746c3a3c0389aef3847d7d9a335bca1a73ef',
-      'kit-demo': '77b80c6e74021508d5857208d669da36cc74f20384798a6d5a269fd37f9e4f35',
+      'kit-demo': '4a75376f6acac54994808f9c0f622c9c0e482c14153eddcf8f883a3f7d6bde2b',
     };
     const loaded = loadWorkshop(EXAMPLES, { log: quiet });
     assert.deepEqual(loaded.errors, [], '三份示例包必须都加载成功');
@@ -193,7 +202,13 @@ describe('四组声明: 形状合法 ⇒ 接受，并如实出现在解析结果
       panels: [{ id: 'sp-resource-import', slot: 'root.overlays', module: 'resources/preloadModal.js', order: 10, gate: 'session.preloadRequired' }],
       requires: ['serviceWorker', 'cacheStorage', 'webCrypto'],   // 闭枚举的次序，不是书写次序
     });
-    assert.deepEqual(CLIENT_PANEL_SLOTS, ['root.overlays', 'root.guide', 'screen.game.aside', 'screen.result.footer']);
+    // 挂载点是**闭枚举**：前四个是 0.11.0 的浮层，后十二个是业主 2026-10-10 裁决里「插进已存在的组件」那一半
+    //（`screen.game.shopCard` 与 `screen.diy.card` 是**可重复宿主**：每张商店卡 / 自选编队每一格已填的卡各一个容器；
+    //  `screen.lobby.aside` / `screen.room.chat` / `screen.title.entry` 是后来加的三格，宿主分别由 `screens/lobby.js` /
+    //  `screens/chat.js` / `screens/title.js` 渲染；`screen.stats.profile` 落在统计页个人信息栏的末尾，由 `screens/stats.js` 渲染）。
+    assert.deepEqual(CLIENT_PANEL_SLOTS, ['root.overlays', 'root.guide', 'screen.game.aside', 'screen.result.footer',
+      'screen.game.shopCard', 'screen.game.bondStrip', 'screen.game.hud', 'screen.game.overlay', 'screen.loadout.detail', 'screen.loadout.card', 'screen.diy.card', 'screen.room.aside', 'screen.lobby.aside', 'screen.room.chat', 'screen.title.entry', 'screen.stats.profile']);
+    assert.deepEqual(CLIENT_PANEL_REPEATABLE, ['screen.game.shopCard', 'screen.diy.card']);
     assert.deepEqual(CLIENT_REQUIRES, ['serviceWorker', 'cacheStorage', 'webCrypto']);
     // 可选字段不写就不出现（不然「没声明」与「声明成 undefined」会是两种字节）
     const minimal = norm({ content: ['chess'], client: { panels: [{ id: 'p1', slot: 'root.guide', module: 'a/b.js' }] } });
@@ -256,7 +271,9 @@ describe('四组声明: 坏形状 ⇒ 点名拒绝（断言拒绝码）', () => 
     ['client', { client: { panels: [{ id: 'p', slot: 'root.overlays', module: 'a.js', gate: 3 }] } }, 'CLIENT_BAD_PANEL_GATE', 'gate 不是字符串'],
     ['client', { client: { panels: VALID.client.panels, requires: 'serviceWorker' } }, 'CLIENT_BAD_REQUIRES', 'requires 不是数组'],
     ['client', { client: { panels: VALID.client.panels, requires: ['serviceworker'] } }, 'CLIENT_UNKNOWN_REQUIRE', '能力名不在闭枚举里'],
-    ['client', { client: { ...VALID.client, theme: true } }, 'CLIENT_UNKNOWN_FIELD', '未知顶层键'],
+    // `theme` 曾经落在这里（0.11.0 时它还不是 `client` 的字段），2026-10-10 的业主裁决把它收进了已知字段，
+    // 所以「未知键点名」这一条换一个真的未知键来钉 —— 判据本身没变，变的是哪个键属于已知集合。
+    ['client', { client: { ...VALID.client, colour: true } }, 'CLIENT_UNKNOWN_FIELD', '未知顶层键'],
     // server.preDispatch —— 未知键 / 路径 / 扩展名 / 拦截类型
     ['server', { server: [] }, 'SERVER_DECL_BAD_SHAPE', '不是对象'],
     ['server', { server: { hooks: {} } }, 'SERVER_UNKNOWN_FIELD', '未知顶层键'],

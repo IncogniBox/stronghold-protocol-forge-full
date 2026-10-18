@@ -9,10 +9,21 @@
 // Backdrop art: if data/assets.json lists a UI backdrop (`ui.titleBackdrop`, or one of the
 // entry/loading illustration names) it is layered under the CSS art; otherwise the screen is
 // pure CSS/SVG (radar, ridgelines, glow), so it never issues a request that can 404.
+//
+// The full art, under the login box: 下载完整素材 (ui/assetDownload.js — its dialog downloads from this server) and
+// 导入素材包 (ui/assetImport.js — the player's own folder or zip, no server download) side by side, so an import never
+// opens the download (docs/history/0.3.0.md §34.14.39).
+//
+// Plugins (DESIGN §34 P1a, the design study's §7.4): when the server has unofficial plugins (content.plugins of /healthz or
+// welcome — content.js installedCount), the footer says 「本服务器安装了 N 个插件」 — a button that loads the list
+// (ui/pluginPanel.js InstalledPlugins, which fetches the catalogue when it opens); nothing on a server without any, which
+// the page never asks for its catalogue — and the title page loads none of the panel's code.
 
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
-import { useMemo, useState } from '../../vendor/hooks.module.js';
-import { NAME_MAX_LEN, APP_VERSION, DEV_BUILD } from '../../../shared/constants.js';
+import { AssetDownloadButton } from '../ui/assetDownload.js';
+import { AssetImportButton } from '../ui/assetImport.js';
+import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
+import { NAME_MAX_LEN, UPSTREAM_VERSION, DEV_BUILD } from '../../../shared/constants.js';
 import { html, Button, Icon, MicroLabel, TextField, PingPill } from '../ui/components.js';
 import { GuideButton } from '../ui/guide.js';
 import { openStats } from './stats.js';
@@ -22,54 +33,16 @@ import { store, useStore, shallowEqual } from '../store.js';
 import { data, useData } from '../data.js';
 import { FullscreenButton, PwaInstallButton, detectFeatures } from '../ui/device.js';
 import { NoticesButton, NoticesModal } from '../ui/notices.js';
+import { LargeAssetsBar, ResourceButton, ResourceModal } from '../ui/largeAssets.js';
 import { LangToggle, useLang } from '../ui/lang.js';
 import { t, N_ } from '../../../shared/i18n.js';
 import { scriptOf } from '../../../shared/i18nPacks.js';
 import { GIcon } from '../ui/gameComponents.js';
 import { SettingsModal } from '../ui/settings.js';
+import { installedCount } from '../content.js';
+import { sanitizeName, isValidName } from '../ui/playerName.js';
 
-// Same character classes as server/net.js sanitizeName (control, zero-width, bidi, BOM), so a name
-// the client accepts is never rejected by the server's hello validation.
-const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g;
-// Lone surrogates are removed by a scan, not a regex: the lookbehind such a regex needs is a *syntax error* in Safari
-// < 16.4, which would stop the whole client from loading there.
-export function stripLoneSurrogates(str) {
-  let out = '';
-  for (let i = 0; i < str.length; i++) {
-    const c = str.charCodeAt(i);
-    if (c >= 0xd800 && c <= 0xdbff) {
-      const n = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
-      if (n >= 0xdc00 && n <= 0xdfff) { out += str[i] + str[i + 1]; i++; }
-      continue;
-    }
-    if (c >= 0xdc00 && c <= 0xdfff) continue;
-    out += str[i];
-  }
-  return out;
-}
-
-/**
- * Normalise a nickname like the server does (NFC, strip lone surrogates / control / invisible /
- * bidi characters, collapse whitespace, trim), then clamp to NAME_MAX_LEN UTF-16 code units — the
- * protocol's `hello.name` limit — without splitting a surrogate pair.
- * @param {any} raw
- * @returns {string}
- */
-export function sanitizeName(raw) {
-  let s = String(raw ?? '');
-  try { s = s.normalize('NFC'); } catch { /* keep as is */ }
-  s = stripLoneSurrogates(s).replace(/\s+/g, ' ').replace(CONTROL_CHARS, '').replace(/ {2,}/g, ' ').trim();
-  if (s.length > NAME_MAX_LEN) {
-    s = s.slice(0, NAME_MAX_LEN);
-    // Don't leave half a surrogate pair at the end.
-    if (/[\ud800-\udbff]$/.test(s)) s = s.slice(0, -1);
-    s = s.trim();
-  }
-  return s;
-}
-
-/** @param {any} raw @returns {boolean} */
-export const isValidName = (raw) => sanitizeName(raw).length > 0;
+export { stripLoneSurrogates, sanitizeName, isValidName } from '../ui/playerName.js';
 
 /**
  * Enter the game shell with a nickname (title → lobby).
@@ -138,7 +111,8 @@ const EMBLEM = [
   'XXXXXXXXXXXXX',
 ];
 
-function Emblem() {
+// ui-hub-package-20261013 §4.2：包版大厅中央徽标复用它 ⇒ 补导出（只加 export，函数体与调用点未动）。
+export function Emblem() {
   const dots = useMemo(() => {
     const out = [];
     EMBLEM.forEach((row, r) => {
@@ -196,6 +170,10 @@ export function TitleScreen() {
   const [name, setName] = useState(() => store.get().me.name || identity.loadName() || '');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [noticesOpen, setNoticesOpen] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
+  // 资源面板与标题屏那一行**共用一个计数器**：面板点下重新下载时 +1，那一行于是重新去看服务器一眼
+  // （它早在「不在跑」那一次就停止轮询了 —— 空闲时零请求是刻意的）。
+  const [assetsNonce, setAssetsNonce] = useState(0);
   const assetsSettled = useData('assets');
   const assets = data.get('assets');
   const backdrop = findUiAsset(assets, BACKDROP_KEYS);
@@ -225,6 +203,7 @@ export function TitleScreen() {
   // hides; a CJK / kana / Hangul title keeps the Chinese layout (shared/i18nPacks.js scriptOf — a pack needs no flag)
   const alphabetic = scriptOf(t('卫戍协议')) === 'alphabetic';
   return html`<div class="screen title-screen">
+    <${LargeAssetsBar} nonce=${assetsNonce} />
     <div class=${`title-bg${bgLoaded ? ' has-art' : ''}${ridgesLoaded ? ' has-ridges' : ''}`} aria-hidden="true">
       ${backdrop ? html`<img class="title-bg__art" src=${backdrop} alt="" draggable=${false}
         onLoad=${() => setBgLoadedUrl(backdrop)} />` : null}
@@ -252,6 +231,7 @@ export function TitleScreen() {
         <div class="title-corner__tools">
           <${Button} variant="ghost" size="sm" icon="chart" class="title-stats" onClick=${openStats} title=${t('统计数据')}>${t('统计')}<//>
           <${NoticesButton} onOpen=${() => setNoticesOpen(true)} />
+          <${ResourceButton} onOpen=${() => setResourcesOpen(true)} />
           <${LangToggle} class="title-lang" />
         </div>
         <${MicroLabel} tone="hi">TARGET POINT<//><br /><${MicroLabel}>STRONGHOLD PROTOCOL<//>
@@ -276,6 +256,15 @@ export function TitleScreen() {
           placeholder=${t('输入你的代号（最多 {NAME_MAX_LEN} 字）', { NAME_MAX_LEN })} autoFocus=${!touchUi}
           onInput=${setName} onEnter=${start} />
         <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" disabled=${!valid} onClick=${start}>${t('开始')}<//>
+        ${/*
+          起名页的**入场位**宿主（`screen.title.entry`，docs/WORKSHOP.md §1.9.3 的第 15 槽）：容器由**组件自己**渲染
+          （`[data-mod-slot]`），**不在** `extensions.js MOD_PANEL_CREATED` 的四个浮层里 —— 它不是浮层，是这张起名卡片
+          里的一块地方；注册点对这一格只查不造（`test/modClientHosts.test.js` 逐槽位钉住「枚举里每一个组件渲染的宿主
+          都必须真的有人渲染它」）。`.mod-host` 是 `display: contents`：引擎只给地址、不给样子，定位与观感是包自己
+          `styles` 的事（与 `room.js` 的 `screen.room.aside` 同一条先例）。它只是**界面** —— 入场判据（`valid` /
+          `start` / `enterSession`，以及 store 的 `entryGateBlocked`）一个字不动，没包声明这一格时 DOM 逐字节相同。
+        */ null}
+        <div class="mod-host" data-mod-slot="screen.title.entry"></div>
         <div class="title-conn">
           <span class=${`status-dot ${dotClass}`}></span>
           <span>${STATUS_TEXT[conn.status] ? t(STATUS_TEXT[conn.status]) : conn.status}</span>
@@ -290,13 +279,20 @@ export function TitleScreen() {
 
     <${SettingsModal} open=${settingsOpen} onClose=${() => setSettingsOpen(false)} />
     <${NoticesModal} open=${noticesOpen} onClose=${() => setNoticesOpen(false)} />
+    <${ResourceModal} open=${resourcesOpen} onClose=${() => setResourcesOpen(false)} onStarted=${() => setAssetsNonce((n) => n + 1)} />
 
     <footer class="title-foot">
       <${ResumeMatchButton} />
       <${PwaInstallButton} />
       <span>${t('非官方同人复刻 · 游戏素材版权归 上海鹰角网络 / Yostar 所有')}</span>
-      <${MicroLabel}>v${APP_VERSION} · WEB SIMULATION<//>
-      ${DEV_BUILD ? html`<span class="title-dev" role="note">${t('开发版 · 不稳定，请勿用于公开服务器')}</span>` : null}
+      <span class="title-foot__meta">
+        <a class="title-repo" href="https://github.com/sganggs/Stronghold-Protocol" target="_blank" rel="noopener noreferrer">${t('项目仓库')}</a>
+        ${/* 业主 2026-10-18：这一格说的是「**这是哪一版游戏**」，所以显示**上游游戏本体**的版本
+              （`UPSTREAM_VERSION`，本检出打包的那一版），而不是本 fork 的发行号 `APP_VERSION` ——
+              发行号会为「包兼容」之外的理由变动，右下角这行不该跟着它漂。 */ null}
+        <${MicroLabel}>v${UPSTREAM_VERSION} · WEB SIMULATION<//>
+        ${DEV_BUILD ? html`<span class="title-dev" role="note">${t('开发版 · 不稳定，请勿用于公开服务器')}</span>` : null}
+      </span>
     </footer>
   </div>`;
 }

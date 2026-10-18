@@ -1,0 +1,154 @@
+/* server-ext —— 账号面板（`ui/panel.js`）的样式。
+ *
+ * 两条与引擎同源的纪律（与 `ui/chat.css` 逐条相同）：
+ *   * 宿主 `.mod-panel`（= `ctx.host`）被引擎置 `pointer-events: none`，所以三个根类显式打开 `auto`，
+ *     否则输入框与按钮一个都点不动；
+ *   * **位置由宿主决定**：本包的两个账号挂点都是引擎渲染的宿主（起名页卡片里的 `screen.title.entry`、统计页个人
+ *     那一栏的 `screen.stats.profile`），这里**不**用 `position: fixed` —— 底下三个都是「跟着宿主长」的普通段落。
+ *
+ * 颜色只取引擎已有的变量（`--mint-400` / `--text-hi` / `--text-md` / `--text-dim` / `--panel-*`），不发明新色。 */
+
+.acct-root { pointer-events: none; }
+
+/* ---------- 统计页个人那一栏里的账号区块（`screen.stats.profile`） ----------
+ * 它**不是浮层**：位置由宿主决定（`screens/stats.js` 把它渲染在 `.st-mode-summary` 那一栏里、`.st-modegrid` 之下），
+ * 所以这里只做「长得像那一栏的一部分」：跟着栏宽、上面一条细线、全部竖排。宿主 `.mod-panel` 仍是
+ * `pointer-events: none`，根上打开 `auto`（输入框与按钮才点得动）。 */
+
+.acct-block {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .06rem;
+  margin-top: .08rem;
+  padding-top: .08rem;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  color: var(--text-md, #b9cdc9);
+  font-size: .13rem;
+  line-height: 1.35;
+}
+.acct-block__head { display: flex; align-items: baseline; gap: .06rem; }
+.acct-block__title { color: var(--text-hi, #e8f4f2); font-weight: 800; letter-spacing: .06em; }
+.acct-block__hint { color: var(--text-dim, #7d918e); font-size: .11rem; }
+
+/* ---------- 起名页那张卡片里的内联注册 / 登录（`screen.title.entry`） ----------
+ * 位置是**引擎给的**（`screens/title.js` 在「开始」按钮下面渲染的那个 `[data-mod-slot]`），所以这里只做一件事：
+ * 让它长得像那张卡片的一部分，而不是一块浮在旁边的面板 —— 宽度跟着卡片走、上下用一条细线分隔、全部竖排。
+ * 宿主 `.mod-panel` 仍是 `pointer-events: none`，根上打开 `auto`（输入框与按钮才点得动）。 */
+
+.acct-entry-root { pointer-events: none; }
+
+.acct-entry {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .06rem;
+  margin-top: .08rem;
+  padding-top: .08rem;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  color: var(--text-md, #b9cdc9);
+  font-size: .13rem;
+  line-height: 1.35;
+}
+
+.acct-entry__form { display: flex; flex-direction: column; gap: .05rem; }
+/* 竖排：起名卡片本身很窄，三个字段并排会把卡片撑变形（这里**不**假设桌面视口）。 */
+.acct-entry__row { display: flex; flex-direction: column; gap: .05rem; }
+.acct-entry__row .acct-btn--go { width: 100%; }
+.acct-entry .acct-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: .04rem; }
+.acct-entry .acct-tabs .acct-entry__hint { flex-basis: 100%; }
+.acct-entry__hint { color: var(--text-dim, #7d918e); font-size: .12rem; }
+.acct-entry__who { display: flex; align-items: center; gap: .06rem; flex-wrap: wrap; }
+.acct-entry__name { color: var(--text-hi, #e8f4f2); font-weight: 800; }
+.acct-entry__tag { color: var(--mint-400, #6fe0c8); }
+
+
+/* ---------- 提示 ---------- */
+.acct-notice { margin-bottom: .08rem; padding: .05rem .07rem; border-radius: .05rem; }
+.acct-notice--ok { background: rgba(90, 200, 160, .16); color: var(--mint-400, #6fe0c8); }
+.acct-notice--err { background: rgba(220, 110, 110, .16); color: #f0a0a0; }
+
+/* ---------- 正文 ---------- */
+.acct-body { display: flex; flex-direction: column; gap: .08rem; }
+.acct-tabs { display: flex; gap: .04rem; }
+.acct-tab {
+  pointer-events: auto; cursor: pointer;
+  padding: .03rem .09rem; border: 1px solid transparent; border-radius: .05rem;
+  background: none; color: var(--text-dim, #7d918e); font-weight: 700;
+}
+.acct-tab.is-on { color: var(--mint-400, #6fe0c8); border-color: var(--mint-a35, rgba(120, 220, 200, .35)); background: rgba(90, 200, 160, .1); }
+
+.acct-id { display: flex; gap: .08rem; align-items: center; }
+.acct-id__text { min-width: 0; }
+.acct-id__name { color: var(--text-hi, #e8f4f2); font-weight: 800; }
+.acct-id__tag { color: var(--mint-400, #6fe0c8); }
+.acct-id__sub { color: var(--text-dim, #7d918e); font-size: .12rem; }
+.acct-id__flag { color: #e8c47a; font-size: .12rem; }
+.acct-id__flag--bad { color: #f0a0a0; }
+
+.acct-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; overflow: hidden; flex: none;
+  border: 1px solid var(--mint-a35, rgba(120, 220, 200, .35));
+  background: rgba(255, 255, 255, .06);
+}
+.acct-avatar__img { width: 100%; height: 100%; object-fit: cover; }
+.acct-avatar--text { color: var(--text-hi, #e8f4f2); font-weight: 800; }
+
+.acct-sec { display: flex; flex-direction: column; gap: .05rem; padding-top: .06rem; border-top: 1px solid rgba(255, 255, 255, .08); }
+.acct-sec__title { color: var(--text-hi, #e8f4f2); font-weight: 800; letter-spacing: .05em; }
+.acct-hint { color: var(--text-dim, #7d918e); font-size: .12rem; }
+.acct-hint--bad { color: #f0a0a0; }
+.acct-empty { color: var(--text-dim, #7d918e); font-size: .12rem; }
+
+.acct-row { display: flex; gap: .06rem; }
+.acct-row__k { flex: none; width: 1.2rem; color: var(--text-dim, #7d918e); }
+.acct-row__v { color: var(--text-md, #b9cdc9); word-break: break-word; }
+
+/* ---------- 表单 ---------- */
+.acct-field { display: flex; flex-direction: column; gap: .02rem; }
+.acct-field__label { color: var(--text-dim, #7d918e); font-size: .12rem; }
+.acct-field__input {
+  pointer-events: auto;
+  padding: .04rem .06rem; border: 1px solid rgba(255, 255, 255, .14); border-radius: .04rem;
+  background: rgba(0, 0, 0, .35); color: var(--text-hi, #e8f4f2); font: inherit;
+}
+.acct-field__input:focus { outline: none; border-color: var(--mint-400, #6fe0c8); }
+
+.acct-textarea {
+  pointer-events: auto; width: 100%; box-sizing: border-box;
+  padding: .04rem .06rem; border: 1px solid rgba(255, 255, 255, .14); border-radius: .04rem;
+  background: rgba(0, 0, 0, .35); color: var(--text-hi, #e8f4f2); font: inherit;
+}
+
+.acct-actions { display: flex; gap: .05rem; flex-wrap: wrap; }
+.acct-actions--end { justify-content: flex-end; }
+.acct-file { display: none; }
+
+.acct-btn {
+  pointer-events: auto; cursor: pointer;
+  padding: .04rem .1rem; border: 1px solid rgba(255, 255, 255, .18); border-radius: .05rem;
+  background: rgba(255, 255, 255, .06); color: var(--text-hi, #e8f4f2); font: inherit;
+}
+.acct-btn:hover:not(:disabled) { border-color: var(--mint-400, #6fe0c8); }
+.acct-btn:disabled { opacity: .5; cursor: default; }
+.acct-btn--go { background: rgba(90, 200, 160, .18); border-color: var(--mint-a35, rgba(120, 220, 200, .35)); }
+
+/* ---------- 管理列表 ---------- */
+.acct-list { display: flex; flex-direction: column; gap: .03rem; max-height: 2.4rem; overflow: auto; }
+.acct-list__row { display: flex; align-items: center; gap: .05rem; }
+.acct-list__name { color: var(--text-hi, #e8f4f2); }
+.acct-list__why { margin-left: auto; color: var(--text-dim, #7d918e); font-size: .12rem; }
+.acct-mini {
+  pointer-events: auto; cursor: pointer; font: inherit;
+  padding: .01rem .05rem; border: 1px solid rgba(255, 255, 255, .18); border-radius: .04rem;
+  background: rgba(255, 255, 255, .05); color: var(--text-md, #b9cdc9);
+}
+.acct-mini:hover { border-color: var(--mint-400, #6fe0c8); }
+/* 管理台里那张待审头像的缩略图（服务端只在管理口令之后才给图）。 */
+.acct-thumb {
+  flex: none; width: 30px; height: 30px; border-radius: .04rem;
+  object-fit: cover; border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .06);
+}
+.acct-thumb--none { display: inline-flex; align-items: center; justify-content: center; color: var(--text-dim, #7d918e); }

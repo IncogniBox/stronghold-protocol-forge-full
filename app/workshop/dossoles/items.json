@@ -1,0 +1,736 @@
+{
+ "chess_item_ws_dos_tourbadge_a": {
+  "id": "chess_item_ws_dos_tourbadge_a",
+  "baseId": "chess_item_ws_dos_tourbadge_a",
+  "goldenId": "chess_item_ws_dos_tourbadge_b",
+  "isGolden": false,
+  "trapId": "trap_ws_dos_tourbadge",
+  "iconId": "trap_ws_dos_tourbadge",
+  "identifier": 393,
+  "name": "多索雷斯游客章",
+  "itemType": "EQUIP",
+  "tier": 1,
+  "shopSortId": 0,
+  "price": 3,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": true,
+  "upgradeNum": 2,
+  "upgradeChessId": "chess_item_ws_dos_tourbadge_b",
+  "duration": -1,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "eff_ws_dos_tourbadge",
+  "effectName": "多索雷斯游客章",
+  "desc": "装备时销毁，获得1资金并使携带者所属盟约层数+2（无需激活盟约）。\n“多索雷斯给入城的外国游客发放的纽扣徽章，细心的人会发现只要带着这个徽章去购物，商品价格都会更贵一点。”",
+  "descRaw": "装备时<@ba.vup>销毁</>，获得<@ba.vup>1</>资金并使携带者所属盟约层数<@ba.vup>+2</><@autochess.gray>（无需激活盟约）</>。\n<@ba.acrem>“多索雷斯给入城的外国游客发放的纽扣徽章，细心的人会发现只要带着这个徽章去购物，商品价格都会更贵一点。”</>",
+  "buffs": [
+   {
+    "key": "equip_destory_gain_random_coin",
+    "countType": "NONE",
+    "bb": {
+     "min": 1,
+     "max": 1
+    },
+    "bbStr": {}
+   },
+   {
+    "key": "use_equip_reward_char_chess_bond_layer",
+    "countType": "NONE",
+    "bb": {
+     "layer": 2
+    },
+    "bbStr": {}
+   }
+  ],
+  "params": {
+   "min": 1,
+   "max": 1,
+   "layer": 2
+  },
+  "category": "ECONOMY",
+  "kind": "consume_on_equip",
+  "family": null,
+  "implFormula": "纯数据实现（不需要任何包内代码）：两个官方 buff 键各自命中引擎内置处理器 —— `equip_destory_gain_random_coin{min,max}` 发 min..max 资金（盟约之币同款），`use_equip_reward_char_chess_bond_layer{layer}` 给携带者的**每一条**盟约 +layer 层、`requireActive: false`（随身身份牌同款，即「无需激活盟约」）。装备后由引擎自动销毁（`kind: consume_on_equip`）。",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“多索雷斯给入城的外国游客发放的纽扣徽章，细心的人会发现只要带着这个徽章去购物，商品价格都会更贵一点。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_tourbadge"
+  }
+ },
+ "chess_item_ws_dos_tourbadge_b": {
+  "id": "chess_item_ws_dos_tourbadge_b",
+  "baseId": "chess_item_ws_dos_tourbadge_a",
+  "goldenId": "chess_item_ws_dos_tourbadge_b",
+  "isGolden": true,
+  "trapId": "trap_ws_dos_tourbadge",
+  "iconId": "trap_ws_dos_tourbadge",
+  "identifier": 394,
+  "name": "多索雷斯游客章",
+  "itemType": "EQUIP",
+  "tier": 1,
+  "shopSortId": 0,
+  "price": 5,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": false,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "duration": 0,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "effg_ws_dos_tourbadge",
+  "effectName": "多索雷斯游客章",
+  "desc": "装备时销毁，获得2资金并使携带者所属盟约层数+4（无需激活盟约）。\n“多索雷斯给入城的外国游客发放的纽扣徽章，细心的人会发现只要带着这个徽章去购物，商品价格都会更贵一点。”",
+  "descRaw": "装备时<@ba.vup>销毁</>，获得<@ba.vup>2</>资金并使携带者所属盟约层数<@ba.vup>+4</><@autochess.gray>（无需激活盟约）</>。\n<@ba.acrem>“多索雷斯给入城的外国游客发放的纽扣徽章，细心的人会发现只要带着这个徽章去购物，商品价格都会更贵一点。”</>",
+  "buffs": [
+   {
+    "key": "equip_destory_gain_random_coin",
+    "countType": "NONE",
+    "bb": {
+     "min": 2,
+     "max": 2
+    },
+    "bbStr": {}
+   },
+   {
+    "key": "use_equip_reward_char_chess_bond_layer",
+    "countType": "NONE",
+    "bb": {
+     "layer": 4
+    },
+    "bbStr": {}
+   }
+  ],
+  "params": {
+   "min": 2,
+   "max": 2,
+   "layer": 4
+  },
+  "category": "ECONOMY",
+  "kind": "consume_on_equip",
+  "family": null,
+  "implFormula": "As the normal copy with 2 funds and +4 layers.",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“多索雷斯给入城的外国游客发放的纽扣徽章，细心的人会发现只要带着这个徽章去购物，商品价格都会更贵一点。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_tourbadge"
+  }
+ },
+ "chess_item_ws_dos_chico_a": {
+  "id": "chess_item_ws_dos_chico_a",
+  "baseId": "chess_item_ws_dos_chico_a",
+  "goldenId": "chess_item_ws_dos_chico_b",
+  "isGolden": false,
+  "trapId": "trap_ws_dos_chico",
+  "iconId": "trap_ws_dos_chico",
+  "identifier": 395,
+  "name": "奇科龙舌兰",
+  "itemType": "EQUIP",
+  "tier": 2,
+  "shopSortId": 0,
+  "price": 2,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": true,
+  "upgradeNum": 2,
+  "upgradeChessId": "chess_item_ws_dos_chico_b",
+  "duration": -1,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "eff_ws_dos_chico",
+  "effectName": "奇科龙舌兰",
+  "desc": "装备时销毁，获得1名随机2阶干员。\n“如今的玻利瓦尔随处可见的廉价蒸馏酒品牌，味道很冲，广受玻利瓦尔穷人的喜爱。”",
+  "descRaw": "装备时<@ba.vup>销毁</>，获得<@ba.vup>1</>名随机<@ba.vup>2阶</>干员。\n<@ba.acrem>“如今的玻利瓦尔随处可见的廉价蒸馏酒品牌，味道很冲，广受玻利瓦尔穷人的喜爱。”</>",
+  "buffs": [
+   {
+    "key": "use_equip_reward_random_chess_of_tier",
+    "countType": "NONE",
+    "bb": {
+     "tier": 2,
+     "count": 1
+    },
+    "bbStr": {}
+   }
+  ],
+  "params": {
+   "tier": 2,
+   "count": 1
+  },
+  "category": "RECRUIT",
+  "kind": "consume_on_equip",
+  "family": null,
+  "implFormula": "包内 `meta/main.mjs` 的 `registry.item('chess_item_ws_dos_chico')`：按 `bb.tier` 用 `ctx.rollChess({ tier })` 抽 count 名干员，抽到该阶没人时回退 `ctx.rollChess({ maxTier })`（与「开拓大地」/ 娜斯提同一条兜底写法），`ctx.grantChess` 收进整备区。装备后由引擎自动销毁。",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“如今的玻利瓦尔随处可见的廉价蒸馏酒品牌，味道很冲，广受玻利瓦尔穷人的喜爱。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_chico"
+  }
+ },
+ "chess_item_ws_dos_chico_b": {
+  "id": "chess_item_ws_dos_chico_b",
+  "baseId": "chess_item_ws_dos_chico_a",
+  "goldenId": "chess_item_ws_dos_chico_b",
+  "isGolden": true,
+  "trapId": "trap_ws_dos_chico",
+  "iconId": "trap_ws_dos_chico",
+  "identifier": 396,
+  "name": "奇科龙舌兰",
+  "itemType": "EQUIP",
+  "tier": 2,
+  "shopSortId": 0,
+  "price": 4,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": false,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "duration": 0,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "effg_ws_dos_chico",
+  "effectName": "奇科龙舌兰",
+  "desc": "装备时销毁，获得2名随机2阶干员。\n“如今的玻利瓦尔随处可见的廉价蒸馏酒品牌，味道很冲，广受玻利瓦尔穷人的喜爱。”",
+  "descRaw": "装备时<@ba.vup>销毁</>，获得<@ba.vup>2</>名随机<@ba.vup>2阶</>干员。\n<@ba.acrem>“如今的玻利瓦尔随处可见的廉价蒸馏酒品牌，味道很冲，广受玻利瓦尔穷人的喜爱。”</>",
+  "buffs": [
+   {
+    "key": "use_equip_reward_random_chess_of_tier",
+    "countType": "NONE",
+    "bb": {
+     "tier": 2,
+     "count": 2
+    },
+    "bbStr": {}
+   }
+  ],
+  "params": {
+   "tier": 2,
+   "count": 2
+  },
+  "category": "RECRUIT",
+  "kind": "consume_on_equip",
+  "family": null,
+  "implFormula": "As the normal copy with count 2.",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“如今的玻利瓦尔随处可见的廉价蒸馏酒品牌，味道很冲，广受玻利瓦尔穷人的喜爱。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_chico"
+  }
+ },
+ "chess_item_ws_dos_chico_premium_a": {
+  "id": "chess_item_ws_dos_chico_premium_a",
+  "baseId": "chess_item_ws_dos_chico_premium_a",
+  "goldenId": "chess_item_ws_dos_chico_premium_b",
+  "isGolden": false,
+  "trapId": "trap_ws_dos_chico_premium",
+  "iconId": "trap_ws_dos_chico_premium",
+  "identifier": 397,
+  "name": "奇科精品龙舌兰",
+  "itemType": "EQUIP",
+  "tier": 3,
+  "shopSortId": 0,
+  "price": 3,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": true,
+  "upgradeNum": 2,
+  "upgradeChessId": "chess_item_ws_dos_chico_premium_b",
+  "duration": -1,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "eff_ws_dos_chico_premium",
+  "effectName": "奇科精品龙舌兰",
+  "desc": "装备时销毁，之后每回合开始时使已激活的核心盟约层数+2。\n“奇科酒业为了高端市场打造的新产品，但是玻利瓦尔的有钱人并不想和穷人喝一个牌子的酒，所以销量不佳。”",
+  "descRaw": "装备时<@ba.vup>销毁</>，之后每回合开始时使已激活的<@ba.vup>核心盟约</>层数<@ba.vup>+2</>。\n<@ba.acrem>“奇科酒业为了高端市场打造的新产品，但是玻利瓦尔的有钱人并不想和穷人喝一个牌子的酒，所以销量不佳。”</>",
+  "buffs": [
+   {
+    "key": "equip_destory_round_start_core_bond_layer",
+    "countType": "NONE",
+    "bb": {
+     "count": 2
+    },
+    "bbStr": {}
+  }
+  ],
+  "params": {
+   "count": 2
+  },
+  "category": "BOND",
+  "kind": "consume_on_equip",
+  "family": null,
+  "implFormula": "装备时由 `meta/main.mjs` 的 `registry.item('chess_item_ws_dos_chico_premium')` 挂一个持久 EffectRef（`key: 'effect:mod_dos_premium'`、`battle: false`、`params.count` = 2/4，`id` 里带装备 uid 所以两件互不覆盖），EventHandler `onRoundStart` 对**每一条已激活的核心盟约**（`bondRecord(id).isCore === true` 且 `ctx.bondActive(id)`）`ctx.addLayers(id, count, { requireActive: true })`。装备后由引擎自动销毁，但 EffectRef 留在玩家身上，之后每回合开始时都会再叠。与「精打细算玩偶」同一条持久效果通道（`effect:builtin_round_coin`）。",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“奇科酒业为了高端市场打造的新产品，但是玻利瓦尔的有钱人并不想和穷人喝一个牌子的酒，所以销量不佳。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_chico_premium"
+  }
+ },
+ "chess_item_ws_dos_chico_premium_b": {
+  "id": "chess_item_ws_dos_chico_premium_b",
+  "baseId": "chess_item_ws_dos_chico_premium_a",
+  "goldenId": "chess_item_ws_dos_chico_premium_b",
+  "isGolden": true,
+  "trapId": "trap_ws_dos_chico_premium",
+  "iconId": "trap_ws_dos_chico_premium",
+  "identifier": 398,
+  "name": "奇科精品龙舌兰",
+  "itemType": "EQUIP",
+  "tier": 3,
+  "shopSortId": 0,
+  "price": 5,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": false,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "duration": 0,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "effg_ws_dos_chico_premium",
+  "effectName": "奇科精品龙舌兰",
+  "desc": "装备时销毁，之后每回合开始时使已激活的核心盟约层数+4。\n“奇科酒业为了高端市场打造的新产品，但是玻利瓦尔的有钱人并不想和穷人喝一个牌子的酒，所以销量不佳。”",
+  "descRaw": "装备时<@ba.vup>销毁</>，之后每回合开始时使已激活的<@ba.vup>核心盟约</>层数<@ba.vup>+4</>。\n<@ba.acrem>“奇科酒业为了高端市场打造的新产品，但是玻利瓦尔的有钱人并不想和穷人喝一个牌子的酒，所以销量不佳。”</>",
+  "buffs": [
+   {
+    "key": "equip_destory_round_start_core_bond_layer",
+    "countType": "NONE",
+    "bb": {
+     "count": 4
+    },
+    "bbStr": {}
+   }
+  ],
+  "params": {
+   "count": 4
+  },
+  "category": "BOND",
+  "kind": "consume_on_equip",
+  "family": null,
+  "implFormula": "As the normal copy with count 4.",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“奇科酒业为了高端市场打造的新产品，但是玻利瓦尔的有钱人并不想和穷人喝一个牌子的酒，所以销量不佳。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_chico_premium"
+  }
+ },
+ "chess_item_ws_dos_anton_a": {
+  "id": "chess_item_ws_dos_anton_a",
+  "baseId": "chess_item_ws_dos_anton_a",
+  "goldenId": "chess_item_ws_dos_anton_b",
+  "isGolden": false,
+  "trapId": "trap_ws_dos_anton",
+  "iconId": "trap_ws_dos_anton",
+  "identifier": 399,
+  "name": "安东龙舌兰",
+  "itemType": "EQUIP",
+  "tier": 4,
+  "shopSortId": 0,
+  "price": 3,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": true,
+  "upgradeNum": 2,
+  "upgradeChessId": "chess_item_ws_dos_anton_b",
+  "duration": -1,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "eff_ws_dos_anton",
+  "effectName": "安东龙舌兰",
+  "desc": "装备时销毁，获得1名阶级不超过调度中心的随机【多索雷斯】盟约干员。\n“安东是大部分玻利瓦尔人熟悉的高档酒品牌，这家公司以其仗着辛嘉斯政府的背景横行霸道而闻名。”",
+  "descRaw": "装备时<@ba.vup>销毁</>，获得<@ba.vup>1</>名阶级不超过调度中心的随机<@ba.vup>【多索雷斯】</>盟约干员。\n<@ba.acrem>“安东是大部分玻利瓦尔人熟悉的高档酒品牌，这家公司以其仗着辛嘉斯政府的背景横行霸道而闻名。”</>",
+  "buffs": [
+   {
+    "key": "use_equip_reward_random_char_chess_of_bond",
+    "countType": "NONE",
+    "bb": {
+     "count": 1
+    },
+    "bbStr": {
+     "bond": "dossolesShip"
+    }
+   }
+  ],
+  "params": {
+   "count": 1,
+   "bond": "dossolesShip"
+  },
+  "category": "RECRUIT",
+  "kind": "consume_on_equip",
+  "family": null,
+  "implFormula": "包内 `meta/main.mjs` 的 `registry.item('chess_item_ws_dos_anton')`：`ctx.rollChess({ bond, maxTier: ctx.shopLevel() })` 抽 count 名【多索雷斯】干员并 `ctx.grantChess`（与哥伦比亚「沙盘·α」同一套写法，只是把 `tier` 换成 `maxTier` —— 文本是「不超过调度中心」而不是「等于」）。装备后由引擎自动销毁。",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“安东是大部分玻利瓦尔人熟悉的高档酒品牌，这家公司以其仗着辛嘉斯政府的背景横行霸道而闻名。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_anton"
+  }
+ },
+ "chess_item_ws_dos_anton_b": {
+  "id": "chess_item_ws_dos_anton_b",
+  "baseId": "chess_item_ws_dos_anton_a",
+  "goldenId": "chess_item_ws_dos_anton_b",
+  "isGolden": true,
+  "trapId": "trap_ws_dos_anton",
+  "iconId": "trap_ws_dos_anton",
+  "identifier": 400,
+  "name": "安东龙舌兰",
+  "itemType": "EQUIP",
+  "tier": 4,
+  "shopSortId": 0,
+  "price": 5,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": false,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "duration": 0,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "effg_ws_dos_anton",
+  "effectName": "安东龙舌兰",
+  "desc": "装备时销毁，获得2名阶级不超过调度中心的随机【多索雷斯】盟约干员。\n“安东是大部分玻利瓦尔人熟悉的高档酒品牌，这家公司以其仗着辛嘉斯政府的背景横行霸道而闻名。”",
+  "descRaw": "装备时<@ba.vup>销毁</>，获得<@ba.vup>2</>名阶级不超过调度中心的随机<@ba.vup>【多索雷斯】</>盟约干员。\n<@ba.acrem>“安东是大部分玻利瓦尔人熟悉的高档酒品牌，这家公司以其仗着辛嘉斯政府的背景横行霸道而闻名。”</>",
+  "buffs": [
+   {
+    "key": "use_equip_reward_random_char_chess_of_bond",
+    "countType": "NONE",
+    "bb": {
+     "count": 2
+    },
+    "bbStr": {
+     "bond": "dossolesShip"
+    }
+   }
+  ],
+  "params": {
+   "count": 2,
+   "bond": "dossolesShip"
+  },
+  "category": "RECRUIT",
+  "kind": "consume_on_equip",
+  "family": null,
+  "implFormula": "As the normal copy with count 2.",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“安东是大部分玻利瓦尔人熟悉的高档酒品牌，这家公司以其仗着辛嘉斯政府的背景横行霸道而闻名。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_anton"
+  }
+ },
+ "chess_item_ws_dos_coating_a": {
+  "id": "chess_item_ws_dos_coating_a",
+  "baseId": "chess_item_ws_dos_coating_a",
+  "goldenId": "chess_item_ws_dos_coating_b",
+  "isGolden": false,
+  "trapId": "trap_ws_dos_coating",
+  "iconId": "trap_ws_dos_coating",
+  "identifier": 401,
+  "name": "沙兹专业镀膜装置",
+  "itemType": "EQUIP",
+  "tier": 5,
+  "shopSortId": 0,
+  "price": 4,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": true,
+  "upgradeNum": 2,
+  "upgradeChessId": "chess_item_ws_dos_coating_b",
+  "duration": -1,
+  "giveBondId": "dossolesShip",
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "eff_ws_dos_coating",
+  "effectName": "沙兹专业镀膜装置",
+  "desc": "携带者获得特质“<休整期结束时>自身已激活盟约层数+5”。\n“看起来非常专业的镀膜套装，理论上可以保证在海水里泡上一个月不会受到侵蚀，但由于根本没有人敢这么去做，其实一般作为技术展示被陈列在橱窗里。”",
+  "descRaw": "携带者获得特质<@ba.vup>“<休整期结束时>自身已激活盟约层数+5”</>。\n<@ba.acrem>“看起来非常专业的镀膜套装，理论上可以保证在海水里泡上一个月不会受到侵蚀，但由于根本没有人敢这么去做，其实一般作为技术展示被陈列在橱窗里。”</>",
+  "buffs": [
+   {
+    "key": "equip_prep_end_own_bond_layer",
+    "countType": "NONE",
+    "bb": {
+     "count": 5
+    },
+    "bbStr": {}
+   }
+  ],
+  "params": {
+   "count": 5
+  },
+  "category": "BOND",
+  "kind": "passive",
+  "family": null,
+  "implFormula": "「获得特质」的效果由包内 `meta/main.mjs` 的 `registry.item('chess_item_ws_dos_coating')` 在 `onPrepEnd`（= <休整期结束时>）直接实现：对携带者的**每一条**盟约 `ctx.addLayers(bond, count, { requireActive: true })`（文本说「已激活」，所以 requireActive）—— 与官方「涤火杰西卡」<休整期结束时> 那一条同一条通道、同一个口径，不额外注册一个假特质（特质是数据记录，运行时没法往棋子上挂）。`giveBondId: 'dossolesShip'` 是**变形同构体**那一套：同时携带变形同构体时，携带者被视为【多索雷斯】盟约成员（引擎的 `pieceBonds` 纯计算，见 META.md §3）。",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。（变形同构体增加同时携带沙兹专业镀膜装置获得【多索雷斯】盟约）",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“看起来非常专业的镀膜套装，理论上可以保证在海水里泡上一个月不会受到侵蚀，但由于根本没有人敢这么去做，其实一般作为技术展示被陈列在橱窗里。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_coating"
+  }
+ },
+ "chess_item_ws_dos_coating_b": {
+  "id": "chess_item_ws_dos_coating_b",
+  "baseId": "chess_item_ws_dos_coating_a",
+  "goldenId": "chess_item_ws_dos_coating_b",
+  "isGolden": true,
+  "trapId": "trap_ws_dos_coating",
+  "iconId": "trap_ws_dos_coating",
+  "identifier": 402,
+  "name": "沙兹专业镀膜装置",
+  "itemType": "EQUIP",
+  "tier": 5,
+  "shopSortId": 0,
+  "price": 5,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": false,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "duration": 0,
+  "giveBondId": "dossolesShip",
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "effg_ws_dos_coating",
+  "effectName": "沙兹专业镀膜装置",
+  "desc": "携带者获得特质“<休整期结束时>自身已激活盟约层数+10”。\n“看起来非常专业的镀膜套装，理论上可以保证在海水里泡上一个月不会受到侵蚀，但由于根本没有人敢这么去做，其实一般作为技术展示被陈列在橱窗里。”",
+  "descRaw": "携带者获得特质<@ba.vup>“<休整期结束时>自身已激活盟约层数+10”</>。\n<@ba.acrem>“看起来非常专业的镀膜套装，理论上可以保证在海水里泡上一个月不会受到侵蚀，但由于根本没有人敢这么去做，其实一般作为技术展示被陈列在橱窗里。”</>",
+  "buffs": [
+   {
+    "key": "equip_prep_end_own_bond_layer",
+    "countType": "NONE",
+    "bb": {
+     "count": 10
+    },
+    "bbStr": {}
+   }
+  ],
+  "params": {
+   "count": 10
+  },
+  "category": "BOND",
+  "kind": "passive",
+  "family": null,
+  "implFormula": "As the normal copy with count 10.",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。（变形同构体增加同时携带沙兹专业镀膜装置获得【多索雷斯】盟约）",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“看起来非常专业的镀膜套装，理论上可以保证在海水里泡上一个月不会受到侵蚀，但由于根本没有人敢这么去做，其实一般作为技术展示被陈列在橱窗里。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_coating"
+  }
+ },
+ "chess_item_ws_dos_jade_a": {
+  "id": "chess_item_ws_dos_jade_a",
+  "baseId": "chess_item_ws_dos_jade_a",
+  "goldenId": "chess_item_ws_dos_jade_b",
+  "isGolden": false,
+  "trapId": "trap_ws_dos_jade",
+  "iconId": "trap_ws_dos_jade",
+  "identifier": 403,
+  "name": "翡翠庭院至臻",
+  "itemType": "EQUIP",
+  "tier": 6,
+  "shopSortId": 0,
+  "price": 4,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": true,
+  "upgradeNum": 2,
+  "upgradeChessId": "chess_item_ws_dos_jade_b",
+  "duration": -1,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "eff_ws_dos_jade",
+  "effectName": "翡翠庭院至臻",
+  "desc": "获得等于【多索雷斯】盟约层数×3的基础攻击力。\n“专为上流客户提供优质咖啡的翡翠庭院中，最上等的一种咖啡，千金难求，只有最有权力的人才有资格获得。”",
+  "descRaw": "获得等于<@ba.vup>【多索雷斯】盟约层数×3</>的<@ba.vup>基础攻击力</>。\n<@ba.acrem>“专为上流客户提供优质咖啡的翡翠庭院中，最上等的一种咖啡，千金难求，只有最有权力的人才有资格获得。”</>",
+  "buffs": [
+   {
+    "key": "env_gbuff_new_with_verify",
+    "countType": "NONE",
+    "bb": {
+     "atk_per_layer": 3
+    },
+    "bbStr": {
+     "key": "mod_dos_jade"
+    }
+   }
+  ],
+  "params": {
+   "atk_per_layer": 3,
+   "key": "mod_dos_jade"
+  },
+  "category": "STAT",
+  "kind": "passive",
+  "family": null,
+  "implFormula": "战斗侧 `battle/main.mjs` 的 `registerItemBehaviour('mod_dos_jade', …)`（注册键是 buff 的 `bbStr.key`，与哥伦比亚「同行者」同一条通道）：给携带者挂 `{ atkFlat: 【多索雷斯】层数 × atk_per_layer }`。用 `atkFlat` 而不是 `atkPct`，因为文本说的是**基础攻击力** —— 引擎 `units.js` 的公式是 `(b.atk + ΣatkFlat) × (1 + ΣatkPct) …`，`atkFlat` 正好加在百分比之前。层数变化时用 `onLayers` 重算。",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“专为上流客户提供优质咖啡的翡翠庭院中，最上等的一种咖啡，千金难求，只有最有权力的人才有资格获得。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_jade"
+  }
+ },
+ "chess_item_ws_dos_jade_b": {
+  "id": "chess_item_ws_dos_jade_b",
+  "baseId": "chess_item_ws_dos_jade_a",
+  "goldenId": "chess_item_ws_dos_jade_b",
+  "isGolden": true,
+  "trapId": "trap_ws_dos_jade",
+  "iconId": "trap_ws_dos_jade",
+  "identifier": 404,
+  "name": "翡翠庭院至臻",
+  "itemType": "EQUIP",
+  "tier": 6,
+  "shopSortId": 0,
+  "price": 5,
+  "hideInShop": true,
+  "shopExcluded": false,
+  "shopExcludedBy": null,
+  "mergeable": false,
+  "upgradeNum": 0,
+  "upgradeChessId": null,
+  "duration": 0,
+  "giveBondId": null,
+  "givePowerId": null,
+  "canGiveBond": false,
+  "requiresBondId": null,
+  "effectId": "effg_ws_dos_jade",
+  "effectName": "翡翠庭院至臻",
+  "desc": "获得等于【多索雷斯】盟约层数×5的基础攻击力。\n“专为上流客户提供优质咖啡的翡翠庭院中，最上等的一种咖啡，千金难求，只有最有权力的人才有资格获得。”",
+  "descRaw": "获得等于<@ba.vup>【多索雷斯】盟约层数×5</>的<@ba.vup>基础攻击力</>。\n<@ba.acrem>“专为上流客户提供优质咖啡的翡翠庭院中，最上等的一种咖啡，千金难求，只有最有权力的人才有资格获得。”</>",
+  "buffs": [
+   {
+    "key": "env_gbuff_new_with_verify",
+    "countType": "NONE",
+    "bb": {
+     "atk_per_layer": 5
+    },
+    "bbStr": {
+     "key": "mod_dos_jade"
+    }
+   }
+  ],
+  "params": {
+   "atk_per_layer": 5,
+   "key": "mod_dos_jade"
+  },
+  "category": "STAT",
+  "kind": "passive",
+  "family": null,
+  "implFormula": "As the normal copy with atk_per_layer 5.",
+  "note": "知名商品标志物：只能从【多索雷斯】龙舌兰的特质中获得，商店不售（hideInShop）。",
+  "rangeGrid": [
+   [
+    0,
+    0
+   ]
+  ],
+  "flavor": "“专为上流客户提供优质咖啡的翡翠庭院中，最上等的一种咖啡，千金难求，只有最有权力的人才有资格获得。”",
+  "workshop": {
+   "schema": 1,
+   "id": "dos_jade"
+  }
+ }
+}

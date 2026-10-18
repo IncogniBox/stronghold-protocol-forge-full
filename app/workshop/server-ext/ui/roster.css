@@ -1,0 +1,53 @@
+/* server-ext —— 房间成员名单（`ui/roster.js`）的样式。
+ *
+ * 挂点是 `screen.room.aside`（房间屏的旁栏）。与 `ui/chat.css` 同两条纪律：宿主 `.mod-panel` 被引擎置
+ * `pointer-events: none`，所以根上打开 `auto`（列表要能滚）；颜色只取引擎已有的变量，不发明新色。 */
+
+.roster-root { pointer-events: none; }
+
+.roster {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .04rem;
+  margin: .06rem 0;
+  padding: .07rem .08rem;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: .06rem;
+  background: rgba(8, 16, 22, .72);
+  color: var(--text-md, #b9cdc9);
+  font-size: .12rem;
+  line-height: 1.4;
+}
+
+.roster__head { display: flex; align-items: baseline; gap: .06rem; }
+.roster__title { color: var(--text-hi, #e8f4f2); font-weight: 800; letter-spacing: .06em; }
+.roster__count { margin-left: auto; color: var(--text-dim, #7d918e); }
+
+.roster__list { display: flex; flex-direction: column; gap: .03rem; max-height: 2.6rem; overflow: auto; }
+.roster__empty { color: var(--text-dim, #7d918e); }
+
+.roster__row { display: flex; align-items: center; gap: .05rem; }
+.roster__name { color: var(--text-hi, #e8f4f2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster__tag { color: var(--mint-400, #6fe0c8); font-weight: 700; }
+
+.roster__flag {
+  flex: none; margin-left: auto;
+  padding: 0 .04rem; border-radius: .03rem;
+  background: rgba(255, 255, 255, .08); color: var(--text-dim, #7d918e);
+  font-size: .11rem;
+}
+.roster__flag--me { background: rgba(90, 200, 160, .18); color: var(--mint-400, #6fe0c8); }
+.roster__flag--dim { background: none; color: var(--text-dim, #7d918e); opacity: .75; }
+
+.roster-avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  border-radius: 50%; overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .06);
+}
+.roster-avatar__img { width: 100%; height: 100%; object-fit: cover; }
+.roster-avatar--text { color: var(--text-hi, #e8f4f2); font-weight: 800; font-size: .12rem; }
+.roster-avatar--none { color: var(--text-dim, #7d918e); }
+
+.roster__foot { color: var(--text-dim, #7d918e); font-size: .11rem; }

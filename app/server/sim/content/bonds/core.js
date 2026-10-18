@@ -44,6 +44,8 @@ import { kjeragColdWind } from '../devices.js';
 import * as items from '../items.js';
 import { FORCED_EXIT } from '../../constants.js';
 import { msg } from '../../../../shared/i18n.js';
+import { bbCap } from '../../../../shared/plugins/officialBounds.js';
+import { textFinite } from '../../../../shared/plugins/textNumber.js';
 
 const num = S.num;
 
@@ -59,18 +61,26 @@ const BUFF_KEYS = Object.freeze({
   egirShip: 'act1autochess_bond_eff_egir',
   siracusaShip: 'act2autochess_bond_eff_siracusa',
   kazimierzShip: 'act2autochess_bond_eff_kazimierz',
-  // 雷姆必拓 mod（workshop/rimbilliton）：数据在创意工坊叠加层，这里只登记效果键
-  rimBilliton: 'act2autochess_bond_eff_rimbilliton',
-  // 颂乐人偶 mod（workshop/ave-mujica）：同上，只登记效果键
-  aveMujica: 'act2autochess_bond_eff_avemujica',
 });
 const SARGON_SHARE_KEY = 'act2autochess_bond_eff_sargon[share]';
 const VICTORIA_REWARD_KEY = 'bond_layer_added_reward_equip';
 const VICTORIA_COUNTER = 'bond:victoria:hammers';
 
-/** Bond effect blackboard `{ ...bb, ...bbStr }` of a core bond (null when the data record is missing). */
+/**
+ * Bond effect blackboard `{ ...bb, ...bbStr }` of a core bond (null when the data record is missing).
+ *
+ * `key` 默认取 `BUFF_KEYS[bondId]`：官方盟约的 buff 记录不止一条，中心表按效果 buff 键选定「效果」那一条。
+ * **取不到就回退到记录自己的 `bbStr.key`** —— 工坊 mod 盟约的记录就是它自己，效果 buff 键已经写在记录里；
+ * 有了回退，新增 mod 盟约不必再到引擎里手工登记一行，也就不会因为漏登记而让 `install()` 里
+ * `if (!bb) continue` 静默跳过整块战斗效果（哥伦比亚盟约 2026-10-12 实测踩过这个坑）。
+ */
 export function bondBb(bondId, key = BUFF_KEYS[bondId]) {
-  return S.buffParams(S.bondRecord(bondId), key);
+  const rec = S.bondRecord(bondId);
+  if (!rec) return null;
+  const hit = key ? S.buffParams(rec, key) : null;
+  if (hit) return hit;
+  const own = rec.bbStr && typeof rec.bbStr.key === 'string' && rec.bbStr.key ? rec.bbStr.key : null;
+  return own && own !== key ? S.buffParams(rec, own) : hit;
 }
 
 /** Has player `pid` reached the tier of `bondId` that needs `cnt` members? (active + count / tier index) */
@@ -85,11 +95,11 @@ export function reached(battle, pid, bondId, cnt) {
   return idx >= 0 && S.bondTier(battle, pid, bondId) >= idx + 1;
 }
 
-/** "总和的30%" → 0.3 (炎佑 stat share, text only). */
+/** "总和的30%" → 0.3 (炎佑 stat share, text only). A percent, not a count: finite, not forced to 64. */
 export function yanyouShare() {
   const text = String(S.bondRecord('yanShip')?.effectDesc ?? S.bondRecord('yanShip')?.desc ?? '');
-  const m = /总和的\s*(\d+(?:\.\d+)?)\s*%/.exec(text);
-  const v = m ? +m[1] / 100 : NaN;
+  const raw = textFinite(text, /总和的\s*(\d+(?:\.\d+)?)\s*%/, NaN);
+  const v = Number(raw) / 100;
   return v > 0 && v <= 10 ? v : 0.3;
 }
 
@@ -461,7 +471,11 @@ function devour(battle, pid, bb, members) {
     // start, resolves nothing (`knocked`: it is off the field)
     if (knocked(t)) continue;
     S.fxOn(battle, 'devour', t, 'bond:egirShip', 'devour', { from: m.id });
-    if (amount > 0) battle.loseHp(t, mitigate(amount, 'phys', t.s), { source: m, tags: ['bond:egir:devour'] });
+    // The maintainer's 2026-10-11 联防 carry decision: reconstruct marks/attributes, but do not apply a second
+    // opening HP loss (or trigger deaths/revives) to an operator restored from the previous field. Battle.start
+    // applies its exact HP ratio and SP after the opening hooks. Fresh units and all other battle kinds still pay.
+    const restored = battle.kind === 'unite' && Number.isFinite(t.carry?.hpPct) && t.carry.hpPct > 0;
+    if (amount > 0 && !restored) battle.loseHp(t, mitigate(amount, 'phys', t.s), { source: m, tags: ['bond:egir:devour'] });
     if (!layered.has(t)) {
       layered.add(t);
       S.gainLayers(battle, { playerId: pid, bonds: 'egirShip', n: S.tierOf(t), source: m, reason: 'bond' });
@@ -668,7 +682,7 @@ const INSTALLERS = Object.freeze({
 });
 
 /** Extra bond installers of content packs / mods (registerBondInstaller) — a mod bond adds its own installer here
- * without touching the official installers. Keys are bond ids (rimBilliton). */
+ * without touching the official installers. Keys are bond ids (a pack's own bond id). */
 const EXTRA_INSTALLERS = new Map();
 
 /** Register a bond's battle installer `fn(battle, pid, bb, members)` (a content-pack / mod bond; the official
@@ -697,8 +711,10 @@ export function install(battle) {
 /**
  * 维多利亚 hammer milestones: every `layer` layers pay `count` item(s) of `pool` once (counter = milestones paid).
  * A bond effect, so it pays only while 维多利亚 is active (official tip "叠加的盟约…只有在盟约被激活时才会发挥作用");
- * milestones crossed while it was inactive ("无需激活" sources such as 烛煌) are paid the next time a hook sees it active
- * (research 02 §3.3 / §8 Q7: the payout counts layers added while inactive) — same rule as 远见 / 奇迹 (addon/meta.js).
+ * milestones crossed while it was inactive ("无需激活" sources such as 烛煌) are paid as soon as it lights up — the
+ * onActiveBonds hook of the recompute that activated it, e.g. placing the third member in prep (the maintainer's report
+ * of the official game, 2026-10-15; research 02 §3.3 / §8 Q7: the payout counts layers added while inactive) — and
+ * the hooks below catch up anything a capped nested dispatch skipped; same rule as 远见 / 奇迹 (addon/meta.js).
  */
 export function payHammers(ctx) {
   if (!ctx.bondActive('victoriaShip')) return 0;
@@ -706,7 +722,8 @@ export function payHammers(ctx) {
   const step = Math.floor(num(p?.layer, 0));
   if (!p || !(step > 0)) return 0;
   const due = Math.floor(ctx.layers('victoriaShip') / step);
-  const count = Math.max(0, Math.floor(num(p.count, 1)));
+  // [ASSUMED] DESIGN §34.5: each milestone pays at most the official `count` cap. Official count is 1.
+  const count = Math.min(bbCap('count'), Math.max(0, Math.floor(num(p.count, 1))));
   let granted = 0;
   // re-read the counter every milestone: grantItem dispatches onGain, which re-enters this function (nested payments
   // must not be paid twice by the outer loop)
@@ -725,8 +742,12 @@ export function payHammers(ctx) {
   return granted;
 }
 
-/** Hooks on which owed hammers are (caught up and) paid; onLayers only for 维多利亚's own gains. */
-const HAMMER_HOOKS = Object.freeze(['onLayers', 'onRoundStart', 'onPrepStart', 'onPrepEnd', 'onBuy', 'onGain', 'onSold', 'onMerge']);
+/**
+ * Hooks on which owed hammers are (caught up and) paid; onLayers only for 维多利亚's own gains; onActiveBonds when the
+ * active set changes (the bond lighting up — payHammers reads the counter, so the hammer of a milestone comes once
+ * however often the bond goes off and on again).
+ */
+const HAMMER_HOOKS = Object.freeze(['onLayers', 'onActiveBonds', 'onRoundStart', 'onPrepStart', 'onPrepEnd', 'onBuy', 'onGain', 'onSold', 'onMerge']);
 
 export function registerMeta(registry) {
   const prev = typeof registry.get === 'function' ? registry.get('bond:victoriaShip') : null;

@@ -1,11 +1,26 @@
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
-import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, MAX_ROOM_MODS, EMOTES, GEO } from './constants.js';
+import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_ROOM_MODS, EMOTES, GEO, maxSeatsFrom, MIN_SEATS } from './constants.js';
 import { isDroppableChess } from './standIn.js';
 import { diySlotIds, validateDiyPicks } from './diy.js';
 import { isSupportEntries } from './support.js';
-import { cultivatedStats, isPotential, isCultivate, POTENTIAL_DEFAULT, CULTIVATE_DEFAULT } from './potential.js';
+import { cultivatedStats, isPotential, isCultivate, POTENTIAL_DEFAULT, CULTIVATE_DEFAULT, hasPotentialData } from './potential.js';
+import { isContentHash } from './plugins/identity.js';
+import { isPluginId } from './plugins/manifest.js';
+
+/**
+ * 座位校验的上界 (100 人版移植; 缺省上限 20 座, 业主裁令 2026-10-12): `SP_MAX_SEATS` when the deployment set it,
+ * else the DEFAULT ceiling (`DEFAULT_MAX_SEATS` 20 — NOT `MAX_SEATS`, which is the official-room declaration and the
+ * variant gate in server/match/Match.js `variant`).
+ *
+ * The seat field of `room.removeBot` / `room.kick` is validated HERE and nowhere else — the handler only checks that
+ * the addressed seat actually holds an AI / the confirmed player (server/lobby.js) — so this bound is the single gate
+ * a bigger room has to widen. It reads the same `maxSeatsFrom` the Lobby's `maxSeats` default does, so the protocol
+ * can never be narrower than the seats a room really has (a message naming a seat the room does not have is still
+ * refused by the handler's own `!target ⇒ BAD_TARGET`).
+ */
+const SEAT_CAP = maxSeatsFrom(typeof process !== 'undefined' && process.env ? process.env : {});
 import { isModDigest, isModId } from './modIdentity.js';
 
 // Mod identity (DESIGN §28.2): the wire shape of a mod set lives in shared/modIdentity.js, because jsconfig.json
@@ -86,6 +101,9 @@ const isMap = (v, max, key, val) => {
   return true;
 };
 const isList = (v, max, item) => Array.isArray(v) && v.length <= max && v.every(item);
+/** A plain object (not an array, not null) — the shape a `picks` map must be. */
+const isRec = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+const isScalar = (v) => isStr(v, 64) || isNum(v) || isBool(v);
 
 // ---- client-side combat (DESIGN §14): b.progress / b.result payloads -------------------------------------------
 
@@ -109,7 +127,7 @@ function jsonBytes(value) {
 }
 
 /** Size limits of a b.result payload (the whole frame also obeys the 64 KB inbound limit). */
-export const RESULT_LIMITS = Object.freeze({ players: 4, leaked: 400, unitsEnd: 64, unitStats: 160, layerGains: 40, mods: 16, unspawned: 400 });
+export const RESULT_LIMITS = Object.freeze({ players: 4, leaked: 400, unitsEnd: 64, unitStats: 160, layerGains: 40, mods: 16, unspawned: 400, marks: 16 });
 const BIG = 1e13;
 const isStat = (v) => v === undefined || isNum(v, 0, BIG);
 const isModVal = (v) => v === null || isNum(v, -BIG, BIG) || isStr(v, 64) || isBool(v);
@@ -127,10 +145,14 @@ const isPerPlayer = (p) => isPlain(p) && isInt(p.killed, 0, 1e5) && isInt(p.tota
   // knock-out — a runtime split child / summon too — and may therefore exceed `total`, which counts only the round's own
   // scheduled enemies (server/match/fields.js validateClientResult bounds it against maxTotal instead).
   && optional((x) => isInt(x, 0, 1e5))(p.resolved)
+  && optional((x) => isInt(x, 0, 1e9))(p.creditedKills)
   && isList(p.leaked, RESULT_LIMITS.leaked, isLeak) && isBool(p.perfect)
   && isMap(p.layerGains, RESULT_LIMITS.layerGains, isId, (v) => isNum(v, 0, 1e4))
   && isStat(p.coins) && isStat(p.damageDealt) && isStat(p.bossDamage) && isStat(p.healingDone) && isStat(p.deaths)
   && isList(p.unitsEnd, RESULT_LIMITS.unitsEnd, isUnitEnd)
+  // 战斗 → 休整期的**通用标记**（pack 的 `server.battle` 用 `@battle/setBattleMark` 写、`server.meta` 用 `ctx.mark` 读；
+  // 见 shared/protocol.js 上面的 RESULT_LIMITS.marks 与 docs/SIM.md 的 BattleResult 形状）
+  && (p.marks === undefined || isMap(p.marks, RESULT_LIMITS.marks, (k) => isStr(k, 32), isModVal))
   && (p.unitStats === undefined || isList(p.unitStats, RESULT_LIMITS.unitStats, isUnitStat));
 const isUnspawned = (u) => isPlain(u) && isId(u.enemyKey) && nullable(isId)(u.sourcePlayerId) && nullable((v) => isStr(v, 16))(u.tag)
   && optional((v) => isNum(v, 0, 1e6))(u.time);
@@ -288,14 +310,38 @@ export function cultivationCharIds(chess, backups = null) {
 }
 
 /**
+ * Whether a non-default potential changes this operator. Official characters always may: a PRESET without `potDown`
+ * (char_616_pithst) is stored as written and changes no stat, and that stays allowed. A plugin `char_x_` with no
+ * `potDown` and no chained talent curve does not. [ASSUMED] only the plugin prefix is restricted (DESIGN §34.5).
+ * @param {{ chess?: Record<string, any>, backups?: any }|null|undefined} data
+ * @param {string} charId
+ */
+export function charPotentialChanges(data, charId) {
+  if (typeof charId !== 'string' || !charId.startsWith('char_x_')) return true;
+  const chess = data?.chess;
+  if (chess && typeof chess === 'object') {
+    for (const c of Object.values(chess)) if (c?.charId === charId && hasPotentialData(c)) return true;
+  }
+  const unit = data?.backups?.units?.[charId];
+  if (unit) {
+    if (hasPotentialData(unit)) return true;
+    for (const f of Object.values(unit.forms ?? {})) if (hasPotentialData(f)) return true;
+  }
+  return false;
+}
+
+/**
  * Semantic check + normalisation of `room.loadout.ops` (0.2.2) — strict like checkLoadout: an operator `isOperator` does
  * not know (cultivationCharIds) rejects the whole message. Entries equal to the defaults (潜能 6, 练度 3) are dropped, the
  * rest stored complete `{ potential, cultivate }`. `undefined` / `null` = no settings (`{}`).
+ * `changesWithPotential(charId)`, when passed, rejects a non-default potential for an operator whose record has no curve.
+ * Callers that omit it keep the previous behaviour.
  * @param {any} ops
  * @param {(charId: string) => boolean} isOperator
+ * @param {(charId: string) => boolean} [changesWithPotential]
  * @returns {{ ok: true, ops: Record<string, { potential: number, cultivate: number }> } | { error: 'BAD_MSG'|'BAD_TARGET', detail: string }}
  */
-export function checkLoadoutOps(ops, isOperator) {
+export function checkLoadoutOps(ops, isOperator, changesWithPotential = null) {
   if (ops == null) return { ok: true, ops: {} };
   if (!isLoadoutOps(ops)) return { error: 'BAD_MSG', detail: 'bad operator settings' };
   const out = {};
@@ -303,6 +349,9 @@ export function checkLoadoutOps(ops, isOperator) {
     if (typeof isOperator !== 'function' || !isOperator(id)) return { error: 'BAD_TARGET', detail: `unknown operator ${id}` };
     const potential = ops[id].potential ?? POTENTIAL_DEFAULT;
     const cultivate = ops[id].cultivate ?? CULTIVATE_DEFAULT;
+    if (potential !== POTENTIAL_DEFAULT && typeof changesWithPotential === 'function' && changesWithPotential(id) === false) {
+      return { error: 'BAD_TARGET', detail: `potential does not change ${id}` };
+    }
     if (potential === POTENTIAL_DEFAULT && cultivate === CULTIVATE_DEFAULT) continue;
     out[id] = { potential, cultivate };
   }
@@ -339,6 +388,51 @@ export function checkNotOwned(list, getChess) {
   }
   const notOwned = [...keep].sort();
   return { ok: true, notOwned, dropped: list.length - notOwned.length };
+}
+
+// ---- 干员冲突兼容 (operator conflict): room.conflict { picks } -------------------------------------------------------
+
+/**
+ * `room.conflict { picks }`：**同一个 id 被两个包各贡献一份**时，玩家挑「这一条用哪个包那一份」——
+ * `{ [chessId]: packId }`。
+ *
+ * 为什么需要它：合并层按 `byPackId` 只留赢家、输家整个丢掉（`shared/workshop.js` 的 `PACK_ID_COLLISION`）——
+ * 一份合并结果是对的（客户端与服务端都只看得见一份），但玩家从此不知道**还有另一份**：A 包加了一个阿米娅、
+ * B 包也加了一个，界面上永远只有字典序小的那个包的，且没有任何一处会告诉他。`data.workshopConflicts` 把丢掉的
+ * 那几份留了下来，这一条消息就是玩家从里面挑一个（不挑 = 用今天实际生效的那一份，即赢家）。
+ *
+ * 与 `room.loadout` / `room.ownership` / `room.diy` 同一条纪律：**局外设置**，存在会话与座位上，一局取开局那一刻
+ * 的那一份；比赛中改只存给下一局（ROOM_STARTED 'stored for the next match'）。判据**宽松**（`checkConflictPicks`
+ * 与 checkNotOwned / checkDiyPicks 同一条）：挑了一个这局数据里没有的冲突、或一个没贡献过这条记录的包，**逐项
+ * 丢掉**，绝不让整条消息变成 BAD_MSG —— 一个过期的选择不该把玩家别的选择一起废掉。
+ */
+export const CONFLICT_LIMITS = Object.freeze({ picks: 64 });
+
+/** Structural check of `room.conflict.picks`: an object of ≤ 64 `id → id` entries. */
+export const isConflictPicks = (v) => isRec(v)
+  && Object.keys(v).length <= CONFLICT_LIMITS.picks
+  && Object.entries(v).every(([k, val]) => isId(k) && isId(val));
+
+/**
+ * Semantic check + normalisation of a conflict pick map against the merged game data: keeps the entries whose chess id
+ * really is a **conflicted** id (`data.workshopConflicts.chess`) and whose pack really contributed one of its candidates.
+ * @param {any} picks `room.conflict.picks`
+ * @param {Record<string, any>} data the merged game data (`workshopConflicts` is what makes an id choosable at all)
+ * @returns {{ ok: true, picks: Record<string, string>, dropped: number } | { error: 'BAD_MSG', detail: string }}
+ */
+export function checkConflictPicks(picks, data) {
+  if (!isConflictPicks(picks)) return { error: 'BAD_MSG', detail: 'bad conflict picks' };
+  const index = isRec(data) && isRec(data.workshopConflicts) ? data.workshopConflicts : null;
+  const chess = index && isRec(index.chess) ? index.chess : null;
+  /** @type {Record<string, string>} */
+  const out = {};
+  let dropped = 0;
+  for (const [chessId, packId] of Object.entries(picks)) {
+    const entry = chess && Object.hasOwn(chess, chessId) ? chess[chessId] : null;
+    const ok = !!entry && Array.isArray(entry.packs) && entry.packs.some((p) => p && p.pack === packId);
+    if (ok) out[chessId] = packId; else dropped++;
+  }
+  return { ok: true, picks: out, dropped };
 }
 
 // ---- 自选编队 (0.2.0 DIY): room.diy { picks } ------------------------------------------------------------------------
@@ -510,11 +604,27 @@ const target = (v) => {
   return false;
 };
 
+/**
+ * `g.dev` 的 **action 闭枚举**（本 Forge 发行版自加的 dev 通道，非上游协议）：
+ * 「全量模拟」对局（`Match.dev`）或 `SP_DEV=1` 下，开发者面板用它改这一局的状态。
+ * 缺省（无 `action`）等价于旧的 `funds` 形状，向后兼容。
+ */
+export const DEV_ACTIONS = Object.freeze([
+  'funds', 'lp', 'shopLevel', 'shopSlots', 'layers', 'band', 'item', 'grantChess', 'spawnEnemy', 'enemyOverride',
+  'stage', 'roundKind', 'boss',
+]);
+
 /** @type {Record<string, Record<string, (v:any)=>boolean> & { $optional?: string[], $check?: (m:any)=>boolean }>} */
 export const C2S = {
   // session & lobby
   hello: { name: (v) => isStr(v, NAME_MAX_LEN) && v.trim().length > 0, token: (v) => v == null || isStr(v, 64), version: (v) => v == null || isInt(v, 0, 1e6),
-    noReplace: isBool, claimAt: (v) => isNum(v, 0, Number.MAX_SAFE_INTEGER), $optional: ['token', 'version', 'noReplace', 'claimAt'] },
+    // 账号（`SP_ACCOUNTS=1`, server/accounts.js, docs/RECORDS.md）：`auth` = 'login' | 'register'，`password`
+    // 只在 `auth` 给同时出现。两者都是 **$optional** —— 关掉账号的服务器上老客户端一个字段都不发，握手逐字节不变；
+    // 开着账号的服务器上不发 auth 会得到 `AUTH_REQUIRED`（这是策略，不是协议不兼容）。
+    // `password` 的 128 上限是**传输**上限，真正的门槛（≥8 位、无控制字符）在 `accounts.js validPassword` ——
+    // 这里放宽到 128 是为了让超长口令走到那个判据去换 `WEAK_PASSWORD`，而不是被协议层当成 `BAD_MSG`。
+    auth: (v) => v === 'login' || v === 'register', password: (v) => isStr(v, 128),
+    noReplace: isBool, claimAt: (v) => isNum(v, 0, Number.MAX_SAFE_INTEGER), $optional: ['token', 'version', 'auth', 'password', 'noReplace', 'claimAt'] },
   ping: { c: (v) => typeof v === 'number' && Number.isFinite(v) },
   'room.create': {
     mode: (v) => v === 'solo' || v === 'coop',
@@ -525,20 +635,85 @@ export const C2S = {
     modIds: (v) => Array.isArray(v) && v.length <= MAX_ROOM_MODS && v.every(isModId),
     // 房内聊天模式（`room.state.chatMode` 回给所有人）：房主在建房时定，默认 'open'。服务端强制它。
     chatMode: (v) => v == null || isChatMode(v),
-    $optional: ['mods', 'modIds', 'chatMode'],
+    // 本房座位上限 (业主裁决 B5): 房主建房时自己选这一个房间开几张座位卡，可选、**只作用于 co-op**
+    // （solo 房永远是 `mode:'solo'` 那一个座位形状，见 server/lobby.js create）。
+    //
+    // 范围是 `[MIN_SEATS, SEAT_CAP]`，`SEAT_CAP` 就是上面 `room.removeBot` / `room.kick` 用的那一个号 ——
+    // 这台服务器允许的最大座位数（`SP_MAX_SEATS`，缺省 20 —— 不是 `MAX_SEATS` 那个「官方 4 座」）。越界或垃圾值**点名拒绝**
+    // （`bad field seatCap` ⇒ `ERR.BAD_MSG`），不是静默钳制：静默钳制会让「我明明选了 100」变成一个
+    // 玩家自己解释不了的 4 座房间。
+    //
+    // 「可选」登记在下面的 `$optional` 里 —— 与同文件 `hello` 的写法一致（判据允许缺席的键就登记），而且这张表
+    // 是**作者可见的表面**：`server/modDispatch.js` 把它复制进交给包的 `c2s`，包据此判断哪个字段可以不发。
+    // 表里漏一条，包就会把一个合法的 `room.create` 当成缺字段。所以判据与 `$optional` 两条路都要留着：
+    // `$optional` 管「键根本没出现」，判据里的 `v === undefined || v === null` 管「显式给了 null」。
+    // 缺省 / `null`（= 旧客户端根本不发）⇒ 服务器缺省上限（缺省 20 座）。
+    seatCap: (v) => v === undefined || v === null || isInt(v, MIN_SEATS, SEAT_CAP),
+    // 开发者模式（工坊包 dev-ext 的「全量模拟」，`mode:'solo'` 才收）：
+    //   `dev: true` 让这一局**跳过 INFO_CHECK / BAND_DRAFT**（「确认本局信息」「选择策略」两屏）直接进战斗；
+    //   `stage` 指名这一局强制打的那张图 —— 与 `SP_STAGE` 同一处覆盖逻辑（Match.rbStage），只是来源从环境变量
+    //   改成房间字段。非法值**点名拒绝**（`dev` 非布尔 / `stage` 形状不对都是 `BAD_MSG`），不静默忽略。
+    dev: (v) => v === undefined || v === null || isBool(v),
+    stage: (v) => v === undefined || v === null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.-]+$/.test(v)),
+    $optional: ['mods', 'modIds', 'chatMode', 'seatCap', 'dev', 'stage'],
   },
-  'room.join': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v), mods: (v) => v == null || isModDigest(v), $optional: ['mods'] },
+  // 房间同意（W7, DESIGN §28.53）：进一个**声明了模组集合**的房间（`room.state.mods`）时，真人玩家必须**明确
+  // 同意**才继续 —— 这是「我知道这一局要跑别人写的内容」那句话的落点。它与 `checkModSet` 要客户端回一个摘要
+  // **不是同一件事**：回摘要是**握手**（客户端证明它读到了服务器装了哪些包），同意是**表态**（人对着那一串包名
+  // 点一下）。房主不受这条约束：他 `room.create` 报出 `modIds` 就是在钉这一份字节（见 `server/lobby.js`
+  // 的 `modConsentRefusal`）。
+  //
+  // **加性可选字段 ⇒ 与 `records.mine` 同一条先例，`PROTOCOL_VERSION` 不抬**：抬版本的判据是「推送帧的形状变了、
+  // 旧页面会读错」。这里变的是 **C2S**，而且是一个**可选**字段 —— 老客户端一个字节都不发，它的 `room.join` 与今天
+  // 逐字节相同；服务器只在目标房间**声明了集合**时才会回 `MOD_CONSENT_REQUIRED`，那是一句能照着改的错，不是协议
+  // 不兼容。`hello.version` 也不动。缺席与显式 `null` 都按「没同意」处理（判据里 `$optional` 管「键没出现」，
+  // 这一行的 `v === null` 管「显式给了 null」，与 `room.create.seatCap` 同一处写法）。
+  'room.join': {
+    code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v),
+    mods: (v) => v == null || isModDigest(v),
+    consent: (v) => v === undefined || v === null || v === true,
+    $optional: ['mods', 'consent'],
+  },
   'room.leave': {},
+  // 上局战绩（`SP_ACCOUNTS=1`, server/matchRecords.js, docs/RECORDS.md）：空消息，答案走 `records.latest`
+  // 给**请求者本人**。开着账号时它是「我这个账号的最近一局」；关着账号时按会话 playerId 查（每次连接的新 id，
+  // 所以实际上只会拿到本会话打过的局）。它在 `server/net.js` 的 `HEAVY_TYPES` 里：一次廉价请求换一整份战绩。
+  'records.mine': {},
   'room.ready': { ready: isBool },
   'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) },
+  // 本房座位上限 (业主裁决 B5, docs/META.md §1.9): the HOST resizes the room it is already in — the same host-only,
+  // before-the-match window `room.setDifficulty` / `room.setAiPicksLast` live in.
+  //
+  // `code` is REQUIRED and must be the room the sender is in right now. It is not redundant with the session's own
+  // room: a tab that was left open (or a client that acted on a stale `room.state`) then names the room it MEANT, and
+  // the two answers are distinguishable — a mismatch is `NOT_IN_ROOM`, never a silent resize of "whatever room you
+  // happen to be in now", which on a host who just moved to a new room would resize the wrong one.
+  //
+  // `seatCap` uses the SAME bound as `room.create.seatCap` (`[MIN_SEATS, SEAT_CAP]`) and the same explicit refusal
+  // (`bad field seatCap` ⇒ `BAD_MSG`) — a value outside it is a malformed request, not a policy decision. The policy
+  // decision against the room's CURRENT occupants is the handler's, and it is the one with its own code
+  // (`SEAT_CAP_TOO_SMALL`).
+  'room.setSeatCap': {
+    code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v),
+    seatCap: (v) => isInt(v, MIN_SEATS, SEAT_CAP),
+  },
   // the co-op room option 「AI 队友最后选择」 (GitHub #338; host, before the match): the strategy and 机变 drafts order every
   // human seat before every AI seat (server/match/match/phases.js humansFirst); room.state.aiPicksLast
   'room.setAiPicksLast': { on: isBool },
+  // 房间内改本房间的**模组集合**（G1；docs/WORKSHOP.md §1.9.3）：房主、开局前、且**没有任何真人已就绪**时，
+  // 把这一房声明的集合换成另一个（`[]` = 改回「不声明」，即跑服务器加载的全部）。形状与 `room.create.modIds`
+  // **逐字同形**（同一格的判据、同一个 `MAX_ROOM_MODS` 上限）—— 一条声明两处写法就是两个会漂的真相。
+  //
+  // **`modIds` 是必填的**（与 `room.create` 那一格不同，那里是可以缺席的）：这一条消息的全部内容就是「换成这几个」，
+  // 缺了它，「声明空集合」与「消息坏了」就分不开了 —— 而这两种情况的修法正好相反。
+  'room.mods': {
+    modIds: (v) => Array.isArray(v) && v.length <= MAX_ROOM_MODS && v.every(isModId),
+  },
   'room.addBot': {},
-  'room.removeBot': { seat: (v) => isInt(v, 0, MAX_SEATS - 1) },
+  'room.removeBot': { seat: (v) => isInt(v, 0, SEAT_CAP - 1) },
   // the host removes another human before the match (server/lobby.js kick; community report #17); playerId = the one the
   // host confirmed — a seat that changed hands meanwhile is refused
-  'room.kick': { seat: (v) => isInt(v, 0, MAX_SEATS - 1), playerId: isId },
+  'room.kick': { seat: (v) => isInt(v, 0, SEAT_CAP - 1), playerId: isId },
   'room.start': {},
   'room.rerollSetup': { setupRevision: (v) => isInt(v, 0, 2 ** 31) },
   'room.cancelReroll': { voteId: (v) => isInt(v, 1, 2 ** 31) },
@@ -555,6 +730,10 @@ export const C2S = {
   // 自选编队 (0.2.0 DIY): the player's DIY slot picks; stored per session / seat like room.ownership (a match takes the
   // picks its seat had when it started; during a match they are stored for the next one: ROOM_STARTED)
   'room.diy': { picks: isDiyPicks },
+  // 干员冲突兼容（同一个 id 被两个包各贡献一份时，玩家挑用哪一份）：与上面三条同一条纪律 —— 局外设置，
+  // 存在会话/座位上，一局取开局那一刻的那一份；比赛中改只存给下一局（ROOM_STARTED）。判据宽松：不认识的一项
+  // 逐项丢掉，不废整条消息（checkConflictPicks）。
+  'room.conflict': { picks: isConflictPicks },
   // 房间内的**外观选择**（皮肤层，业主裁决：让「换装 / 头像」对同房的人可见）。
   //
   // 这是一条**展示**消息，不是玩法消息：它改的是别人看到的你长什么样，**永远不碰战果**，因此
@@ -568,6 +747,24 @@ export const C2S = {
   // room.closed { reason: 'kicked' }). room.leave / g.leave leave a spectator seat like a player seat.
   'room.spectate': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.removeSpectator': { playerId: isId },
+  // the room's plugins (DESIGN **§34**，上游原文 `§32`, P1a; host, before the match — like a difficulty change it
+  // un-readies the others): the plugins of this server the room switches on, in any order (the server closes the set over
+  // their requirements and sorts it: shared/plugins/order.js); [] = the original content. Cosmetic plugins (art: the
+  // room's visual set, `vs`) and, from P1c (DESIGN **§34.6**), content plugins (gameplay: the room's content set, a `cs`
+  // of its own); `settings` is for the classes that have settings (a cosmetic plugin has none, so it is ignored).
+  // room.state.content names the set
+  'room.setPlugins': { plugins: (v) => isList(v, 32, (p) => isPlain(p) && isPluginId(p.id)
+    && (p.settings === undefined || isMap(p.settings, 32, (k) => isStr(k, 32), isScalar))) },
+  // the room's mode (DESIGN **§34.6**, P1c; host, before the match — like a difficulty change it un-readies the others):
+  // an official mode of the room's type (the one of a difficulty: it sets the difficulty) or a mode a plugin of the
+  // room's content set provides (room.state.content.modes; room.state.content.modeId while it is chosen)
+  'room.setMode': { modeId: isId },
+  // the page has loaded and checked the room's content set (DESIGN **§34.6**): `cs` = the room.state.content.cs it
+  // checked — every data file's bytes against /cs/<cs16>/index.json, that manifest's composition against `cs`;
+  // `ok: false` = it could not (the seat shows it). A room with gameplay plugins starts only once every player's page
+  // sent it for its cs
+  'room.consent': { cs: isContentHash, accept: isBool },
+  'room.contentReady': { cs: isContentHash, ok: isBool, $optional: ['ok'] },
 
   // 野排匹配 (quick match; a PRODUCT feature of the engine, not a pack surface — server/matchmaking.js):
   // `room.queue` puts the player in the quick-match queue, `room.dequeue` takes them out (the same thing
@@ -584,6 +781,15 @@ export const C2S = {
     $optional: ['mode', 'difficulty', 'mods'],
   },
   'room.dequeue': {},
+
+  // 房间目录（业主裁决 B，2026-10-15，docs/META.md §1.7b）：**空消息**，回执是只发给请求者的一条 `room.listed`
+  // ——`{ ok: true, online, roomsCount, matchesCount, rooms: [{ code, mode, difficulty, humans, maxSeats, inMatch, hostName }] }`。
+  // 它同时是**能力信号**：`public/js/screens/lobby.js`（界面包 ui-hub-package 的大厅版）的 `HAS('room.list')` 查的就是
+  // 这张表 —— 没有这一条，大厅右上角那个「N 名博士在线」与「缺人同盟」那一卡**不画**（它自己写着的口径是
+  // 「部署没有的入口就不出现」）。
+  // **只读**：不建房、不改房。**房号进列表是业主 2026-10-15 的授权**（此前 §1.7a 的口径是「公开面只给一个数」，
+  // 那条继续管 HTTP 面 `GET /api/rooms`；协议面这一条是新开的一刀）。`online` 的口径是**已连接**的会话数。
+  'room.list': {},
 
   // 房内聊天（引擎特性）：`room.chat { text }` 与 `room.quickMsg { ids, arg? }`。
   // 形状只判到这里，能不能说由大厅裁决：不在房间 / 是旁观者 / 模式不允许 / 短语 id 不在服务端白名单，都各自
@@ -650,6 +856,11 @@ export const C2S = {
   'g.equip': { itemUid: isUid, targetUid: isUid, replaceUid: nullable(isUid), $optional: ['replaceUid'] },
   'g.art': { itemUid: isUid, row: (v) => isInt(v, 0, GEO.ROWS - 1), col: (v) => isInt(v, 0, GEO.COLS - 1), dir: isDir, $optional: ['dir'] },
   'g.destroy': { uid: isUid },
+  // 装备拆卸（行为开关 `unequip: "allow"`，DESIGN §28.43.1）：把一件**已装备**的装备从干员身上取下，退回手牌
+  // （手牌满则进临时整备区）。**新增的 C2S 类型，`PROTOCOL_VERSION` 不动**（先例 `records.mine`）：老客户端不发它
+  // 就一切照旧，而**缺省档（`official`）下这个意图逐字回今天那句 `'equipped items are locked'`**（见
+  // server/match/player/items.js）。形状只有一个字段，与 `g.equip.itemUid` / `g.destroy.uid` 同一个 `isUid`。
+  'g.unequip': { itemUid: isUid },
   'g.reward': { idx: (v) => isInt(v, 0, 5) },
   'g.choice': { idx: (v) => isInt(v, 0, 5), choiceId: isId, $optional: ['choiceId'] },
   'g.ready': { ready: isBool },
@@ -664,7 +875,39 @@ export const C2S = {
   // the stats the own board's units start their next battle with (user playtest #4 item 7; prep phases): answered by
   // the push m.unitStats { seq, round, units: [unitStatsEntry] }; `seq` is echoed so the client keeps the newest answer
   'g.unitStats': { seq: (v) => isInt(v, 0, 2 ** 31), $optional: ['seq'] },
+  // incremental m.public (DESIGN §8.2 "incremental frame"): the client could not merge a delta — it holds no
+  // materialized state, or a patch named a seat it does not know — and asks for the full frame again. The answer is a
+  // unicast full m.public; a spectator seat may ask too (watching includes resyncing what it watches)
+  'g.publicFull': {},
   'g.leave': {},
+
+  // 本地调试指令（本 Forge 发行版自加的 dev 通道，非上游协议）—— 动作闭枚举见文件顶部的 `DEV_ACTIONS`。两种门禁：
+  //   * `SP_DEV=1`：只认旧形状 `{ funds }`（浏览器控制台 `__SP__.net.send('g.dev', { funds: 1000 })`）；
+  //   * `Match.dev`（「全量模拟」对局）：开发者面板发 action 化的形状，改这一局的状态。
+  // 全部字段都**可选**（形状层），缺省 / 非法由处理器回 BAD_TARGET —— fuzz 的「逐类型造空消息」用例不必特判。
+  'g.dev': {
+    action: (v) => v === undefined || v === null || DEV_ACTIONS.includes(v),
+    funds: (v) => isInt(v, -1000000, 1000000),
+    lp: (v) => isInt(v, -1000, 1000),
+    shopLevel: (v) => isInt(v, 1, 12),
+    chessSlots: (v) => isInt(v, 0, 12),
+    itemSlots: (v) => isInt(v, 0, 12),
+    layers: (v) => isInt(v, 1, 999),
+    count: (v) => isInt(v, 1, 100),
+    routeIndex: (v) => v === undefined || v === null || isInt(v, 0, 7),
+    value: (v) => isInt(v, -1000000, 1000000),
+    bondId: (v) => v === undefined || v === null || isId(v),
+    bandId: (v) => v === undefined || v === null || isId(v),
+    itemId: (v) => v === undefined || v === null || isId(v),
+    chessId: (v) => v === undefined || v === null || isId(v),
+    enemyKey: (v) => v === undefined || v === null || isId(v),
+    stageId: (v) => v === undefined || v === null || isId(v),
+    bossId: (v) => v === undefined || v === null || isId(v),
+    kind: (v) => v === undefined || v === null || v === 'normal' || v === 'boss',
+    overrides: (v) => v === undefined || v === null || (!!v && typeof v === 'object' && !Array.isArray(v) && jsonBytes(v) <= 1024),
+    $optional: ['action', 'funds', 'lp', 'shopLevel', 'chessSlots', 'itemSlots', 'layers', 'count', 'routeIndex', 'value',
+      'bondId', 'bandId', 'itemId', 'chessId', 'enemyKey', 'stageId', 'bossId', 'kind', 'overrides'],
+  },
 
   // client-side combat (DESIGN §14): the authoritative client of a field reports its battle; a 联防 field adds
   // `left` = { [leakerId]: its enemies still standing (unspawned, alive, or through again) } (server/sim/spec.js
@@ -682,7 +925,21 @@ export const C2S = {
     leaksBy: (v) => isMap(v, RESULT_LIMITS.players, isId, (x) => isNum(x, 0, 1e6)),
     $optional: ['resolved', 'leaks', 'bossDmg', 'by', 'done', 'left', 'leaksBy'],
   },
-  'b.result': { battleId: isId, result: isBattleResult },
+  // `cs` (DESIGN §34, optional): the content hash the reporting browser ran the battle on — its spec's `cs`. In a room
+  // with gameplay plugins (P1c, DESIGN §34.6) the match refuses a result without it or with another one (and runs the
+  // battle itself); a vanilla room's browser sends none
+  'b.result': { battleId: isId, result: isBattleResult, cs: isContentHash, $optional: ['cs'] },
+  // A delegated bot layout rehearsal (DESIGN §14): the match's current host answers the candidates it was handed with
+  // the S2C 'b.rehearsal' frame. `choice` is the index of the candidate its browser picked, in the order the task sent
+  // them — a malicious or buggy client can only name one of the server's own candidate layouts, never a layout or a
+  // match state of its own; `error: true` says this client cannot run the task at all (no module Worker, or the
+  // simulation data did not load), so the server takes the rehearsal over at once instead of waiting for its timeout.
+  // An unknown task, another sender or a task the server already took over is ignored; an invalid `choice` makes the
+  // server run the candidates itself. `choice` stops at 7 because a match rehearses at most 8 candidates.
+  'b.rehearsalResult': {
+    taskId: isId, choice: (v) => v === undefined || isInt(v, 0, 7), error: (v) => v === undefined || v === true,
+    $optional: ['choice', 'error'],
+  },
 };
 
 // Server → client message types (documentation + client dispatch table keys).
@@ -692,9 +949,23 @@ export const C2S = {
 // `room.state` carries its OWN `mods` of the same shape when the room declared a set (W-A, DESIGN §28.9) — absent when
 // the room declared none. It names the set the room asked for; the gate above still judges against the process set
 // until W-B makes the room's set the one the simulation runs.
+// `welcome` ALSO carries `maxSeats` on EVERY handshake (业主裁令 2026-10-12; server/lobby.js `welcomeInfo`): the seat
+// ceiling this deployment allows (`LOBBY_DEFAULTS.maxSeats` = `maxSeatsFrom(env)`, **20 by default**), i.e. the number
+// the lobby's seat slider is allowed to reach. It used to be sent only when the ceiling left the official `MAX_SEATS`;
+// the default ceiling is no longer the official one, so there is no case left to omit it for — and a client that never
+// received it (an older server) must keep assuming `MAX_SEATS`, which can only ever ask for FEWER seats.
+// `welcome` ALSO carries `bindTicket` on EVERY handshake (DESIGN §28.59; signed in server/net.js, verified by a pack's
+// `server.modules` with `uses: ["tickets"]`): the game core's HMAC ticket that lets a pack's own service bind the
+// session to its true `playerId` — the client's self-reported one is never trustworthy. It is **not for the player**:
+// it lives 120 s and is one-use, so a client that ignores it loses nothing; it is an additive optional field, which is
+// why `PROTOCOL_VERSION` does not move (same precedent as `hello.auth` / `records.mine`).
 export const S2C = [
   'welcome', 'ok', 'error', 'pong',
   'room.state', 'room.closed',
+  // 上局战绩的答案（server/lobby.js `records.mine`）：`records.latest { record: publicRecord|null }`，只发给请求者。
+  // `record` 的**可见范围**由服务端收窄（docs/RECORDS.md §可见性）：本人看到完整明细，同房的人看到昵称，
+  // 只凭房间号查询的人连昵称都看不到。公开的 HTTP 面另有 `GET /api/records/<CODE>`，与这条消息同源同裁剪。
+  'records.latest',
   // 野排匹配 (quick match, server/matchmaking.js): the queue's own state push, `room.queued { status, position, size,
   // need, waitedMs, deadline, code? }`. status 'waiting' = in the queue (position 1-based, `need` = the queue size the
   // engine waits for), 'placed' = the engine just put this player into a room whose 4-letter code is `code` (the
@@ -703,16 +974,28 @@ export const S2C = [
   // nothing (the slot is kept for a resume and merely stops counting as waiting); a player who is not in the queue
   // never receives one at all.
   'room.queued',
+  // 房间目录的回执（server/lobby.js `listRooms`，docs/META.md §1.7b）：
+  // `room.listed { ok: true, online, roomsCount, matchesCount, rooms }`，**只发给请求者**，并带着那次请求的 `rid`
+  // —— 客户端按 `rid` 收下这一条（`public/js/net.js` 的 `_pending` 认任何类型，与 `records.latest` 同族的做法）。
+  // 只有 `mode === 'coop'` 的房间在里面：独立模拟（solo）不可被加入，列出来只会给出错误的「缺 N 人」。
+  'room.listed',
   // 房内聊天（引擎特性）：`chat.msg { from, name, seat, text, at }` 广播给房间里每个连着的人（旁观者收得到、
   // 说不了）；`chat.history { messages }` 只在重连的 resync 里发给**这一个**会话。两者都永不落盘。
   'chat.msg', 'chat.history',
   'm.public', 'm.private', 'm.field', 'm.toast', 'm.ticker', 'm.emote', 'm.result',
+  // m.layer { playerId, bondId, add } — own live prep layer gain; ephemeral, never replayed on resync.
+  'm.layer',
   // m.unitStats { seq, round, units: [unitStatsEntry] } — the answer to g.unitStats (the requester only)
   'm.unitStats',
   // client-side combat (DESIGN §14): b.start { battleId, fieldId, kind, spec, authoritative, startAt, serverNow, elapsed,
   // speed, watch? } · b.pool { hp, max, teamLp, acked: { [fieldId]: cumulative boss damage counted } } ·
   // b.end { battleId, fieldId, reason }
   'b.start', 'b.pool', 'b.end',
+  // a delegated bot layout rehearsal (DESIGN §14): b.rehearsal { taskId, playerId, cap, specs } — the host's browser
+  // runs the candidate BattleSpecs off the page's main thread and answers with a C2S b.rehearsalResult ·
+  // b.rehearsalCancel { taskId } — the server dropped that task (it timed out, the host changed, the prep ended):
+  // the executor drops it too, and only a running simulation (the Worker) is really stopped
+  'b.rehearsal', 'b.rehearsalCancel',
   // server-run combat streaming (legacy / SP_COMBAT=server only)
   'b.snap', 'b.ev',
   // 包命名空间消息（§1.9.6）：同一个房间里、装了同一个包、声明过这个通道的客户端会收到它。
@@ -745,10 +1028,12 @@ export function validateC2S(msg) {
   return null;
 }
 
-// Event tuple kinds inside `b.ev` (DESIGN §8.2).
+// Event tuple kinds inside `b.ev` (DESIGN §8.2). 'cast' ['cast', id, slot, dur?] is display only: an enemy uses the skill
+// of that slot of its data record's skills[] (server/sim/content/enemies/helpers.js castSlot; the client's skill clip
+// and official skill effects — render/app.js).
 export const EV = Object.freeze({
   SPAWN: 'spawn', ATK: 'atk', DMG: 'dmg', HEAL: 'heal', SKILL: 'skill', ENGAGE: 'engage', DIE: 'die', LEAK: 'leak',
-  STATUS: 'status', FX: 'fx', LAYER: 'layer', BOUNTY: 'bounty', DEPLOY: 'deploy',
+  STATUS: 'status', FX: 'fx', LAYER: 'layer', BOUNTY: 'bounty', DEPLOY: 'deploy', CAST: 'cast',
 });
 
 /**

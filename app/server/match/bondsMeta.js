@@ -24,29 +24,43 @@
 // Layers (`ps.layers[bondId]`) persist the whole match; they are reported for every bond but only matter while active.
 
 import { layerGainRoom } from '../../shared/constants.js';
+import { memberBonds } from '../../shared/morph.js';
 
 export const HARMONY_BOND = 'maniShip';
 export const DEPUTY_BOND = 'deputShip';
 
 /**
- * Bonds of a chess piece: own bonds ∪ bonds granted by 变形同构体 pairings.
+ * Bonds of a chess piece: own bonds ∪ bonds granted by 变形同构体 pairings ∪ **特质授予**（`c.trait.grantsBonds`，
+ * DESIGN §28.49）∪ engine-level extra grants the piece carries (`piece.meta.data.bondGrants`, written by a content
+ * hook through `ctx.setPieceData` — 哥伦比亚 mod 的源石辅助仪 inherits a destroyed item's 变形同构体 grant).
+ * The pairing rule itself lives in `shared/morph.js`（行为开关 `morphPairing`，DESIGN §28.43.1）：这一处、战斗里的
+ * `unitBonds` 与客户端的 `grantedBonds` 调的是**同一个纯函数**，因为三处各写一份循环正是这条规则历史上最容易分叉
+ * 的地方。档位从 `gd`（这一局的 `GameData`，`Match` 建它时把 `Match.morphPairing` 传了进去）读。
+ * `removed`（可选）= 本局被**摘除**的盟约（`server/match/pool.js drawDisabledBonds` 的策略钩子产物，`Match.removedBondsSet`）：
+ * 这类盟约「不算作任何棋子的盟约」—— 不计入归属与激活、不进战斗输入 —— 于是它在这一局里对这些棋子等同于不存在。
  * @param {import('./gamedata.js').GameData} gd
  * @param {{ id: string, items?: Array<{ id: string }> }} piece
+ * @param {Set<string>|null} [removed] 本局摘除的盟约 id
  * @returns {string[]}
  */
-export function pieceBonds(gd, piece) {
+export function pieceBonds(gd, piece, removed = null) {
   const c = gd.chess(piece.id);
-  const out = c && Array.isArray(c.bonds) ? c.bonds.slice() : [];
   const items = Array.isArray(piece.items) ? piece.items : [];
-  if (items.length >= 2) {
-    const recs = items.map((it) => gd.item(it.id)).filter(Boolean);
-    if (recs.some((r) => r.canGiveBond)) {
-      for (const r of recs) {
-        if (r.canGiveBond) continue;
-        if (typeof r.giveBondId === 'string' && gd.bond(r.giveBondId) && !out.includes(r.giveBondId)) out.push(r.giveBondId);
-      }
-    }
-  }
+  const recs = items.map((it) => gd.item(it.id)).filter(Boolean);
+  // 成员资格的**合并**在 `shared/morph.js` 的 `memberBonds`（一处判据、三处同源）：自己的 `bonds` ∪ 装备授予 ∪
+  // **特质授予**（`c.trait.grantsBonds`，DESIGN §28.49）。这一处、战斗里的 `unitBonds` 与客户端的 `pieceBondIds`
+  // 调的是同一个函数 —— 三处各写一份 push 循环正是这条规则历史上最容易分叉的地方。
+  let out = memberBonds(c && Array.isArray(c.bonds) ? c.bonds : [], {
+    trait: c && c.trait,
+    recs,
+    morphed: gd.morphPairing,
+    hasBond: (id) => !!gd.bond(id),
+  });
+  // 引擎级额外授予（`piece.meta.data.bondGrants`，内容钩子经 `ctx.setPieceData` 写入 —— 哥伦比亚 mod 的源石辅助仪
+  // 继承一件被销毁装备的 变形同构体 grant）：它们是**数据**、不是「谁带哪些装备」的判定，所以不进 `memberBonds`。
+  const extra = piece && piece.meta && piece.meta.data && piece.meta.data.bondGrants;
+  if (Array.isArray(extra)) for (const id of extra) if (typeof id === 'string' && gd.bond(id) && !out.includes(id)) out.push(id);
+  if (removed && removed.size) out = out.filter((b) => !removed.has(b));
   return out;
 }
 
@@ -62,14 +76,15 @@ function membership(gd, ps) {
   const onBoardVariant = new Map();
   const inHand = new Map();
   const add = (m, bond, key) => { let s = m.get(bond); if (!s) m.set(bond, (s = new Set())); s.add(key); };
+  const removed = ps.removedBonds || null;
   for (const p of boardChess) {
     const base = gd.baseIdOf(p.id);
     const golden = gd.isGolden(p.id);
-    for (const b of pieceBonds(gd, p)) { add(onBoard, b, base); add(onBoardVariant, b, `${base}|${golden ? 1 : 0}`); }
+    for (const b of pieceBonds(gd, p, removed)) { add(onBoard, b, base); add(onBoardVariant, b, `${base}|${golden ? 1 : 0}`); }
   }
   for (const p of handChess) {
     const base = gd.baseIdOf(p.id);
-    for (const b of pieceBonds(gd, p)) add(inHand, b, base);
+    for (const b of pieceBonds(gd, p, removed)) add(inHand, b, base);
   }
   return { onBoard, onBoardVariant, inHand, goldenOnBoard: boardChess.filter((p) => gd.isGolden(p.id)).length };
 }
@@ -98,7 +113,8 @@ const layersIn = (ps, id) => {
 /**
  * Compute every bond's state for a player. `harmony` (only present when it applies) = the +1 that 调和 added to `count`.
  * @param {import('./gamedata.js').GameData} gd
- * @param {{ board: Map<string, any>, hand: Array<any>, layers: Record<string, number>, bondCountBonus?: Record<string, number> }} ps
+ * @param {{ board: Map<string, any>, hand: Array<any>, layers: Record<string, number>, bondCountBonus?: Record<string, number>,
+ *   removedBonds?: Set<string>|null }} ps `removedBonds`: bonds stripped from every carrier this match (pieceBonds)
  * @returns {Record<string, { count: number, active: boolean, tier: number, layers: number, harmony?: number }>}
  */
 export function computeBonds(gd, ps) {

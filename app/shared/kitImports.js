@@ -33,7 +33,18 @@
 // verdict as the VALIDATOR: `server/workshop.js` imports `kitImportIssues()` from this file, so the editor cannot pass
 // something the loader then refuses (docs/design/mod-layer.md §28.3).
 
-/** The only prefixes a kit may import through. A specifier that starts with neither is refused. */
+/**
+ * 一个 kit **可以 import 的命名空间**。不带这里任何一个前缀的 specifier 一律被拒 —— 但反过来不成立：
+ * 前缀只说明「这个命名空间是开着的」，**具体哪个文件能 import 由下面 `KIT_IMPORT_FILES` 决定**
+ * （裁决走 `kitImportIssues` 的 `targets.has(specifier)`）。
+ *
+ * `@ops/` 就是这条纪律的例子（2026-10-14，业主裁定；2026-10-15 由 4 个加到 8 个，本发行版连同哥伦比亚 / 多索雷斯共 10 个）：它进了这张前缀表，因为浏览器
+ * 侧的 import map 是**按前缀**生成的（`kitImportMap`）、错误文案也要能说"模块没开"而不是"未知前缀"；但表里
+ * **只有列了名的那几个**官方 ops kit（雷姆必拓 4 + 哥伦比亚 4 + 多索雷斯 2），`@ops/op-siege.js` 这类同前缀、未列名的文件
+ * 今天仍然被拒（`test/kitImports.test.js` §⑥ 把这条界线钉住，含一条按前缀计数的断言）。
+ * `@sim/` 同样按文件开表：除三个既有纯函数外，本版还开了 `@sim/detmath.js`（确定性数学的唯一入口）与
+ * `@sim/body.js` / `@sim/professions.js`。
+ */
 export const KIT_IMPORT_PREFIXES = Object.freeze(['@kit/', '@sim/', '@ops/']);
 
 /**
@@ -45,6 +56,13 @@ export const KIT_IMPORT_PREFIXES = Object.freeze(['@kit/', '@sim/', '@ops/']);
  * 两个前缀，而不是把 kit 的名单撑大。
  */
 export const BATTLE_IMPORT_PREFIXES = Object.freeze(['@battle/', '@sim/']);
+
+/**
+ * kit 与 battle 两份前缀的并集。只用于**说清拒绝理由**：「前缀合法、只是那个模块没开」与「前缀根本不存在」
+ * 是两句不同的话 —— 前者能指路（同一个命名空间里有能用的写法），后者只能告负。从两份常量算出来、不抄第二份：
+ * 抄了就会在前缀表变动时给出错的那一句（`@ops/` 进表时正是这条分支要跟着改）。
+ */
+const KNOWN_IMPORT_PREFIXES = Object.freeze([...new Set([...KIT_IMPORT_PREFIXES, ...BATTLE_IMPORT_PREFIXES])]);
 
 /**
  * The whitelist. `specifier` is what the author writes; `file` is the real path, workspace-relative and POSIX — the
@@ -60,19 +78,46 @@ export const KIT_IMPORT_FILES = Object.freeze([
   { specifier: '@kit/tier5.js', file: 'server/sim/content/kits/shared/tier5.js' },
   { specifier: '@kit/tier6.js', file: 'server/sim/content/kits/shared/tier6.js' },
   { specifier: '@kit/summoner.js', file: 'server/sim/content/kits/shared/summoner.js' },
-  // the three pure engine helpers the SDK is built on (and the ones a community kit already imported by relative path)
+  // the pure engine helpers the SDK is built on (and the ones a community kit already imported by relative path)
   { specifier: '@sim/constants.js', file: 'server/sim/constants.js' },
   { specifier: '@sim/dir.js', file: 'server/sim/dir.js' },
   { specifier: '@sim/targeting.js', file: 'server/sim/targeting.js' },
   // the official per-operator kits a community kit may reuse (雷姆必拓 mod: 黑/莱伊/予愿安洁莉娜/珊比)
+  // ⭐ `@sim/detmath.js`（2026-10-15，交接文档 §2 的 W1：**上游单有、我们缺**的一条）。
+  //   AGENTS.md 的确定性硬规矩要求 `server/sim/` 里的代码**不许**直接用 `Math.sin` / `Math.cos` / `Math.atan2` /
+  //   `Math.hypot` / `Math.pow` 这类「两端可能不一致」的函数（`tools/check-imports.mjs` 与
+  //   `test/sim/detmath.test.js` 一起钉这件事）。包里的 kit 若要算几何（射程、方向、距离），**唯一**的正当
+  //   写法就是 import 这个模块 —— 不开放它，作者只能自己抄一份 `Math.*`，那正是这条硬规矩要挡的东西。
+  //
+  //   ⚠️ **准入口径**：不是「零模块级变量」，而是「**无可观察状态、每个导出都是纯函数**」（文件里确有模块级
+  //   暂存缓冲，但每次调用先写后读、不跨调用保留）。
+  { specifier: '@sim/detmath.js', file: 'server/sim/detmath.js' },
+  // ⭐ 另外两个**同样纯**的引擎 helper（2026-10-15）。开表的理由不是「想让包碰内核」，而是「包已经在整份复制它们了」：
+  //   一份实测的第三方补丁为了用 `bodyInKeys` / `resolveProfile`，把 `server/sim/body.js`、`server/sim/professions.js`
+  //   的相关段落抄进了包内 —— 抄出来的是一份**会静默漂移的副本**。与 `@ops/` 同一条纪律：**按文件指名，不开前缀**。
+  { specifier: '@sim/body.js', file: 'server/sim/body.js' },
+  { specifier: '@sim/professions.js', file: 'server/sim/professions.js' },
   { specifier: '@ops/op-shwaz.js', file: 'server/sim/content/kits/ops/op-shwaz.js' },
   { specifier: '@ops/op-ray.js', file: 'server/sim/content/kits/ops/op-ray.js' },
   { specifier: '@ops/op-aglna2.js', file: 'server/sim/content/kits/ops/op-aglna2.js' },
   { specifier: '@ops/op-thumpy.js', file: 'server/sim/content/kits/ops/op-thumpy.js' },
+  // 哥伦比亚 mod: 谬因 / 娜斯提 / 涤火杰西卡 / 霍尔海雅（含召唤物 中继器 / 支援装置 / 机动盾牌）
+  { specifier: '@ops/op-aphris.js', file: 'server/sim/content/kits/ops/op-aphris.js' },
+  { specifier: '@ops/op-nasti.js', file: 'server/sim/content/kits/ops/op-nasti.js' },
+  { specifier: '@ops/op-jesca2.js', file: 'server/sim/content/kits/ops/op-jesca2.js' },
+  { specifier: '@ops/op-heyak.js', file: 'server/sim/content/kits/ops/op-heyak.js' },
+  // 多索雷斯 mod: 假日威龙陈 / 林（复用官方的散射手 / 阵法术师 kit）
+  { specifier: '@ops/op-chen2.js', file: 'server/sim/content/kits/ops/op-chen2.js' },
+  { specifier: '@ops/op-lin.js', file: 'server/sim/content/kits/ops/op-lin.js' },
   // 战斗逻辑模块的 SDK：**战斗内容层的辅助函数**（`server/sim/content/support/index.js`）—— 官方内容模块
   // （`content/bonds/*.js`、`content/garrisons/*.js`）用的同一份。它已经在浏览器侧被服务（`/sim/content/support/`，
   // 客户端战斗本来就要加载它），所以两端都能解。
   { specifier: '@battle/index.js', file: 'server/sim/content/support/index.js' },
+  // 战斗逻辑模块的 SDK 的**注册面**（`server/sim/content/support/mod.js`）：基地辅助函数（`@battle/index.js` 的全集）
+  // 加上 register* 注册函数与 wave-B 安装器用到的读法（reached / onLayers / onUnitDamaged / bondBb / byUnit /
+  // fireGain / bp / memberOf / …）。工坊 mod 的盟约 / 战斗特质 / 装备行为 / 召唤物 kit 就靠这一份把自己接进官方表，
+  // 不必再新增引擎专属的挂载点。它是**叶子模块**（只再导出兄弟模块，无人 import 它），所以两端都不会成环。
+  { specifier: '@battle/mod.js', file: 'server/sim/content/support/mod.js' },
 ]);
 
 /** 战斗逻辑模块允许的名单（它不比 kit 多一个前缀，只是指向另一组文件）。 */
@@ -329,7 +374,7 @@ export function kitImportUnavailableReason(specifier, { allowedText = kitImportA
   }
   if (s.startsWith('.')) return `相对路径无法同时在服务端与浏览器成立（只有 "./…" 这种向下的包相对形式可以，见 §28.18）；${allowedBoth}`;
   if (s.startsWith('/')) return `绝对路径无法同时在服务端与浏览器成立；${allowedBoth}`;
-  if (s.startsWith('@kit/') || s.startsWith('@sim/') || s.startsWith('@battle/')) {
+  if (KNOWN_IMPORT_PREFIXES.some((p) => s.startsWith(p))) {
     return `模块名 "${s.slice(s.indexOf('/') + 1)}" 未开放（前缀合法，但这个文件不在白名单里）；${allowedBoth}`;
   }
   if (s.startsWith('@')) return `未知前缀 "${s.slice(0, s.indexOf('/') + 1 || undefined)}"；${allowedBoth}`;

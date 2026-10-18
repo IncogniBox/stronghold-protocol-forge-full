@@ -65,7 +65,9 @@ export class MatchViews {
       t: 'm.public',
       phase: this.phase,
       round: this.round,
-      lastRound: this.gd.lastRound,
+      // 「全量模拟」的回合数无限：不给客户端一个「最后一回合」（否则 ui/hud.js 会把 `round > lastRound` 的回合
+      // 当成隐秘核心）。普通对局照官方值。
+      lastRound: this.dev ? 999 : this.gd.lastRound,
       deadline: this.deadline,
       serverNow: this.sched.now(),
       modeId: this.modeId,
@@ -82,46 +84,30 @@ export class MatchViews {
       disabledBonds: [...new Set([...this.disabledBonds, ...this.staticInactiveBonds])].sort(),
       drawnDisabledBonds: this.disabledBonds.slice(),
       bannedChess: this.bannedChess.slice(),
+      // 本局被**摘除**的盟约（`drawDisabledBonds` 的包策略产物）：它们对任何棋子都不算数（bondsMeta.pieceBonds），
+      // 客户端据此把这些盟约从干员的盟约芯片 / 名单里去掉（同时它们也在 disabledBonds 里 —— 简报照「本局禁用」画）。
+      // 一个都没有时**不出现这个键**：没有包的对局与前逐字节相同。
+      ...(this.removedBonds && this.removedBonds.length ? { removedBonds: this.removedBonds.slice() } : {}),
       bossId: this.bossId,
       hiddenBossId: this.hiddenBossId,
-      bossRound: this.gd.bossRound,
+      // 开发者面板强制的首领回合：这一整个回合都要看起来像官方首领回合（客户端的 最终攻势 分场 / 相机 / 首领 HUD
+      // 全部按 `pub.bossRound` 判定）—— 覆盖它，否则服务端计划了首领波次、界面照样是普通场景。
+      bossRound: this.devBossRound ?? this.gd.bossRound,
       hiddenRound: this.gd.hiddenRound,
+      bossPairs: this.bossWaves ? this.bossWaves.map(w => w.players.slice()) : this.bossPairs ? this.bossPairs.map(ids => ids.slice()) : null,
       spRound: this.gd.spRounds().includes(this.round),
       // DESIGN §14: 'client' = battles are simulated by the browsers (b.start specs), 'server' = legacy streaming
       combatMode: this.clientCombat ? 'client' : 'server',
       // solo pause (g.pause, DESIGN §14): the battle, its field clock and every deadline are frozen while true
       paused: !!this.paused,
-      players: this.order.map((ps) => ({
-        playerId: ps.playerId,
-        seat: ps.seat,
-        name: ps.name,
-        isBot: ps.isBot,
-        connected: ps.isBot || (ps.connected && !ps.left),
-        alive: ps.alive,
-        lp: Math.max(0, ps.lp),
-        bandId: ps.bandId,
-        shopLevel: ps.shop.level,
-        boardCount: ps.deployCount,
-        ready: this.phase === PHASE.INFO_CHECK ? ps.infoReady : ps.ready,
-        // the strip of a teammate watching this player (DESIGN §20.15): every bond with members, layers or an active tier
-        // (= the player's own m.private list without thresholds / countsHand — the client reads those from bonds.json),
-        // this round's in-battle gains included once the COMBAT phase ended (PlayerState.bondsView); [] once eliminated —
-        // nobody can watch an eliminated player (g.watch refuses them, they have no field) and the result screen reads
-        // m.result's own bonds, so their layers would only cost every m.public bytes for the rest of the match
-        // (the mode-off bonds with members included, `off: true`, as in m.private — bondsMeta.offBondCounts)
-        bonds: ps.alive ? bondList(this.gd, ps.bondsView(), { off: offBondCounts(ps.gd || this.gd, ps) }) : [],
-        fieldId: this.fieldOf(ps),
-        status: this.statusOf(ps),
-        autoplay: ps.autoplay,
-        // the LP this round's own battle will cost at settlement so far (COMBAT / 联防 only, omitted when 0)
-        ...this._pendingLpView(ps),
-      })),
-      fields: this.fields.map((f) => {
-        const v = { fieldId: f.fieldId, kind: f.kind, players: f.players.slice(), live: !!f.live };
-        const pr = this._fieldProgress(f);
-        if (pr) v.progress = pr;
-        return v;
-      }),
+      // 开发者模式（「全量模拟」）：客户端据此显示局内开发者面板。普通对局**不出现这个键**（帧逐字节不变）。
+      ...(this.dev ? { dev: true } : {}),
+      // 已武装、还没被下一回合消费的战斗类型（面板据此高亮 / 提示「下一回合生效」）。
+      // **在 dev 局里恒出现**（未武装时是 null）：增量帧的顶层键白名单不认识它，只有**第一帧就带上**，
+      // 之后的变化才走 patch 而不是每次都被差集拒绝、整帧重发。
+      ...(this.dev ? { devNextKind: this.devRoundKind ?? null } : {}),
+      players: this.order.map((ps) => this.publicPlayerView(ps)),
+      fields: this.fields.map((f) => this.publicFieldView(f)),
     };
     if (this.teamLp != null) v.teamLp = Math.max(0, Math.round(this.teamLp));
     // 最终攻势 / 隐秘核心: when the overtime drain starts (ms epoch; `deadline` is the level's 120 s countdown)
@@ -138,7 +124,8 @@ export class MatchViews {
     if (this.phase === PHASE.SP_DRAFT && this.sp) {
       const s = this.sp;
       v.sp = {
-        family: s.family, name: s.name, desc: s.desc, eventId: s.eventId, cards: s.cards.map(cardView), order: s.order.slice(),
+        family: s.family, name: s.name, desc: s.desc, eventId: s.eventId,
+        cards: s.cards.map(c => ({ ...cardView(c), soldOut: c.kind === 'item' && !this.itemPool.canGain(c.id) })), order: s.order.slice(),
         turn: this.spTurn(), picks: { ...s.picks }, taken: { ...s.taken }, untimed: !!s.untimed,
       };
     }
@@ -150,6 +137,48 @@ export class MatchViews {
       const ur = this.uniteResultView;
       v.uniteResult = { through: ur.through, helpers: ur.helpers.slice(), leakers: ur.leakers.slice(), losses: { ...ur.losses } };
     }
+    return v;
+  }
+
+  /**
+   * One `m.public.players[]` row (full form). Split out of publicView so the incremental frame (matchMessaging
+   * _publicFrame → server/viewsDelta.js) can diff one player at a time: the emitted objects are the same, field for
+   * field, in the same order — a full frame is byte-identical to before the delta work.
+   * @param {any} ps PlayerState
+   */
+  publicPlayerView(ps) {
+    return {
+      playerId: ps.playerId,
+      seat: ps.seat,
+      name: ps.name,
+      isBot: ps.isBot,
+      connected: ps.isBot || (ps.connected && !ps.left),
+      alive: ps.alive,
+      lp: Math.max(0, ps.lp),
+      bandId: ps.bandId,
+      shopLevel: ps.shop.level,
+      boardCount: ps.deployCount,
+      ready: this.phase === PHASE.INFO_CHECK ? ps.infoReady : ps.ready,
+      // the strip of a teammate watching this player (DESIGN §20.15): every bond with members, layers or an active tier
+      // (= the player's own m.private list without thresholds / countsHand — the client reads those from bonds.json),
+      // this round's in-battle gains included once the COMBAT phase ended (PlayerState.bondsView); [] once eliminated —
+      // nobody can watch an eliminated player (g.watch refuses them, they have no field) and the result screen reads
+      // m.result's own bonds, so their layers would only cost every m.public bytes for the rest of the match
+      // (the mode-off bonds with members included, `off: true`, as in m.private — bondsMeta.offBondCounts)
+      bonds: ps.alive ? bondList(this.gd, ps.bondsView(), { off: offBondCounts(ps.gd || this.gd, ps) }) : [],
+      fieldId: this.fieldOf(ps),
+      status: this.statusOf(ps),
+      autoplay: ps.autoplay,
+      // the LP this round's own battle will cost at settlement so far (COMBAT / 联防 only, omitted when 0)
+      ...this._pendingLpView(ps),
+    };
+  }
+
+  /** One `m.public.fields[]` row (full form; split out for the incremental frame, like publicPlayerView). @param {any} f */
+  publicFieldView(f) {
+    const v = { fieldId: f.fieldId, kind: f.kind, players: f.players.slice(), live: !!f.live };
+    const pr = this._fieldProgress(f);
+    if (pr) v.progress = pr;
     return v;
   }
 
@@ -227,14 +256,16 @@ export class MatchViews {
   /** nextEnemies preview for m.private. */
   nextEnemiesFor(ps) {
     if (!ps.alive) return [];
+    // 开发者模式：面板「添加至怪物预览区」追加的敌人也进预览（与战场同一份列表，见 combat.js _normalOpts）
+    const dev = this.devExtraEnemies || [];
     if (this.bossWaves) {
       const g = this.bossGroupOf(ps);
       if (!g) return [];
-      return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side })]);
+      return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side }), ...dev]);
     }
     if (!this.wave) return [];
     const bounty = bountySpawns(this.gd, this.round, this.wave, ps.bounties, ps.playerId, { solo: this.isSolo });
-    return previewOf([...this.wave.spawns, ...bounty]);
+    return previewOf([...this.wave.spawns, ...bounty, ...dev]);
   }
 
   /** A 自选 piece's pick (like the sim's UnitInfo.diy): a scout's card composes the operator from it (shared/diy.js). */
@@ -243,10 +274,29 @@ export class MatchViews {
     return p ? { charId: p.charId, skillIndex: p.skillIndex, uniEquipId: p.uniEquipId } : undefined;
   }
 
+  /** The 外勤医疗 reserve medic already standing on each player's field in preparation. Touch replaces it only at
+   * battleStart, so the prep view always uses the reserve medic, regardless of the current elite count. The stage's
+   * normal-board slot is transformed to the correct half of a boss field by _onBossHalf / the client prep camera. */
+  prepMapChars(ps) {
+    if (!ps?.alive || this.phase !== PHASE.PREP || !this.teamMedicGranted()) return [];
+    const id = 'char_605_cmedic';
+    const slot = this.stage?.mapChars?.find((m) => m?.key === id && Array.isArray(m.pos) && m.pos[0] >= 9 && m.pos[0] <= 12
+      && m.pos[1] >= 0 && m.pos[1] <= 10 && !/multi_only/.test(String(m.alias)));
+    const rec = this.gd.token(id);
+    if (!slot || !rec) return [];
+    const dir = slot.dir || 'RIGHT';
+    return [{
+      id: -ps.seat - 1, uid: -ps.seat - 1, kind: 'token', side: 'ally', ownerId: ps.playerId, defId: id,
+      area: 'board', name: rec.name || id, tier: 1, golden: false,
+      spine: rec.assets?.spine || id, avatar: rec.assets?.avatar || id,
+      x: slot.pos[1], y: slot.pos[0], dir, facing: dir === 'LEFT' ? -1 : 1, maxHp: rec.stats?.maxHp || 1,
+    }];
+  }
+
   /** UnitInfo of a player's board pieces on their (board) tiles — a prep scout's board, the boss partner's (bossMateView).
    *  `area: 'board'` (a bench unit says 'hand' / 'temp': prepFieldMeta). */
   _prepBoardUnits(ps) {
-    const units = [];
+    const units = this.prepMapChars(ps);
     // the player's own view of the data (0.2.0 自选编队: its slotted DIY slots are its operators — player/diy.js)
     const gd = ps.gd || this.gd;
     for (const { r, c, piece } of boardOrder(ps.board)) {
@@ -340,7 +390,7 @@ export class MatchViews {
     for (let i = 0; i < ps.hand.length; i++) {
       if (ps.hand[i]) benchUnit(ps.hand[i], i, GEO.HAND_ROW, 'hand');
     }
-    for (let i = 0; i < ps.temp.length; i++) {
+    for (let i = 0; i < Math.min(ps.temp.length, GEO.TEMP_SIZE); i++) {
       if (ps.temp[i]) benchUnit(ps.temp[i], GEO.TEMP_C0 + i, GEO.TEMP_ROW, 'temp');
     }
     // `nextEnemies`: the scouted player's coming enemies — their preview pen shows on the scouting board too (research 09
