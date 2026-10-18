@@ -14,7 +14,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { snapshot, verify, jobsOf, repair, manifestHash, MANIFEST_REL, groupOf, groupsOf, listPayload, forceRows, needRows, normalizeTarget } from '../tools/large-assets.mjs';
+import { snapshot, verify, jobsOf, repair, manifestHash, MANIFEST_REL, groupOf, groupsOf, listPayload, forceRows, needRows, normalizeTarget, repairFromPacks, packRows, packSafeRel } from '../tools/large-assets.mjs';
+import { zipWrite } from '../shared/zip.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sp-large-'));
@@ -246,5 +247,175 @@ describe('真子进程那条路（node tools/large-assets.mjs --check --json）'
     assert.equal(code, 1, '有缺失 ⇒ 退出码 1（运维看得见）');
     assert.ok(fs.existsSync(keep), '--check 不动盘上的东西');
     assert.equal(fs.existsSync(gone), false, '也不凭空造文件');
+  });
+});
+
+describe('备用来源：Release 组包（repairFromPacks，注入 fetchImpl 与本地造的 zip）', () => {
+  const absFor = (root, rel) => path.join(root, 'public', ...rel.split('/'));
+  const packConfig = (groups, extra = {}) => ({
+    v: 1, repo: 'o/n', tag: 't', releaseBase: 'https://rel.example.com/download', mirrors: [], groups, ...extra,
+  });
+  const zipResponse = (zip) => new Response(zip, { status: 200, headers: { 'content-length': String(zip.length) } });
+
+  test('好条目写盘、size 不符的条目被点名丢弃（只写校验通过的）', async () => {
+    const root = tmp();
+    const good = Buffer.from('scene-bytes-'.repeat(64));
+    const bad = Buffer.from('short');
+    const relGood = 'assets/local/scene/m01/scene.bin';
+    const relBad = 'assets/local/scene/m02/scene.bin';
+    const manifest = {
+      v: 1,
+      files: {
+        [relGood]: { size: good.length, sha256: sha(good) },
+        [relBad]: { size: 4096, sha256: sha(Buffer.alloc(4096, 9)) },
+      },
+    };
+    const rows = verify({ root, manifest }).rows;            // 两项都缺
+    assert.equal(rows.length, 2);
+    const zip = zipWrite([{ name: relGood, data: good }, { name: relBad, data: bad }]);
+    const config = packConfig([{ id: 'local/scene', name: 'local/scene', file: 'local__scene.zip', bytes: zip.length }]);
+    const asked = [];
+    const events = [];
+    const out = await repairFromPacks({
+      root, manifest, rows, config, onEvent: (e) => events.push(e),
+      fetchImpl: async (url) => { asked.push(url); return zipResponse(zip); },
+    });
+    assert.deepEqual([out.repaired, out.failed], [1, 1], '好的收下、坏的记一笔');
+    assert.deepEqual(asked, ['https://rel.example.com/download/t/local__scene.zip'], '只按声明的 file 拼一个 URL');
+    assert.equal(sha(fs.readFileSync(absFor(root, relGood))), sha(good), '好条目落盘且字节一致');
+    assert.equal(fs.existsSync(absFor(root, relBad)), false, 'size 不符的条目丢弃、不落盘');
+    assert.deepEqual(events.filter((e) => e.type === 'file').map((e) => [e.rel, e.status]), [[relGood, 'ok'], [relBad, 'error']], '好坏都进事件（坏的带着理由）');
+    assert.deepEqual([verify({ root, manifest }).totals.missing, verify({ root, manifest }).totals.short], [1, 0]);
+  });
+
+  test('盘上已经好的那一项不被覆盖（好文件不换，哪怕清单那一行还标着缺）', async () => {
+    const root = tmp();
+    const same = Buffer.from('same-bytes-'.repeat(32));
+    const rel = 'assets/local/scene/m01/scene.bin';
+    const manifest = { v: 1, files: { [rel]: { size: same.length, sha256: sha(same) } } };
+    write(root, rel, same);                                   // 盘上已经是对的
+    assert.equal(verify({ root, manifest }).rows.length, 0, '核对结论：没问题');
+    const zip = zipWrite([{ name: rel, data: Buffer.from('DIFFERENT-BYTES') }]);   // 组包里是另一份
+    const config = packConfig([{ id: 'local/scene', file: 'local__scene.zip', bytes: zip.length }]);
+    // 一个**过期**的行（标着仍缺）：落盘时必须以盘上的真相为准，别覆盖好文件
+    const out = await repairFromPacks({ root, manifest, config, fetchImpl: async () => zipResponse(zip),
+      rows: [{ rel, size: same.length, sha256: sha(same), kind: 'bin', need: true, status: 'missing' }] });
+    assert.deepEqual([out.repaired, out.failed], [0, 0], '盘上没问题就不写、也不点名');
+    assert.equal(sha(fs.readFileSync(absFor(root, rel))), sha(same), '好文件原样，没被组包那份换掉');
+  });
+
+  test('白名单：只取声明过的 groups[].file；未声明的组一个请求都不发', async () => {
+    const root = tmp();
+    const a = Buffer.from('a'.repeat(64));
+    const b = Buffer.from('b'.repeat(64));
+    const relScene = 'assets/local/scene/m01/scene.bin';
+    const relUi = 'assets/local/ui/outer/x.png';
+    const manifest = { v: 1, files: { [relScene]: { size: a.length, sha256: sha(a) }, [relUi]: { size: b.length, sha256: sha(b) } } };
+    const rows = verify({ root, manifest }).rows;
+    const zip = zipWrite([{ name: relScene, data: a }, { name: relUi, data: b }]);
+    const config = packConfig([{ id: 'local/scene', name: 'local/scene', file: 'local__scene.zip', bytes: zip.length }]);   // 只声明 scene
+    const asked = [];
+    const out = await repairFromPacks({ root, manifest, rows, config, fetchImpl: async (url) => { asked.push(url); return zipResponse(zip); } });
+    assert.deepEqual(asked, ['https://rel.example.com/download/t/local__scene.zip'], '只取声明过的那个 file，绝不自由拼 URL');
+    assert.equal(out.repaired, 1, 'scene 那一项补上');
+    assert.equal(out.failed, 1, '未声明的 local/ui 那一项如实点名');
+    assert.equal(sha(fs.readFileSync(absFor(root, relScene))), sha(a));
+    assert.equal(fs.existsSync(absFor(root, relUi)), false, '未声明的组不写');
+  });
+
+  test('只收 https：http 的源带理由拒绝、不尝试；回退到 https 的镜像', async () => {
+    const root = tmp();
+    const body = Buffer.from('q'.repeat(64));
+    const rel = 'assets/local/scene/m01/scene.bin';
+    const manifest = { v: 1, files: { [rel]: { size: body.length, sha256: sha(body) } } };
+    const rows = verify({ root, manifest }).rows;
+    const zip = zipWrite([{ name: rel, data: body }]);
+    const config = packConfig([{ id: 'local/scene', file: 'local__scene.zip', bytes: zip.length }], { releaseBase: 'http://plain.example.com/dl', mirrors: ['https://ok.example.com'] });
+    const asked = [];
+    const out = await repairFromPacks({ root, manifest, rows, config, fetchImpl: async (url) => { asked.push(url); return zipResponse(zip); } });
+    assert.deepEqual(asked, ['https://ok.example.com/local__scene.zip'], 'http 的 releaseBase 不尝试，回退到 https 的 mirror');
+    assert.equal(out.repaired, 1);
+  });
+
+  test('组包取不到时不阻断：逐条点名，别的组照补', async () => {
+    const root = tmp();
+    const goodScene = Buffer.from('s'.repeat(128));
+    const goodUi = Buffer.from('u'.repeat(128));
+    const relScene = 'assets/local/scene/m01/scene.bin';
+    const relUi = 'assets/local/ui/outer/x.png';
+    const manifest = { v: 1, files: { [relScene]: { size: goodScene.length, sha256: sha(goodScene) }, [relUi]: { size: goodUi.length, sha256: sha(goodUi) } } };
+    const rows = verify({ root, manifest }).rows;
+    const zipUi = zipWrite([{ name: relUi, data: goodUi }]);
+    const config = packConfig([
+      { id: 'local/scene', file: 'local__scene.zip', bytes: 100 },
+      { id: 'local/ui', file: 'local__ui.zip', bytes: zipUi.length },
+    ]);
+    const asked = [];
+    const logs = [];
+    const out = await repairFromPacks({
+      root, manifest, rows, config, log: (s) => logs.push(s),
+      fetchImpl: async (url) => { asked.push(url); return String(url).endsWith('local__scene.zip') ? new Response('gone', { status: 404 }) : zipResponse(zipUi); },
+    });
+    assert.deepEqual([out.repaired, out.failed], [1, 1], 'scene 取不到只点名，ui 照补');
+    assert.equal(sha(fs.readFileSync(absFor(root, relUi))), sha(goodUi));
+    assert.equal(fs.existsSync(absFor(root, relScene)), false);
+    assert.ok(asked.every((u) => u.includes('local__scene.zip') || u.includes('local__ui.zip')), '只问了两个声明的包');
+    assert.ok(logs.some((l) => l.includes('组包 local__scene.zip 没取到')), '取不到的那一组如实点名');
+  });
+
+  test('坏归档（zipRead 拒 `..` 路径）整份被拒、什么都不写、也不写到 public/ 之外', async () => {
+    const root = tmp();
+    const body = Buffer.from('z'.repeat(64));
+    const rel = 'assets/local/scene/m01/scene.bin';
+    const manifest = { v: 1, files: { [rel]: { size: body.length, sha256: sha(body) } } };
+    const rows = verify({ root, manifest }).rows;
+    const evil = zipWrite([{ name: '../escape.bin', data: body }]);
+    const config = packConfig([{ id: 'local/scene', file: 'local__scene.zip', bytes: evil.length }]);
+    const out = await repairFromPacks({ root, manifest, rows, config, fetchImpl: async () => zipResponse(evil) });
+    assert.deepEqual([out.repaired, out.failed], [0, 1]);
+    assert.equal(fs.existsSync(absFor(root, rel)), false);
+    assert.equal(fs.existsSync(path.join(root, 'public/escape.bin')), false, '没有写到 public/ 之外');
+    assert.equal(packSafeRel('../escape.bin'), false);
+  });
+
+  test('packRows：缺/短/哈希不符都收；好的与「比清单大」不收', () => {
+    const rows = [
+      { rel: 'assets/local/scene/a.bin', need: true, status: 'missing' },
+      { rel: 'assets/local/scene/b.bin', need: true, status: 'short' },
+      { rel: 'assets/local/scene/c.bin', need: false, status: 'sha' },
+      { rel: 'assets/local/scene/d.bin', need: false, status: 'longer' },
+      { rel: 'assets/local/scene/e.bin', need: false, status: 'ok' },
+      { rel: 'assets/local/ui/f.png', need: true, status: 'missing' },
+    ];
+    assert.deepEqual(packRows(rows, 'all').map((r) => r.rel), ['assets/local/scene/a.bin', 'assets/local/scene/b.bin', 'assets/local/scene/c.bin', 'assets/local/ui/f.png']);
+    assert.deepEqual(packRows(rows, 'local/scene').map((r) => r.rel), ['assets/local/scene/a.bin', 'assets/local/scene/b.bin', 'assets/local/scene/c.bin']);
+  });
+});
+
+describe('真子进程：--repair 的备用来源那条路（两个源都不可达也不崩）', () => {
+  test('CDN 与组包都取不到 ⇒ 退出码 1、summary 里如实记「仍缺」、stderr 有人话点名', () => {
+    const root = tmp();
+    const rel = 'assets/local/scene/m01/scene.bin';
+    const manifest = { v: 1, files: { [rel]: { size: 64, sha256: sha(Buffer.alloc(64, 5)) } } };
+    fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+    fs.writeFileSync(path.join(root, MANIFEST_REL), JSON.stringify(manifest, null, 1));
+    fs.writeFileSync(path.join(root, 'data/asset-pack.json'), JSON.stringify({
+      v: 1, repo: 'o/n', tag: 't', releaseBase: 'https://127.0.0.1:1', mirrors: [],
+      groups: [{ id: 'local/scene', name: 'local/scene', file: 'local__scene.zip', bytes: manifest.files[rel].size }],
+    }, null, 1));
+    let out;
+    let err;
+    let code = 0;
+    try {
+      out = execFileSync(process.execPath, [path.join(ROOT, 'tools/large-assets.mjs'), '--repair', '--json', '--root', root],
+        { encoding: 'utf8', cwd: ROOT, env: { ...process.env, SP_CDN_BASE: 'http://127.0.0.1:1/' } });
+    } catch (e) { code = e.status; out = String(e.stdout || ''); err = String(e.stderr || ''); }
+    assert.equal(code, 1, '仍有缺项 ⇒ 退出码 1（工具没崩、也没假装成功）');
+    const lines = out.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    assert.equal(lines[0].type, 'plan');
+    const summary = lines.at(-1);
+    assert.equal(summary.type, 'summary');
+    assert.equal(summary.failed, 1, 'CDN 失败 + 组包取不到，最后仍是 1 项缺（不是两手相加）');
+    assert.ok(err.includes('组包 local__scene.zip 没取到'), 'stderr 点名了取不到的组包');
   });
 });

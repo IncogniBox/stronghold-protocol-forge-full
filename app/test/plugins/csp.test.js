@@ -6,7 +6,7 @@ import os from 'node:os';
 import { Writable } from 'node:stream';
 import { once } from 'node:events';
 import { createHash } from 'node:crypto';
-import { siteCsp, SIM_WORKER_CSP } from '../../server/http/csp.js';
+import { siteCsp, SIM_WORKER_CSP, assetCdnOrigin } from '../../server/http/csp.js';
 import { createRequestHandler } from '../../server/http/routes.js';
 import { createStaticHandler } from '../../server/http/static.js';
 import { installPixiNoEval } from '../../public/js/render/app/pixiNoEval.js';
@@ -43,6 +43,36 @@ test('page import maps hash exact bytes; no inline executable script/events; pag
       else assert.ok(!m[2].trim(), file);
     }
   }
+});
+
+test('the asset CDN origin (SP_CDN_BASE) enters the passive types only — never script-src / style-src / frame-src / object-src', () => {
+  const cdn = 'https://speedcdn.jiangjiangze.icu';
+  const plain = siteCsp(publicDir, '');            // '' ⇒ unset, today's policy
+  const withCdn = siteCsp(publicDir, cdn);
+  // ① a legal base: the origin appears in img-src and connect-src, and in no other directive
+  const dirs = Object.fromEntries(withCdn.split('; ').map((s) => { const sp = s.indexOf(' '); return [s.slice(0, sp), s.slice(sp + 1)]; }));
+  const carrying = Object.entries(dirs).filter(([, v]) => v.includes(cdn)).map(([k]) => k).sort();
+  assert.deepEqual(carrying, ['connect-src', 'img-src'], 'the CDN origin only in the passive-ish types');
+  assert.equal(dirs['img-src'], `'self' data: blob: ${cdn}`);
+  assert.equal(dirs['connect-src'], `'self' ${cdn}`);
+  for (const d of ['script-src', 'style-src', 'frame-src', 'object-src']) assert.ok(!dirs[d].includes('speedcdn'), `${d} must never carry the CDN origin`);
+  assert.match(withCdn, /script-src 'self' 'sha256-/, 'script-src stays self + the importmap hashes');
+  // ② unset / blank / a typo / a non-http(s) scheme ⇒ byte-for-byte today's policy
+  assert.equal(plain, siteCsp(publicDir, null));
+  assert.match(plain, /img-src 'self' data: blob:;/); assert.match(plain, /connect-src 'self';/);
+  for (const bad of ['', '   ', null, 'not a url', 'ftp://cdn.example.com', 'javascript:alert(1)']) {
+    assert.equal(siteCsp(publicDir, bad), plain, `fallback for ${JSON.stringify(bad)}`);
+    assert.ok(!siteCsp(publicDir, bad).includes('speedcdn'), `${JSON.stringify(bad)}: no CDN origin`);
+  }
+  // the source is the environment variable when no argument is given (and only the origin is used)
+  const saved = process.env.SP_CDN_BASE;
+  try {
+    delete process.env.SP_CDN_BASE; assert.equal(siteCsp(publicDir), plain, 'unset ⇒ today');
+    process.env.SP_CDN_BASE = `${cdn}/a/b/?x=1`; assert.equal(siteCsp(publicDir), withCdn, 'env value, origin only (path/query dropped)');
+  } finally { if (saved === undefined) delete process.env.SP_CDN_BASE; else process.env.SP_CDN_BASE = saved; }
+  // the origin extractor
+  assert.equal(assetCdnOrigin(`${cdn}/a/b?x=1`), cdn);
+  for (const bad of ['', '   ', 'nope', 'ftp://x', 'javascript:alert(1)']) assert.equal(assetCdnOrigin(bad), null, JSON.stringify(bad));
 });
 
 test('native script HTTP routes serve exact descriptor bytes and JavaScript MIME under site CSP',async t=>{

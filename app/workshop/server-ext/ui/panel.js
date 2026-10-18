@@ -37,6 +37,13 @@ let sharedClient = null;
 /** 这一页上还活着的本模块面板（起名页那一格与大厅芯片那一格**可能同时在**）。用**集合**而不是计数：同一次挂载
  * 天然只记一个记号，重复 apply / 漏掉一次 unmount 都不会把它算错（`close()` 因此不会被人为拖住）。 */
 const liveMounts = new Set();
+/** 「**这一页里**已经进过一次大厅」没有 —— 它是「记住我」与「同页内退回起名屏」的分界线：
+ *   * 新开页面 / 刷新：模块重新加载 ⇒ `false` ⇒ 起名页那一格认到 token 有效就**零输入直达**（记住我）；
+ *   * 玩家在大厅按「返回」退回起名屏：同一次页面会话 ⇒ 那一格重新挂载时它已经是 `true` ⇒ **不再自动送进**，
+ *     停在起名屏，由玩家点「以 昵称#编号 进入」再进。
+ * **只放在模块级**（不落 localStorage / store）：「这一页里进过没有」是**这一次页面会话**的事实；写进
+ * localStorage 反而会让下一次打开页面也变成「不自动进」，把「记住我」弄坏。 */
+let enteredFromHere = false;
 function clientFor(ctx) {
   if (!sharedClient) sharedClient = new AccountClient({ log: ctx && ctx.log });
   return sharedClient;
@@ -81,6 +88,10 @@ function Avatar({ account, size = 44 }) {
  * 这里**不走弹窗**：注册 / 登录就长在「开始」按钮下面。成功之后用 `ctx.session.setName(账号名)` 落地 ——
  * 那是引擎唯一允许面板改游戏名的入口（见包内 README §5/§6），于是「按开始进大厅」与「账号名即游戏名」是同一件事。
  * 想做游客的人**不受影响**：上面那个代号框与「开始」按钮一个字都没动。
+ *
+ * **「记住我」的边界**（`enteredFromHere`）：这一格挂载时若本机 token 有效，会认人、**并且**在「这一页里还没进过」
+ * 时直接送进大厅 —— 这就是「新开页面零输入直达」。但玩家在大厅按「返回」退回这张起名屏时，这一刻已经是「这一页里
+ * 进过一次」了，所以**不再自动送进**（否则就是回环），停在起名屏，改由玩家点账号栏里的「以 昵称#编号 进入」再进。
  */
 function EntryForm({ ctx }) {
   const client = useMemo(() => clientFor(ctx), [ctx]);
@@ -101,7 +112,8 @@ function EntryForm({ ctx }) {
     finally { setBusy(false); }
   };
 
-  // 本机 token 还有效 ⇒ **直接以这个身份进大厅**（「下次不用再输」的全部实现就是这一句；口令从没存过）。
+  // 本机 token 还有效 ⇒ 认到人之后**是否**直接进大厅，取决于**这一页里进过没有**（`enteredFromHere`，见其注释）：
+  // 新开页面 = 零输入直达（记住我）；玩家在大厅按「返回」退回起名屏之后 = 停在这里，由玩家点「以 … 进入」再进。
   // 这一格只挂在起名页上 ⇒ 「我在这里」就等于「玩家还没进大厅」，不会有重复进入的问题。
   useEffect(() => {
     let alive = true;
@@ -112,7 +124,7 @@ function EntryForm({ ctx }) {
         const next = payload.account;
         setAccount(next);
         writeLastLogin(loginLabel(next));
-        enterWith(next);
+        if (!enteredFromHere) enterWith(next);   // 这一页里已经进过一次 ⇒ 不再自动送进（回环的根因就在这一步）
       })
       .catch(() => { /* 未登录 / token 失效 / 服务没开：上次的登录名留着供回填 */ });
     return () => { alive = false; };
@@ -124,7 +136,10 @@ function EntryForm({ ctx }) {
       say('ok', `已登录：${next.name}#${next.tag}。这台服务器没有装 ctx.session.setName —— 把上面的代号改成这个名字再按「开始」`);
       return;
     }
-    try { ctx.session.setName(next.name); }
+    try {
+      ctx.session.setName(next.name);
+      enteredFromHere = true;   // 名字**真的落地**了才算「这一页里进过一次」；进不去（canEnter=false 那条）不算。
+    }
     catch { say('err', '名字没落地（引擎拒绝了这次改名）'); }
   };
 
@@ -157,6 +172,7 @@ function EntryForm({ ctx }) {
     ${notice ? html`<div class="acct-notice acct-notice--${notice.kind}">${notice.text}</div>` : null}
     ${account ? html`<div class="acct-entry__who">
       <span class="acct-entry__name">${account.name}<span class="acct-entry__tag">#${account.tag}</span></span>
+      <button type="button" class="acct-btn acct-btn--go" disabled=${busy} onClick=${() => enterWith(account)}>以 ${account.name}#${account.tag} 进入</button>
       <button type="button" class="acct-btn" disabled=${busy} onClick=${doLogout}>退出</button>
       <span class="acct-entry__hint">已登录 —— 按上面的「开始」，就以这个身份进大厅</span>
     </div>` : html`<div class="acct-entry__form">

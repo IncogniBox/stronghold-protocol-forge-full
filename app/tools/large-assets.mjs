@@ -18,6 +18,12 @@
 //   node tools/large-assets.mjs --check --json 机器可读：每行一个 JSON（服务器就是读它显示进度的）
 // 环境：SP_CDN_BASE（源基址）、SP_LARGE_ASSETS_SCOPE（默认 `assets/local/`）、SP_LARGE_ASSETS_MIN（默认 1048576）。
 //
+// **备用来源（第二手）**：CDN 那条路（逐文件）先照旧跑完；仍「缺 / 短 / 哈希不符」的那些，改从
+// `data/asset-pack.json` 声明的 **Release 组包**补（`repairFromPacks`）—— 只按 `groups[].file` 白名单取、
+// 源顺序 `<releaseBase>/<tag>/<file>` → `mirrors[]`、只收 https；用 `shared/zip.js zipRead` 解包，条目
+// **逐条**与 `data/large-assets.json` 比 size + sha256，只写通过的，不符/没有的逐条点名。某一组取不到只
+// 点名、不阻断别的组（这一整手也只在 `--repair` / `--force` 这条路上跑，`--check` / `--list` 不下载）。
+//
 // 两条判据纪律（docs/ASSETS.md 同步写）：
 //   * **只补不含糊**：只动「缺」与「比清单短」的文件；尺寸更大或尺寸相同但哈希不符只**报告**，不覆盖 —— 清单陈旧
 //     或 CDN 是另一平台编码时，绝不拿它们换掉盘上那份好的。
@@ -29,6 +35,9 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Downloader } from './assets/downloader.mjs';
 import { kindOf } from './assets/formats.mjs';
+import { zipRead, ZIP_LIMITS } from '../shared/zip.js';
+// 备用来源读的是**同一份**声明（白名单 / 源顺序都复用这一格，免得两边漂）——`data/asset-pack.json`。
+import { ASSET_PACK_REL, ASSET_PACK_MAX_FACTOR, readPackConfig, upstreamCandidates } from '../server/assetPack.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_REL = 'data/large-assets.json';
@@ -225,6 +234,189 @@ export async function repair({ root = ROOT, rows, base, onEvent = () => {}, fetc
   return { repaired: jobs.length - failed, failed, receivedBytes: received, expectedBytes: expected };
 }
 
+// ── 备用来源：Release 的组包（CDN 逐文件那条路之后的第二手） ────────────────────────────
+
+/** sha256(hex) of an in-memory payload. */
+const sha256Of = (buf) => createHash('sha256').update(buf).digest('hex');
+
+/** 盘上那一份是不是已经与清单一致（size + sha256）？一致就别再覆盖它（好文件不换）。 */
+const isIntactOnDisk = (abs, want) => {
+  const st = statOf(abs);
+  return !!(st && st.size === want.size && sha256File(abs) === want.sha256);
+};
+
+/** 原子落盘：先在 `public/assets/` 之下写临时文件再改名（失败不留半份）。 */
+function writeAtomic(abs, data) {
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  const tmp = `${abs}.pktmp`;
+  try { fs.writeFileSync(tmp, data); fs.renameSync(tmp, abs); }
+  catch (e) { try { fs.unlinkSync(tmp); } catch { /* 没有就没有 */ } throw e; }
+}
+
+/**
+ * 只允许落在 `public/assets/` 之下：`assets/` 前缀、无空段、无 `.` / `..`、无反斜杠、无 NUL。
+ * `zipRead` 已经拒过绝对路径 / `..`（它拒整份归档），这里是**第二道**（条目名要用来拼落盘路径）。
+ */
+export const packSafeRel = (rel) => {
+  const r = String(rel ?? '');
+  if (!r.startsWith('assets/') || r.includes('\\') || r.includes('\0')) return false;
+  return !r.split('/').some((seg) => seg === '' || seg === '.' || seg === '..');
+};
+
+/** 备用来源该接手的那些行：仍「缺 / 短」（`need`）或「同尺寸哈希不符」（`status==='sha'`）；`--only` 同一套归一化。 */
+export const packRows = (rows, target) => {
+  const t = normalizeTarget(target);
+  return (rows || []).filter((r) => (r.need || r.status === 'sha')
+    && (t === 'all' || r.rel === `assets/${t}` || r.rel.startsWith(`assets/${t}/`)));
+};
+
+/** zipRead 的帽子：按清单里这一组的字节和 / 最大单条调高到恰好够（默认 64 MB / 32 MB 对 local/scene 那组不够）。 */
+function limitsFor(manifest, gid) {
+  let total = 0, maxFile = 0;
+  for (const [rel, want] of Object.entries((manifest && manifest.files) || {})) {
+    if (groupOf(rel) !== gid) continue;
+    const size = Number(want && want.size) || 0;
+    total += size;
+    if (size > maxFile) maxFile = size;
+  }
+  return {
+    maxEntries: ZIP_LIMITS.maxEntries,
+    maxTotalBytes: Math.max(ZIP_LIMITS.maxTotalBytes, total),
+    maxFileBytes: Math.max(ZIP_LIMITS.maxFileBytes, maxFile),
+  };
+}
+
+const brief = (rels, n = 3) => rels.slice(0, n).join('、') + (rels.length > n ? ' …' : '');
+
+/** 取一个组包：带超时与体积上限；失败只回一个理由（绝不抛）。 */
+async function fetchArchive(url, { fetchImpl, timeoutMs, cap }) {
+  let res;
+  try {
+    res = await fetchImpl(url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { 'user-agent': 'stronghold-protocol-large-assets/1.0' },
+    });
+  } catch (e) { return { ok: false, reason: e?.message || String(e) }; }
+  if (!res || !res.ok) {
+    try { await res?.body?.cancel?.(); } catch { /* 忽略 */ }
+    return { ok: false, reason: `HTTP ${res && res.status ? res.status : '?'}` };
+  }
+  const declared = Number(res.headers.get('content-length')) || 0;
+  if (cap > 0 && declared > cap) {
+    try { await res.body?.cancel?.(); } catch { /* 忽略 */ }
+    return { ok: false, reason: `${declared} bytes declared, over the ${cap} byte cap` };
+  }
+  try {
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!buf.length) return { ok: false, reason: 'empty body' };
+    if (cap > 0 && buf.length > cap) return { ok: false, reason: `${buf.length} bytes, over the ${cap} byte cap` };
+    return { ok: true, buf };
+  } catch (e) { return { ok: false, reason: e?.message || String(e) }; }
+}
+
+/**
+ * 备用来源：把 CDN 跑完仍「缺 / 短 / 哈希不符」的那些，从 Release 的**组包**补。
+ *
+ * 纪律（与 `server/assetPack.js` 的同源代理同源，且更严）：
+ *   * 只按 `data/asset-pack.json` **声明过的** `groups[].file` 取（白名单；绝不自由拼 URL），源顺序照既有
+ *     `<releaseBase>/<tag>/<file>` → `mirrors[]`，且**只收 https**（其余带理由拒绝、不尝试）；
+ *   * 请求带超时；响应体按该组声明的 `bytes × 1.2` 封顶（与代理同一系数）；
+ *   * `zipRead` 解出的条目**逐条**与 `data/large-assets.json` 比 size + sha256，**只写通过的**到
+ *     `public/assets/…`；盘上已经好的不覆盖；不符 / 没有这一条的**逐条点名**；
+ *   * **永不阻断**：某一组取不到、坏、或某一条不符，只点名，别的组照跑；整个函数不抛。
+ * @param {{ root?: string, manifest: any, rows: any[], config: any, onEvent?: (e: any) => void,
+ *   log?: (s: string) => void, fetchImpl?: any, timeoutMs?: number }} o
+ */
+export async function repairFromPacks({ root = ROOT, manifest, rows, config, onEvent = () => {}, log = () => {}, fetchImpl, timeoutMs = 120000 } = {}) {
+  const doFetch = fetchImpl || globalThis.fetch;
+  const targets = (rows || []).filter((r) => (r.need || r.status === 'sha') && packSafeRel(r.rel));
+  if (!targets.length || !config || !Array.isArray(config.groups)) return { repaired: 0, failed: 0, groups: 0 };
+
+  // 白名单：只认配置里 `groups[]` 声明过的 `id` → `file`；别的一律不去猜。
+  const declared = new Map();
+  for (const g of config.groups) if (g && typeof g.id === 'string' && typeof g.file === 'string') declared.set(g.id, g);
+
+  const byGroup = new Map();
+  for (const r of targets) {
+    const id = groupOf(r.rel);
+    if (!byGroup.has(id)) byGroup.set(id, []);
+    byGroup.get(id).push(r.rel);
+  }
+  const wantSize = (rel) => Number(manifest?.files?.[rel]?.size) || 0;
+  let repaired = 0, failed = 0, groups = 0;
+
+  for (const [id, rels] of byGroup) {
+    const group = declared.get(id);
+    if (!group) {
+      for (const rel of rels) { failed++; onEvent({ type: 'file', rel, size: wantSize(rel), status: 'error', error: 'no-declared-pack' }); }
+      log(`[大资源] 组 ${id} 没有被声明的组包 —— ${rels.length} 项仍缺/不符：${brief(rels)}`);
+      continue;
+    }
+    groups++;
+    const cap = Number(group.bytes) > 0 ? Math.ceil(Number(group.bytes) * ASSET_PACK_MAX_FACTOR) : 0;
+    const limits = limitsFor(manifest, id);
+    const tried = [];
+    let archive = null;
+    try {
+      for (const c of upstreamCandidates(config, group.file)) {
+        if (c.reason) { tried.push(c); continue; }
+        let proto = null;
+        try { proto = new URL(c.url).protocol; } catch { proto = null; }
+        if (proto !== 'https:') { tried.push({ ...c, reason: `scheme ${proto || '?'} is not https` }); continue; }
+        const f = await fetchArchive(c.url, { fetchImpl: doFetch, timeoutMs, cap });
+        if (!f.ok) { tried.push({ ...c, reason: f.reason }); continue; }
+        const z = zipRead(f.buf, limits);
+        if (!z.ok) { tried.push({ ...c, reason: `${z.error}: ${z.detail}` }); continue; }
+        archive = z.entries; break;
+      }
+    } catch (e) {
+      tried.push({ url: group.file, reason: e?.message || String(e) });
+    }
+
+    if (!archive) {
+      for (const rel of rels) { failed++; onEvent({ type: 'file', rel, size: wantSize(rel), status: 'error', error: 'pack-unavailable' }); }
+      const why = tried.map((x) => `${x.url} → ${x.reason}`).join('；') || '没有可用的源';
+      log(`[大资源] 组包 ${group.file} 没取到 —— ${rels.length} 项仍缺/不符（${why}）`);
+      continue;
+    }
+
+    const need = new Set(rels);
+    const handled = new Set();   // 已写好的 + 已点名不符的：下面不再重复点名
+    for (const entry of archive) {
+      const rel = entry.name;
+      if (!need.has(rel) || !packSafeRel(rel)) continue;   // 已经好的、或不是我们这组的条目：不碰
+      const want = manifest?.files?.[rel];
+      if (!want) continue;
+      const abs = absOf(root, rel);
+      if (isIntactOnDisk(abs, want)) { handled.add(rel); continue; }   // 盘上已经好的：别覆盖
+      if (entry.data.length === want.size && sha256Of(entry.data) === want.sha256) {
+        try { writeAtomic(abs, entry.data); }
+        catch (e) {
+          handled.add(rel); failed++;
+          onEvent({ type: 'file', rel, size: want.size, status: 'error', error: 'write-failed' });
+          log(`[大资源] ${rel} 组包条目写盘失败：${e?.message || e}`);
+          continue;
+        }
+        handled.add(rel); repaired++;
+        onEvent({ type: 'file', rel, size: want.size, status: 'ok', sha: true });
+        log(`[大资源] ${rel} 已从组包 ${group.file} 补齐（${MB(want.size)} MB）`);
+      } else {
+        handled.add(rel); failed++;
+        onEvent({ type: 'file', rel, size: want.size, status: 'error', error: 'pack-mismatch' });
+        log(`[大资源] ${rel} 组包 ${group.file} 里这一条与清单不符（${entry.data.length} ≠ ${want.size} 字节，或哈希不同）—— 丢弃`);
+      }
+    }
+    for (const rel of rels) {
+      if (handled.has(rel)) continue;
+      failed++;
+      onEvent({ type: 'file', rel, size: wantSize(rel), status: 'error', error: 'pack-missing' });
+      log(`[大资源] ${rel} 不在组包 ${group.file} 里 —— 仍缺/不符`);
+    }
+  }
+  return { repaired, failed, groups };
+}
+
 /** 一条人话总结（服务器与 CLI 共用同一句，免得两处文案漂）。 */
 export function summaryLine(totals) {
   const parts = [`清单 ${totals.checked} 项 / ${MB(totals.totalBytes)} MB`];
@@ -286,33 +478,51 @@ async function main() {
   emit({ type: 'plan', state: totals.needBytes ? 'repairable' : 'ok', totals });
   say(summaryLine(totals));
 
-  if (!force && !totals.needBytes) {
+  // 「没有可补的（缺/短）也没有可修的（哈希不符）」才收工；哈希不符只由组包修（CDN 那条判据不变），
+  // 所以它也得把这条路走下去（`needBytes` 为 0 时下面那段会跳过 CDN 直接组包）。
+  if (!force && !totals.needBytes && !totals.sha) {
     fs.mkdirSync(path.dirname(stateAbs), { recursive: true });
     fs.writeFileSync(stateAbs, JSON.stringify(nextState));
     emit({ type: 'done', state: 'ok', repaired: 0, failed: 0 });
-    return totals.sha || totals.longer ? 1 : 0;   // 只报告的那两类也算「要人看一眼」
+    return totals.longer ? 1 : 0;   // 「比清单大」只报告的那一类也算「要人看一眼」
   }
   if (!force && !has('--repair')) {
     say(needRows(rows, only).map((r) => `[大资源]   待补 ${r.rel}（${MB(r.size)} MB，${r.status}）`).join('\n'));
     emit({ type: 'done', state: 'repairable', repaired: 0, failed: 0 });
     return 1;
   }
-  // 要下的那一批：`--force` 一律重下（不看核对结论，`--only` 收窄到一组或一个文件），否则只补缺的/短的。
+  // 第一手（CDN，逐文件）：`--force` 一律重下（不看核对结论，`--only` 收窄到一组或一个文件），否则只补缺的/短的。
   const target = force ? forceRows(manifest, only || 'all') : needRows(rows, only);
-  if (!target.length) {
-    emit({ type: 'done', state: 'ok', repaired: 0, failed: 0 });
-    say(`[大资源] 这一批（${only || '全部'}）没有要下的项`);
-    return 0;
+  let cdn = { repaired: 0, failed: 0 };
+  if (target.length) {
+    say(`[大资源] ${force ? '重新下载' : '补齐'} ${target.length} 项 / ${MB(target.reduce((s, x) => s + x.size, 0))} MB（源 ${base}${only ? ` · 范围 ${only}` : ''}）`);
+    cdn = await repair({ root, rows: target, base, onEvent: emit, log: say, force });
+  } else {
+    say(`[大资源] 这一批（${only || '全部'}）没有要从 CDN 下的项`);
   }
-  say(`[大资源] ${force ? '重新下载' : '补齐'} ${target.length} 项 / ${MB(target.reduce((s, x) => s + x.size, 0))} MB（源 ${base}${only ? ` · 范围 ${only}` : ''}）`);
-  const r = await repair({ root, rows: target, base, onEvent: emit, log: say, force });
+  // 第二手（备用来源）：CDN 跑完仍「缺 / 短 / 哈希不符」的那些，从 Release 的组包补。
   // 复核时拿上面那份 state 当备忘：**只有刚下回来的那几个** mtime 变了 ⇒ 只有它们要重新哈希（不是全量 192 MB）。
+  const leftover = packRows(verify({ root, manifest, state: nextState, stateText: manifestText }).rows, only);
+  let pack = { repaired: 0, failed: 0 };
+  if (leftover.length) {
+    const config = readPackConfig(root);
+    if (!config) {
+      pack.failed = leftover.length;
+      say(`[大资源] 备用来源未配置（${ASSET_PACK_REL} 不在或 groups 为空）—— ${leftover.length} 项仍缺/不符：${brief(leftover.map((r) => r.rel))}`);
+    } else {
+      say(`[大资源] 备用来源：${leftover.length} 项改从 Release 的组包补（${config.repo || '(无 repo)'}${config.tag ? `@${config.tag}` : ''}）`);
+      pack = await repairFromPacks({ root, manifest, rows: leftover, config, onEvent: emit, log: say });
+    }
+  }
+  // 收工：拿上面那份 state 当备忘再核一遍（**只有刚写回来的那几个** mtime 变了 ⇒ 只有它们要重新哈希，
+  // 不是全量 192 MB）。`failed` 是**两手里都没修好**的那些（不是两手失败数相加）—— 唯它决定退出码。
   const after = verify({ root, manifest, state: nextState, stateText: manifestText });
+  const failed = packRows(after.rows, only).length;
   fs.mkdirSync(path.dirname(stateAbs), { recursive: true });
   fs.writeFileSync(stateAbs, JSON.stringify(after.nextState));
-  emit({ type: 'summary', succeeded: r.failed === 0, repaired: r.repaired, failed: r.failed, totals: after.totals });
-  say(`${summaryLine(after.totals)}${r.failed ? ` · 失败 ${r.failed}` : force ? ' · 已重下' : ' · 已补齐'}`);
-  return r.failed ? 1 : 0;
+  emit({ type: 'summary', succeeded: failed === 0, repaired: cdn.repaired + pack.repaired, failed, totals: after.totals });
+  say(`${summaryLine(after.totals)}${failed ? ` · 失败 ${failed}` : force ? ' · 已重下' : ' · 已补齐'}`);
+  return failed ? 1 : 0;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

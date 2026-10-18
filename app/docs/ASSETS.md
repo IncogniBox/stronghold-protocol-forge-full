@@ -256,6 +256,11 @@ SP_ASSET_CDN=https://cdn.example.com/ node server/index.js
 - Unset ⇒ the branch never runs and every response is byte-for-byte what it was before.
 - The CDN must send `Access-Control-Allow-Origin` (the client loads art with `img.crossOrigin='anonymous'`) — otherwise
   the WebGL textures are tainted and the map/board render empty.
+- **The page's CSP names that origin too, in the passive types only, and takes it from `SP_CDN_BASE`.**
+  `server/http/csp.js` adds `new URL(SP_CDN_BASE).origin` to `img-src` (art, WebGL spine textures) and `connect-src`
+  (audio is `fetch`ed, never played through `<audio src>`; so are the spine `.skel`/`.atlas`) — never to `script-src` /
+  `style-src` / `frame-src` / `object-src`, so a poisoned CDN can never run code or load a frame. An unset or malformed
+  `SP_CDN_BASE` leaves the policy byte-for-byte as it was, so a clean install and a CDN-less deployment are unchanged.
 
 The pack bytes are pushed to the CDN by an agent upload channel (`POST /api/cdn/upload/begin` → direct `PUT` to the bucket's
 S3 endpoint → `POST /api/cdn/upload/commit`); the source of truth for what is live is the CDN's `hosted-index.json` /
@@ -719,8 +724,19 @@ of the big files and repairs them when it boots:
   and the title screen shows the same numbers (`public/js/ui/largeAssets.js`).
 - **Only unambiguous files are touched**: *missing* or *shorter than the manifest* ⇒ downloaded from `SP_CDN_BASE`
   (default `https://speedcdn.jiangjiangze.icu`, which serves `<base>/assets/…` with Range support). *Larger than the
-  manifest*, or same size with a different sha256, is only **reported** — a stale manifest or another platform's encoding
-  (Windows BC7 vs Android ASTC) must never overwrite a good local file.
+  manifest*, or same size with a different sha256, is **reported** by this lane and never overwritten — a stale manifest
+  or another platform's encoding (Windows BC7 vs Android ASTC) must never replace a good local file. The backup source
+  below is the one exception, and only for an entry whose bytes *are* the manifest hash.
+- **A backup source (the GitHub Release asset packs) fills what the CDN lane leaves broken.** After the per-file CDN
+  pass, whatever is still *missing*, *short* or *sha256-mismatched* is fetched from the packs declared in
+  `data/asset-pack.json`: the same whitelist (`groups[].file` verbatim — no URL is ever built from anything else) and
+  source order as the client proxy (`/asset-pack/<file>`, `<releaseBase>/<tag>/<file>` then each `mirrors[]`), https
+  only, with a request timeout and a body cap of that group's declared `bytes` × 1.2. Each zip is read with
+  `shared/zip.js` `zipRead`, and every entry (`assets/…`) is checked against `data/large-assets.json` **before** it is
+  written to `public/assets/…` — only entries whose size *and* sha256 match are written; a mismatched or absent one is
+  named and dropped, never written; a file already good on disk is never replaced. A pack that cannot be fetched is
+  named with the reason per source and never blocks the rest: the run finishes and reports what is left, so one broken
+  external source can never keep the server from starting (exit 1 when something is still missing, as before).
 - **Hashing is on demand**: sizes are compared first, and a matching size with the same `mtime` recorded in
   `.cache/large-assets-state.json` is trusted without re-reading — a boot with nothing missing costs ~0.1 s.
 - **Off switch** `SP_LARGE_ASSETS=off`; CLI `node tools/large-assets.mjs [--check|--list|--repair|--snapshot]` plus
