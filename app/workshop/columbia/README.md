@@ -190,7 +190,7 @@
 
 | id | 名字 | `effectId` | `effectName` | 效果 | 备注 |
 |---|---|---|---|---|---|
-| `band_columbia` | 谬因 | `aceffect_band_columbia` | 混沌本质 | 【哥伦比亚】盟约层**每叠加 50 层**时获得 1 件**沙盘·α** 和 1 件**沙盘·β**（可重复触发） | `sortId 43`、`iconId icon_columbia_hundun`、`totalHp 24`、`modeTypeList [SINGLE, MULTI]`、`bondIds ["columbiaShip"]`；`params.items` = 两件沙盘 |
+| `band_columbia` | 谬因 | `aceffect_band_columbia` | 混沌本质 | 【哥伦比亚】盟约层**每叠加 50 层**时获得 1 件**沙盘·α** 和 1 件**沙盘·β**（可重复触发） | `sortId 43`、`iconId icon_columbia`、`totalHp 24`、`modeTypeList [SINGLE, MULTI]`、`bondIds ["columbiaShip"]`；`params.items` = 两件沙盘 |
 
 ### 4.2 召唤物（tokens.json，5 条）
 

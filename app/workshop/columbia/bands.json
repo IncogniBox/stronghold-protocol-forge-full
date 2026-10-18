@@ -3,7 +3,7 @@
   "bandId": "band_columbia",
   "sortId": 43,
   "name": "谬因",
-  "iconId": "icon_columbia_hundun",
+  "iconId": "icon_columbia",
   "modeTypeList": [
    "SINGLE",
    "MULTI"

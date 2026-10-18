@@ -339,7 +339,12 @@ function MatchScreen() {
   // own board's layout there (every coordinate the UI handles is a board coordinate either way) and draws the tiles of
   // that half (ui/fallbackField.js: the legal fence tiles are floor, not the normal field's walls; user playtest #5 item 7).
   const prepCam = prepCamera(pub, myId, stageLayout);
-  const prepCamKey = `${prepCam.kind}:${prepCam.opts.side}`;
+  // The key carries the ROUND as well as kind:side: a boss round and the Hidden Core round right after it
+  // compute the SAME prep camera (`bossPrep:L`, camera.js prepCamera), and the re-check below only re-issues
+  // setCam when the key changes — with kind:side alone, R15's prep matched R14's recorded key, early-returned,
+  // and the prep board stayed on whatever camera the intermission had left (the normal field) until the battle
+  // started (owner report, 2026-10-19: 隐秘核心休整期画回普通场地、开战才回 boss 场地).
+  const prepCamKey = `${pub?.round ?? 0}:${prepCam.kind}:${prepCam.opts.side}`;
   const prepCamSeen = useRef(prepCamKey);                // the prep camera last requested
   const camRef = useRef({ kind: 'prep', opts: { rect: mapRectOf(stageLayout, 'prep'), side: 'L' } });
   const penRef = useRef({ on: false, collapsed: false });
