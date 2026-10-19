@@ -350,6 +350,37 @@ export function setPeerAppearance(playerId, picks) {
 /** 忘掉所有座位的选择（离开房间 / 换房时用）。 */
 export function clearPeerAppearance() { peerAppearance.clear(); }
 
+// ---- 别人那一张**玩家自己的头像**（`room.appearance` 的顶层 `avatar`）------------------------------------
+//
+// 与 `peerAppearance`（**按干员**的换装）刻意分开：协议里也是两个字段 —— 一张头像属于**人**，不按干员分组
+// （`shared/protocol.js` 那一节写着理由）。值是一枚**直接画得出来的图**（上传的 data URL 或根相对路径，
+// 见 `isAppearanceAvatar`），所以本链**不解析**它，只按座位记着、原样交给画的一方。
+//
+// 「我自己的那一枚」不在这里：它由宿主记在 `store.me.avatar`（`ctx.session.setAvatar` 那一格，会落盘），
+// 本链只记**别人**的。同一条纪律：只活在这一局（从 `room.state` 抄来，换房即清）。
+
+/** @type {Map<string, string>} playerId → 那个人自己那张头像（没有 = 不在表里 ⇒ 画的一方退回原本的画法） */
+const peerAvatar = new Map();
+
+/** 记下某个座位（别人）的头像（整份替换；`null` / 坏值 = 清掉这一位）。 */
+export function setPeerAvatar(playerId, src) {
+  if (typeof playerId !== 'string' || !playerId) return;
+  if (typeof src === 'string' && src) peerAvatar.set(playerId, src);
+  else peerAvatar.delete(playerId);
+}
+
+/**
+ * **别人**那一枚头像，或 `null`（没有 / 不认识这个座位）。
+ * 我自己那一席一律 `null` —— 本链不认识 `store`，我自己那一枚由宿主读 `me.avatar`（两个读点都是这么写的）。
+ */
+export function peerAvatarOf(playerId) {
+  if (typeof playerId !== 'string' || !playerId || (myPlayerId !== null && playerId === myPlayerId)) return null;
+  return peerAvatar.get(playerId) || null;
+}
+
+/** 忘掉所有座位的头像（与 `clearPeerAppearance` 同一条：离开房间 / 换房时用）。 */
+export function clearPeerAvatars() { peerAvatar.clear(); }
+
 /**
  * `opts.owner` 对应的那位干员的**时装 id**（`skinId`，没有则 `avatar`），或 null。
  * `owner === null` ⇒ null（归属未知，不套用任何选择）；`owner === undefined` 或 `owner === setMyPlayerId(…)`

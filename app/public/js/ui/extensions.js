@@ -63,7 +63,7 @@
 // the browser half is the opt-in `SP_E2E=1` path, see docs/WORKSHOP.md §4.4 for the same standing gap).
 
 import { t } from '../../../shared/i18n.js';
-import { C2S, validateC2S } from '../../../shared/protocol.js';
+import { C2S, validateC2S, APPEARANCE_LIMITS, AVATAR_DATA_RE, AVATAR_PATH_RE } from '../../../shared/protocol.js';
 // 立绘解析链的**唯一 hook**（皮肤层第 1 步）：核心只认识「有一个函数可能回答这个 id」，不认识「皮肤」。
 import { setAppearanceLookup, clearAppearanceLookup, mergeOwnAppearance } from './portraitChain.js';
 // 素材加载源的**排序面**（DESIGN §28.40）：与外观提供者逐字同构的一条注册链 —— 一个提供者、最多一个、点名拒绝。
@@ -207,12 +207,14 @@ export const CLIENT_SESSION_AVATAR_UNAVAILABLE = 'CLIENT_SESSION_AVATAR_UNAVAILA
 /**
  * 一枚头像值（`me.avatar`）的长度上限。比账号服务自己的 48 KiB **宽松**一档：引擎只管「这一页画不画得出来」，
  * 服务端那一侧的上限属于服务端 —— 引擎反过来比服务端更严，会让一枚合法头像在这一头被拒、界面上一个像素都没有。
+ *
+ * **与协议上界是同一个数**（`APPEARANCE_LIMITS.avatar`，`room.appearance` 的顶层 `avatar` 那一格）：两处若各写一份，
+ * 「本机画得出来、却发不出去」是那种只有上传大图的人才会撞见的错 —— 所以这一格直接读协议那一份。
  */
-const AVATAR_MAX_LEN = 128 * 1024;
-/** `data:image/…;base64,…`：只认 `<img>` 真画得出来的那几种图片类型。 */
-const AVATAR_DATA_RE = /^data:image\/(?:png|jpeg|jpg|webp|gif|avif);base64,[A-Za-z0-9+/]+=*$/;
-/** 根相对路径（`/…`）。**不收**绝对外域 URL：页面 CSP 的 `img-src` 本来也不放行它，收了只会画成破图。 */
-const AVATAR_PATH_RE = /^\/[A-Za-z0-9._~%/-]*$/;
+const AVATAR_MAX_LEN = APPEARANCE_LIMITS.avatar;
+// `AVATAR_DATA_RE`（`data:image/…;base64,…`，只认 `<img>` 真画得出来的那几种类型）与 `AVATAR_PATH_RE`（根相对路径
+// `/…`；**不收**绝对外域 URL —— 页面 CSP 的 `img-src` 本来也不放行它，收了只会画成破图）从 `shared/protocol.js`
+// 导入：与 `room.appearance` 的顶层 `avatar` 那一格**同一条判据**，抄一份就是第二个会漂的真相。
 
 /**
  * 头像值清洗：返回**字符串**=「就画这一枚」，`null`=「清除（退回引擎原本的画法）」，`''`=「坏值」。
@@ -948,6 +950,14 @@ export function createPanelRegistry(deps) {
         // 落盘（`sp.pref.meAvatar`）：同一标签页**刷新**时起名屏不渲染（`main.js` 的 `entered` 已为真），
         // 那一刻没有任何面板能再推一次 —— 所以这一格得自己活过一次刷新，由 `main.js` 开机读回来。
         savePref('meAvatar', src);
+        // **广播**（皮肤层：`room.appearance` 的顶层 `avatar`）：这一格本来是「只有我自己看得见」的两处画法
+        // （大厅右上角那枚芯片、局内左上角自己那一行），而**别人**那一侧（房间座位卡、局内队友那一行）读的是
+        // 同一个 `appearance.avatar` —— 不广播它就永远是原版（2026-10-20 业主报的：上传通过审核的头像别人看不到）。
+        // 不在房间里发也**有用**：服务端把它存在会话上，进房建座位时照抄给座位（`server/lobby.js humanSeat`）。
+        // `null`（清除）也照发：别人那一侧跟着退回原本的画法。形状先按协议判一遍（与服务端同一份判据）；
+        // 判不过是这一层与协议漂了（清洗器已经把值收窄到这两种形状），那就**不发** —— 发出去只会换回一个 error 帧。
+        const payload = { avatar: { avatar: src } };
+        if (!validateC2S({ t: 'room.appearance', ...payload }) && net && typeof net.send === 'function') net.send('room.appearance', payload);
         return true;
       },
       /**

@@ -470,10 +470,32 @@ export const isDiyPicks = (v) => isMap(v, DIY_LIMITS.slots, isId, isDiyPickWire)
  *     `assets.skins`，而服务端**看不见**包内容 —— 所以服务端**只转发不判定**，不认识的那一项由**画的一方**
  *     回落原版（与 `portraitChain` 的回落同一条：可见、可解释，不会串到别的干员身上）；
  *   * 它是**展示**消息：不进 golden、不影响任何服务端判定，因此 `combat` 与它无关；
- *   * 上界 `APPEARANCE_LIMITS.picks`：一间房最多这么多干员，多出来的是坏数据而不是「更多的时装」。
- *     两个字段都**可选**（只换头像不动皮肤，反之亦然），但**不能都不给** —— 一条什么都没说的消息是坏消息。
+ *   * **上界**：`APPEARANCE_LIMITS.picks` —— 一间房最多这么多干员，多出来的是坏数据而不是「更多的时装」；
+ * `APPEARANCE_LIMITS.avatar` —— 玩家自己那张头像的**字节长度**上界（上传的头像是一枚 data URL，见
+ * `isAppearanceAvatar`）。两个字段都**可选**（只换头像不动皮肤，反之亦然），但**不能都不给** —— 一条什么都没说的
+ * 消息是坏消息。
  */
-export const APPEARANCE_LIMITS = Object.freeze({ picks: 64 });
+export const APPEARANCE_LIMITS = Object.freeze({ picks: 64, avatar: 128 * 1024 });
+/**
+ * 玩家自己那张头像（顶层 `avatar.avatar`）的三种**合法值**：
+ *
+ *   * 一个 **id**（`isId`：官方 charId，或包 `art` 里的一条）—— 画的一方按外观链自己取图，服务端不认识它；
+ *   * **一枚图本身**：`data:image/…;base64,…`（账号服务上传的那条路，客户端把它裁到 128×128 再上传）或一个
+ *     **根相对路径**（`/…`，页面 CSP 的 `img-src` 放行的那种）；长度 ≤ `APPEARANCE_LIMITS.avatar`；
+ *   * **`null`** = 清除（退回对方原本的画法：策略图标 / 首字）。
+ *
+ * 为什么放行「图本身」：账号头像存在账号库里、**没有**静态文件路由（`host.route` 只有 GET/HEAD、收不到参数），
+ * 所以「别人看到的头像」这一格只能把那一枚图**自己**发出来。形状判据与客户端 `ctx.session.setAvatar` 的清洗器
+ * **同一条**（两处都读这两个正则，别再抄一份）。
+ *
+ * 单挑出来的两个理由：`picks` 里那一项 `{ avatar }` 一直是 **id**（它是「哪一套外观」，属干员），与这一格
+ * 「玩家自己那张图」是两件事 —— 同一个判据两处用会让其中一处悄悄放行不该放行的东西。
+ */
+export const AVATAR_DATA_RE = /^data:image\/(?:png|jpeg|jpg|webp|gif|avif);base64,[A-Za-z0-9+/]+=*$/;
+export const AVATAR_PATH_RE = /^\/[A-Za-z0-9._~%/-]*$/;
+/** `avatar` 那一格的值合法吗（`isAppearanceAvatar` 的判据，写出来给测试与调用点共用）。 */
+export const isAppearanceAvatar = (v) => v === null || isId(v)
+  || (typeof v === 'string' && v.length <= APPEARANCE_LIMITS.avatar && (AVATAR_DATA_RE.test(v) || AVATAR_PATH_RE.test(v)));
 /** 一项外观：`{ skinId }` 或 `{ avatar }`，**恰好一个**（两个都给/都不给都是坏消息，不是「取其一」）。 */
 const isAppearancePick = (p) => {
   if (!isPlain(p)) return false;
@@ -502,8 +524,8 @@ export const isAppearanceMsg = (v) => {
   if (hasPicks && !isMap(v.picks, APPEARANCE_LIMITS.picks, isId, isAppearancePick)) return false;
   // 顶层 `avatar` **只能**是 `{ avatar }`：它是「玩家自己那张头像」的简写，写成 `{ skinId }` 没有意义
   // （皮肤属于干员，不属于人）—— 那种写法多半是作者把 `picks` 的形状抄错了地方，所以要**点名拒绝**
-  // 而不是「反正也解析不出东西，收下算了」。
-  if (hasAvatar && !(isPlain(v.avatar) && v.avatar.avatar !== undefined && v.avatar.skinId === undefined && isId(v.avatar.avatar))) return false;
+  // 而不是「反正也解析不出东西，收下算了」。值本身按 `isAppearanceAvatar`（id / 图本身 / `null` = 清除）。
+  if (hasAvatar && !(isPlain(v.avatar) && v.avatar.avatar !== undefined && v.avatar.skinId === undefined && isAppearanceAvatar(v.avatar.avatar))) return false;
   return true;
 };
 

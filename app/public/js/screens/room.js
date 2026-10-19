@@ -59,6 +59,8 @@ import { store, useStore, shallowEqual, emptyMatch, isSpectating, serverNow, loa
 import { data, useData } from '../data.js';
 import { chessAvatarUrl } from '../ui/assetUrls.js';
 import { CARD_PREF, cardOperators, seatPortrait } from '../ui/seatArt.js';
+// 别人那一席的**玩家头像**（`appearance.avatar` 那一路，见 `ui/portraitChain.js`）：座位卡是它的两个读点之一。
+import { peerAvatarOf } from '../ui/portraitChain.js';
 import { C2S } from '../../../shared/protocol.js';
 import { difficultyInfo, ProtoCard, LAYER_TEXT, serverSeatMaxOf } from './lobby.js';
 import { ProtocolScene } from '../ui/protocolScene.js';
@@ -281,8 +283,10 @@ function SeatCapSetter({ room, isHost, onPick }) {
 function SeatCard({ seat, index, room, facts, myId, busy, onKick, onInvite, searching, portraits, onPickCard = null, onAddBot = null, onRemoveBot = null }) {
   const seatAccount = useAccount(seat && !seat.isBot ? seat.playerId : null);
   // 自己那一席的头像：引擎的「账号目录」（`useAccount`）在本仓库是空壳（恒 `null`），所以**本机自己那一枚**走
-  // `me.avatar`（`ctx.session.setAvatar` 落的那一格，`ui/accounts.js` 的芯片同源）；没有它就退回首字。
+  // `me.avatar`（`ctx.session.setAvatar` 落的那一格，`ui/accounts.js` 的芯片同源）；**别人那一席**走引擎按座位记下的
+  // `appearance.avatar`（`room.appearance` 的顶层那一格，`main.js` 的 `syncRoomAppearance` 同步进来）；都没有就退回首字。
   const myAvatar = useStore((s) => s.me?.avatar || null);
+  const peerAvatar = useStore(() => (!seat || seat.isBot ? null : peerAvatarOf(seat.playerId)));
   const [bad, setBad] = useState(null);
   const flash = useRise(!!seat && (seat.ready || seat.isBot || seat.playerId === room.hostId));
   if (!seat) {
@@ -334,7 +338,7 @@ function SeatCard({ seat, index, room, facts, myId, busy, onKick, onInvite, sear
     <div class=${`rseat__plate${seatAccount?.card ? ' has-nc' : ''}`}>
       <${NameCardLayer} card=${seatAccount?.card} />
       ${isMe ? html`<span class="rseat__me" title=${t('你')}><${Icon} name="info" /></span>` : null}
-      <${AvatarFrame} size="sm" name=${seat.name} src=${seatAccount?.avatar || (isMe ? myAvatar : null) || undefined} seat=${index} bot=${seat.isBot} self=${isMe} />
+      <${AvatarFrame} size="sm" name=${seat.name} src=${seatAccount?.avatar || (isMe ? myAvatar : peerAvatar) || undefined} seat=${index} bot=${seat.isBot} self=${isMe} />
       <span class="rseat__who">
         <${TrophyBadge} count=${seatAccount?.trophies} class="tbadge--inline" /><b class=${`rseat__name${owner ? ' sp-owner-name' : ''}`}>${seat.name || t('博士')}</b><${AccountTag} playerId=${seat.isBot ? null : seat.playerId} />
         ${owner ? html`<span class="sp-owner-badge">${t('服主')}</span>` : null}

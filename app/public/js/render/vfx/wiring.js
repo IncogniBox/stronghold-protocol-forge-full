@@ -279,6 +279,34 @@ export class FxWiring {
   skinOf(u) { return u && u.skin && this.idx ? this.idx.skins[u.skin] || null : null; }
 
   /**
+   * 一枚特效该播哪一个 key（**唯一的一处分辨率**）：
+   *
+   *   * 单位 `v` 当前穿的那套时装在特效数据里登记了 `fx`（`skins[<stem>].fx`，DESIGN §35.12 Skin），**且**装的那
+   *     一份特效数据真有 `<key>_<fx>` ⇒ 用**时装自己的那一枚**；
+   *   * 没有变体 ⇒ 用 `key` 本身 —— **皮肤没有这一枚的变体时播默认的那一枚，绝不因此什么都不播**；
+   *   * 两者都没有 ⇒ null（这枚特效数据里本来就没有）。
+   *
+   * 为什么要有这一处：这套后缀从前**只有 `playOn` 认**，别的起特效的地方（弹道自己的主特效与绳索、到达点特效、
+   * 链式连线的线、浮游单位的飞行特效）都直接 `spawn(原 key)` —— 于是时装自带的那些变体在那些路径上永远不播
+   * （2026-10-20 修：`assets/fx` 里明明有 `oblvns_attack_01_trail_avemujica#1`，弹道却一直用默认那枚）。
+   * 顺带修好另一半：**只有时装版、默认版都没有**的那几枚 key（本机提取里根本不存在，如 `dolris_loop_01`）从前
+   * 会被 `lib.has(原 key)` 挡在门外一次都不播，现在先问变体就播得出来。
+   *
+   * `v` 是**这枚特效放在谁身上**（`playOn` 的 v）—— 时装的选择按那个单位的主人取（`skinFor`，`opts.skin`）。
+   * 不传 `v`（特效不在任何单位身上，或调用点还不知道主人）⇒ 只看 `key` 本身，与从前逐字相同。
+   * @param {string} key 计划的 key（大小写不敏感） @param {any} [v] 这枚特效落在哪个视图上
+   * @returns {string|null}
+   */
+  fxKey(key, v) {
+    const k = lc(key);
+    if (!k) return null;
+    const skin = v ? this.skinFor(v) : null;
+    const fxk = typeof skin?.fx === 'string' && skin.fx ? `${k}_${lc(skin.fx)}` : null;
+    if (fxk && this.ofx.lib.has(fxk)) return fxk;
+    return this.ofx.lib.has(k) ? k : null;
+  }
+
+  /**
    * The index.json `skins` record a view draws with: the outfit its owner chose — `opts.skin(info)` names the outfit
    * model (the `.skel` stem), index.json `skins[<stem>]` its mount points and its `fx` (the effect-key suffix the pack
    * ships its own variants of) — when the installed fx data has one, else the unit's own record (its default skin,
@@ -351,11 +379,17 @@ export class FxWiring {
     for (const k of this.skills.keys(views)) keys.add(k);
     for (const k of this.talents.keys(views)) keys.add(k);
     for (const k of this.funnels.keys(views)) keys.add(k);   // the 驭械术士's floating units (render/vfx/funnelfx.js)
-    // the outfits the battle's units wear (`skins[<stem>].fx`): their own variant of every key, when the pack ships one
-    // — the same suffix playOn applies, preloaded so a unit's first outfit effect does not pop in late
+    // 时装变体（`skins[<stem>].fx`）：每一枚 key 的 `<key>_<fx>` 一并预载 —— 与 `fxKey` 同一条规则，开战时不再现拉
     const fx = [...new Set((views || []).map((v) => this.skinFor(v)?.fx).filter(Boolean))];
-    if (fx.length) for (const k of [...keys]) for (const f of fx) { const s = `${k}_${lc(f)}`; if (this.ofx.lib.has(s)) keys.add(s); }
-    return [...keys].map(lc).filter((k) => k && this.ofx.lib.has(k));
+    const out = new Set();
+    for (const k of keys) {
+      const b = lc(k);
+      if (!b) continue;
+      if (this.ofx.lib.has(b)) out.add(b);
+      // **只有时装版**的那一枚也留下（默认版在本机提取里根本不存在时，`fxKey` 会用它）
+      for (const f of fx) { const s = `${b}_${lc(f)}`; if (this.ofx.lib.has(s)) out.add(s); }
+    }
+    return [...out];
   }
 
   /** Preload the effects of the battle's units (views) — the prep → battle switch. */
@@ -491,14 +525,13 @@ export class FxWiring {
    * started in the battle's first frames used to sit at the HitPoint for good).
    */
   playOn(key, v, o = {}) {
-    let k = lc(key);
-    if (!k || !this.ofx.lib.has(k)) return null;
+    // 时装先说话（`fxKey`：装了这套时装自己的一枚 `<key>_<fx>` 就用它，没有就用 key 本身 —— 皮肤缺这一枚的变体
+    // 时播**默认的那一枚**，不是什么都不播；另两处起特效的地方（弹道、链式连线、浮游单位）共用它）
+    let k = this.fxKey(key, v);
+    if (!k) return null;
     const u = this.unitOf(v);
+    // 挂载点取自**这套时装自己的记录**（它自己的 `points`）—— 与上面那个 key 用的是同一份选择
     const skin = this.skinFor(v, u);
-    // the outfit the unit wears may ship its own variant of this effect (`skins[<stem>].fx`: the key's suffix —
-    // `<key>_avemujica#1` and the like, a pack's own prefabs); its mount points come from the outfit's record above
-    const fxk = typeof skin?.fx === 'string' && skin.fx ? `${k}_${lc(skin.fx)}` : null;
-    if (fxk && this.ofx.lib.has(fxk)) k = fxk;
     let def = this.ofx.lib.def(k);
     if (def && def.switchable) {
       const alt = lc(this._variant(def.switchable, v, this.pose(v)));
@@ -863,7 +896,9 @@ export class FxWiring {
    * hit rows, with a key the library has. Without any (the data missing) the procedural shot stays.
    */
   _drawable(a, sk, src, nth) {
-    const has = (k) => { const kk = lc(k); return !!kk && this.ofx.lib.has(kk); };
+    // 「装的数据里有这一枚吗」按**时装同一条分辨率**问（`fxKey`：有变体算有）—— 只有时装版的那几枚因此也算「有」，
+    // 不再因为默认版缺失而被判成「这一下没有官方特效」而整段换成程序化特效
+    const has = (k) => !!this.fxKey(k, src);
     const rowHas = (e) => this._rowKeys(e, src, nth).some(has);
     const entryHas = (e) => !!e && (has(e.key) || (Array.isArray(e.slots) && e.slots.some(has)));
     if (a) {
@@ -975,8 +1010,10 @@ export class FxWiring {
     const parts = projectileParts(proj);
     for (const k of proj.onStart || []) this.playOn(k, src, { toward: tgt, strike: !o.later });
     const placed = this._startOnTarget(proj, src, tgt);
-    const mainKey = parts.main && this.ofx.lib.has(parts.main) ? parts.main : null;
-    const ropeKey = parts.rope && this.ofx.lib.has(parts.rope) ? parts.rope : null;
+    // 弹道自己的主特效与绳索也按**同一条时装分辨率**取（射手的）—— 从前这里直接用原 key，于是时装自带的
+    // `oblvns_attack_01_trail_avemujica#1` 这类变体一次都不播，画面上永远是默认那枚
+    const mainKey = this.fxKey(parts.main, src);
+    const ropeKey = this.fxKey(parts.rope, src);
     // a timer (no flying effect: 溯光星源 S3): its hit when the effect it put on its target lands, at the end of its life
     let hitAt = dur;
     if (!mainKey) {
@@ -1103,8 +1140,9 @@ export class FxWiring {
         if ((proj.onHit || []).some((k) => /heal/.test(k))) this.healed.set(id, now);
       }
       for (const k of proj.onReached || []) {
-        const kk = lc(k);
-        if (kk && this.ofx.lib.has(kk)) this.ofx.spawn(kk, { pos: at.slice(), groundZ: at[2] }, {});
+        // 同一条时装分辨率：射手的变体（没有就是默认那一枚；库里一枚都没有才真的没有）
+        const kk = this.fxKey(k, src || tgt);
+        if (kk) this.ofx.spawn(kk, { pos: at.slice(), groundZ: at[2] }, {});
       }
     };
     if (laterAt == null) go();
@@ -1260,8 +1298,10 @@ export class FxWiring {
     if (!next || next.destroyed) return;
     const ps = this.skinFor(prev), ns = this.skinFor(next);
     const a = unitPoint(ps, 'hit', this.pose(prev)), b = unitPoint(ns, 'hit', this.pose(next));
-    if (c.line && this.ofx.lib.has(c.line)) {
-      const h = this.ofx.spawn(c.line, { pos: a.slice(), groundZ: -(prev.z || 0) }, {
+    // 链式连线的线也按同一条时装分辨率（发这一跳的那个人）
+    const lineKey = c.line ? this.fxKey(c.line, prev) : null;
+    if (lineKey) {
+      const h = this.ofx.spawn(lineKey, { pos: a.slice(), groundZ: -(prev.z || 0) }, {
         important: true,
         track: (fx) => {
           if (!prev.destroyed && prev.alive !== false) unitPoint(ps, 'hit', this.pose(prev), a);

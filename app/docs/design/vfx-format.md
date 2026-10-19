@@ -4,6 +4,14 @@ Part of [DESIGN.md](../DESIGN.md) (the index; section numbers are global).
 
 **Changelog** (for runtimes reading the files; newest first)
 
+* **2026-10-20 — the outfit's `fx` applies to every effect a unit causes, and it never costs an effect**; no version
+  change, no field added. One resolver decides the key (`Wiring.fxKey`): `<key>_<fx>` when the installed data has that
+  variant, else `key` itself (**a key the outfit has no variant of plays the unit's normal one — never nothing**), else
+  null. It is now the ONE place, used by `playOn` *and* by the three places that used to spawn a raw key: a projectile's
+  own main effect and rope, an `onReached` effect and a chain lightning's line (each resolved against **the unit that
+  causes it**), plus the 驭械术士's floating-unit flights. The same resolver also fixes a key that exists **only** as an
+  outfit variant (`dolris_loop_01_avemujica#1` with no `dolris_loop_01` anywhere): it used to be filtered out by
+  `lib.has(rawKey)` and never played, and is drawn now. Preloading follows the same rule.
 * **2026-10-18 — an outfit (时装) entry in `skins`, and its `fx` (index.json, §35.12 Skin)**; no version change, one
   field added: an operator's outfit gets its own `skins` entry, keyed by the **model stem** it is drawn with
   (`char_4182_oblvns_avemujica_1` — the Front skeleton's file name without `.skel`), carrying `fx` — the suffix the
@@ -1021,8 +1029,13 @@ suffix the client appends to the unit's effect keys while the outfit is worn —
 prefix (`char_4182_oblvns_avemujica#1` → `avemujica#1`); the game's own prefabs follow that rule, so
 `oblvns_skill_01_start_avemujica#1` is the outfit's `oblvns_skill_01_start`. A runtime that knows which outfit a unit
 wears (the appearance chain, by the unit's owner) takes that entry's `points` as the unit's mount points and prefers
-`<key>_<fx>` when the installed effect data has it (render/vfx/wiring.js `skinFor` / `playOn`); with no chosen outfit —
-or an outfit without such an entry — it reads the unit's own record, exactly as before.
+`<key>_<fx>` when the installed effect data has it; with no chosen outfit — or an outfit without such an entry — it
+reads the unit's own record, exactly as before. **One resolver answers that question for the whole layer**
+(`render/vfx/wiring.js fxKey`), and the answer is never "nothing": a key the outfit has no variant of plays the unit's
+normal `<key>`, and a key that exists **only** as the outfit's variant plays it (before 2026-10-20 both cases went
+through `lib.has(rawKey)` in the paths outside `playOn` — the outfit's projectile trail, its rope, an `onReached` effect,
+a chain lightning's line and a floating unit's flight — so those either stayed the normal effect for good or never
+played at all).
 
 **generic**: `{ hit: { phys, arts, heal, enemy, fire, cut, ranger }, die: { char, enemy }, birth: { char },
 status: { <sim status>: key }, keys: [every generic key exported] }` — the keys the client binds in code (no data file

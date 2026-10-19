@@ -94,7 +94,7 @@ import { createPanelRegistry } from './ui/extensions.js';
 // 那个模块里，读写的还是引擎自己那条 `sp.pref.*` 路径）。面板因此拿得到、写得动那七个偏好键，但仍然**没有**
 // store 句柄、没有 localStorage、碰不到 `match` / `room` / `me`。
 import { readCloudPrefs, applyCloudPrefs } from './ui/cloudPrefs.js';
-import { setOwnAppearance, getOwnAppearance, setPeerAppearance, clearPeerAppearance, setMyPlayerId, setOwnAppearanceStore, ownPicksVerdict } from './ui/portraitChain.js';
+import { setOwnAppearance, getOwnAppearance, setPeerAppearance, clearPeerAppearance, setPeerAvatar, clearPeerAvatars, setMyPlayerId, setOwnAppearanceStore, ownPicksVerdict } from './ui/portraitChain.js';
 
 const RESTORE_GRACE_MS = 1500;
 const JOIN_DELAY_MS = 350;
@@ -391,21 +391,38 @@ function onWelcome(msg) {
  * 「我那份 vs 房间那份」该怎么对齐（以我为准 / 本机为空才采纳 / 装不下协议上界就别发）整条判据是链上的纯函数
  * `ownPicksVerdict`：这里的每一行都只做那一个动作，规则本身有测试钉着。
  * 我不在座时（还没进房 / 已离开）**不动**自己的选择：那是我的偏好，跨房间要留住。
+ *
+ * 同一份房态里还有**别人那张玩家头像**（`seats[].appearance.avatar`，一位玩家一枚、不按干员分组）：别人的交给
+ * 链上的 `setPeerAvatar`（房间座位卡 / 局内队友那一行照它画），**我自己**那一枚仍以本机 `me.avatar` 为准，
+ * 只是本机还没记过（新浏览器 / 另一台设备刚上传）时**采纳**房间那份 —— 与 picks 的 `adopt` 同一条。
  * @param {any} room @param {string|null} myId
  */
 function syncRoomAppearance(room, myId) {
   // 我自己的 playerId：对局里的单位只带 `ownerId`（画我的单位时是我自己的 id），靠这张对照表认出「那是我」。
   setMyPlayerId(myId);
   clearPeerAppearance();
+  clearPeerAvatars();
   const seats = Array.isArray(room && room.seats) ? room.seats : [];
   for (const s of seats) {
     if (!s || typeof s.playerId !== 'string' || !s.playerId) continue;
     const picks = s.appearance && typeof s.appearance === 'object' ? s.appearance.picks : null;
+    const avatar = s.appearance && typeof s.appearance === 'object' && s.appearance.avatar && typeof s.appearance.avatar.avatar === 'string'
+      ? s.appearance.avatar.avatar : null;
     if (myId != null && s.playerId === myId) {
       const v = ownPicksVerdict(getOwnAppearance(), picks, APPEARANCE_LIMITS.picks);
       if (v.adopt) setOwnAppearance(v.adopt);                       // 本机还没选过 ⇒ 采纳房间那份（别人正看着它）
       if (v.push) net.send('room.appearance', { picks: v.push });     // 房间那份落后于本机 ⇒ 补上去
-    } else setPeerAppearance(s.playerId, picks || null);
+      // 我自己那枚头像：本机没有而房间那份有 ⇒ 采纳它（`setAvatar` 那一格本来就落盘，这里照样写一次）；
+      // 反过来（本机有、房间那份不同）⇒ **补发一次**，与 picks 的 `push` 同一条：
+      // `ctx.session.setAvatar` 也可能发在**引擎还没连上**的时候（起名屏那一格面板在 `hello` 之前就会推），
+      // 那一次广播会被丢掉；没有这一行，「刷新过一次 / 换一台设备」的人在本局里就一直只有自己看得见。
+      const mineAvatar = store.get().me.avatar || null;
+      if (!mineAvatar && avatar) { store.set((st) => ({ me: { ...st.me, avatar } })); savePref('meAvatar', avatar); }
+      else if (mineAvatar && mineAvatar !== avatar) net.send('room.appearance', { avatar: { avatar: mineAvatar } });
+    } else {
+      setPeerAppearance(s.playerId, picks || null);
+      setPeerAvatar(s.playerId, avatar);
+    }
   }
 }
 
@@ -437,6 +454,7 @@ function onRoomState(msg) {
     publicState = null;
     store.set({ room: null, match: emptyMatch() });
     clearPeerAppearance();
+    clearPeerAvatars();
     return;
   }
   syncRoomAppearance(room, myId);
@@ -529,6 +547,7 @@ function wireNet() {
   net.on('room.closed', (msg) => {
     backToLobby();
     clearPeerAppearance(); // 换了房间就没有「同房的人」了；我自己的选择照旧留住
+    clearPeerAvatars();    // 同上：别人那张头像也只活在这一局（我自己那一枚在 `me.avatar`，动不到）
     const known = Object.hasOwn(CLOSE_REASON, String(msg.reason)) ? CLOSE_REASON[msg.reason] : null;
     toast(known ? t(known) : typeof msg.reason === 'string' && msg.reason.length < 60 ? t('同盟已关闭：{reason}', { reason: msg.reason }) : t('同盟已关闭'), 'warn');
   });

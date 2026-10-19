@@ -12,7 +12,7 @@ import {
 } from './assetUrls.js';
 // 头像统一走解析链（皮肤层）：`UnitThumb` 是结算页 / 队伍面板 / 手牌共用的小头像组件，
 // 所以接这一处就等于把「时装也影响小头像」这件事一次接对所有消费点。
-import { avatarUrlOf, currentAppearanceLookup } from './portraitChain.js';
+import { avatarUrlOf, currentAppearanceLookup, peerAvatarOf } from './portraitChain.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
@@ -262,13 +262,16 @@ export function RichTip({ text, children, placement = 'top' }) {
 
 /**
  * Seat-coloured player avatar: **本机自己那一席**先看 `me.avatar`（账号头像，`ctx.session.setAvatar` 落的那一格），
- * 再是策略图标（band icon），再是首字 / 机器人。
+ * **别人的那一席**看引擎按座位记下的 `appearance.avatar`（`room.appearance` 的顶层那一格，`main.js` 的
+ * `syncRoomAppearance` 同步进来 —— 见 `ui/portraitChain.js` 的 `peerAvatarOf`），再是策略图标（band icon），
+ * 再是首字 / 机器人。
  * @param {{ player: any, size?: 'sm'|'md', self?: boolean, class?: string }} props
  */
 export function PlayerAvatar({ player, size = 'md', self = false, class: cls }) {
-  // 自己那一枚账号头像（**只有 `self` 才读**）：有它就压过策略图标；没有包写这一格时逐字节照旧。
-  const myAvatar = useStore((s) => (self ? s.me?.avatar || null : null));
-  const src = myAvatar || (player?.bandId ? bandIconUrl(data.get('assets'), player.bandId) : null);
+  // 两种来源各管各的一侧：自己那一枚走 store（会落盘），**别人**那一枚走换装链上按 playerId 记的那张表。
+  // 两个都只是「有就压过策略图标」—— 没有包写这两格时逐字节照旧。
+  const avatar = useStore((s) => (self ? s.me?.avatar || null : peerAvatarOf(player?.playerId || null)));
+  const src = avatar || (player?.bandId ? bandIconUrl(data.get('assets'), player.bandId) : null);
   const glyph = [...(player?.name || '').trim()][0] || '?';
   const dead = player?.alive === false || player?.status === 'dead';
   const left = player?.status === 'left';

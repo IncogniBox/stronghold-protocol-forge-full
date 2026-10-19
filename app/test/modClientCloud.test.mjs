@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 
 import { createStore, initialState, loadPref, savePref } from '../public/js/store.js';
 import { NAME_MAX_LEN } from '../shared/constants.js';
+import { APPEARANCE_LIMITS } from '../shared/protocol.js';
 import {
   createPanelRegistry,
   CLIENT_SESSION_BAD_NAME, CLIENT_SESSION_NAME_UNAVAILABLE, CLIENT_CLOUD_UNAVAILABLE,
@@ -47,14 +48,15 @@ function mkEl(tag) {
   };
 }
 
-/** 一个假的 `net`：订阅表 + `setName` 的记录本（§28.58.1 要数「名字有没有交到 net」）。 */
+/** 一个假的 `net`：订阅表 + `setName` / `send` 的记录本（§28.58.1 要数「名字有没有交到 net」，头像要数广播）。 */
 function fakeNet() {
   const names = [];
+  const sends = [];
   return {
-    names,
+    names, sends,
     setName: (name) => { names.push(name); },
     on: () => () => {},
-    send: () => true,
+    send: (type, fields) => { sends.push([type, fields]); return true; },
   };
 }
 
@@ -197,6 +199,11 @@ describe('§28.58.3 ctx.session.setAvatar：把「已审核的头像」交给引
 
     assert.equal(ctx.store, undefined, '门面上仍然没有 store 句柄');
     assert.equal(ctx.match, undefined);
+
+    // 长度上限**就是协议那一格的上界**（`APPEARANCE_LIMITS.avatar`）：刚好到上界 ⇒ 本机画得出来、也发得出去
+    const head = 'data:image/png;base64,';
+    assert.equal(ctx.session.setAvatar(head + 'A'.repeat(APPEARANCE_LIMITS.avatar - head.length)), true);
+    assert.equal(store.get().me.avatar.length, APPEARANCE_LIMITS.avatar);
   });
 
   test('坏形状 ⇒ CLIENT_SESSION_BAD_AVATAR + false，那枚头像一个字节都不动', async () => {
@@ -252,6 +259,22 @@ describe('§28.58.3 ctx.session.setAvatar：把「已审核的头像」交给引
     const { ctx } = await ctxOf({ identity: fakeIdentity(), net: fakeNet() });
     assert.ok(Object.isFrozen(ctx.session));
     assert.equal(typeof ctx.session.setAvatar, 'function');
+  });
+
+  test('广播：这一枚头像同时发给同房的人（`room.appearance` 的顶层 `avatar`）—— 不发就只有我自己看得见', async () => {
+    const net = fakeNet();
+    const { ctx } = await ctxOf({ identity: fakeIdentity(), net });
+    assert.equal(ctx.session.setAvatar(AVATAR), true);
+    assert.deepEqual(net.sends, [['room.appearance', { avatar: { avatar: AVATAR } }]],
+      '一条广播，形状就是协议里那一格（图本身，不是 id）');
+    // 清除（登出 / 未审核）也照发：别人那一侧跟着退回原本的画法
+    net.sends.length = 0;
+    assert.equal(ctx.session.setAvatar(null), true);
+    assert.deepEqual(net.sends, [['room.appearance', { avatar: { avatar: null } }]]);
+    // 坏值：与「不写 store」同一条 —— 一个字节都不发
+    net.sends.length = 0;
+    assert.equal(ctx.session.setAvatar('https://evil.example/a.png'), false);
+    assert.deepEqual(net.sends, []);
   });
 });
 

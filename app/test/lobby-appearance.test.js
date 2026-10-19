@@ -57,6 +57,28 @@ describe('room.appearance：形状判据（服务端与客户端共用同一份�
     assert.equal(isAppearanceMsg(n(APPEARANCE_LIMITS.picks + 1)), false);
   });
 
+  test('玩家自己那张头像：id / **一枚图本身**（上传的 data URL、根相对路径）/ null（清除）都收，超长与坏形状拒', () => {
+    // 账号头像存在账号库里、**没有**静态文件路由，所以「别人看到的头像」只能把那一枚图自己发出来（2026-10-20）
+    assert.equal(isAppearanceMsg({ avatar: { avatar: 'data:image/png;base64,iVBORw0KGgo=' } }), true, '上传的那一枚 data URL');
+    assert.equal(isAppearanceMsg({ avatar: { avatar: '/workshop-assets/alpha/avatar.png' } }), true, '根相对路径');
+    assert.equal(isAppearanceMsg({ avatar: { avatar: 'a_7' } }), true, 'id 那条老写法照旧');
+    assert.equal(isAppearanceMsg({ avatar: { avatar: null } }), true, 'null = 清除');
+    const bad = [
+      'https://evil.example/avatar.png',                       // 绝对外域：CSP 的 img-src 本来也不放行它
+      'javascript:alert(1)',
+      'data:text/html;base64,PHNjcmlwdD4=',                    // 不是 `<img>` 画得出来的图片类型
+      `data:image/png;base64,${'A'.repeat(APPEARANCE_LIMITS.avatar)}`,   // 超过长度上限
+      { size: 1 }, 123, [],                                    // 非字符串
+    ];
+    for (const v of bad) assert.equal(isAppearanceMsg({ avatar: { avatar: v } }), false, `${String(v).slice(0, 40)} 应当被拒`);
+    // 边界是 **≤**：刚好到上界的那一枚收
+    const head = 'data:image/png;base64,';
+    const full = head + 'A'.repeat(APPEARANCE_LIMITS.avatar - head.length);
+    assert.equal(full.length, APPEARANCE_LIMITS.avatar);
+    assert.equal(isAppearanceMsg({ avatar: { avatar: full } }), true, '刚好到上界：收');
+    assert.equal(isAppearanceMsg({ avatar: { avatar: full + 'A' } }), false, '再多一个字符：拒');
+  });
+
   test('validateC2S 认得这条消息（进了 C2S 表，而不是走 default 分支）', () => {
     assert.equal(validateC2S({ t: 'room.appearance', picks: { char_1_01: { skinId: 'summer' } } }), null);
     assert.ok(validateC2S({ t: 'room.appearance' }), '都不给要被拒');
@@ -199,6 +221,44 @@ describe('room.appearance：真服务器端到端', () => {
     const r = await c.request({ t: 'room.appearance', picks: { char_1_01: { skinId: 'summer' } } });
     // 大厅层允许它先存在（会话上的偏好），但房间里没人受到影响；关键是**不是 INTERNAL**
     assert.notEqual(r.code, 'INTERNAL', `不该是内部错误：${JSON.stringify(r)}`);
+  });
+
+  test('**进房之前**发的头像也跟着进座位：大厅就先选好的人，进房那一刻别人已经看得到', async () => {
+    // 真实路径：起名页/大厅那一格面板（`ctx.session.setAvatar`）在**还没有房间**时就发了这一条 ——
+    // 服务端把它存在会话上（`appearance()` 没有房间时就是这样），建座位时照抄给座位（`humanSeat`）。
+    // 从前座位不带这个键，于是同房的人看到的还是策略图标/首字（业主 2026-10-20 报的那一条）。
+    const AVATAR = 'data:image/png;base64,iVBORw0KGgo=';
+    const c = await player('先选好的');
+    assert.equal((await c.request({ t: 'room.appearance', avatar: { avatar: AVATAR } })).t, 'ok');
+
+    const host = await player('房主');
+    const created = host.waitFor('room.state', (s) => s.hostId === host.id && s.code);
+    assert.equal((await host.request({ t: 'room.create', mode: 'coop', difficulty: 'NORMAL' })).t, 'ok');
+    const st = await created;
+    const joined = host.waitFor('room.state', (s) => s.seats.some((x) => x && x.playerId === c.id));
+    assert.equal((await c.request({ t: 'room.join', code: st.code })).t, 'ok');
+    host.roomState = await joined;
+    assert.deepEqual({ ...ownAvatarOf(host, c.id) }, { avatar: AVATAR }, '房主看到的那一席带着他进房前的头像');
+    // 反过来也成立：客人自己那一侧看房主（他没发过 ⇒ 那一席不带这个键）
+    c.roomState = await refresh(c);
+    assert.equal(seatOf(c, host.id).appearance, undefined, '没发过的人那一席照旧不带这个键');
+  });
+
+  test('**进房之前**发的换装也跟着进座位：在大厅先选好时装的人，进房那一刻别人已经看得到', async () => {
+    // 与上一条同一条路（会话 → 座位），换的是 `picks` 那一半 —— 这是业主现象里更常见的那一种：
+    // 时装是在「干员调配」界面选的，而干员调配不一定在房间里（大厅也进得去）。
+    const c = await player('先换好装的');
+    assert.equal((await c.request({ t: 'room.appearance', picks: { char_4182_oblvns: { skinId: 'avemujica-oblvns' } } })).t, 'ok');
+
+    const host = await player('房主');
+    const created = host.waitFor('room.state', (s) => s.hostId === host.id && s.code);
+    assert.equal((await host.request({ t: 'room.create', mode: 'coop', difficulty: 'NORMAL' })).t, 'ok');
+    const st = await created;
+    const joined = host.waitFor('room.state', (s) => s.seats.some((x) => x && x.playerId === c.id));
+    assert.equal((await c.request({ t: 'room.join', code: st.code })).t, 'ok');
+    host.roomState = await joined;
+    assert.deepEqual({ ...appOf(host, c.id, 'char_4182_oblvns') }, { skinId: 'avemujica-oblvns' },
+      '房主从房态里就能读到「客人穿的是哪一套」—— 观战 / 座位卡都靠这一份');
   });
 });
 

@@ -270,11 +270,11 @@ const DEFS = {
   owner_flash: { spawn: 3, follow: { mount: 0, keepRot: true, owner: true } }, // amgoat_attack_01_start: FollowOwner, MUZZLE_POINT
 };
 
-function fakeOfx(index) {
+function fakeOfx(index, defs = DEFS) {
   const spawned = [];
   const ofx = {
     active: true, time: 0, timers: [], ctx: { cam: () => ({ tilt: 30 }) },
-    lib: { has: (k) => k in DEFS, def: (k) => (k in DEFS ? { isLoop: false, rotateType: 0, rotY: -1, n: 0, line: [], ...DEFS[k] } : null), index: async () => index, preload: async (keys) => keys.length, defs: new Map() },
+    lib: { has: (k) => k in defs, def: (k) => (k in defs ? { isLoop: false, rotateType: 0, rotY: -1, n: 0, line: [], ...defs[k] } : null), index: async () => index, preload: async (keys) => keys.length, defs: new Map() },
     spawn(key, place, opts) {
       const def = this.lib.def(key);
       const fx = { key, def, anchor: place.pos.slice(), mountRot: place.mountRot ? place.mountRot.slice() : null, yaw: 0, pitch: 0, mirror: !!place.mirror, flipY: !!place.flipY, time: 0, linePts: new Map(), stopped: null, stop(o = {}) { this.stopped = o; },
@@ -288,13 +288,17 @@ function fakeOfx(index) {
   return { ofx, spawned };
 }
 
-async function setup() {
-  const index = makeIndex();
-  const f = fakeOfx(index);
-  const w = new FxWiring(f.ofx, { speed: () => 10, record: () => null });
+async function setup(o = {}) {
+  const index = o.index || makeIndex();
+  const f = fakeOfx(index, o.defs);
+  const w = new FxWiring(f.ofx, { speed: () => 10, record: () => null, ...o.wiring });
   await w.ready();
-  const view = (id, key, x, y, o = {}) => ({ id, x, y, z: 0, visFacing: 1, isEnemy: /^enemy_/.test(key), alive: true, flags: 0, dir: 'RIGHT',
-    info: { id, spine: key, defId: key, side: /^enemy_/.test(key) ? 'enemy' : 'ally', kind: 'op', skillIndex: 1 }, ...o });
+  // `o.info` 并进 info（时装那一组用例要 `skinStem`：`opts.skin` 只看 info）
+  const view = (id, key, x, y, o2 = {}) => {
+    const { info: extra, ...rest } = o2;
+    return { id, x, y, z: 0, visFacing: 1, isEnemy: /^enemy_/.test(key), alive: true, flags: 0, dir: 'RIGHT', ...rest,
+      info: { id, spine: key, defId: key, side: /^enemy_/.test(key) ? 'enemy' : 'ally', kind: 'op', skillIndex: 1, ...(extra || {}) } };
+  };
   return { ...f, w, view, index };
 }
 
@@ -399,6 +403,66 @@ describe('the wiring places shots and weapon effects on the drawn model', () => 
     const src = view(7, 'char_lob', 4, 11, { flags: 16, boneOffset: boneView({}).boneOffset });
     w.attack(src, view(8, 'enemy_t', 7, 11), 'arrow', 0);
     assert.deepEqual(spawned.map((h) => h.key), ['s2lr_trail']);
+  });
+});
+
+describe('装备时装：变体装在数据里就播变体、没装就播默认那一枚（DESIGN §35.12 Skin）', () => {
+  /** 一套时装在特效数据里的登记（`skins[<stem>]`）：该时装的挂载点 + `fx` 后缀。 */
+  const outfit = (fx) => ({ ...SKIN, fx });
+  /** A wiring whose unit wears that outfit: its stem is what `opts.skin` names. */
+  const worn = (o = {}) => setup({
+    index: o.index, defs: o.defs,
+    wiring: { skin: (info) => info.skinStem || null },
+  });
+  const stem = { skinStem: 'char_lob_skim_1' };
+
+  test('有变体就用时装那一枚（playOn / 弹道的主特效 / 到达点特效全线同一条规则）', async () => {
+    const index = makeIndex();
+    index.skins.char_lob_skim_1 = outfit('skim#1');
+    const { w, spawned, view } = await worn({ index, defs: { ...DEFS, 'lob_flash_skim#1': { spawn: 3 }, 'lob_trail_skim#1': { spawn: 0 } } });
+    const src = view(1, 'char_lob', 4, 11, { info: stem });
+    const tgt = view(2, 'enemy_t', 7, 11);
+    // 一次普攻：越肩的起手闪光是**时装那一枚**；弹道自己的主特效也是（从前这里直接用默认那枚）
+    w.attack(src, tgt, 'arrow', 0);
+    assert.deepEqual(spawned.map((h) => h.key).sort(), ['lob_flash_skim#1', 'lob_trail_skim#1'].sort());
+    // 飞到头：到达点那一枚播在**挨打的那个人**身上（敌人没穿时装 ⇒ 默认那枚 `lob_hit`）
+    const shot = spawned.find((h) => h.key === 'lob_trail_skim#1');
+    for (let i = 1; i <= 60; i++) run(shot, (0.3 * i) / 60);
+    assert.deepEqual([...new Set(spawned.map((h) => h.key))].sort(), ['lob_flash_skim#1', 'lob_hit', 'lob_trail_skim#1'].sort());
+    // 没穿时装的那一枚棋子（同一条数据）：三枚都还是默认的
+    const plain = view(3, 'char_lob', 4, 11);
+    spawned.length = 0;
+    const shot0 = (w.attack(plain, tgt, 'arrow', 0), spawned.find((h) => h.key === 'lob_trail'));
+    for (let i = 1; i <= 60; i++) run(shot0, (0.3 * i) / 60);
+    assert.deepEqual([...new Set(spawned.map((h) => h.key))].sort(), ['lob_flash', 'lob_hit', 'lob_trail'].sort());
+  });
+
+  test('这一枚时装没带变体 ⇒ 播默认那一枚（不是什么都不播）', async () => {
+    const index = makeIndex();
+    index.skins.char_lob_skim_1 = outfit('skim#1');          // 这套时装只有 lob_flash 的变体
+    const { w, view } = await worn({ index, defs: { ...DEFS, 'lob_flash_skim#1': { spawn: 3 } } });
+    const v = view(1, 'char_lob', 4, 11, { info: stem });
+    assert.equal(w.playOn('lob_flash', v).key, 'lob_flash_skim#1', '有变体：时装那一枚');
+    assert.equal(w.playOn('lob_hit', v).key, 'lob_hit', '没有变体：默认那一枚照播');
+    assert.equal(w.playOn('staff_glow', v).key, 'staff_glow', '同上');
+  });
+
+  test('只有时装版的那一枚（默认版在本机提取里根本没有）也播得出来 —— 从前被 `lib.has(原 key)` 挡成一次都不播', async () => {
+    const index = makeIndex();
+    index.skins.char_lob_skim_1 = outfit('skim#1');
+    // `skin_only` 的**默认版不在库里**，只有时装那一枚（如 dolris_loop_01 / oblvns_skill_02_start_a_02 那种）
+    const defs = { ...DEFS, 'skin_only_skim#1': { spawn: 3 } };
+    const { w, spawned, view } = await worn({ index, defs });
+    const v = view(1, 'char_lob', 4, 11, { info: stem });
+    assert.equal(w.playOn('skin_only', v)?.key, 'skin_only_skim#1', '装着时装 ⇒ 播这一枚');
+    assert.equal(w.playOn('skin_only', view(2, 'char_lob', 4, 11)), null, '没穿时装 (库里一枚都没有) ⇒ 本来就没有');
+    // 同一条规则也管「这一下有没有官方特效可画」：只有变体时它照样算有（`_drawable`），不再整段换成程序化特效
+    index.units.char_lob.modes[0].attack.cast = [{ effects: ['skin_only'], oneshot: 0, directionType: 0 }];
+    const drew = view(3, 'char_lob', 4, 11, { info: stem });
+    spawned.length = 0;
+    assert.equal(w.attack(drew, view(4, 'enemy_t', 7, 11), 'none', 0), true);
+    assert.ok(spawned.some((h) => h.key === 'skin_only_skim#1'), '这一下画的是时装那一枚');
+    assert.deepEqual([...new Set(w.keysFor([drew]))].filter((k) => k.startsWith('skin_only')), ['skin_only_skim#1'], '预载也带上它');
   });
 });
 

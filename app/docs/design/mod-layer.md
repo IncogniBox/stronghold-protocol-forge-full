@@ -4385,7 +4385,9 @@ Node 宿主或极小宿主没有这一格，就是没有这一格；注入的那
 | 其它类型 / 别的字符串 / 长度 > 128 KiB（`AVATAR_MAX_LEN`） | **拒** |
 
 长度上限刻意比账号服务自己的 48 KiB **宽松**一档：引擎只管「这一页画不画得出来」，服务端那一侧的上限属于服务端
-—— 引擎反过来比服务端更严，会让一枚合法头像在这一头被拒、界面上一个像素都没有。
+—— 引擎反过来比服务端更严，会让一枚合法头像在这一头被拒、界面上一个像素都没有。**这一格与协议那一格是同一个数**
+（`APPEARANCE_LIMITS.avatar`）：`extensions.js` 直接读协议那一份，两处各写一遍的话，「本机画得出来、却发不出去」
+是那种只有上传大图的人才会撞见的错。
 
 **落地**：写进去的**只有 `me.avatar` 一个 store 键**（`match` / `room` / 别的 `me` 键一个都不碰），**不给面板
 store 句柄** —— 与 `setName` 同形的一格；**同时落盘**（`sp.pref.meAvatar`，与 `setName` 走 `identity.saveName`
@@ -4395,6 +4397,22 @@ store 句柄** —— 与 `setName` 同形的一格；**同时落盘**（`sp.pre
 的头像在 welcome 到达时又被冲掉 —— 真机撞到的就是这一条）。没有包写这一格时，页面与
 从前**逐字节相同**（三处读点都只是各多一个可选来源）。
 
+**广播给别人（2026-10-20 补的那一半）**：这一格从前只改本机那两处，于是**别人**看到的还是策略图标 / 首字（业主
+报的「服务器上传通过审核的头像，其他玩家看不到」）。现在写它的**同一条 `setAvatar`** 顺带把这一枚发上线
+（`room.appearance` 的顶层 `avatar`，形状就是上面这张表里那种「图本身」—— 协议于是也认这两种形状，见
+`shared/protocol.js isAppearanceAvatar`；`null` 也照发 = 别人那一侧跟着退回原本的画法）：
+
+* 不在房间里发也**有用**：服务端把它存在**会话**上（`server/lobby.js appearance()`），建座位时照抄给座位
+  （`humanSeat` 的 `appearance: session.appearance || null`）—— 少了这一行，「在大厅先选好、再进房」那条路上座位
+  永远不带这个键，同房的人看到的还是原版；
+* 在房间里发则**变更即广播**（与 `picks` 那条完全同路：服务端只转发、座位上的那份进 `room.state`）；
+* 客户端按座位记进换装链（`ui/portraitChain.js` 的 `setPeerAvatar` / `peerAvatarOf`，与 `peerAppearance` 并排但
+  **分开**：一张头像属于**人**、不按干员分组），离开房间 / 关房时与 `clearPeerAppearance` 一起清；
+* 我方那一份仍以本机 `me.avatar` 为准：本机还没记过（新浏览器 / 另一台设备刚上传）时**采纳**房态里那一份
+  —— 与 `picks` 的 `adopt` 同一条判据；反过来本机有、房态那份不同时**补发一次** —— 与 `picks` 的 `push` 同一条
+  （那一格是必需的：`setAvatar` 也可能发在**引擎还没连上**的时候 —— 起名屏那一格面板在 `hello` 之前就会推，
+  那一次广播会被丢掉；少了它，「刷新过一次 / 换了设备」的人在本局里就一直只有自己看得见）。
+
 **失败一律「点名 + `false`」，不抛、不静默**：
 
 | 判据 | 码 | 说明 |
@@ -4402,15 +4420,17 @@ store 句柄** —— 与 `setName` 同形的一格；**同时落盘**（`sp.pre
 | 值不是那份窄形状（含长度超限） | `CLIENT_SESSION_BAD_AVATAR` | 与 `CLIENT_SESSION_BAD_NAME` 同一条纪律：洗不出来的东西一律点名 |
 | 这一页的 store 没有 `set()`（极小宿主 / Node 用例） | `CLIENT_SESSION_AVATAR_UNAVAILABLE` | 「拿不到就是拿不到」：不静默失效、也不抛 |
 
-**三处读点**（都只多一个可选来源，都不认识「账号」二字）：
+**四处读点**（都只多一个可选来源，都不认识「账号」二字）：
 
 * 大厅右上角那枚个人芯片：`ui/accounts.js` 的 `AccountMeChip` 把 `player.avatar` 交给 `AvatarFrame` 的 `src`
   （`player` 就是 store 的 `me`，见 `screens/lobby.js`）。
 * **凡是画「你自己」的那个人像**：`ui/gameComponents.js` 的 `PlayerAvatar` **自己**在 `self` 为真时读
-  `store.me.avatar`（局内左上角自己那一行、策略轮选、结算页、机变选择都走这一个组件），有它就压过策略图标；
-  队友那几行照旧用策略图标 —— 这一页拿不到别人的账号头像，也不该编一个出来。
-* 房间那张席位卡上**自己那一席**：`screens/room.js` 的 `SeatCard` 在 `isMe` 为真时把 `store.me.avatar` 交给
-  `AvatarFrame` 的 `src`（那一格的「账号目录」`useAccount` 在本仓库是空壳恒 `null`，所以自己那一枚走这一格）。
+  `store.me.avatar`（局内左上角自己那一行、策略轮选、结算页、机变选择都走这一个组件），有它就压过策略图标。
+* **凡是画「别人」的那个人像（同一个组件）**：`self` 不为真时读 `peerAvatarOf(player.playerId)`（上面那张按座位
+  记的表）—— 队友那几行因此也画得出他上传的那一枚；这张表空（没进房 / 他那侧没发过）时照旧退回策略图标。
+* 房间那张席位卡上**每一席**：`screens/room.js` 的 `SeatCard` 在 `isMe` 为真时把 `store.me.avatar`、否则把
+  `peerAvatarOf(seat.playerId)` 交给 `AvatarFrame` 的 `src`（那一格的「账号目录」`useAccount` 在本仓库是空壳恒
+  `null`，所以两半都走这两格）。
 
 **判据**：`test/modClientCloud.test.mjs`（`setAvatar` 的收 / 清除 / 两条码 / 只写 `me.avatar`）、
 `test/modSurface.test.js` 的锚点（两个码）、以及既有那几条**有意逐键列全**的断言（`test/modClientPanels.test.js`
