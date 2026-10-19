@@ -40,13 +40,13 @@
 
 | | |
 |---|---|
-| **现在报什么** | `PACK_UNKNOWN_FIELD: pack.json: "type" is not a field of this pack format (id, name, version, author, license, description, gameVersion, game, api, layer, combat, content, overrides, voices, voiceLangs, bondIcons, itemIcons, art, skins, support, operators, i18n, forms, fx, notices, playtest, variants, behaviour, assets, client, server, routes, target, dependencies, conflicts). A key this loader does not know is never read: write it as one of the fields above, or drop it — a declaration that is ignored is worse than a refusal` |
-| **在哪** | `Stronghold-Protocol/shared/workshop.js:1825-1826` |
-| **小白会怎么想** | 「35 个合法字段一次性全砸过来，我怎么知道 `type` 该换成哪个？」后半句「a declaration that is ignored is worse than a refusal」是**纯设计哲学**，对用户零信息量 |
+| **现在报什么** | `PACK_UNKNOWN_FIELD: pack.json: "type" is not a field of this pack format (id, name, version, author, license, description, gameVersion, game, api, layer, combat, content, overrides, voices, voiceLangs, bondIcons, itemIcons, art, skins, support, operators, i18n, forms, fx, notices, playtest, stripDiyOverlaps, enabled, callBudget, variants, behaviour, assets, client, server, routes, matchKinds, target, dependencies, conflicts). A key this loader does not know is never read: write it as one of the fields above, or drop it — a declaration that is ignored is worse than a refusal` |
+| **在哪** | `Stronghold-Protocol/shared/workshop.js:2164-2165` |
+| **小白会怎么想** | 「39 个合法字段一次性全砸过来，我怎么知道 `type` 该换成哪个？」后半句「a declaration that is ignored is worse than a refusal」是**纯设计哲学**，对用户零信息量 |
 | **改成什么** | **「`pack.json` 里不能有 `"type"` 这个字段。包的类型不用你写 —— 引擎会看你声明了什么自己判断。把这一行删掉就行。」** |
 | **修法** | ① 删掉报出来那个字段所在的一行<br>② 如果那个字段其实是想表达别的意思，按下面的高频对照换：`type` → 删掉；`app` → `client` / `server`；`authors` → `author`；`englishName` → `name`；`target` → `api` + `game`；`capabilities` → 具体声明<br>③ 重跑校验 |
 
-> 只有引擎**认不出**的键才需要拉那张 35 个字段的长清单；已经反复出现的高频错键应当单独给一句。
+> 只有引擎**认不出**的键才需要拉那张 39 个字段的长清单；已经反复出现的高频错键应当单独给一句。
 
 ### 4. `BAD_API_TYPE` —— `api` 写成了数字
 

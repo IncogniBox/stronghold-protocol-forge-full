@@ -100,7 +100,7 @@ my-first-pack/          ← 包文件夹（名字 = 下面 pack.json 里的 "id"
    想用别的文件名也行，那就要把 `pack.json` 里 `"portrait"` 后面那个 `"portrait.png"` **一起改掉**，两边保持一致。
 2. 把 `"char_003_kalts"` 换成你想要的那个干员的 id。
 
-**干员 id 怎么查？** 在整合包根目录（也就是有 `data\` 和 `tools\` 的那一层）打开命令提示符，粘贴：
+**干员 id 怎么查？** 在整合包根目录下的 **`app\`**（也就是有 `data\` 和 `tools\` 的那一层）打开命令提示符，粘贴：
 
 ```
 node -e "const a=require('./data/assets.json');for(const k of Object.keys(a.chars))console.log(k, (a.chars[k].portrait||''))"
@@ -181,10 +181,10 @@ pack.json
 
 ## 三、怎么确认它真的装得上（不用开游戏）
 
-在整合包根目录粘贴（把路径换成你自己的 `workshop` 文件夹）：
+在 `app\` 那个文件夹（有 `data\` 和 `tools\` 的那一层）粘贴（工坊文件夹不叫 `workshop` 就把它换成你自己的）：
 
 ```
-node tools/workshop-validate.mjs app/workshop
+node tools/workshop-validate.mjs workshop
 ```
 
 **本项目实测的原样输出**（就是上面这份模板跑出来的）：
@@ -203,6 +203,8 @@ VALID: the engine accepts this content.
 ```
 
 看到 **`0 error(s), 0 warning(s)`** 和 **`VALID`** 就是装得上。这条命令**不写任何文件**，可以随时跑。
+
+> ⚠️ **自带的包也在这一扫里**：`app\workshop\` 里已经有十几个包（整合包自带的那几个），它们各有自己的 warning，所以整段输出不一定是 `0 warning(s)`。**只看你自己那一条 `pack <你的包名>` 下面的 `OK`，以及最后 `error(s)` 是不是 0** —— warning 不拦你装包。
 
 > 编辑器里也有这条：**包管理 → 校验这个包**。两条路同一套判据，结果一样。
 >
@@ -257,7 +259,7 @@ VALID: the engine accepts this content.
 | 真症状 | 真正的原因 | 怎么改 |
 |---|---|---|
 | 包装上了，游戏里一切照旧，日志也干干净净 | `content` 里没写 `chess` —— 引擎**只读声明过的文件**，`chess.json` 在磁盘上但一个字节都不读。**症状全是静默的** | 在 `pack.json` 里写 `"content": ["chess"]` |
-| 校验说「什么都没带」，可我明明写了 `support` | `support` / `playtest` / `variants` / `behaviour` / `dependencies` / `conflicts` / `callBudget` / `matchKinds` **都不算内容**（八样）—— 它们说的是「怎么跑」，不往对局里带东西 | 至少补一样真的：`content` / `art` / `client` / `notices` / `routes` / 素材之一 |
+| 校验说「什么都没带」，可我明明写了 `support` | `support` / `playtest` / `stripDiyOverlaps` / `variants` / `behaviour` / `dependencies` / `conflicts` / `callBudget` / `matchKinds` **都不算内容**（九样）—— 它们说的是「怎么跑」，不往对局里带东西 | 至少补一样真的：`content` / `art` / `client` / `notices` / `routes` / 素材之一 |
 | 明明有图，包被拒了 | 有 `assets/` 文件夹却**没写 `license`** | 加一行 `"license": "CC-BY-4.0"` |
 | 文件夹名和 `"id"` 不一致，包消失了 | 引擎按 `<workshop 文件夹>/<包 id>/pack.json` 找包，名字对不上就**整包跳过** | 让文件夹名 = `pack.json` 的 `"id"` |
 | 两个包都加了同一个干员，先装的那个没了 | 两个包抢同一个 id：**包 id 字典序小的赢**，而且与扫描顺序无关 | 改包名，或者让其中一个包别放这条 |
@@ -267,7 +269,7 @@ VALID: the engine accepts this content.
 | `"combat": false`，但包里的东西完全不生效 | 能改对局结果却标 `false` ⇒ 直接拒 | 改成 `"combat": true`，并在包说明里写明「会影响对局结果」 |
 | 引擎升级后，以前能用的包突然装不上了 | `api` 是**会强制比对**的版本区间。引擎抬到 2 时，写 `"1.x"` 的包被拒 | 改 `api` 区间。这是**保护**，不是 bug |
 | `api` 写成数字 `1`，包看着没问题但区间不生效 | 类型闸门直接拒非字符串的 `api` | 加引号：`"api": ">=1 <2"` |
-| 包的格式完全正确，却被整包拒绝，理由列了 38 个字段 | `pack.json` 的顶层字段是**闭集**，写了不认识的键就被拒 —— 刻意不静默 | 删掉那个键，或换成合法字段 |
+| 包的格式完全正确，却被整包拒绝，理由列了 39 个字段 | `pack.json` 的顶层字段是**闭集**，写了不认识的键就被拒 —— 刻意不静默 | 删掉那个键，或换成合法字段 |
 | 想让包覆盖引擎自己的文件（`data/**`、`server/sim/**`） | **刻意没有这条路** | 这类能力得先在引擎里做成开关，包才能声明 |
 | 技能文字写得好好的，游戏里一点效果都没有 | 技能里的键用了引擎不认的写法 —— 不报错，也不生效 | 看校验器给的警告，要么换成清单里的键，要么改成写代码那条路 |
 | 新干员画成一张菱形贴纸 | 模型 id 填了一个不存在的 | 从 `data/assets.json` 里挑一个真实存在的；第一版建议只换立绘，别碰模型 |
