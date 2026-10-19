@@ -110,5 +110,20 @@ describe('placeholders', () => {
     assert.equal(richTextPlain(formatBondEffect(stepped, 49)), '携带了1件（每50层+1）');
     assert.equal(richTextPlain(formatBondEffect(stepped, 50)), '携带了2件（每50层+1）');
     assert.equal(richTextPlain(formatBondEffect(stepped, 150)), '携带了4件（每50层+1）');
+    // `cap`: the number stops at `bb[cap]` like the battle does (多索雷斯 「移动与攻击速度降低 …（至多80%）」: 208 层
+    // would print 114% without it, while the sim applies min(0.8, …)). Only the param that declares it is clamped.
+    const capped = {
+      effectDesc: '降低{0:0%}（至多{1:0%}）',
+      effectDescParams: [
+        { index: 0, format: '0%', base: 'slow', perStack: 'slow_per_stack', cap: 'slow_cap' },
+        { index: 1, format: '0%', base: 'slow_cap', perStack: null },
+      ],
+      bb: { slow: 0.1, slow_per_stack: 0.005, slow_cap: 0.8 },
+    };
+    assert.equal(richTextPlain(formatBondEffect(capped, 0)), '降低10%（至多80%）');
+    assert.equal(richTextPlain(formatBondEffect(capped, 10)), '降低15%（至多80%）');
+    assert.equal(richTextPlain(formatBondEffect(capped, 208)), '降低80%（至多80%）');
+    // an unknown / non-finite cap key changes nothing (every bond without `cap` is untouched)
+    assert.equal(richTextPlain(formatBondEffect({ ...capped, effectDescParams: [{ index: 0, format: '0%', base: 'slow', perStack: 'slow_per_stack', cap: 'nope' }] }, 208)), '降低114%（至多{1:0%}）');
   });
 });

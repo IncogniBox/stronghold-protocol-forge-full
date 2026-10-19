@@ -1,13 +1,13 @@
 {
  "garrison_dos_holungday_a": {
   "garrisonId": "garrison_dos_holungday_a",
-  "desc": "自身攻击范围扩大至全场的特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+2",
-  "descRaw": "自身攻击范围扩大至全场的特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+2",
+  "desc": "自身攻击范围扩大至特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+2",
+  "descRaw": "自身<@ba.vup>攻击范围</>扩大至<@ba.vup>特殊水地形</>；<战斗中>每消耗<@ba.vup>4</>发弹药，使已激活的【多索雷斯】【精准】层数<@ba.vup>+2</>",
   "eventType": "IN_BATTLE",
   "eventTypeDesc": "作战能力",
   "eventTypeIcon": "icon_battle",
-  "effectType": "DOS_CHEN2_AMMO_FULLRANGE",
-  "effectKey": "DOS_CHEN2_AMMO_FULLRANGE",
+  "effectType": "DOS_CHEN2_WATER_RANGE",
+  "effectKey": "DOS_CHEN2_WATER_RANGE",
   "battleRuneKey": null,
   "charLevel": 0,
   "bb": {
@@ -23,13 +23,13 @@
  },
  "garrison_dos_holungday_b": {
   "garrisonId": "garrison_dos_holungday_b",
-  "desc": "自身攻击范围扩大至全场的特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+4",
-  "descRaw": "自身攻击范围扩大至全场的特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+4",
+  "desc": "自身攻击范围扩大至特殊水地形；<战斗中>每消耗4发弹药，使已激活的【多索雷斯】【精准】层数+4",
+  "descRaw": "自身<@ba.vup>攻击范围</>扩大至<@ba.vup>特殊水地形</>；<战斗中>每消耗<@ba.vup>4</>发弹药，使已激活的【多索雷斯】【精准】层数<@ba.vup>+4</>",
   "eventType": "IN_BATTLE",
   "eventTypeDesc": "作战能力",
   "eventTypeIcon": "icon_battle",
-  "effectType": "DOS_CHEN2_AMMO_FULLRANGE",
-  "effectKey": "DOS_CHEN2_AMMO_FULLRANGE",
+  "effectType": "DOS_CHEN2_WATER_RANGE",
+  "effectKey": "DOS_CHEN2_WATER_RANGE",
   "battleRuneKey": null,
   "charLevel": 0,
   "bb": {

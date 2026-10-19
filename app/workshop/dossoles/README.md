@@ -34,18 +34,19 @@
 | `bondType` | `SIDE_STORY`（故事集；由前置包 `workshop/side-story` 接管抽签与简报分区） |
 | `isCore` | `false`（附加盟约） |
 | `identifier` / `bondOrder` | 41 / 2（决定数据里的排序） |
-| 人数阈值 `thresholds` | **2 / 2**（两档同为在场 2 名不同成员；`countMode: BOARD`，只在场的不同成员计数） |
+| 人数阈值 `thresholds` | **2 / 4**（第 1 档在场 2 名不同成员、第 2 档在场 4 名；`countMode: BOARD`，只在场的不同成员计数） |
 | `activeType` / `weight` | `BATTLE` / 10 |
 | `effectId` | `bondeffect_dossoles` |
-| 层数轴 | 引擎通用叠层（与其它盟约同源，本包不额外造）；`bb` 的 12 个键全部参与计算 |
+| 层数轴 | 引擎通用叠层（与其它盟约同源，本包不额外造）；`bb` 的 13 个键全部参与计算 |
+| 显示 | 叠层数值按**总值**印（`effectDescParams` 5 条，与哥伦比亚 / 颂乐人偶同款）；减速那条带 80% 上限（`effectDescParams[].cap`） |
 
 **两档效果**（设计取自多索雷斯假日活动的「水蚀」机制）：
 
 - **第 1 档（在场 2 名不同【多索雷斯】干员）**
-  - ①【多索雷斯】干员的攻击范围视为**特殊水地形**（= 所有在场成员攻击范围格子的并集）；
-    处于其中的【多索雷斯】干员攻击附带相当于**攻击力 ×（10% + 0.1% × 层数）**的**侵蚀损伤**；
-  - ②敌人处于特殊水地形中时，**移动与攻击速度降低 10% + 0.5% × 层数**。
-- **第 2 档（同为在场 2 名）**
+  - ①【多索雷斯】干员的攻击范围视为**特殊水地形**（= 所有在场成员攻击范围格子的并集），战场上**用浅蓝波纹覆盖每一格**
+    （fx 种类 `dosWater`，见 §7）；处于其中的【多索雷斯】干员攻击附带相当于**攻击力 ×（10% + 0.1% × 层数）**的**侵蚀损伤**；
+  - ②敌人处于特殊水地形中时，**移动与攻击速度降低 10% + 0.5% × 层数**（**至多 80%**）。
+- **第 2 档（在场 4 名不同【多索雷斯】干员）**
   - ③敌人受到**侵蚀损伤爆发**时，**防御力额外降低 50 + 2 × 层数**点（与引擎自带的那份降防并存，按爆发次数叠加）；
   - ④敌人处于**损伤爆发期间**时，每 **0.5 秒**受到一次**元素伤害** = 场上攻击力最高的【多索雷斯】干员 ×（50% + 1% × 层数）。
 
@@ -74,7 +75,7 @@
 
 | id | 名字 | 阶级 | 盟约 | 特质（普通 → 精锐） |
 |---|---|---|---|---|
-| `chess_ws_dos_holungday_a` / `_b` | 假日威龙陈 | 6 | 多索雷斯 + 精准 | 自身攻击范围扩大至**全场**的特殊水地形；`<战斗中>`每消耗 **4** 发弹药，使已激活的【多索雷斯】【精准】层数 **+2** / **+4** |
+| `chess_ws_dos_holungday_a` / `_b` | 假日威龙陈 | 6 | 多索雷斯 + 精准 | 自身攻击范围扩大至**特殊水地形**（= 本盟约算出来的并集，**不是整张战场**；敌人站在特殊水地形上时她的技能就会释放）；`<战斗中>`每消耗 **4** 发弹药，使已激活的【多索雷斯】【精准】层数 **+2** / **+4** |
 | `chess_ws_dos_lin_a` / `_b` | 林 | 5 | 炎 + 多索雷斯 + 灵巧 | `<战斗中>`攻击范围内有干员受到攻击时，其已激活盟约的层数 **+1** / **+2**（同一名干员最多 **6** / **12** 次）；若本场没有触发过 `<战斗中>`特质，则 `<进入休整期时>`使自身已激活层数 **+6** / **+12** |
 | `chess_ws_dos_crow_a` / `_b` | 羽毛笔 | 3 | 多索雷斯 + 不屈 | `<战斗中>`击倒敌人时，使已激活的【多索雷斯】【不屈】层数 **+1** / **+2** |
 | `chess_ws_dos_takila_a` / `_b` | 龙舌兰 | 2 | 多索雷斯 + 迅捷 | `<进入休整期时>`获得 **1** / **2** 件阶级不超过调度中心的随机「知名商品标志物」 |
@@ -120,7 +121,7 @@
 
 | `effectKey` | 挂在谁 | `eventType` | 效果 |
 |---|---|---|---|
-| `garrison_dos_holungday_a` / `_b` | 假日威龙陈 | `IN_BATTLE` | `<战斗中>`每消耗 4 发弹药 → 已激活【多索雷斯】【精准】层数 **+2 / +4** |
+| `garrison_dos_holungday_a` / `_b` | 假日威龙陈 | `IN_BATTLE` | 攻击范围扩大至**特殊水地形**（并集；敌人站在水地形上时技能即释放）+ `<战斗中>`每消耗 4 发弹药 → 已激活【多索雷斯】【精准】层数 **+2 / +4** |
 | `garrison_dos_lin_a` / `_b` | 林 | `IN_BATTLE` | `<战斗中>`攻击范围内有干员受到攻击 → 其已激活盟约层数 **+1 / +2**（同一名干员上限 **6 / 12** 次） |
 | `garrison_dos_lin_prep_a` / `_b` | 林 | `SERVER_PREP_START` | 兜底：本场没触发过战斗侧特质 → `<进入休整期时>`自身已激活层数 **+6 / +12**（读 `dosLinFired` 标记） |
 | `garrison_dos_crow_a` / `_b` | 羽毛笔 | `IN_BATTLE` | `<战斗中>`击倒敌人 → 已激活【多索雷斯】【不屈】层数 **+1 / +2** |
@@ -137,8 +138,9 @@
 ### 5.1 `server.battle` — `battle/main.mjs`
 
 - 导出 `install(battle)`（空实现，只为满足模块契约）+ 模块顶层注册两件东西：
-  - `registerBondInstaller('dossolesShip', …)`：§1 的四条盟约效果（特殊水地形的并集每 0.25 s 重算一次；
-    攻击带侵蚀损伤；水地形减速；爆发额外降防；爆发期间的元素伤害脉冲）。
+  - `registerBondInstaller('dossolesShip', …)`：§1 的四条盟约效果（特殊水地形的并集每 0.25 s 重算一次、
+    **每 0.6 s 用 `battle.fx('dosWater', { tiles })` 把它画在地块上**（浅蓝波纹覆盖；一次 fx 最多 60 格，超过就分包）；
+    攻击带侵蚀损伤；水地形减速按 `bb.water_slow_cap` 夹在 80% 以下；爆发额外降防；爆发期间的元素伤害脉冲）。
   - `registerItemBehaviour('mod_dos_jade', …)`：翡翠庭院至臻的基础攻击力加成（按【多索雷斯】层数重算）。
 
 ### 5.2 `server.meta` — `meta/main.mjs`（`pack.json.server.meta.registers` 的 8 条键）
@@ -163,9 +165,13 @@
   meta 的 `registry.item` / `registry.effect` / `registry.garrison`。
 - meta 侧上下文：`ctx.rollChess` / `ctx.grantChess` / `ctx.grantItem` / `ctx.addFunds` / `ctx.addLayers` /
   `ctx.addEffect` / `ctx.shopLevel` / `ctx.pieceBonds` / `ctx.bonds` / `ctx.bondActive` / `ctx.mark` / `ctx.rng`。
-- 战斗侧上下文：`gainLayers` / `bondLayers` / `reached` / `battle.setExtraRange` / `battle.on('damaged')` /
-  `battle.on('elementBurst')` / `battle.every` / `battle.addBuff` / `battle.removeBuff` / `battle.dealDamage` /
-  `battle.enemies`（全部来自包侧合法的 `@battle/mod.js` 入口与 battle 句柄）。
+- 战斗侧上下文：`gainLayers` / `bondLayers` / `reached` / `battle.setExtraRange` / `unit.skill.addTriggerRange` /
+  `battle.fx` / `battle.on('damaged')` / `battle.on('elementBurst')` / `battle.on('deploy')` / `battle.every` /
+  `battle.addBuff` / `battle.removeBuff` / `battle.dealDamage` / `battle.enemies`（全部来自包侧合法的 `@battle/mod.js`
+  入口与 battle 句柄；`addTriggerRange` 与「丰川祥子」写 `liveRangeGrid` 同一条先例，见 §7）。
+- 直觉上要小心的一处：`battle.setExtraRange` 只并入 `rangeKeys`/`rangeKeySet`（**普通攻击**的选目标），
+  **不进** `baseRangeKeys`（技能的 DEFAULT 触发判据）—— 所以「攻击范围扩大」与「技能因它而释放」是**两件事**，
+  假日威龙陈两条都要（§2.1）。
 
 ---
 
@@ -218,16 +224,25 @@ assets/skin/op/<stem>/{avatar,portrait}.png
   —— 本局抽签接管（`matchBondPolicy`，故事集盟约不走引擎原版附加盟约抽选，且有「N 个故事集盟约就禁若干」的规则）、
   简报的两个分区（**故事集盟约 SIDE STORY BONDS** / **本局禁用故事集干员**）、以及盟约条上的「故事集」金标外观。
   本包**零客户端代码**。
-- **引擎源文件改动（2 处，仅此 2 处）**：
+- **引擎源文件改动（4 处，仅此 4 处）**：
   - `app/shared/kitImports.js` 的 ops 白名单加了 `@ops/op-chen2.js` 与 `@ops/op-lin.js` 两行；
   - `app/test/kitImports.test.js` 的 `KIT_IMPORT_EXPORTS` 补了这两份 kit 的导出名。
   这是为了让 `kits/` 能复用两份官方 ops kit（陈 / 林本体与假日威龙陈 / 林的动作、弹药、技能一致）。
+  - **`app/public/js/render/fx/kinds.js` 加了一个 fx 种类 `dosWater`**（`{ a: 'telegraph', c: 0x8fe0ff }`，
+    浅蓝）：引擎的 fx 种类表本来就是**加法表**，工坊的 `fever`（颂乐人偶）是同一条先例 —— 本包只是又占一个名字，
+    `a: 'telegraph'` 走的是引擎自己「火墙 / 预警框」那条**显式地块表**通道（`tiles`，一格一画），
+    不新增任何渲染通道、不改任何既有种类。
+  - **`app/public/js/ui/richText.js` 的 `formatBondEffect` 多认一个可选字段 `cap`**（`effectDescParams[].cap` =
+    一个 `bb` 键名）：解析出来的数**最后夹一次上限** `min(value, bb[cap])`，让卡片印的就是战斗真正在用的那个数
+    （本包减速那条「至多 80%」）。没写 `cap` 的参数逐字不变（官方 23 条盟约与其它包全都不声明它），
+    `docs/DATA.md` §3 与 `test/ui/richText.test.js` 同步。
 - **包公告走引擎原生声明面**：`pack.json.notices.announcement` 指向包内的 `notice/announcement.json`，
   装载期由 `server/notices.js` 的 `workshopNotices` 把这一条**追加**进 `/data/notices.json`（合并语义是**追加**，
   引擎那一半从 `CHANGELOG.md` 生成，两边互不覆盖；上限 8 条公告 / 每条 12 小节 × 40 项 / 每项 200 字 / 摘要 600 字）。
   引擎侧零改动。`notice/announcement.json` 在装载期要「可读且是合法 JSON」，否则**拒整包**（`NOTICES_BAD_FILE`）。
 - **本包不新增任何引擎端口**：客户端用的都是引擎**已具名**的组件与**已声明**的槽位（本包一个都没用），
-  服务端用的都是引擎已声明的通用钩子（§5.3）。
+  服务端用的都是引擎已声明的通用钩子（§5.3）。特殊水地形那个人眼可见的「浅蓝波纹」是**服务端发的 fx 事件**
+  （`battle.fx('dosWater', { tiles })`），不是客户端代码 —— 所以本包仍然是**零客户端面板**。
 
 ---
 
@@ -236,7 +251,7 @@ assets/skin/op/<stem>/{avatar,portrait}.png
 | 文件 | 职责 |
 |---|---|
 | `pack.json` | 身份声明；`content: ["bonds","chess","garrisons","items"]`、6 条 `overrides`、`art`（chars + skills）、`bondIcons`、`itemIcons`、`skins`、`server.battle` / `server.meta`（8 条 `registers`）；`combat: true`、`stripDiyOverlaps: true` |
-| `bonds.json` | 盟约 `dossolesShip`（故事集，阈值 2 / 2，成员名单已填 7 位） |
+| `bonds.json` | 盟约 `dossolesShip`（故事集，阈值 2 / 4，成员名单已填 7 位；`effectDescParams` 5 条 + `cap` 上限） |
 | `chess.json` | 新增 4 名干员（8 条）+ 覆盖 3 名官方干员（6 条） |
 | `garrisons.json` | 10 条干员特质 |
 | `items.json` | 6 件装备（12 条） |

@@ -12,7 +12,7 @@
   "activeCount": 2,
   "thresholds": [
    2,
-   2
+   4
   ],
   "maxCount": null,
   "thresholdTemplate": "count_threshold_upward",
@@ -25,20 +25,53 @@
   "weight": 10,
   "maxInactiveBondCount": -1,
   "layerMilestones": [],
-  "desc": "根据在场的【多索雷斯】干员数量，触发效果。\n<在场2名不同【多索雷斯】干员>【多索雷斯】干员的攻击范围视为特殊水地形，处于特殊水地形中时，攻击附带相当于攻击力10%的侵蚀损伤（可叠加，每层增加0.1%）。\n敌人处于特殊水地形中时，移动与攻击速度降低10%（可叠加，每层增加0.5%）。\n<在场2名不同【多索雷斯】干员>敌人受到侵蚀损伤爆发时，防御力额外降低50点（可叠加，每层增加2）。\n敌人处于损伤爆发期间时，每0.5秒受到1次基于场上攻击力最高的【多索雷斯】干员50%攻击力的元素伤害（可叠加，每层增加1%）。",
-  "descRaw": "根据在场的【多索雷斯】干员数量，触发效果。\n<在场<@autochess.dgreen>2</>名不同【多索雷斯】干员>【多索雷斯】干员的<@ba.vup>攻击范围</>视为<@ba.vup>特殊水地形</>，处于特殊水地形中时，攻击附带相当于<@ba.vup>攻击力10%</>的<@ba.vup>侵蚀损伤</><@autochess.gray>（可叠加，每层增加0.1%）</>。\n敌人处于特殊水地形中时，<@ba.vup>移动与攻击速度降低10%</><@autochess.gray>（可叠加，每层增加0.5%）</>。\n<在场<@autochess.dgreen>2</>名不同【多索雷斯】干员>敌人受到<@ba.vup>侵蚀损伤爆发</>时，<@ba.vup>防御力额外降低50点</><@autochess.gray>（可叠加，每层增加2）</>。\n敌人处于<@ba.vup>损伤爆发期间</>时，每<@ba.vup>0.5</>秒受到1次基于场上攻击力最高的【多索雷斯】干员<@ba.vup>50%攻击力</>的<@ba.vup>元素伤害</><@autochess.gray>（可叠加，每层增加1%）</>。",
+  "desc": "根据在场的【多索雷斯】干员数量，触发效果。\n<在场2名不同【多索雷斯】干员>【多索雷斯】干员的攻击范围视为特殊水地形，处于特殊水地形中时，攻击附带相当于攻击力10%的侵蚀损伤（可叠加，每层增加0.1%）。\n敌人处于特殊水地形中时，移动与攻击速度降低10%（可叠加，每层增加0.5%，至多80%）。\n<在场4名不同【多索雷斯】干员>敌人受到侵蚀损伤爆发时，防御力额外降低50点（可叠加，每层增加2）。\n敌人处于损伤爆发期间时，每0.5秒受到1次基于场上攻击力最高的【多索雷斯】干员50%攻击力的元素伤害（可叠加，每层增加1%）。",
+  "descRaw": "根据在场的【多索雷斯】干员数量，触发效果。\n<在场<@autochess.dgreen>2</>名不同【多索雷斯】干员>【多索雷斯】干员的<@ba.vup>攻击范围</>视为<@ba.vup>特殊水地形</>，处于特殊水地形中时，攻击附带相当于<@ba.vup>攻击力10%</>的<@ba.vup>侵蚀损伤</><@autochess.gray>（可叠加，每层增加0.1%）</>。\n敌人处于特殊水地形中时，<@ba.vup>移动与攻击速度降低10%</><@autochess.gray>（可叠加，每层增加0.5%，至多80%）</>。\n<在场<@autochess.dgreen>4</>名不同【多索雷斯】干员>敌人受到<@ba.vup>侵蚀损伤爆发</>时，<@ba.vup>防御力额外降低50点</><@autochess.gray>（可叠加，每层增加2）</>。\n敌人处于<@ba.vup>损伤爆发期间</>时，每<@ba.vup>0.5</>秒受到1次基于场上攻击力最高的【多索雷斯】干员<@ba.vup>50%攻击力</>的<@ba.vup>元素伤害</><@autochess.gray>（可叠加，每层增加1%）</>。",
   "effectId": "bondeffect_dossoles",
   "effectName": "多索雷斯",
-  "effectDesc": "根据在场的【多索雷斯】干员数量，触发效果。\n<在场2名不同【多索雷斯】干员>【多索雷斯】干员的攻击范围视为特殊水地形，处于特殊水地形中时，攻击附带相当于攻击力10%的侵蚀损伤（可叠加，每层增加0.1%）。\n敌人处于特殊水地形中时，移动与攻击速度降低10%（可叠加，每层增加0.5%）。\n<在场2名不同【多索雷斯】干员>敌人受到侵蚀损伤爆发时，防御力额外降低50点（可叠加，每层增加2）。\n敌人处于损伤爆发期间时，每0.5秒受到1次基于场上攻击力最高的【多索雷斯】干员50%攻击力的元素伤害（可叠加，每层增加1%）。",
-  "effectDescRaw": "根据在场的【多索雷斯】干员数量，触发效果。\n<在场<@autochess.dgreen>2</>名不同【多索雷斯】干员>【多索雷斯】干员的<@ba.vup>攻击范围</>视为<@ba.vup>特殊水地形</>，处于特殊水地形中时，攻击附带相当于<@ba.vup>攻击力10%</>的<@ba.vup>侵蚀损伤</><@autochess.gray>（可叠加，每层增加0.1%）</>。\n敌人处于特殊水地形中时，<@ba.vup>移动与攻击速度降低10%</><@autochess.gray>（可叠加，每层增加0.5%）</>。\n<在场<@autochess.dgreen>2</>名不同【多索雷斯】干员>敌人受到<@ba.vup>侵蚀损伤爆发</>时，<@ba.vup>防御力额外降低50点</><@autochess.gray>（可叠加，每层增加2）</>。\n敌人处于<@ba.vup>损伤爆发期间</>时，每<@ba.vup>0.5</>秒受到1次基于场上攻击力最高的【多索雷斯】干员<@ba.vup>50%攻击力</>的<@ba.vup>元素伤害</><@autochess.gray>（可叠加，每层增加1%）</>。",
-  "effectDescParams": [],
+  "effectDesc": "根据在场的【多索雷斯】干员数量，触发效果。\n<在场2名不同【多索雷斯】干员>【多索雷斯】干员的攻击范围视为特殊水地形，处于特殊水地形中时，攻击附带相当于攻击力{0:0.0%}的侵蚀损伤（可叠加，每层增加0.1%）。\n敌人处于特殊水地形中时，移动与攻击速度降低{1:0.0%}（可叠加，每层增加0.5%，至多{2:0%}）。\n<在场4名不同【多索雷斯】干员>敌人受到侵蚀损伤爆发时，防御力额外降低{3}点（可叠加，每层增加2）。\n敌人处于损伤爆发期间时，每0.5秒受到1次基于场上攻击力最高的【多索雷斯】干员{4:0%}攻击力的元素伤害（可叠加，每层增加1%）。",
+  "effectDescRaw": "根据在场的【多索雷斯】干员数量，触发效果。\n<在场<@autochess.dgreen>2</>名不同【多索雷斯】干员>【多索雷斯】干员的<@ba.vup>攻击范围</>视为<@ba.vup>特殊水地形</>，处于特殊水地形中时，攻击附带相当于<@ba.vup>攻击力{0:0.0%}</>的<@ba.vup>侵蚀损伤</><@autochess.gray>（可叠加，每层增加0.1%）</>。\n敌人处于特殊水地形中时，<@ba.vup>移动与攻击速度降低{1:0.0%}</><@autochess.gray>（可叠加，每层增加0.5%，至多{2:0%}）</>。\n<在场<@autochess.dgreen>4</>名不同【多索雷斯】干员>敌人受到<@ba.vup>侵蚀损伤爆发</>时，<@ba.vup>防御力额外降低{3}点</><@autochess.gray>（可叠加，每层增加2）</>。\n敌人处于<@ba.vup>损伤爆发期间</>时，每<@ba.vup>0.5</>秒受到1次基于场上攻击力最高的【多索雷斯】干员<@ba.vup>{4:0%}攻击力</>的<@ba.vup>元素伤害</><@autochess.gray>（可叠加，每层增加1%）</>。",
+  "effectDescParams": [
+   {
+    "index": 0,
+    "format": "0.0%",
+    "base": "erosion_ratio",
+    "perStack": "erosion_ratio_per_stack"
+   },
+   {
+    "index": 1,
+    "format": "0.0%",
+    "base": "water_slow",
+    "perStack": "water_slow_per_stack",
+    "cap": "water_slow_cap"
+   },
+   {
+    "index": 2,
+    "format": "0%",
+    "base": "water_slow_cap",
+    "perStack": null
+   },
+   {
+    "index": 3,
+    "format": "0",
+    "base": "burst_def_down",
+    "perStack": "burst_def_down_per_stack"
+   },
+   {
+    "index": 4,
+    "format": "0%",
+    "base": "burst_hit_ratio",
+    "perStack": "burst_hit_ratio_per_stack"
+   }
+  ],
   "bb": {
    "power_bond_char_cnt": 2,
-   "ex_bond_char_cnt": 2,
+   "ex_bond_char_cnt": 4,
    "erosion_ratio": 0.1,
    "erosion_ratio_per_stack": 0.001,
    "water_slow": 0.1,
    "water_slow_per_stack": 0.005,
+   "water_slow_cap": 0.8,
    "burst_def_down": 50,
    "burst_def_down_per_stack": 2,
    "burst_hit_ratio": 0.5,
@@ -54,11 +87,12 @@
     "key": "mod_bond_eff_dossoles",
     "bb": {
      "power_bond_char_cnt": 2,
-     "ex_bond_char_cnt": 2,
+     "ex_bond_char_cnt": 4,
      "erosion_ratio": 0.1,
      "erosion_ratio_per_stack": 0.001,
      "water_slow": 0.1,
      "water_slow_per_stack": 0.005,
+     "water_slow_cap": 0.8,
      "burst_def_down": 50,
      "burst_def_down_per_stack": 2,
      "burst_hit_ratio": 0.5,
@@ -71,8 +105,19 @@
     }
    }
   ],
-  "baseParams": [],
-  "perStackParams": [],
+  "baseParams": [
+   "erosion_ratio",
+   "water_slow",
+   "water_slow_cap",
+   "burst_def_down",
+   "burst_hit_ratio"
+  ],
+  "perStackParams": [
+   "erosion_ratio_per_stack",
+   "water_slow_per_stack",
+   "burst_def_down_per_stack",
+   "burst_hit_ratio_per_stack"
+  ],
   "members": [
    "chess_char_4_17_a",
    "chess_char_3_03_a",
@@ -95,27 +140,29 @@
    "tiers": [
     {
      "need": "2 distinct 【多索雷斯】 on board",
-     "effect": "Every 【多索雷斯】 operator's attack range counts as 特殊水地形. A 【多索雷斯】 operator standing on it (its own range includes its own tile) carries 侵蚀损伤 on its attacks: 10% + 0.1%·L of its ATK, as an `erosion` element rider. An enemy standing on it has its move speed and attack speed reduced by 10% + 0.5%·L."
+     "effect": "Every 【多索雷斯】 operator's attack range counts as 特殊水地形. A 【多索雷斯】 operator standing on it (its own range includes its own tile) carries 侵蚀损伤 on its attacks: 10% + 0.1%·L of its ATK, as an `erosion` element rider. An enemy standing on it has its move speed and attack speed reduced by min(80%, 10% + 0.5%·L)."
     },
     {
-     "need": "2 distinct",
+     "need": "4 distinct",
      "effect": "An enemy whose 侵蚀损伤 bursts takes an extra −(50 + 2·L) flat DEF on top of the engine's own 侵蚀 burst (−120); while it is in a burst cooldown, it takes one 元素伤害 every 0.5 s equal to (50% + 1%·L) of the ATK of the highest-ATK 【多索雷斯】 operator on the field."
     }
    ],
    "formulas": {
     "erosionRider": "u.atk × (0.10 + 0.001·L)",
-    "waterSlow": "moveMul = 1 − (0.10 + 0.005·L); aspd = −(0.10 + 0.005·L) × 100",
+    "waterSlow": "moveMul = 1 − min(0.80, 0.10 + 0.005·L); aspd = −min(0.80, 0.10 + 0.005·L) × 100",
     "burstDefDown": "defFlat −(50 + 2·L), stacking per burst like the engine's own erosion (−120)",
     "burstPulse": "max(atk of 【多索雷斯】 on field) × (0.50 + 0.01·L) every 0.5 s"
    },
-   "caps": "one erosion rider per damaging hit (any damage the member deals to an enemy, matching the engine's 灼燃损伤 rider on 「炎佑」)",
+   "caps": "one erosion rider per damaging hit (any damage the member deals to an enemy, matching the engine's 灼燃损伤 rider on 「炎佑」); the 移动/攻击速度 reduction of the first tier is capped at 80% (`bb.water_slow_cap`, printed by the card as the `至多{2:0%}` of the 当前效果 line)",
    "layerGain": "The story-bond axis: layers come from the same 盟约叠层 sources every other bond uses.",
-   "howToPlay": "Field 【多索雷斯】 operators and keep them inside each other's attack ranges — the union of their ranges is the 「特殊水地形」, so they erode anything they hit and slow whatever stands in it.",
+   "howToPlay": "Field 【多索雷斯】 operators and keep them inside each other's attack ranges — the union of their ranges is the 「特殊水地形」 (painted on the board as a light-blue pulsing tile overlay), so they erode anything they hit and slow whatever stands in it.",
    "assumed": [
     "「攻击范围视为特殊水地形」 is read as a virtual tile set (the union of the members' attack-range tiles) — the engine has no per-tile custom terrain state, and this reading makes 「处于特殊水地形中」 decidable without one",
     "「攻击附带…侵蚀损伤」 follows the engine's own rider precedent (炎's 炎佑): any damaging hit by the member on an enemy carries the erosion element, not only a basic attack",
     "「攻击速度降低 x%」 is mapped to the engine's additive 攻速 mod (aspd: −x×100 points), the only attack-speed axis the engine exposes for enemies; 移动速度 uses moveMul",
-    "「每层」 is the bond's 层数 (bondLayers, the 盟约叠层 axis), not the member count; the two member counts (2 / 2) are the tiers",
+    "「每层」 is the bond's 层数 (bondLayers, the 盟约叠层 axis), not the member count; the two member counts are the tiers (2 / 4)",
+    "the 80% 上限 of 「移动与攻击速度降低 x%」 is an [ASSUMED] cap: the text says 「至多80%」, and the pair (moveMul, aspd points) is clamped to it together",
+    "which tiles the 「特殊水地形」 covers is shown to the player with `battle.fx('dosWater', { tiles })` (a light-blue pulsing tile overlay, `public/js/render/fx/kinds.js`) — a display-only event, no gameplay state",
     "「损伤爆发期间」 is the erosion burst cooldown (the engine's `<el>Burst` lock); the 2nd-tier pulse needs a 【多索雷斯】 operator on the field to read an ATK from"
    ]
   }

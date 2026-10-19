@@ -204,7 +204,8 @@ export function itemDescText(item, layers = null) {
 /**
  * The bond's in-battle effect text with its layer-dependent numbers resolved (DATA.md §3:
  * `{i:fmt}` = `bb[base] + bb[perStack] × layers`, plus `floor(layers / bb[perStep])` when the param declares
- * `perStep` — 哥伦比亚's 「视为额外携带 N 件装备（每 50 层 +1）」).
+ * `perStep` — 哥伦比亚's 「视为额外携带 N 件装备（每 50 层 +1）」 — finally clamped from above by `bb[cap]` when the
+ * param declares `cap` (多索雷斯's 「移动与攻击速度降低 …（至多 80%）」: the card must print what the battle applies).
  * @param {any} bond bonds.json record
  * @param {number} [layers]
  * @returns {string} rich text (markup kept)
@@ -229,8 +230,13 @@ export function formatBondEffect(bond, layers = 0) {
     // a layer-scaled chance (迅捷 / 不屈 base_prob + prob_per_stack, 奇迹 baseprob + prob) stops at 100 % like the sim's
     // min(1, …) (bonds/addon procChance, meta.js 奇迹) — the card read 124 % at 266 layers (GitHub #108)
     const chance = /prob/i.test(`${p.base}|${p.perStack}`);
-    const value = base + per * L + plus;
-    values[p.index] = chance ? Math.max(0, Math.min(1, value)) : value;
+    // `cap`：这个数**战斗里夹在 `bb[cap]` 以下**（多索雷斯 的 80% 上限），卡片也要夹 —— 否则层数堆高后卡片印着一个
+    // 战斗永远不会用的数。只声明它的参数受影响，别的参数逐字不变。
+    const cap = p.cap != null ? Number(bb[p.cap]) : NaN;
+    let value = base + per * L + plus;
+    if (chance) value = Math.max(0, Math.min(1, value));
+    if (Number.isFinite(cap)) value = Math.min(value, cap);
+    values[p.index] = value;
     formats[p.index] = p.format || '0';
   }
   return fillPlaceholders(src, values, formats);
