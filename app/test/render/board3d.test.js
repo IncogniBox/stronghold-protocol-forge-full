@@ -271,7 +271,7 @@ function fakePack() {
   const cube = parseObj(['v -50 -50 -50', 'v 50 -50 -50', 'v 50 50 -50', 'v -50 50 -50', 'vt 0 0', 'vt 1 0', 'vt 1 1', 'vt 0 1', 'vn 0 0 -1', 'f 1/1/1 2/2/1 3/3/1 4/4/1'].join('\n'));
   return {
     key: 'test', images: { D: img, N: img, R: img, E: img, common: img, gate: img, BG: img, wind: img },
-    meshes: { crate, blower: cube, bgPlane: null, gate: { startDown: { mesh: cube }, startUp: { mesh: cube }, startBack: { mesh: cube }, endDown: { mesh: cube }, endUp: { mesh: cube } } },
+    meshes: { box: crate, blower: cube, bgPlane: null, gate: { startDown: { mesh: cube }, startUp: { mesh: cube }, startBack: { mesh: cube }, endDown: { mesh: cube }, endUp: { mesh: cube } } },
     tiles: null, uv: resolveUvTable(null), materials: {},
   };
 }
@@ -389,6 +389,7 @@ describe('asset pack loader (fake store)', () => {
     const manifest = { groups: {} };
     for (const [slot, [g, n]] of Object.entries(PACK_IMAGES)) (manifest.groups[g] ||= {})[n] = { path: `/assets/local/${g}/${n}.png` };
     manifest.groups['mesh/s_common_box_01'] = { pCube2: { path: '/assets/local/mesh/s_common_box_01/pCube2.obj' } };
+    manifest.groups['mesh/trap_110'].trap_1105_accrate = { path: '/assets/local/mesh/trap_110/trap_1105_accrate.obj' };
     manifest.groups['map/fx'] = { ...manifest.groups['map/fx'], Start_up: { path: '/assets/local/map/fx/Start_up.obj' }, prefab: { path: '/assets/local/map/fx/prefab.json' } };
     const requested = [];
     const store = {
@@ -407,9 +408,15 @@ describe('asset pack loader (fake store)', () => {
       const pack = await loadBoardPack(store);
       assert.ok(pack && pack.images.D && pack.images.gate, 'images');
       assert.ok(requested.some((u) => u.includes('%5Bopt%5Dmerged_textures')), 'bracketed names are URL-encoded');
-      assert.ok(pack.meshes.crate && pack.meshes.gate.startUp, 'meshes');
+      assert.ok(pack.meshes.crate && pack.meshes.box && pack.meshes.gate.startUp, 'client model and fallback loaded separately');
+      assert.ok(pack.images.crate, 'client crate texture loaded');
       assert.equal(pack.meshes.gate.startUp.material, '[opt]start_end_add');
       assert.ok(pack.uv.concrete);
+      resetBoardPack();
+      delete manifest.groups['mesh/trap_110'].trap_1105_accrate;
+      delete manifest.groups['mesh/trap_110'].TX_trap_1105_accrate;
+      const legacy = await loadBoardPack(store);
+      assert.ok(legacy.meshes.box && !legacy.meshes.crate && !legacy.images.crate, 'old extraction keeps the box');
       resetBoardPack();
       delete manifest.groups['map/autochess'].TX_autochessi_D;
       assert.equal(await loadBoardPack(store), null, 'no diffuse atlas → no 3D board');
@@ -419,5 +426,62 @@ describe('asset pack loader (fake store)', () => {
       globalThis.fetch = realFetch;
       resetBoardPack();
     }
+  });
+  test('a theme swaps the backdrop + the mood, and every theme caches on its own', async () => {
+    resetBoardPack();
+    const manifest = { groups: {} };
+    for (const [slot, [g, n]] of Object.entries(PACK_IMAGES)) (manifest.groups[g] ||= {})[n] = { path: `/assets/local/${g}/${n}.png` };
+    for (const [g, n] of [
+      ['map/skymirror', 'TX_SkyMirror_background'], ['map/suilingcave', 'TX_SuilingCave_BG'],
+      // the theme's own tile atlas (themes.js `atlas`): its diffuse / emission / device maps, and the DERIVED relief
+      ['map/skymirror', 'TX_SkyMirror_D'], ['map/skymirror', 'TX_SkyMirror_E'],
+      ['map/skymirror', 'TX_SkyMirror_N_rgb'], ['map/skymirror', 'TX_SkyMirror_M_rough'],
+      ['map/skymirror', 'TX_SkyMirror_Wood_D'],
+      ['map/skymirror', 'TX_SkyMirror_common_D'], ['map/skymirror', 'TX_SkyMirror_common_E'],
+    ]) (manifest.groups[g] ||= {})[n] = { path: `/assets/local/${g}/${n}.png` };
+    const requested = [];
+    const store = {
+      local: async () => manifest,
+      localUrl: (g, n) => manifest.groups[g]?.[n]?.path || null,
+      image: async (u) => { requested.push(u); return { width: 8, height: 8 }; },
+    };
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({ ok: false, json: async () => null, text: async () => '' });
+    try {
+      const std = await loadBoardPack(store);
+      assert.equal(std.theme, 'autochess');
+      assert.equal(std.mood, null, 'the default theme keeps the official lighting rig');
+      const sky = await loadBoardPack(store, 'skymirror');
+      assert.equal(sky.theme, 'skymirror');
+      assert.ok(sky.mood && Number.isInteger(sky.mood.clear), 'a theme carries its own mood');
+      assert.ok(requested.some((u) => u.includes('TX_SkyMirror_background')), 'a theme fetches its own backdrop');
+      // a theme with its own atlas dresses the tiles with ITS textures, measured in its own (1024²) pixel space
+      assert.ok(requested.some((u) => u.includes('TX_SkyMirror_D')), 'a theme fetches its own tile atlas');
+      assert.ok(requested.some((u) => u.includes('TX_SkyMirror_N_rgb')), 'the theme is lit by its own DERIVED normal map');
+      assert.ok(requested.some((u) => u.includes('TX_SkyMirror_M_rough')), 'and by its own DERIVED roughness map');
+      // the theme's own high-ground material is a WHOLE image, sampled through the full-rect woodUv (not a tile-atlas crop)
+      assert.ok(requested.some((u) => u.includes('TX_SkyMirror_Wood_D')), 'the theme high-ground material is fetched');
+      assert.deepEqual(sky.woodUv && sky.woodUv.rect, [0, 0, 1024, 1024], 'the wood uv is that image in full');
+      assert.equal(std.woodUv, null, 'the official board has no separate high-ground material');
+      assert.equal(sky.uv.concrete.sw, 1024, 'the theme rect is measured in its own atlas');
+      const rect = sky.uv.concrete.rect;
+      assert.ok(rect[0] + rect[2] <= 1024 && rect[1] + rect[3] <= 1024, `theme rect ${rect} fits its 1024² atlas`);
+      assert.notEqual(sky, std, 'each theme gets its own pack');
+      assert.equal(await loadBoardPack(store, 'skymirror'), sky, 'a theme pack is shared across mounts');
+      assert.equal(await loadBoardPack(store, 'nope'), std, 'an unknown theme id falls back to the default');
+    } finally {
+      globalThis.fetch = realFetch;
+      resetBoardPack();
+    }
+  });
+  test('stableTiles: a theme atlas keeps every tile in one orientation (the official board turns them at random)', () => {
+    // 业主实测「这些地块有点歪，而且方向没有统一」：主题图集的花纹一转身就散。stableTiles 把逐砖 hash 钉成 0，
+    // 高台那几块按连通性定的转向不受影响（那是语义，不是随机）。
+    const row = 'r'.repeat(21);
+    const stage = { rows: [row, row, row, row, row], tiles: {} };
+    const free = classifyStage(stage);
+    const stable = classifyStage(stage, null, { stableTiles: true });
+    assert.ok(free.flat().some((t) => t.rot !== 0 || t.flipX), 'the autochess board does turn tiles at random');
+    assert.deepEqual([...new Set(stable.flat().map((t) => `${t.rot}|${t.flipX}`))], ['0|false'], 'a theme atlas does not');
   });
 });

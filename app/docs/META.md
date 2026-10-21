@@ -637,7 +637,7 @@ the engine built-ins, so content always wins). Sugar: `registry.band(id, h)`, `.
 
 | key | runs for | source (`ctx.source`) |
 |---|---|---|
-| `global:<name>` | every player, every hook | `{ kind:'global' }` |
+| `global:<name>` | every player, every hook — including the three item-scoped ones (onEquip / onArt / onDestroy, added 0.3.1: that dispatch goes through `dispatchItem`, which used to skip globals) | `{ kind:'global' }` |
 | `band:<bandId>` | the band's owner | `{ kind:'band', bandId, band }` |
 | `bond:<bondId>` | every player (active or not — check `ctx.bondActive`) | `{ kind:'bond', bondId, bond: {count,active,tier,layers} }` |
 | `garrison:<effectKey>` | owners of chess whose garrison has that `effectKey`, on its eventType hook only (§2.3) | `{ kind:'garrison', piece, garrisonId, garrison, bb, bbStr, where }` |
@@ -719,7 +719,11 @@ Reads: `playerId seat name round phase modeId difficulty isSolo isCoop data (fro
 (`rng()`, `rng.int(n)`, `rng.pick(a)`, `rng.chance(p)`, `rng.shuffle(a)` — the match's meta stream, never
 `Math.random`), `funds() lp() alive() bandId() shopLevel() bond(id) bonds() bondActive(id) bondCount(id) layers(id)
 board() hand() temp() piece(uid) pieceAt(row, col) pieceBonds(uid) garrisonsOf(uid) chessRecord(id) stats() roundStats()
-shopSlots() effect(id)` (`piece(uid)` adds `area`, `holderUid`, `idx`; "身前一格" of (r, c) is (r, c + 1)),
+shopSlots() effect(id) recon()` (`piece(uid)` adds `area`, `holderUid`, `idx`; "身前一格" of (r, c) is (r, c + 1)),
+`recon()` = this match's **预重构** choice of this player (`Match.reconChoices[playerId]`:
+`{ major, minor, story, bosses, assist, load }`, every field optional — the shape of `shared/protocol.js`'s
+`g.reconChoice`), or `null` outside that phase / for a player who never submitted; it returns a copy, arrays included
+(the mode that fills it is the engine's `mode_recon_*`, `shared/reconModes.js`),
 counters `counter(k) setCounter(k, v) incCounter(k, n)` (player scope, persistent; prefix keys with your module) and
 `pieceCounter(uid, k) incPieceCounter(uid, k, n)` (per piece, current round only: 0 in a new round and for a new piece —
 bought, granted, transformed, or an elite merged this round (GitHub #169, the owner's decision of 2026-10-06) —; a move
@@ -735,11 +739,12 @@ Writes (all validated, never throw on bad input, never make funds / pools negati
 | `addLayers(bondId, n, { requireActive })` | layer gain (`requireActive` = "使已激活的…"); returns layers added — at most the room left under `BOND_LAYER_CAP` (999, shared/constants.js `layerGainRoom`; the battle gains merged at SETTLE too); fires onLayers unless it added 0 |
 | `grantChess(id, { toTemp, golden, requirePool=true, fromPool=true })` | acquire a chess (takes pool copies; with `requirePool` a pool chess with no copy left fails → `null`); merges; fires onGain. `toTemp` puts it into temp, but a free hand slot pulls it in at the next recompute (temp holds overflow only, `PlayerState._fillHandFromTemp`) |
 | `grantItem(id, { toTemp })` | acquire an item (merges with an identical normal item); `toTemp` as for grantChess |
-| `rollChess({ maxTier, tier, bond, filter })` / `rollItem({ pool, tier, maxTier })` | copy-weighted chess id from the shared pool / item id (choices.json pools) |
+| `rollChess({ maxTier, tier, bond, filter })` / `rollItem({ pool, tier, minTier, maxTier })` | copy-weighted chess id from the shared pool / item id (choices.json pools); `rollItem`'s `minTier` (added 0.3.1) raises the lower bound — "不低于某件装备的阶级" draws tiers `[minTier, maxTier]` (absent ⇒ 1, as before), and an explicit `tier` still means exactly that tier |
 | `grantFreeRefresh(n)` | free refreshes (stack) |
 | `modifyPrice(delta)` / `setPrice(v)` | onPrice only: edit `ev.price` |
 | `promote(uid)` / `transform(uid, chessId)` / `upgradeItem(uid)` | elite in place / 突变细胞's transformation: destroy the chess wherever it stands (a board tile is freed; its equipment returns to the hand first, overflow temp), then gain `chessId` like `grantChess` (hand, overflow into the expandable temp queue; a merge it completes as usual — the carrier's tile is no copy's) and return the gained piece (the elite after a merge) / item → golden |
 | `destroyPiece(uid)` / `equipDirect(itemUid, chessUid)` | remove a piece (chess copies return, items go back) / attach without equip effects |
+| `destroyItem(uid, { reason })` | **unconditionally** destroy an **item** piece (equipment or Art — added 0.3.1): hand / temp / **equipped** alike — unlike `g.destroy` (the player's intent: equipped items are locked) it skips the phase/ready gate, returns the stock, fires `onDestroy` with `reason` (default `'content'`) and recomputes; `true` when it destroyed one. For rules that expire ("this piece of equipment is destroyed 3 rounds later") |
 | `offerChess(ids, { tier, label })` | queue a pick-one offer (shown as `shop.rewardOffer`, free) — 寻呼模块 / 信标 style; `label` (default `effectsMeta.offerLabel(source)`: the strategy's effect name, the item's name or the 特质's operator) is the shop bar's header instead of 晋升奖励 (`rewardOffer.source` `'special'`; the promotion reward is `'merge'`) |
 | `offerItems(ids, { tier, label })` | the same for items (slots of kind `'item'`, drawn as item cards) — 凯瑟琳 定向投放 style (player report #6 after 0.1.0) |
 | `triggerGarrisons(uid, eventType, { asUid })` | run another owned chess's 特质 of that eventType now (铃兰 "触发…的获得时效果"); 投资人 still multiplies SERVER_GAIN; SERVER_PRICE cannot be triggered; depth-capped |

@@ -5,13 +5,22 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE, GEO } from '../../../shared/constants.js';
-import { boardOrder, pieceDir } from '../board.js';
+import { TEST_PUBLIC_LOG } from '../../../shared/testMode.js';
+import { boardOrder, pieceDir, handRow, tempRow } from '../board.js';
 import { bondList, offBondCounts } from '../bondsMeta.js';
 import { cardView } from '../choices.js';
 import { bountySpawns, previewOf } from '../waves.js';
 import { timelineAt } from '../fields.js';
 import { bossFieldPlacement } from '../finalAssault.js';
 import { battleProgress } from '../../sim/spec.js';
+
+/** Milliseconds since the match started. A stamp before the start, or a bad stamp, is 0. The stored log keeps the epoch. */
+function auditClock(at, startedAt) {
+  const stamp = Number(at);
+  const start = Number(startedAt);
+  if (!Number.isFinite(stamp) || !Number.isFinite(start)) return 0;
+  return Math.max(0, stamp - start);
+}
 
 /** A reported capsule numerator clamped to its denominator, else null (unknown — never a fabricated 0). */
 const finiteOrNull = (v, cap = Infinity) => {
@@ -106,9 +115,43 @@ export class MatchViews {
       // **在 dev 局里恒出现**（未武装时是 null）：增量帧的顶层键白名单不认识它，只有**第一帧就带上**，
       // 之后的变化才走 patch 而不是每次都被差集拒绝、整帧重发。
       ...(this.dev ? { devNextKind: this.devRoundKind ?? null } : {}),
-      players: this.order.map((ps) => this.publicPlayerView(ps)),
-      fields: this.fields.map((f) => this.publicFieldView(f)),
+      players: this.order.map((ps) => ({
+        playerId: ps.playerId,
+        seat: ps.seat,
+        name: ps.name,
+        isBot: ps.isBot,
+        connected: ps.isBot || (ps.connected && !ps.left),
+        alive: ps.alive,
+        lp: Math.max(0, ps.lp),
+        bandId: ps.bandId,
+        shopLevel: ps.shop.level,
+        boardCount: ps.deployCount,
+        ready: this.phase === PHASE.INFO_CHECK ? ps.infoReady : ps.ready,
+        // the strip of a teammate watching this player (DESIGN §20.15): every bond with members, layers or an active tier
+        // (= the player's own m.private list without thresholds / countsHand — the client reads those from bonds.json),
+        // this round's in-battle gains included once the COMBAT phase ended (PlayerState.bondsView); [] once eliminated —
+        // nobody can watch an eliminated player (g.watch refuses them, they have no field) and the result screen reads
+        // m.result's own bonds, so their layers would only cost every m.public bytes for the rest of the match
+        // (the mode-off bonds with members included, `off: true`, as in m.private — bondsMeta.offBondCounts)
+        bonds: ps.alive ? bondList(this.gd, ps.bondsView(), { off: offBondCounts(ps.gd || this.gd, ps) }) : [],
+        fieldId: this.fieldOf(ps),
+        status: this.statusOf(ps),
+        autoplay: ps.autoplay,
+        // 干员皮肤 (docs/SKINS.md): PUBLIC on purpose — this is how a teammate sees your skin, and the reason the
+        // renderer reads the skin off the unit rather than off the local player. Omitted when empty, which is the normal
+        // case: the appearance comes from a cosmetic plugin each player switches on for themself, so most have none.
+        ...(Object.keys(ps.skins).length ? { skins: ps.skins } : {}),
+        // the LP this round's own battle will cost at settlement so far (COMBAT / 联防 only, omitted when 0)
+        ...this._pendingLpView(ps),
+      })),
+      fields: this.fields.map((f) => {
+        const v = { fieldId: f.fieldId, kind: f.kind, players: f.players.slice(), live: !!f.live };
+        const pr = this._fieldProgress(f);
+        if (pr) v.progress = pr;
+        return v;
+      }),
     };
+    if (this.offers.length) v.offers = this.offerViews();
     if (this.teamLp != null) v.teamLp = Math.max(0, Math.round(this.teamLp));
     // 最终攻势 / 隐秘核心: when the overtime drain starts (ms epoch; `deadline` is the level's 120 s countdown)
     if ((this.phase === PHASE.FINAL_ASSAULT || this.phase === PHASE.HIDDEN_CORE) && this.overtimeAt) v.overtimeAt = this.overtimeAt;
@@ -120,6 +163,10 @@ export class MatchViews {
         order: d.order.slice(), turn: this.draftTurn(), picks: { ...d.picks }, skipsLeft: { ...d.skipsLeft }, turnDeadline: d.turnDeadline || 0,
         turnSeconds: d.untimed ? 0 : this.bandTurnMs() / 1000, untimed: !!d.untimed,
       };
+    }
+    // 预重构（模式扩展-重构模拟，PHASE.PRE_RECON）：各座位已交的选择（没交的座位不在表里 ⇒ 客户端画「待提交」）。
+    if (this.phase === PHASE.PRE_RECON && this.reconChoices) {
+      v.recon = { choices: Object.fromEntries(Object.entries(this.reconChoices).map(([pid, c]) => [pid, { ...c }])) };
     }
     if (this.phase === PHASE.SP_DRAFT && this.sp) {
       const s = this.sp;
@@ -136,6 +183,21 @@ export class MatchViews {
     if (this.phase === PHASE.SETTLE && this.uniteResultView) {
       const ur = this.uniteResultView;
       v.uniteResult = { through: ur.through, helpers: ur.helpers.slice(), leakers: ur.leakers.slice(), losses: { ...ur.losses } };
+    }
+    // Test match (DESIGN §36.8). Omitted entirely when the flag is off, so a normal m.public stays identical.
+    if (this.test === true) {
+      v.test = true;
+      v.testActions = this.testActions | 0;
+      v.testTimers = this.testTimers !== false;
+      const log = Array.isArray(this.testLog) ? this.testLog : [];
+      v.testLog = log.slice(-TEST_PUBLIC_LOG).map((e) => ({
+        seq: e.seq, playerId: e.playerId, cmd: e.cmd, args: e.args,
+        // The stored row keeps the scheduler epoch. The dock clock is time since this match started.
+        at: auditClock(e.at, this.startedAt),
+        ok: e.ok === true,
+        ...(e.code ? { code: e.code } : {}),
+        ...(e.detail ? { detail: e.detail } : {}),
+      }));
     }
     return v;
   }
@@ -261,11 +323,13 @@ export class MatchViews {
     if (this.bossWaves) {
       const g = this.bossGroupOf(ps);
       if (!g) return [];
-      return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side }), ...dev]);
+      return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side, mid: this.layout.mirrorCol / 2 }), ...dev]);
     }
     if (!this.wave) return [];
     const bounty = bountySpawns(this.gd, this.round, this.wave, ps.bounties, ps.playerId, { solo: this.isSolo });
-    return previewOf([...this.wave.spawns, ...bounty, ...dev]);
+    // 重构模拟的「试炼首领」（reconTrials.js）：这一回合追加的·重构首领也进预览（与战场同一份列表，见 combat.js _normalOpts）
+    const trial = Array.isArray(this.reconTrialSpawns) ? this.reconTrialSpawns : [];
+    return previewOf([...this.wave.spawns, ...bounty, ...dev, ...trial]);
   }
 
   /** A 自选 piece's pick (like the sim's UnitInfo.diy): a scout's card composes the operator from it (shared/diy.js). */
@@ -308,6 +372,7 @@ export class MatchViews {
       // DESIGN §16: the skill / module THIS player's operator fights with (the scout's detail card shows it, like the
       // sim's UnitInfo in a shared field); moduleId only for an elite; 0.2.2 its potential (below 6) and 练度
       const lo = piece.kind === 'chess' && chess ? ps.loadoutFor(chess) : null;
+      const diy = this._diyInfo(ps, piece);
       units.push({
         id: piece.uid, uid: piece.uid, kind: piece.kind === 'token' ? 'token' : 'op', side: 'ally', ownerId: ps.playerId, defId: piece.id,
         area: 'board',
@@ -319,7 +384,10 @@ export class MatchViews {
         // the equipped items (like the sim's UnitInfo): a 变形同构体 wearer shows as a member of the bond it grants
         items: piece.kind === 'chess' && Array.isArray(piece.items) && piece.items.length ? piece.items.map((it) => it.id) : undefined,
         standInFor: rec && rec.standInFor ? rec.standInFor : undefined,
-        diy: this._diyInfo(ps, piece),
+        diy,
+        // 皮肤 (docs/SKINS.md): built per player (the owner of the scouted board), so a teammate's piece shows THEIR
+        // appearance; a 自选 slot fights as its pick's operator, which is the key it wears too
+        skin: ps.skinFor(rec, diy ? diy.charId : null) || undefined,
         ...cultivationInfo(lo),
       });
     }
@@ -373,6 +441,7 @@ export class MatchViews {
       const body = standIn || rec;
       const assets = (body && body.assets) || {};
       const lo = piece.kind === 'chess' && rec ? ps.loadoutFor(rec) : null;
+      const diy = this._diyInfo(ps, piece);
       units.push({
         id: piece.uid, uid: piece.uid, kind: piece.kind === 'token' ? 'token' : piece.kind === 'item' ? 'item' : 'op',
         side: 'ally', ownerId: ps.playerId, defId: piece.id, area,
@@ -383,15 +452,23 @@ export class MatchViews {
         moduleId: lo && typeof lo.moduleId === 'string' ? lo.moduleId : undefined,
         items: piece.kind === 'chess' && Array.isArray(piece.items) && piece.items.length ? piece.items.map((it) => it.id) : undefined,
         standInFor: standIn && standIn.standInFor ? standIn.standInFor : undefined,
-        diy: this._diyInfo(ps, piece),
+        diy,
+        // 皮肤 (docs/SKINS.md): the scouted player's own appearance (see the prep view above)
+        skin: ps.skinFor(rec, diy ? diy.charId : null) || undefined,
         ...cultivationInfo(lo),
       });
     };
+    // 整备行 / 临时整备区行是**这张图自己**的（`board.js handRow` / `tempRow` 读地图的棋盘形状；官方就是 7 / 8），
+    // 而且看的是这个玩家现在部署的那个场（boss 回合的休整期是它的半场，见 Match.deployFieldOf）：一张把普通带
+    // 放大到 5×11 的图，它的整备行比官方低一行。
+    const benchField = this.deployFieldOf(ps);
+    const handRowNow = handRow(this.layout, benchField);
+    const tempRowNow = tempRow(this.layout, benchField);
     for (let i = 0; i < ps.hand.length; i++) {
-      if (ps.hand[i]) benchUnit(ps.hand[i], i, GEO.HAND_ROW, 'hand');
+      if (ps.hand[i]) benchUnit(ps.hand[i], i, handRowNow, 'hand');
     }
     for (let i = 0; i < Math.min(ps.temp.length, GEO.TEMP_SIZE); i++) {
-      if (ps.temp[i]) benchUnit(ps.temp[i], GEO.TEMP_C0 + i, GEO.TEMP_ROW, 'temp');
+      if (ps.temp[i]) benchUnit(ps.temp[i], GEO.TEMP_C0 + i, tempRowNow, 'temp');
     }
     // `nextEnemies`: the scouted player's coming enemies — their preview pen shows on the scouting board too (research 09
     // §2.2 "Teammates"; render/app.js enterBattle({ prep: true, nextEnemies }))

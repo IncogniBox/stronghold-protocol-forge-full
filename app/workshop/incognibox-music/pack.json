@@ -1,0 +1,14 @@
+{
+  "id": "incognibox-music",
+  "name": "IncogniBox的音乐扩展包",
+  "version": "1.0.0",
+  "author": "IncogniBox",
+  "license": "see assets/LICENSE.txt",
+  "description": "IncogniBox 的音乐扩展包：34 首曲目放进本服务器的 Fever 音乐库，可在「大厅音乐 → Fever 音乐」里选曲、裁剪起止片段并试听。",
+  "gameVersion": "0.3.1",
+  "content": [],
+  "overrides": [],
+  "notices": {
+    "announcement": "notice/announcement.json"
+  }
+}

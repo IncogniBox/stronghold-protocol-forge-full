@@ -18,8 +18,9 @@
 //            layout of `size`, which for 19×21 is exactly the official one (shared/layout.js)
 
 import {
-  OFFICIAL_SIZE, SIZE_PRESETS, MIN_ROWS, MIN_COLS, MAX_ROWS, MAX_COLS, FIXED_DEPLOY_COLS,
-  clampSize, isSize, layoutForSize, normalizeLayout, sizeOf, toRectObj, toRectArr,
+  OFFICIAL_SIZE, SIZE_PRESETS, MIN_ROWS, MIN_COLS, MAX_ROWS, MAX_COLS, seamOfDeployRects, DEFAULT_SEAM, bandMidOf,
+  BAND_ROWS, BOARD_COLS, BOSS_ROWS,
+  clampSize, isSize, layoutForSize, normalizeLayout, sizeOf, toRectObj, toRectArr, isDualLayout,
 } from './layout.js';
 
 /** The OFFICIAL stage grid size (docs/DESIGN.md §3). A map's own size is `spec.size` (default this). */
@@ -117,16 +118,18 @@ export function deployRectsOf(size) {
  * The bands are derived from the map's size, so 19×21 gives exactly the official rows (14–18 / 9–12 / 1–5) and a big
  * map keeps the same shape with the extra rows falling into the 中间战场 between `normal` and `boss`.
  */
-export function zonesOf(size) {
+export function zonesOf(size, layout = null) {
   const [R] = clampSize(size);
-  const lay = layoutForSize(size);
-  const [nR0, nR1] = lay.deployRects.normal;
+  const lay = layout || layoutForSize(size);
+  const dual = isDualLayout(lay);
+  const normalRects = dual ? ['normalLeft', 'normalRight'] : ['normal'];
+  const [nR0, nR1] = lay.deployRects[normalRects[0]];
   const [bR0, bR1] = lay.deployRects.bossLeft;
   return [
     { id: 'pen', rows: [lay.pen.r0, lay.pen.r1], deployRects: [] },
-    { id: 'normal', rows: [nR0, nR1], deployRects: ['normal'] },
+    { id: 'normal', rows: [nR0, nR1], deployRects: normalRects },
     { id: 'boss', rows: [bR0, bR1], deployRects: ['bossLeft', 'bossRight'] },
-    { id: 'all', rows: [0, R - 1], deployRects: ['normal', 'bossLeft', 'bossRight'] },
+    { id: 'all', rows: [0, R - 1], deployRects: [...normalRects, 'bossLeft', 'bossRight'] },
   ];
 }
 
@@ -533,36 +536,55 @@ export function validateStage(stage, opts = {}) {
  * Three things are reported, and all three are real breakage rather than taste:
  *   * a rect that does not fit the map's own window — `normalizeLayout` would silently fall back to the default, and
  *     the author would watch their map play on a field they did not draw;
- *   * a deployment rect whose SHAPE is wrong. The board is 4 rows × 9 cols (the boss halves 5 × 9, the 整备区 row
- *     included), so a rect of another size cannot hold it;
+ *   * a deployment rect whose SHAPE is wrong. The normal band IS the board, so it may never be **smaller** than the
+ *     official 4 rows × 9 cols (a bigger one is a bigger board — the 45×60 大战场 sample declares 5×11); the boss halves
+ *     are 5 × 9 (the 整备区 row included) and by design nothing else;
  *   * a deployment rect whose COLUMNS moved. `mirrorCol − c` maps the left half onto the right one, and the board is 9
- *     wide, so the three rects' columns are forced (2..10 / 2..10 / 10..18) — the freedom a big map opens up is the
- *     ROWS (shared/layout.js FIXED_DEPLOY_COLS).
+ *     wide, so the three rects must describe ONE meeting column between them (`seamOfDeployRects`) — a map that declares
+ *     a self-consistent set (e.g. the 45×60 大战场 sample, whose mirror axis sits in the middle of its window) is
+ *     accepted as it stands; a set that names no single column is breakage. The ROWS stay free either way.
  */
 function validateLayout(declared, size, out, err, warn) {
   if (declared === undefined || declared === null) return;
   if (!isPlain(declared)) { warn('layout', 'BAD_LAYOUT', 'layout must be an object; the map will use the default one for its size'); return; }
   const fits = (r) => r.r0 >= 0 && r.r1 < size[0] && r.c0 >= 0 && r.c1 < size[1] && r.r0 <= r.r1 && r.c0 <= r.c1;
   const declaredRects = isPlain(declared.deployRects) ? declared.deployRects : {};
-  for (const [name, shape] of [['normal', [4, 9]], ['bossLeft', [5, 9]], ['bossRight', [5, 9]]]) {
+  // 普通带是**棋盘本身**：比官方那副（4×9）小就不是棋盘，大则可以（业主 2026-10-20 把大战场样板的部署区扩到 5×11）。
+  // 两个 boss 半场永远是官方的 5×9 —— 半场就是半场。一套左右两半的普通带（业主 2026-10-21）把普通带拆成
+  // `normalLeft` / `normalRight` 两块，两块同样是「棋盘」那一档：各自至少 4×9、一块左半一块右半。
+  for (const [name, [minRows, minCols, exact]] of [
+    ['normal', [BAND_ROWS, BOARD_COLS, false]], ['normalLeft', [BAND_ROWS, BOARD_COLS, false]], ['normalRight', [BAND_ROWS, BOARD_COLS, false]],
+    ['bossLeft', [BOSS_ROWS, BOARD_COLS, true]], ['bossRight', [BOSS_ROWS, BOARD_COLS, true]],
+  ]) {
     const raw = declaredRects[name];
     if (raw === undefined) continue;
     const r = toRectObj(raw);
     if (!r) { err(`layout.deployRects.${name}`, 'BAD_LAYOUT', `${name} must be [r0, r1, c0, c1]`, 'four integers'); continue; }
+    const rows = r.r1 - r.r0 + 1, cols = r.c1 - r.c0 + 1;
     if (!fits(r)) err(`layout.deployRects.${name}`, 'OUT_OF_BOUNDS', `${name} ${JSON.stringify([r.r0, r.r1, r.c0, r.c1])} is outside the ${size[0]}×${size[1]} map`);
-    else if (r.r1 - r.r0 + 1 !== shape[0] || r.c1 - r.c0 + 1 !== shape[1]) {
-      err(`layout.deployRects.${name}`, 'BAD_LAYOUT', `${name} must be ${shape[0]} rows × ${shape[1]} cols (the board's own shape), got ${r.r1 - r.r0 + 1}×${r.c1 - r.c0 + 1}`);
-    } else {
-      const cols = FIXED_DEPLOY_COLS[name];
-      if (r.c0 !== cols[0] || r.c1 !== cols[1]) {
-        err(`layout.deployRects.${name}`, 'BAD_LAYOUT', `${name} must keep its columns ${cols[0]}..${cols[1]}, got ${r.c0}..${r.c1}`,
-          'the mirror maps the left half onto the right one and the board is 9 wide, so only the rows may move');
-      }
+    else if (exact ? (rows !== minRows || cols !== minCols) : (rows < minRows || cols < minCols)) {
+      err(`layout.deployRects.${name}`, 'BAD_LAYOUT', exact
+        ? `${name} must be ${minRows} rows × ${minCols} cols (the board's own shape), got ${rows}×${cols}`
+        : `${name} must be at least ${minRows} rows × ${minCols} cols (the board's own shape), got ${rows}×${cols}`);
     }
   }
-  for (const [name, rect] of [['battle', declared.battle], ['pen', declared.pen]]) {
+  // 左右两半必须成对声明、互为镜像 —— 只有一块是坏数据
+  if ((toRectObj(declaredRects.normalLeft) ? 1 : 0) !== (toRectObj(declaredRects.normalRight) ? 1 : 0)) {
+    err('layout.deployRects', 'BAD_LAYOUT', 'normalLeft and normalRight must be declared together', 'the ordinary band is either one rect or a mirrored pair');
+  }
+  // 三块矩形必须指着**同一条相接列**（棋盘右缘 + 两个半场都在那条列会合 + 镜像轴 = 那条列 × 2）：说得出来就是合法
+  // 的一套（这就是「把镜像轴挪到窗口正中」的声明方式），说不出来就是坏数据
+  const seam = seamOfDeployRects(declaredRects, size);
+  if (seam === null && ['normal', 'bossLeft', 'bossRight'].every((k) => declaredRects[k] !== undefined)) {
+    err('layout.deployRects', 'BAD_LAYOUT', 'the three deploy rects must meet on ONE column (normal.c1 = bossLeft.c1 = bossRight.c0)',
+      'the normal band is the board and ends on the column the two boss halves share (the 5×9 halves themselves never move)');
+  } else if (seam === null && (declaredRects.normalLeft !== undefined || declaredRects.normalRight !== undefined)) {
+    err('layout.deployRects', 'BAD_LAYOUT', 'the deploy rects must meet on ONE mirrored column (normalLeft.c1 = normalRight.c0 = bossLeft.c1 = bossRight.c0)',
+      'the left half ends on the column the right half starts on — the same column the two boss halves share');
+  }
+  for (const [name, rect] of [['battle', declared.battle], ['pen', declared.pen], ['penRight', declared.penRight]]) {
     if (rect === undefined) continue;
-    const list = name === 'battle' ? Object.entries(isPlain(rect) ? rect : {}) : [['pen', rect]];
+    const list = name === 'battle' ? Object.entries(isPlain(rect) ? rect : {}) : [[name, rect]];
     if (name === 'battle' && !isPlain(rect)) { err('layout.battle', 'BAD_LAYOUT', 'battle must be an object of rects'); continue; }
     for (const [key, raw] of list) {
       const r = toRectObj(raw);
@@ -570,8 +592,9 @@ function validateLayout(declared, size, out, err, warn) {
       if (!fits(r)) err(`layout.${name}.${key}`, 'OUT_OF_BOUNDS', `${key} ${JSON.stringify([r.r0, r.r1, r.c0, r.c1])} is outside the ${size[0]}×${size[1]} map`);
     }
   }
-  if (declared.mirrorCol !== undefined && declared.mirrorCol !== FIXED_DEPLOY_COLS.bossLeft[0] + FIXED_DEPLOY_COLS.bossRight[1]) {
-    err('layout.mirrorCol', 'BAD_LAYOUT', `mirrorCol is fixed at ${FIXED_DEPLOY_COLS.bossLeft[0] + FIXED_DEPLOY_COLS.bossRight[1]} (where the two boss halves meet), got ${JSON.stringify(declared.mirrorCol)}`,
+  const wantMirror = 2 * (seam ?? DEFAULT_SEAM);
+  if (declared.mirrorCol !== undefined && declared.mirrorCol !== wantMirror) {
+    err('layout.mirrorCol', 'BAD_LAYOUT', `mirrorCol must be twice the column the two boss halves meet on (${wantMirror} here), got ${JSON.stringify(declared.mirrorCol)}`,
       'it follows from the board being 9 wide');
   }
 }
@@ -671,5 +694,118 @@ export function sampleStageSpec() {
     devices: [],
     routes: SAMPLE_ROUTES.map((r) => ({ ...r, start: [...r.start], end: [...r.end], checkpoints: [] })),
     options: { ...SAMPLE_STAGE_SPEC.spec.options },
+  };
+}
+
+// -----------------------------------------------------------------------------------------------------------
+// 「大战场」样板图（45×60）：引擎允许的**最大**尺寸（shared/layout.js MAX_ROWS/MAX_COLS = 画布 45×60）。
+//
+// 与 19×21 那张样板同一套形状与纪律，只是把画布铺满：空气外环、怪物等待区（40–44 行，带 S 门）、普通对战带
+// （35–38 行，部署区 2–10 列铺 `p` 可部署地面、带 E 目标）、boss 那一带（1–5 行）与下半场留给作者自己画。
+// 尺寸写在 spec.size 里（缺了它，编辑器读回一张记录时会缩回官方尺寸）。
+//
+// 阶梯式放大（业主 2026-10-20）：这张样板恒等于当前画布最大档。画布再往上抬时，这里要跟着重铺。
+// -----------------------------------------------------------------------------------------------------------
+
+/** The 45 rows of the 大战场 template, bottom row first (row 42 = the pen's gate, row 36 = the objective). */
+const HUGE_SIZE = Object.freeze([45, 60]);
+const HUGE_GRID_ROWS = Object.freeze([
+  '------------------------------------------------------------',
+  '-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff-',
+  '-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff-',
+  '-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrr####rrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrr####rrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrXXXrrrrrrrrrrr####rrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrXXXrrrrrrrrrrr####rrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrXXXrrrrrrrrrrr####rrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrbrrrbrrrbrrrbrrrbrrr####rrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rppppppppprrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rppEpppppprrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rppppppppprrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rppppppppprrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-rrrrrrrrrrrrrrrrrrr########rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr-',
+  '-fffffffffffffffffff########fffffffffffffffffffffffffffffff-',
+  '-fffffffffffffffffff########fffffffffffffffffffffffffffffff-',
+  '-ffffffSffffffffffff########fffffffffffffffffffffffffffffff-',
+  '-fffffffffffffffffff########fffffffffffffffffffffffffffffff-',
+  '------------------------------------------------------------',
+]);
+
+/** The one drawn route of the 大战场 template: the pen's gate down to the objective. */
+const HUGE_ROUTES = Object.freeze([
+  Object.freeze({ motion: 'WALK', start: Object.freeze([42, 7]), end: Object.freeze([36, 4]), checkpoints: Object.freeze([]) }),
+]);
+
+/**
+ * The 大战场 sample map (45×60), in the shape the editor's 「以模板新建」 writes into its form. Same contract as
+ * {@link SAMPLE_STAGE_SPEC}: validates and derives as-is (`paths` both true and false) — see test/stageRules.test.js.
+ *
+ * 它**自己声明了一套居中的分区**（业主 2026-10-20「把镜像轴移动到地图中间」「放在整张地图的中心位置（30）」）：
+ * 45×60 的中心列是 30，于是两个 boss 半场在 col 30 会合（22–30 / 30–38）、镜像轴 60 —— 这条只属于这一张图，别的
+ * 模板仍走官方锚（见 shared/layout.js `layoutForSize` 的 `seam` 参数）。声明必须整组带上（三块矩形 + 战斗矩形 +
+ * 等待区 + 镜像轴），只写一半会让另一半留在默认位置上（棋盘与战斗矩形对不上）。
+ *
+ * 业主 2026-10-20 追加的两条（同一张图、同一个尺寸参数）：**普通对战部署区从 4×9 扩到 5×11**（棋盘因此变成 5×11：
+ * 行 8–12、列 2–12），**普通战斗矩形与它同宽同高**（`normalMargin: 0` —— 这一张图不要那 2 列场地边距，于是部署区
+ * 34–38×20–30 与战斗矩形是同一块），**整备矩形同比扩到 7 行**（32–38：棋盘上面多出来的那一行让手牌行下移到棋盘底行
+ * 之上两行；它仍保住那 2 列左边距，否则手牌 0–1 会落在取景窗口之外）。boss 两半场不变（业主「boss 先不变」）。
+ */
+export const HUGE_LAYOUT = layoutForSize(HUGE_SIZE, bandMidOf(HUGE_SIZE), { rows: 5, cols: 11, normalMargin: 0 }, true);
+
+export const HUGE_STAGE_SPEC = Object.freeze({
+  id: 'ws_huge_map',
+  name: '样板地图·大战场（45×60）',
+  spec: Object.freeze({
+    id: 'ws_huge_map',
+    name: '样板地图·大战场（45×60）',
+    weight: 40,
+    modes: [],
+    size: Object.freeze([45, 60]),
+    rows: HUGE_GRID_ROWS,
+    tiles: null,
+    devices: [],
+    routes: HUGE_ROUTES,
+    layout: HUGE_LAYOUT,
+    options: Object.freeze({ characterLimit: 8, moveMultiplier: 0.5 }),
+  }),
+});
+
+/** A fresh, editable copy of the 大战场 spec (a plain object; the caller owns it). */
+export function hugeStageSpec() {
+  return {
+    ...HUGE_STAGE_SPEC.spec,
+    size: [45, 60],
+    rows: [...HUGE_GRID_ROWS],
+    tiles: sampleLegend(),
+    devices: [],
+    routes: HUGE_ROUTES.map((r) => ({ ...r, start: [...r.start], end: [...r.end], checkpoints: [] })),
+    layout: layoutForSize(HUGE_SIZE, bandMidOf(HUGE_SIZE), { rows: 5, cols: 11, normalMargin: 0 }, true),   // 每次现算一份，省得表单改坏样板
+    options: { ...HUGE_STAGE_SPEC.spec.options },
   };
 }

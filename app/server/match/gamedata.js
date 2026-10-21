@@ -59,7 +59,7 @@ export const DEFAULTS = Object.freeze({
   hiddenCore: { single: 350, multi: 1200, minTeamLpExclusive: 1, difficulties: ['NORMAL', 'HARD', 'ABYSS'] },
   dp: { init: 10, perSec: 1, max: 99 },
   unite: { maxHelpers: 2, templates: { 1: 'act1autochess_escaped_single', 2: 'act1autochess_escaped_multi' } },
-  timers: { infoCheck: 25, bandDraft: 50, bandTurn: 30, battleCheck: 3, spFirst: 30, spTurn: 16 },
+  timers: { infoCheck: 25, bandDraft: 50, bandTurn: 30, battleCheck: 3, spFirst: 30, spTurn: 16, preRecon: 60 },
   bans: { FUNNY: { core: 0, addon: 1 }, NORMAL: { core: 3, addon: 4 }, HARD: { core: 3, addon: 4 }, ABYSS: { core: 3, addon: 4 } },
   bandDraft: { skipsPerPlayer: 1, timeoutBandId: 'band_bldsk' },
   leftoverFundsKeptByBands: ['band_cannot'],
@@ -495,6 +495,8 @@ export class GameData {
   // ---- mode -----------------------------------------------------------------------------------------
 
   get isSolo() { return this.mode.type === 'SINGLE' || /^mode_single_/.test(this.modeId || ''); }
+  /** 重构模拟（模式扩展-重构模拟）：本局跑的是生成的 `mode_recon_*` 条目（tools/build-data.mjs 注入段）。 */
+  get isRecon() { return /^mode_recon_/.test(this.modeId || ''); }
   get difficulty() { return this.mode.difficulty || (this.modeId ? String(this.modeId).split('_').pop().toUpperCase() : 'NORMAL'); }
   get lastRound() {
     if (Number.isInteger(this.mode.lastRound) && this.mode.lastRound > 0) return this.mode.lastRound;

@@ -20,12 +20,12 @@ export const TEXT_SIZES = Object.freeze(['sm', 'md', 'lg', 'xl']);
  * voiceNative: 设置「本土语言」 — the master switch for whether every operator speaks its own-language dub when the
  *   manifest carries one (`audio.voiceNative`, public/js/audio.js; the 本土语言 button beside 语音语言). Off by default.
  * voiceLangByChar: charId → dub, the per-operator override of 干员详情 / 干员调配 → 配音 (absent = follow voiceLang).
- * ammoCount: 设置「弹药数量」 — the rounds left / the magazine under an ammo skill's bar (render/units.js; PR #552),
- *   off by default: the official HUD has no such number (the maintainer's decision of 2026-10-13).
+ * ammoEnergyCount: 设置「显示弹药与能量数量」 — the count under an ammo skill's bar (PR #552) and a 秘术师's
+ *   stored/cap (PR #636), one switch since 0.3.1, off by default: the official HUD has no such number (the
+ *   maintainer's decision of 2026-10-13). A saved `ammoCount` / `mysticEnergy` migrates on (ammoEnergyCountOf).
  * combatMetrics: 设置「作战统计」 (PR #618), off by default: the official HUD has no such panel.
- * mysticEnergy: 设置「秘术师能量」 (PR #636) — a 秘术师's stored attack energies as stored/cap under the bars
- *   (render/units.js), off by default: the official HUD shows them as an effect on the operator, not a number (the
- *   maintainer's decision of 2026-10-15).
+ * prepDeployFold: 设置「部署时收起商店」 (GitHub #602), on by default.
+ * otherSkins: 设置「显示其他玩家的皮肤」 (docs/SKINS.md), on by default.
  * frameRate: 设置 →「帧率」 30 / 60 / 120, 或 0 = 跟随屏幕（每一个动画帧都出画 —— 这一格出现之前的现状）；默认
  *   60（官方客户端的默认）。落在 render/framePacer.js（挑帧，FRAME_RATES 就是它认识的取值）与 render/app.js
  *   （单一时钟 rAF 时间戳、adaptLoad 的慢 / 快阈值随锁定平移）。
@@ -42,7 +42,16 @@ export const TEXT_SIZES = Object.freeze(['sm', 'md', 'lg', 'xl']);
  *   关掉时导入路径与「没有这一格」逐字相同（走包内那条 `/workshop-resources/…` URL），也就是这一格的**一键回退**：
  *   一个包把加载源改坏了，玩家关掉这一格就回到原样（不变量由 `test/modAssetsMirrors.test.js` 钉住）。
  */
-export const DEFAULT_SETTINGS = Object.freeze({ bgm: 0.6, sfx: 0.8, voice: 0.8, muted: false, damageNumbers: true, officialDamageNumbers: false, ammoCount: false, combatMetrics: false, mysticEnergy: false, workshopSkins: true, workshopSources: true, quality: 'high', officialFx: 'auto', frameRate: 60, textSize: 'sm', keys: DEFAULT_HOTKEYS, voiceLang: DEFAULT_VOICE_LANG, voiceNative: false, voiceLangByChar: Object.freeze({}) });
+export const DEFAULT_SETTINGS = Object.freeze({ bgm: 0.6, sfx: 0.8, voice: 0.8, muted: false, damageNumbers: true, officialDamageNumbers: false, ammoEnergyCount: false, combatMetrics: false, prepDeployFold: true, otherSkins: true, workshopSkins: true, workshopSources: true, quality: 'high', officialFx: 'auto', frameRate: 60, textSize: 'sm', keys: DEFAULT_HOTKEYS, voiceLang: DEFAULT_VOICE_LANG, voiceNative: false, voiceLangByChar: Object.freeze({}) });
+/**
+ * 设置「显示弹药与能量数量」的取值（上游 0.3.1 把「弹药数量」与「秘术师能量」两个开关合并成一个）：
+ * 新键是布尔就用它；否则读旧键 —— 任一为 true 即为 true。旧键只在这里被读，**永不写回**。
+ * @param {Record<string, any>} r
+ */
+function ammoEnergyCountOf(r) {
+  if (typeof r.ammoEnergyCount === 'boolean') return r.ammoEnergyCount;
+  return r.ammoCount === true || r.mysticEnergy === true;
+}
 
 /**
  * The 配音语言 vocabulary (settings 语音语言) under upstream 0.2.2's name: the canonical list is shared/constants.js
@@ -132,9 +141,10 @@ export function sanitizeSettings(raw) {
     muted: typeof r.muted === 'boolean' ? r.muted : DEFAULT_SETTINGS.muted,
     damageNumbers: typeof r.damageNumbers === 'boolean' ? r.damageNumbers : DEFAULT_SETTINGS.damageNumbers,
     officialDamageNumbers: typeof r.officialDamageNumbers === 'boolean' ? r.officialDamageNumbers : false,
-    ammoCount: typeof r.ammoCount === 'boolean' ? r.ammoCount : DEFAULT_SETTINGS.ammoCount,
+    ammoEnergyCount: ammoEnergyCountOf(r),
+    prepDeployFold: typeof r.prepDeployFold === 'boolean' ? r.prepDeployFold : DEFAULT_SETTINGS.prepDeployFold,
+    otherSkins: typeof r.otherSkins === 'boolean' ? r.otherSkins : DEFAULT_SETTINGS.otherSkins,
     combatMetrics: typeof r.combatMetrics === 'boolean' ? r.combatMetrics : DEFAULT_SETTINGS.combatMetrics,
-    mysticEnergy: typeof r.mysticEnergy === 'boolean' ? r.mysticEnergy : DEFAULT_SETTINGS.mysticEnergy,
     workshopSkins: typeof r.workshopSkins === 'boolean' ? r.workshopSkins : DEFAULT_SETTINGS.workshopSkins,
     workshopSources: typeof r.workshopSources === 'boolean' ? r.workshopSources : DEFAULT_SETTINGS.workshopSources,
     quality: QUALITIES.includes(r.quality) ? r.quality : DEFAULT_SETTINGS.quality,

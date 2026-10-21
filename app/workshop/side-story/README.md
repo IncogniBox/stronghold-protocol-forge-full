@@ -224,7 +224,7 @@
   "version": "1.0.0",
   "author": "…",
   "description": "…",
-  "gameVersion": "0.2.6",
+  "gameVersion": "0.3.1",
   "content": ["bonds", "chess", "…"],
   "overrides": ["chess:chess_xxx_a", "…"]
 }

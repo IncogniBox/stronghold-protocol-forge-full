@@ -36,7 +36,7 @@
 import { GEO } from '../../../../shared/constants.js';
 import { bbCap } from '../../../../shared/plugins/officialBounds.js';
 import { burstLimit } from '../../../../shared/plugins/steps.js';
-import { buffsOf, num, bandRecord, gameData } from '../support/index.js';
+import { buffsOf, num, bandRecord, bandEffectId, gameData } from '../support/index.js';
 import { metaBonds } from '../support/meta.js';
 import * as garrisons from '../garrisons.js';
 
@@ -65,8 +65,18 @@ function grant(ctx, id, opts = {}) {
 const chessSlots = (ctx) => ctx.shopSlots().map((s, i) => (s && s.kind === 'chess' && !s.sold ? i : -1)).filter((i) => i >= 0);
 
 /** Up to `n` distinct item ids of an equip pool. */
-function rollItems(ctx, poolId, n) {
+function rollItems(ctx, poolId, n, exclude = []) {
   const out = [];
+  if (exclude.length) {
+    // [ASSUMED] After Cathy's allowance is used, sample eligible items without replacement, up to count (official
+    // aceffect_band_26). Filter before drawing so forbidden/repeated ids cannot underfill a fresh offer.
+    for (let k = 0; k < n; k++) {
+      const r = ctx.rollPool(poolId, { exclude: [...exclude, ...out] });
+      if (!r || r.kind !== 'item') break;
+      out.push(r.id);
+    }
+    return out;
+  }
   for (let k = 0; k < n * 6 && out.length < n; k++) {
     const r = ctx.rollPool(poolId);
     if (!r || r.kind !== 'item') break;
@@ -271,11 +281,17 @@ K.round_start_bond_check_gain_layer = (ps) => ({
   },
 });
 
-K.up_shop_add_special_goods = (ps) => ({
+// Official activity_table aceffect_band_26: count 3, choice 1, pool_equip_kathe; no cell limit is exposed.
+// #677: maintainer decision 2026-10-17 (official play memory): Cathy gives the cell at most once per player/match.
+// [ASSUMED] "given" means successfully taken, not shown; Quintus's independent grant does not use this allowance.
+K.up_shop_add_special_goods = (ps, bandId) => ({
   onLevelUp(ctx) {
     const p = ps[0];
-    const ids = rollItems(ctx, p.pool, timesOf(p.count, 3));
-    if (ids.length) ctx.offerItems(ids, { source: 'band' });
+    // effectRef inherits the behaviour (DESIGN §34.5); concrete parameters still come from this band's buffs.
+    const cathy = bandEffectId(bandId) === 'band_cathy';
+    const exclude = cathy && ctx.counter('band:cathy:cellTaken') ? ['chess_item_5_08_e_a'] : [];
+    const ids = rollItems(ctx, p.pool, timesOf(p.count, 3), exclude);
+    if (ids.length) ctx.offerItems(ids, { source: cathy ? 'band:band_cathy' : 'band' });
   },
 });
 
@@ -397,8 +413,12 @@ export const DUCK_BAND = 'band_ducklord';
 export const DUCK_COINS = 1;
 /** Battle kinds the swap applies to (PRTS: the Final Assault and the Hidden Core too). */
 const DUCK_KINDS = new Set(['normal', 'boss', 'hidden']);
-/** Boss-field column between the left ('L') and the right ('R') player's half (the goals are at cols 2–3 / 17). */
-const BOSS_MID_COL = (GEO.BOSS_RECT.c0 + GEO.BOSS_RECT.c1) / 2;
+/**
+ * Boss-field column between the left ('L') and the right ('R') player's half — the OFFICIAL layout's middle column,
+ * where the two halves meet (the goals are at cols 2–3 / 17). A map carries its own in `layout.mirrorCol`, so the
+ * match passes the map's middle column in (`ev.mid`, shared/layout.js `bandMidOf`).
+ */
+const OFFICIAL_MID_COL = (GEO.BOSS_RECT.c0 + GEO.BOSS_RECT.c1) / 2;
 
 function duckParams(bandId = DUCK_BAND) {
   for (const b of buffsOf(bandRecord(bandId))) if (b.key === 'round_start_all_player_change_enemy_2') return b.p;
@@ -409,7 +429,7 @@ function duckParams(bandId = DUCK_BAND) {
  * Rewrite `spawns` in place (exported for tests). Returns the replaced spawn specs. `side` ('L' | 'R', a pair boss
  * field) limits the swap to the spawns whose route (`routes[routeIndex]`) ends on that half of the field.
  */
-export function duckReplace(ctx, spawns, p, ownerPlayerId, { routes = null, side = null } = {}) {
+export function duckReplace(ctx, spawns, p, ownerPlayerId, { routes = null, side = null, mid = OFFICIAL_MID_COL } = {}) {
   const gd = ctx.gd;
   const ducks = list(p.enemylist).filter((k) => gd.enemy(k));
   if (!ducks.length || !Array.isArray(spawns)) return [];
@@ -421,7 +441,7 @@ export function duckReplace(ctx, spawns, p, ownerPlayerId, { routes = null, side
     if (!half) return true;
     const r = Array.isArray(routes) ? routes[s.routeIndex] : null;
     const c = r && Array.isArray(r.end) ? Number(r.end[1]) : NaN;
-    return side === 'R' ? c > BOSS_MID_COL : c < BOSS_MID_COL;
+    return side === 'R' ? c > mid : c < mid;
   };
   // one entry per enemy of the player (split multi-count specs), in spawn-time order
   const flat = [];
@@ -482,7 +502,7 @@ const duckGlobal = {
     if (!holder) return;
     const p = duckParams(holder.bandId());
     if (!p || ctx.round < int(p.round, 1)) return;
-    duckReplace(ctx, ev.spawns, p, ctx.playerId, { routes: ev.routes, side: ev.side });
+    duckReplace(ctx, ev.spawns, p, ctx.playerId, { routes: ev.routes, side: ev.side, ...(Number.isFinite(ev.mid) ? { mid: ev.mid } : {}) });
   },
 };
 

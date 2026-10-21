@@ -331,6 +331,10 @@ export async function startServer(opts = {}) {
   const matchHostTransport = String(process.env.SP_MATCH_HOST || '').trim().toLowerCase() === 'worker' ? 'worker' : 'process';
   const hosts = createMatchHosts({ contents, log, options: { transport: matchHostTransport, maxWorkers: Math.max(1, policy.get().maxSets), ...(opts.matchHost || {}) } });
   const workshopAssets = workshopAssetsFor(workshopLoaded, workshopDir);
+  /** 工坊包 id → 显示名：`/api/music` 的分组标题用 `pack.json.name`，没有名字的安装照旧显示 id。 */
+  const workshopPackNames = new Map((workshopLoaded.packs || [])
+    .filter((p) => p && typeof p.id === 'string' && p.id)
+    .map((p) => [p.id, String(p.name || p.id)]));
   // 包声明的只读路由（`pack.json.routes`, DESIGN §28.13）：绝对路径 → 包内 `.json`，带声明的 `Cache-Control`。
   // `mount` 让「核心先吃」这条判据（DESIGN §28.35）读到**真正的**核心挂载目录：与 createStaticHandler 那份同一组
   // 目录（`coreMounts` 是它们共同的来源），所以一条声明会不会顶掉引擎自己的文件，判的就是引擎自己读的那个文件。
@@ -460,6 +464,9 @@ export async function startServer(opts = {}) {
     // 的试玩子进程）下 `data` 是**另一次**装载，而单例可能还带着仓库 `workshop/` 那一份内容 —— 那样这条路由就会
     // 把「另一个工坊根有多少冲突」当成这一局的答案报出去。
     workshopConflicts: { path: '/workshop-conflicts.json', list: () => data.workshopConflicts ?? null },
+    // 服务器音乐库（`GET /api/music`，颂乐人偶 Fever 音乐选择）：官方 BGM 目录 + 已装工坊包的 assets/bgm。
+    workshopAssets,
+    workshopPackNames,
     httpLanes: opts.httpLanes, publicDir, trustProxy: network.opts.trustProxy,
     studio, trustedRuntime,
     modsCatalog: (req, res) => serveMods(req, res, MODS_CATALOG_URL, '', modsJson),

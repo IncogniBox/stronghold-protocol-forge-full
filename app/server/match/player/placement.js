@@ -4,6 +4,7 @@
 // Installed on PlayerState.prototype by server/match/PlayerState.js (a method container: never instantiated; `this` is
 // the player state).
 
+import { hasTraitFor } from '../operatorTraits.js';
 import { ERR } from '../../../shared/constants.js';
 import { msg, dn } from '../../../shared/i18n.js';
 import { tileKey, parseKey, inField, canPlace, placeClass, freeSlot, pieceDir, parseDir, ownerRangeKeys } from '../board.js';
@@ -44,6 +45,16 @@ export class PlayerPlacement {
   }
 
   /**
+   * Whether a board tile lies inside the board of the field this player deploys on **now** — the own board, or its half
+   * of the boss field in a boss round (Match.deployFieldOf), each with the shape its own map declares
+   * (shared/layout.js `boardRectOf`: the official 4×9 unless the map says bigger).
+   */
+  _inField(r, c) {
+    const field = this.deployMap() && this._deployField;
+    return inField(r, c, this.m && this.m.layout, field);
+  }
+
+  /**
    * Where piece may stand on (r, c): the deploy map of its position class (board.js canPlace) and, for a summon whose
    * text reads "只能部署在召唤者攻击范围内" (tokens.json `ownerRange`: 伺夜's 狼群, 缪尔赛思's 流形, Mon3tr's 重构体), a tile of
    * its owner's attack range (summonRange); for one marked `ownerRangeOutside` (凯尔希·思衡托's 战术锚点), a tile outside it
@@ -52,7 +63,8 @@ export class PlayerPlacement {
    * with its own owner).
    */
   _legal(piece, r, c, owner = null) {
-    if (!canPlace(this.deployMap(), this._placementOf(piece), r, c)) return false;
+    const dmap = this.deployMap();     // also refreshes `_deployField` (the field that map was built for)
+    if (!canPlace(dmap, this._placementOf(piece), r, c, this.m && this.m.layout, this._deployField)) return false;
     const k = tileKey(r, c);
     const range = this.summonRange(piece, owner);
     if (range && !range.has(k)) return false;
@@ -157,7 +169,7 @@ export class PlayerPlacement {
 
   _moveChessToBoard(loc, r, c, dir = 'RIGHT') {
     const piece = loc.piece;
-    if (!inField(r, c) || !this._legal(piece, r, c)) return fail(ERR.BAD_TILE);
+    if (!this._inField(r, c) || !this._legal(piece, r, c)) return fail(ERR.BAD_TILE);
     const key = tileKey(r, c);
     const occ = this.board.get(key) || null;
     if (occ === piece) return this._reorient(piece, dir);
@@ -198,6 +210,7 @@ export class PlayerPlacement {
     this.board.set(key, piece);
     this.grantTokensFor(piece);
     this.recompute();
+    if (hasTraitFor(this.gd, this.gd.chess(piece.id)?.charId)) this.m.dispatch(this, 'onTraitDeploy', { piece });
     return OK;
   }
 
@@ -242,7 +255,7 @@ export class PlayerPlacement {
 
   _moveTokenToBoard(loc, r, c, dir = 'RIGHT') {
     const piece = loc.piece;
-    if (!inField(r, c)) return fail(ERR.BAD_TILE);
+    if (!this._inField(r, c)) return fail(ERR.BAD_TILE);
     const key = tileKey(r, c);
     const occ = this.board.get(key) || null;
     // a summon dragged onto its own owner swaps with it: a range-bound one must be inside the owner's range from the

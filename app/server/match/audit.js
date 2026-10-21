@@ -259,8 +259,9 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
         if (ps.deployCount > deployed0) fail(`${id}: a merge of ${baseId} grew the deploy count ${deployed0} → ${ps.deployCount}`);
         // a pure read of the deploy field (Match.deployMapFor, as invariants.js): the audit must not refresh the cache
         const dmap = typeof m.deployMapFor === 'function' ? m.deployMapFor(ps) : ps.deployMap();
+        const dfield = typeof m.deployFieldOf === 'function' ? m.deployFieldOf(ps) : 'normal';
         const pos = placeClass(ps, (ps.gd || gd).chess(elite.id));
-        const want = mergeTile([...tiles.keys()].map((key) => ({ key })), (r, c) => canPlace(dmap, pos, r, c));
+        const want = mergeTile([...tiles.keys()].map((key) => ({ key })), (r, c) => canPlace(dmap, pos, r, c, m.layout, dfield), m.layout, dfield);
         if (want) {
           if (loc.area !== 'board' || loc.key !== want.key) fail(`${id}: the elite of ${baseId} went to ${loc.area} ${loc.key || ''}, expected the deployed copy's tile ${want.key}`);
           else if (pieceDir(elite) !== tiles.get(want.key)) fail(`${id}: the elite of ${baseId} faces ${pieceDir(elite)}, its copy faced ${tiles.get(want.key)}`);
@@ -461,8 +462,8 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       for (const [ps, lp0] of before) {
         const r = m.lastResults.get(ps.playerId) || { leaked: [] };
         const counted = (r.leaked || []).filter((l) => l && l.counted !== false).length;
-        // after 联防 a leaker pays for every surviving enemy of its source — enemies spawned by its leaked enemies
-        // (splitters, summoners) included — so only the cap bounds it; everybody else never exceeds own leaks
+        // after 联防 a leaker pays for every surviving enemy of its source — the enemies the field itself spawned while it
+        // ran (splitters, summoners: `uniteRuntime`) are not billable — so only the cap bounds it; everybody else never exceeds own leaks
         const max = uniteRan && plan.leakers.includes(ps) ? cap : Math.min(cap, counted);
         if (ps.alive) {
           const loss = lp0 - ps.lp;

@@ -5,7 +5,7 @@
 //
 // 官方 19×21 的图不带 `size`/`layout`，`layoutOf()` 推出来的每一个数字都等于历史常量，所以官方地图走这条路口径与结果
 // **完全不变**（shared/layout.js 的 `layoutForSize` 与 `GEO` 一族逐字段相等，test/layout.test.js 钉住这一点）。大图
-// （23×27 / 27×33，或编辑器自定尺寸）在自己的窗口 0..R−1 × 0..C−1 里活动：渲染器只画这个窗口，相机用自己的矩形取景。
+// （23×27 / 27×33 / 33×39 / 45×60，或编辑器自定尺寸）在自己的窗口 0..R−1 × 0..C−1 里活动：渲染器只画这个窗口，相机用自己的矩形取景。
 //
 // 本模块只做「把 stage / layout / 相机 kind 翻译成矩形与尺寸」这一件事，不碰 PIXI / three / DOM，所以 Node 测试与
 // DOM 兜底视图都能直接用（和 render/projection.js 一个定位）。`shared/layout.js` 是唯一的数据源，这里不复制任何数字。
@@ -13,10 +13,12 @@
 import { OFFICIAL_LAYOUT, layoutOf, sizeOf, viewRectOf, fieldTileOf, boardTileOf } from '../../../shared/layout.js';
 import { normRect } from './projection.js';
 
-export { OFFICIAL_LAYOUT, layoutOf, sizeOf, viewRectOf } from '../../../shared/layout.js';
+// 棋盘本身的那两个数也一并转出去：客户端凡是遍历 / 夹棋盘的地方读 `boardRectOf` / `handRowOf` / `tempRowOf`
+// （一张图的棋盘是它自己声明的形状，官方 4×9；见 shared/layout.js）。
+export { OFFICIAL_LAYOUT, layoutOf, sizeOf, viewRectOf, boardRectOf, handRowOf, tempRowOf, penRectOf, isDualLayout } from '../../../shared/layout.js';
 
-/** 部署场的三个名字（与 server/match/board.js DEPLOY_FIELDS 同口径）。 */
-export const DEPLOY_FIELDS = Object.freeze(['normal', 'bossL', 'bossR']);
+/** 部署场的名字（与 server/match/board.js DEPLOY_FIELDS 同口径）：普通带整块，或它左右两半（一张左右两半的图），或 boss 的左右半。 */
+export const DEPLOY_FIELDS = Object.freeze(['normal', 'normalL', 'normalR', 'bossL', 'bossR']);
 
 /** The map's own layout for a stage record (the official one when it declares nothing). */
 export const layoutOfStage = (stage) => layoutOf(stage);

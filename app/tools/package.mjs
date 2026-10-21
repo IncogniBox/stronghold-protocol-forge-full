@@ -132,7 +132,9 @@ export const EXAMPLE_PACK_DIRS = ['docs/examples/clementia/', 'docs/examples/dem
  * 为什么必须显式列：`isPlayerFile` 是按名字/目录白名单收的，`docs/` 顶层默认全在包外。
  * 入门层指向它们（`docs/START-HERE.md` 附录 C），包内断链等于入门层把读者引到 404。
  */
-export const PLAYER_WORKSHOP_REFS = ['docs/WORKSHOP.md', 'docs/STANDARD-PACK.md', 'docs/MOD-SURFACE.md', 'docs/EDITOR.md'];
+export const PLAYER_WORKSHOP_REFS = ['docs/WORKSHOP.md', 'docs/STANDARD-PACK.md', 'docs/MOD-SURFACE.md', 'docs/EDITOR.md',
+  // 插件作者的参考面：与 tools/plugin.mjs、schemas/ 一起构成「写包 → check → pack」的闭环（docs/PLUGINS.md 是它的指南）。
+  'docs/PLUGINS.md', 'docs/PLUGIN-GUIDE.md', 'docs/PLUGIN-DSL.md', 'docs/PLUGIN-API.md', 'docs/plugin-catalog.example.json'];
 /** Research tables read at run time: server/sim/nodeData.js (the Node sim's fallback) and tools/fetch-assets.mjs. */
 export const RUNTIME_RESEARCH = ['docs/research/03-operators.json', 'docs/research/05-enemies.json', 'docs/research/05-maps.json', 'docs/research/07-assets.json'];
 /** The start scripts (scripts/make-windows-bundle.mjs is the maintainer's Windows pack, docs/WINDOWS.md). */
@@ -231,6 +233,21 @@ export function isRefused(rel) {
 export const isPluginResource = (rel) => rel === 'plugins/README.md' || rel === 'plugins/AGENTS.md' || rel.startsWith('plugins/_template/');
 /** The author-facing test harness that ships with the player package (the only test file a release carries). */
 export const AUTHOR_TEST_FILES = ['test/helpers/battleHarness.js'];
+/**
+ * The plugin authoring surface's non-document files: the pack schemas `tools/plugin.mjs` validates against,
+ * and the plugin tree's own files (readme, agent notes, the tracked `_template/` — the same set
+ * `isPluginResource` lets past the `plugins/` refusal) plus the author harness above.
+ *
+ * 为什么显式列而不是把整个 `schemas/` 收进来：那是**按名字**的白名单，整目录收会让日后新增的
+ * 任意 schema 自动进玩家包。`plugins/` 下的私人物品（`plugins/mine/`、`plugins/config.json`、
+ * `plugins/_dist/` …）仍由 `isRefused` 拦掉 —— 这里只收 `isPluginResource` 放行的那几个。
+ */
+export const PLAYER_SCHEMAS = ['schemas/plugin.schema.json', 'schemas/overlay.schema.json', 'schemas/records.schema.json',
+  'schemas/dsl.schema.json', 'schemas/ui.schema.json', 'schemas/catalog.schema.json'];
+/** 与 `isPluginResource` 同一口径：整份 `plugins/_template/` 要收（模板是「能跑起来的完整示例」——
+ *  `tools/plugin.mjs` 会读 `_template/script/guard.json`，只收其中两个文件的话 stage 里就缺文件）。 */
+export const PLAYER_PLUGIN_DIRS = ['plugins/_template/'];
+export const PLAYER_PLUGIN_RESOURCES = [...AUTHOR_TEST_FILES, 'plugins/README.md', 'plugins/AGENTS.md'];
 
 /** OS / editor / Python clutter that never ships (the old rsync excludes). */
 export function isJunk(rel) {
@@ -251,7 +268,9 @@ export function isPlayerFile(rel) {
   if (PLAYER_DOC_DIRS.some((d) => p.startsWith(d)) && !EXAMPLE_PACK_DIRS.some((d) => p.startsWith(d))) return true;
   return ROOT_FILES.includes(p) || PLAYER_DOCS.includes(p) || PLAYER_WORKSHOP_DOCS.includes(p)
     || PLAYER_WORKSHOP_REFS.includes(p) || p === PLAYER_WORKSHOP_README
-    || RUNTIME_RESEARCH.includes(p) || PLAYER_SCRIPTS.includes(p) || PLAYER_TOOLS.includes(p);
+    || RUNTIME_RESEARCH.includes(p) || PLAYER_SCRIPTS.includes(p) || PLAYER_TOOLS.includes(p)
+    || PLAYER_SCHEMAS.includes(p) || PLAYER_PLUGIN_RESOURCES.includes(p)
+    || PLAYER_PLUGIN_DIRS.some((d) => p.startsWith(d));
 }
 
 /**

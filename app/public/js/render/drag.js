@@ -27,12 +27,30 @@
 //   pieceDragEnd   { uid, piece, dropped, cancelled }
 
 import { GEO } from '../../../shared/constants.js';
+import { boardRectOf, handRowOf, tempRowOf } from './layout.js';
+
+/**
+ * A `GEO`-shaped view of **one map's board** (the hand / 临时整备区 rows and the board rect itself, in board
+ * coordinates): the pointer layer works in these numbers, and a map that declares a bigger board (or moves its 整备行,
+ * shared/layout.js `boardRectOf`) hands a different one in. Omitted / the official layout ⇒ today's `GEO` numbers
+ * (hand row 7, temp row 8, board 9–12 × 2–10), so every official map keeps the historical behaviour.
+ * @param {object|null|undefined} layout the map's own layout (`layoutOf(stage)`); omitted → the official one
+ * @param {'normal'|'bossL'|'bossR'} [field] the deploy field the pieces are shown on (a boss prep uses the half's rows)
+ */
+export function boardGeo(layout, field = 'normal') {
+  const B = boardRectOf(layout, field);
+  return {
+    HAND_ROW: handRowOf(layout, field), HAND_SIZE: GEO.HAND_SIZE,
+    TEMP_ROW: tempRowOf(layout, field), TEMP_C0: GEO.TEMP_C0, TEMP_SIZE: GEO.TEMP_SIZE,
+    FIELD: { r0: B.r0, r1: B.r1, c0: B.c0, c1: B.c1 },
+  };
+}
 
 /** Where a piece currently sits, as a tile. `piece.area` 'board' uses row/col; 'hand'/'temp' use idx. */
-export function pieceTile(piece) {
+export function pieceTile(piece, geo = GEO) {
   if (!piece || typeof piece !== 'object') return null;
-  if (piece.area === 'hand' && Number.isInteger(piece.idx)) return { row: GEO.HAND_ROW, col: piece.idx };
-  if (piece.area === 'temp' && Number.isInteger(piece.idx)) return { row: GEO.TEMP_ROW, col: GEO.TEMP_C0 + piece.idx };
+  if (piece.area === 'hand' && Number.isInteger(piece.idx)) return { row: geo.HAND_ROW, col: piece.idx };
+  if (piece.area === 'temp' && Number.isInteger(piece.idx)) return { row: geo.TEMP_ROW, col: geo.TEMP_C0 + piece.idx };
   if (Number.isInteger(piece.row) && Number.isInteger(piece.col)) return { row: piece.row, col: piece.col };
   return null;
 }
@@ -98,10 +116,10 @@ export function dragStandTile(move, geo = GEO) {
 }
 
 /** Legality via the UI callback (board → (piece,row,col); hand → (piece, HAND_ROW, idx)). Throwing ⇒ illegal. */
-export function isLegal(canPlace, piece, slot) {
+export function isLegal(canPlace, piece, slot, geo = GEO) {
   if (!slot || slot.area === 'temp' || slot.area === 'outside') return false;
   if (typeof canPlace !== 'function') return true;
-  const row = slot.area === 'board' ? slot.row : GEO.HAND_ROW;
+  const row = slot.area === 'board' ? slot.row : geo.HAND_ROW;
   const col = slot.area === 'board' ? slot.col : slot.idx;
   try { return canPlace(piece, row, col, slot) !== false; } catch { return false; }
 }
@@ -125,6 +143,9 @@ export function createDragController(hooks) {
   const clearT = h.clearTimeout || ((id) => clearTimeout(id));
   let editable = false;
   let canPlace = typeof h.canPlace === 'function' ? h.canPlace : null;
+  /** the map's own board geometry (`boardGeo`); the official `GEO` until the view hands one in */
+  let geo = h.geo || null;
+  const geoNow = () => geo || GEO;
   /** @type {null | { mode: 'pressed'|'dragging'|'held', pointerId, pointerType, piece, from, sx, sy, timer, last? }} */
   let st = null;
   let hoverUid = null;
@@ -137,7 +158,7 @@ export function createDragController(hooks) {
   const overCanvas = (cx, cy) => { try { return h.isOverCanvas ? h.isOverCanvas(cx, cy) !== false : true; } catch { return true; } };
 
   function setHoverTile(tile) {
-    const slot = tile ? tileSlot(tile) : null;
+    const slot = tile ? tileSlot(tile, geoNow()) : null;
     const key = tile ? `${tile.row},${tile.col}` : '';
     if (key === hoverTileKey) return;
     hoverTileKey = key;
@@ -165,8 +186,8 @@ export function createDragController(hooks) {
     st.last = e;
     const tile = tileAt(e.x, e.y);
     const over = overCanvas(e.clientX, e.clientY);
-    const slot = over && tile ? tileSlot(tile) : null;
-    const legal = !!slot && slot.area !== 'temp' && (slot.area === 'board' || !sameSlot(slot, st.from)) && isLegal(canPlace, st.piece, slot);
+    const slot = over && tile ? tileSlot(tile, geoNow()) : null;
+    const legal = !!slot && slot.area !== 'temp' && (slot.area === 'board' || !sameSlot(slot, st.from)) && isLegal(canPlace, st.piece, slot, geoNow());
     setHoverTile(over ? tile : null);
     emit('pieceDragMove', { uid: st.piece.uid, piece: st.piece, x: e.x, y: e.y, clientX: e.clientX, clientY: e.clientY, target: slot, legal });
   }
@@ -178,7 +199,7 @@ export function createDragController(hooks) {
     let dropped = false;
     if (!cancelled) {
       const tile = tileAt(e.x, e.y);
-      const d = resolveDrop({ piece: s.piece, from: s.from, tile, overCanvas: overCanvas(e.clientX, e.clientY), clientX: e.clientX, clientY: e.clientY, canPlace });
+      const d = resolveDrop({ piece: s.piece, from: s.from, tile, overCanvas: overCanvas(e.clientX, e.clientY), clientX: e.clientX, clientY: e.clientY, canPlace, geo: geoNow() });
       if (d.kind === 'drop') {
         dropped = true;
         emit('pieceDrop', { uid: s.piece.uid, piece: s.piece, from: s.from, target: d.target });
@@ -198,6 +219,8 @@ export function createDragController(hooks) {
       if (!editable && st && st.mode === 'dragging') endDrag(null, true);
     },
     setCanPlace(fn) { canPlace = typeof fn === 'function' ? fn : null; },
+    /** The map's own board geometry (`boardGeo(layout, field)`); nothing ⇒ the official `GEO` numbers. */
+    setGeo(g) { geo = g || null; },
 
     /** e: { pointerId, pointerType, button, x, y (canvas CSS px), clientX, clientY } */
     pointerDown(e) {

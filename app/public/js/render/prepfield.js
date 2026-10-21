@@ -21,7 +21,7 @@
 // there instead of in the pen, and lights its hit tiles in red beside an operator's orange range preview (render/app.js).
 
 import { GEO } from '../../../shared/constants.js';
-import { OFFICIAL_LAYOUT, fieldTile, boardTile, mirrorColOf } from './layout.js';
+import { OFFICIAL_LAYOUT, fieldTile, boardTile, mirrorColOf, boardRectOf, handRowOf } from './layout.js';
 
 /** Board row → display (boss-field) row of the OFFICIAL layout: row − 7 (server/match/board.js BOARD_ROWS_ABOVE_BOSS
  * is +7, the inverse). A map that moves its boss half carries its own — read it through `bossPrepField(side, layout)`. */
@@ -32,12 +32,12 @@ export const MAX_COL = OFFICIAL_LAYOUT.mirrorCol;
 const MIRROR = Object.freeze({ RIGHT: 'LEFT', LEFT: 'RIGHT', UP: 'UP', DOWN: 'DOWN' });
 
 /**
- * A piece's own board window in the prep: rows 7 (`GEO.HAND_ROW`, the bench) … 12 (`GEO.FIELD.r1`, the back row) and
- * columns 0 … 10 (the board rect's deploy columns; the bench slots 0–9 and the temp slots 4–8 both sit inside). BOARD
- * coordinates — they do not move with the map (shared/layout.js `FIXED_DEPLOY_COLS` pins the deploy rects' columns).
+ * A piece's own board window in the prep, **board coordinates** — it does not move with the map's window, but it does
+ * follow the map's own board: rows `handRowOf(layout, field)` (the 整备行 — two rows above the board's bottom row, i.e.
+ * 7 officially / 6 on a map that widened its board to 5×11) … `boardRectOf(layout, field).r1` (12, the back row), and
+ * columns 0 … `max(HAND_SIZE − 1, board.c1)` (the hand's ten slots sit at board cols 0–9, so on the official 9-wide
+ * board the window is cols 0–10 and on the 45×60 大战场 sample's 11-wide one it is cols 0–12).
  */
-const BOARD_ROW_MIN = GEO.HAND_ROW, BOARD_ROW_MAX = GEO.FIELD.r1;
-const BOARD_COL_MIN = 0, BOARD_COL_MAX = 10;
 
 /** RIGHT ↔ LEFT (UP / DOWN unchanged); unknown values pass through. */
 export function mirrorDir(d) {
@@ -65,9 +65,12 @@ export function bossPrepField(side, layout = OFFICIAL_LAYOUT) {
   const R = side === 'R';
   const field = R ? 'bossR' : 'bossL';
   const bossR1 = L.battle.boss.r1;
-  // The display window of the player's half: every map tile the pieces' own board window (rows `GEO.HAND_ROW` 7 …
-  // `GEO.FIELD.r1` 12, cols 0–10) maps onto. Those are BOARD coordinates and do not move with the map, so `toBoard`
-  // accepts exactly what `toDisp` can produce — on the official 19×21 map and on a big one alike.
+  // The display window of the player's half: every map tile the pieces' own board window (its 整备行 … the board's back
+  // row, its hand columns … the board's right edge — see the note above) maps onto. Those are BOARD coordinates: they
+  // follow the map's own board (shared/layout.js `boardRectOf`), so `toBoard` accepts exactly what `toDisp` can produce.
+  const B = boardRectOf(L, field);
+  const BOARD_ROW_MIN = handRowOf(L, field), BOARD_ROW_MAX = B.r1;
+  const BOARD_COL_MIN = 0, BOARD_COL_MAX = Math.max(GEO.HAND_SIZE - 1, B.c1);
   const ownDisp = new Set();
   for (let r = BOARD_ROW_MIN; r <= BOARD_ROW_MAX; r++) {
     for (let c = BOARD_COL_MIN; c <= BOARD_COL_MAX; c++) {
@@ -75,7 +78,7 @@ export function bossPrepField(side, layout = OFFICIAL_LAYOUT) {
       ownDisp.add(`${t[0]},${t[1]}`);
     }
   }
-  // the pieces' own board window stays the same on every map (shared/layout.js pins the deploy rects' columns)
+  // the pieces' own board window (board coordinates, this map's shape)
   const onOwnBoard = (r, c) => r >= BOARD_ROW_MIN && r <= BOARD_ROW_MAX && c >= BOARD_COL_MIN && c <= BOARD_COL_MAX;
   return Object.freeze({
     kind: 'bossPrep', side: R ? 'R' : 'L', mirror: R,
@@ -98,6 +101,53 @@ export function bossPrepField(side, layout = OFFICIAL_LAYOUT) {
 
 /** Last display row of the boss field band (the boss rows + the wall row above them) in the Final Assault prep. */
 export const BOSS_DISP_MAX_ROW = OFFICIAL_LAYOUT.battle.boss.r1 + 1;
+
+/**
+ * Transform of the own **ordinary** prep board (`side` 'L' default): the board-coordinate window mapped through the
+ * map's own ordinary band. The official layout is the IDENTITY (its board IS map rows 9–12 × cols 2–10, so the
+ * historical numbers are untouched and `prepXf === IDENTITY` still means "nothing to transform"); a big map maps its
+ * own band (its board sits higher, and its 整备行 two rows above it), and on a map whose ordinary band is a mirrored
+ * pair the right half mirrors col c → mirrorCol − c with RIGHT ↔ LEFT — the same mapping the sim places its pieces by
+ * (shared/layout.js `fieldTileOf`, server/sim/battle/players.js `_boardTile`).
+ * @param {'L'|'R'} [side]
+ * @param {object} [layout] the map's own layout (shared/layout.js); omitted → the official one
+ */
+export function normalPrepField(side = 'L', layout = OFFICIAL_LAYOUT) {
+  const L = layout || OFFICIAL_LAYOUT;
+  const R = side === 'R';
+  const field = R ? 'normalR' : 'normalL';
+  const B = boardRectOf(L, field);
+  const BOARD_ROW_MIN = handRowOf(L, field), BOARD_ROW_MAX = B.r1;
+  const BOARD_COL_MIN = 0, BOARD_COL_MAX = Math.max(GEO.HAND_SIZE - 1, B.c1);
+  // the official band (and any map whose board sits exactly where the official one does): nothing moves
+  if (!R && BOARD_ROW_MIN === GEO.HAND_ROW && B.c0 === GEO.FIELD.c0 && B.r0 === GEO.FIELD.r0) return IDENTITY;
+  const maxRow = L.size[0] - 1, maxCol = L.size[1] - 1;
+  const ownDisp = new Set();
+  for (let r = BOARD_ROW_MIN; r <= BOARD_ROW_MAX; r++) {
+    for (let c = BOARD_COL_MIN; c <= BOARD_COL_MAX; c++) {
+      const t = fieldTile(field, r, c, L);
+      ownDisp.add(`${t[0]},${t[1]}`);
+    }
+  }
+  const onOwnBoard = (r, c) => r >= BOARD_ROW_MIN && r <= BOARD_ROW_MAX && c >= BOARD_COL_MIN && c <= BOARD_COL_MAX;
+  return Object.freeze({
+    kind: 'prep', side: R ? 'R' : 'L', mirror: R,
+    layout: L,
+    toDisp: (row, col) => {
+      const t = fieldTile(field, row, col, L);
+      return { row: t[0], col: t[1] };
+    },
+    toBoard: (row, col) => {
+      if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row > maxRow || col < 0 || col > maxCol) return null;
+      if (!ownDisp.has(`${row},${col}`)) return null;
+      const t = boardTile(field, row, col, L);
+      if (!onOwnBoard(t[0], t[1])) return null;
+      return { row: t[0], col: t[1] };
+    },
+    dirToDisp: (d) => (R ? mirrorDir(d) : d),
+    dirToBoard: (d) => (R ? mirrorDir(d) : d),
+  });
+}
 
 /** Last display row of a map's own boss field band (`BOSS_DISP_MAX_ROW` for the official layout). */
 export const bossDispMaxRow = (layout) => (layout || OFFICIAL_LAYOUT).battle.boss.r1 + 1;

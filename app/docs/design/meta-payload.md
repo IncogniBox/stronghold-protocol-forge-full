@@ -77,7 +77,7 @@ server-side match logic.
 ### 29.3 Decision 3 — the registry is forked per match; there is no global set/restore
 
 `getDefaultRegistry()` is **process-wide**, and `Match` already accepts `opts.registry`
-(`server/match/Match.js:252`). A pack must not write into the process-wide registry: two matches running at once would
+(`server/match/Match.js:432`). A pack must not write into the process-wide registry: two matches running at once would
 both see the union of every room's handlers, and the ordering would depend on which room started first. That is the
 "set a global before the match and restore it after" shape the owner forbade by name, and it is wrong even
 single-threaded (an interrupted match never restores).

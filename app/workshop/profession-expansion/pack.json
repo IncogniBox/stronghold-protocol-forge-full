@@ -4,7 +4,7 @@
  "version": "1.1.0",
  "author": "the profession-expansion mod",
  "license": "GPL-3.0-or-later",
- "gameVersion": "0.3.0",
+ "gameVersion": "0.3.1",
  "description": "「职业分支扩展」的**前置 mod** —— 把「官方 8 职业之外的新职业 / 新分支」这一套公共接口沉淀下来，供别的包按数据引用。①职业与分支的**词汇表**：本包在 professions.json 里给出一组新职业（时术师 / 守望者 / 追踪者 / 协奏者）与一条挂在**官方术师**下的新分支（巡援术师 / Patrol-Support Caster），每个都写明「攻击形态照抄哪一条」「行为照抄哪一个官方分支」，新分支还带上它自己的攻击范围（高台 / 地面各两张）；②**译名**：这套名字的 en / ja / ko / zh-TW 译文由本包的 i18n 提供（消费包只写中文 msgid 就够，不需要自己带译文）；③**分支图标**：巡援术师 的分支图标由本包自带（art.profSub → assets.prof.sub），消费包的记录只要写 subProfessionId 就能画出来；④**引擎侧的唯一前提**：记录自带 professionName / subProfessionName 即被渲染（引擎对 profession 不做枚举校验，未知 id 只影响基础形态，形态由记录自己的 attackKind / dmgType / projectile / canHitFly / targetPriority 决定），而「可以部署在地面」与「处于地面」这两件事引擎本来就有 —— position: 'RANGED' 已含地面格（server/match/board.js canPlace 对 'ranged'/'all' 在 melee 格上返回 true），部署时 sim 就写好 unit.ground（server/sim/battle/deploy.js）；⑤**行为**仍归消费包：新分支的特殊行为（减速 / 链 / 存能量 / 地面时换数值与范围 ……）走消费包自己的 kit trait 或 server.battle 模块，引擎的 SUB 预设表不认识新 id。本包不含任何干员 / 盟约 / 策略，只提供这一层词汇、译名与一个分支图标。",
  "i18n": {
   "en": "i18n/en.json",

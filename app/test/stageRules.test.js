@@ -17,7 +17,10 @@ import {
   deriveDeployTiles, validateStage, stageErrors, STAGE_ROWS, STAGE_COLS,
   // v0.9.0 分区（业主：一张 19×21 里住着三个区，还有「部署矩形外的路放不了干员」这条困惑）
   STAGE_ZONES, zoneOf, DEPLOY_RECTS, deployRectsAt, roadsOutsideDeployRects,
+  // 大图支持（0.9.2）：引擎允许的最大尺寸就是画布本身（27×33），「大战场」样板铺满它
+  HUGE_STAGE_SPEC, hugeStageSpec,
 } from '../shared/stageAuthoring.js';
+import { MAX_ROWS, MAX_COLS, SIZE_PRESETS } from '../shared/layout.js';
 
 const GLYPH_LEGEND = {
   r: { tileKey: 'tile_road', height: 'LOW', buildable: 'ALL', passable: 'ALL', groundPassable: true, flyPassable: true, special: null, bb: {} },
@@ -353,6 +356,60 @@ describe('stage rules: the 样板地图 (SAMPLE_STAGE_SPEC)', () => {
     assert.equal(b.options.characterLimit, 8);
     assert.deepEqual(b.routes[0].start, [6, 2]);
     assert.equal(deriveStage(b).ok, true);
+  });
+});
+
+// ---- 「大战场」样板图（45×60 = 引擎允许的最大尺寸，大图支持的阶梯第一档） ------------------------------
+//
+// 与 19×21 那张样板同一套判据：形状对得上「以模板新建」、每个字形都在自己的图例里、寻路开与关都能推导、
+// 构造出来的每一份都是私有拷贝。区别只有一条 —— 它把**整张画布**铺满（45 行的 R 与 60 列的 C，就是
+// shared/layout.js 的 MAX_ROWS / MAX_COLS），所以它同时是「大图上限」那条规则的执行测试。
+describe('stage rules: the 大战场样板图 (HUGE_STAGE_SPEC, 45×60)', () => {
+  test('它的尺寸是最大档（超巨），而且 spec 自己带着 size', () => {
+    assert.equal(HUGE_STAGE_SPEC.id, 'ws_huge_map');
+    assert.equal(typeof HUGE_STAGE_SPEC.name, 'string');
+    assert.equal(HUGE_STAGE_SPEC.spec.id, HUGE_STAGE_SPEC.id);
+    assert.deepEqual(HUGE_STAGE_SPEC.spec.size, [MAX_ROWS, MAX_COLS]);
+    assert.deepEqual(HUGE_STAGE_SPEC.spec.size, SIZE_PRESETS[SIZE_PRESETS.length - 1].size, '最大档就是 45×60');
+    assert.ok(HUGE_STAGE_SPEC.spec.size[0] > STAGE_ROWS && HUGE_STAGE_SPEC.spec.size[1] > STAGE_COLS, '比官方那档大');
+  });
+
+  test('铺满整张画布：45 行 × 60 字符，最外一圈是空气，每个字形都在自己的图例里', () => {
+    const spec = hugeStageSpec();
+    assert.equal(spec.rows.length, MAX_ROWS);
+    for (const [i, r] of spec.rows.entries()) assert.equal(r.length, MAX_COLS, `row ${i}`);
+    const air = '-'.repeat(MAX_COLS);
+    assert.equal(spec.rows[0], air, '底边一圈空气');
+    assert.equal(spec.rows[MAX_ROWS - 1], air, '顶边一圈空气');
+    for (const r of spec.rows) assert.ok(r.startsWith('-') && r.endsWith('-'), '左右两侧一圈空气');
+    const glyphs = new Set(spec.rows.join(''));
+    assert.ok(glyphs.has('S') && glyphs.has('E'), '有敌方入口与保护目标');
+    for (const g of glyphs) assert.ok(spec.tiles[g], `字形 ${g} 必须在自己的图例里`);
+  });
+
+  test('寻路开与关都推导得动，落成记录后零 issue，并且它自己的门算出一对路径', () => {
+    const off = deriveStage(hugeStageSpec());
+    const on = deriveStage(hugeStageSpec(), { paths: true });
+    assert.ok(off.ok, JSON.stringify(off.errors));
+    assert.ok(on.ok, JSON.stringify(on.errors));
+    assert.deepEqual(validateStageRecord(on.stage, { id: HUGE_STAGE_SPEC.id, officialIds: new Set() }), []);
+    assert.deepEqual(validateStage(hugeStageSpec(), { officialIds: new Set() }).filter((i) => i.severity === 'error'), []);
+    assert.deepEqual(on.stage.size, [MAX_ROWS, MAX_COLS], '记录里也带着自己的尺寸');
+    assert.equal(Object.keys(on.stage.groundPaths || {}).length, 1, '它画的那一条路（S 门 → 目标）');
+  });
+
+  test('每一份构造都是私有拷贝，表单改不坏样板', () => {
+    const a = hugeStageSpec();
+    a.rows[0] = 'X'.repeat(MAX_COLS);
+    a.size[0] = STAGE_ROWS;
+    a.routes[0].start[0] = 0;
+    a.options.characterLimit = 99;
+    const b = hugeStageSpec();
+    assert.equal(b.rows[0], '-'.repeat(MAX_COLS));
+    assert.deepEqual(b.size, [MAX_ROWS, MAX_COLS]);
+    assert.deepEqual(b.routes[0].start, [42, 7]);
+    assert.equal(b.options.characterLimit, 8);
+    assert.equal(deriveStage(b, { paths: true }).ok, true);
   });
 });
 

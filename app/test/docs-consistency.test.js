@@ -305,7 +305,7 @@ test('user playtest #4 (DESIGN §18): picking by tile, timers, 机变 two taps, 
   const app = readFileSync(join(ROOT, 'public/js/render/app.js'), 'utf8');
   const tune = readFileSync(join(ROOT, 'public/js/render/app/tune.js'), 'utf8');
   assert.match(tune, /export const DRAG_HOLD_TILES = 0\.45;/);
-  assert.match(app, /dragStandTile\(p\)/);
+  assert.match(app, /dragStandTile\(p[,)]/);
   assert.match(DESIGN, /`dragStandTile/);
   assert.match(PLAYING, /干员模型直接站在这一格上/);
   assert.ok(!/TOUCH_LIFT_TILES|drawnAt|pickShape|pieceDragOver/.test(app), 'no touch lift, pixel probe or body shapes (user playtest #4 item 1)');
@@ -724,7 +724,7 @@ test('player feedback after 0.1.0 (DESIGN §21, v0.1.1): every report mapped, th
   assert.match(sec(8), /`m\.ticker \{text, id, type, priority, playerId\}`/);
   assert.match(META, /The strip queues by `priority`, highest first/);
   // UnitInfo / unitStats / rewardOffer shapes (§8)
-  assert.match(sec(8), /skillIndex\?, moduleId\?, items\?, form\? \}/);
+  assert.match(sec(8), /skillIndex\?, moduleId\?, items\?, form\?, skin\? \}/);
   assert.match(sec(8), /moveSpeed, range\?, base: \{…same\}\}/);
   assert.match(sec(8), /rewardOffer: null \| \{ tier, source: 'merge'\|'special', label, queued, slots/);
   // §6.6 describes the new bot; the old one-liner is gone
@@ -865,7 +865,8 @@ test('the deliberate trigger deviation (DESIGN §21.29): six 重装 skills DEFAU
   assert.match(DESIGN, /\*\*partly reverted by §21\.29\*\*/);
   assert.match(DESIGN, /\| Six 重装 skills' trigger \(§21\.29\) \|/);
   // the builder's table is per chess (灰毫 S1 is the generic skcom_atk_up[3]) and the data follows it
-  const bd = doc('tools/build-data.mjs');
+  assert.match(doc('tools/build-data.mjs'), /import \{ createOfficialUnitBuilders \} from '\.\.\/server\/plugins\/officialUnitBuilder\.js'/);
+  const bd = doc('server/plugins/officialUnitBuilder.js');
   assert.match(bd, /const TRIGGER_DEVIATIONS = Object\.freeze\(\{/);
   for (const k of ["chess_char_1_04_a: { skchr_udflow_2: 'DEFAULT' }", "chess_char_1_20_a: { skchr_liskam_2: 'DEFAULT' }", "chess_char_2_18_a: { 'skcom_atk_up[3]': 'DEFAULT', skchr_ashlok_2: 'DEFAULT' }", "chess_char_5_08_a: { skchr_horn_2: 'DEFAULT', skchr_horn_3: 'DEFAULT' }"]) assert.ok(bd.includes(k), k);
   for (const id of ['chess_char_1_04_b', 'chess_char_2_18_b', 'chess_char_5_08_b']) {

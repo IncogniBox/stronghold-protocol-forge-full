@@ -22,7 +22,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deriveChessRecord, validateChessRecord, chessIds, overrideChessIds, formatIssues, authoringErrors, specFromChessRecord } from '../shared/chessAuthoring.js';
-import { TILE_PALETTE, DEPLOY_RECTS, STAGE_ROWS, STAGE_COLS, normalizeRows, stageErrors, SAMPLE_STAGE_SPEC, sampleStageSpec } from '../shared/stageAuthoring.js';
+import { TILE_PALETTE, DEPLOY_RECTS, STAGE_ROWS, STAGE_COLS, normalizeRows, stageErrors, SAMPLE_STAGE_SPEC, sampleStageSpec, HUGE_STAGE_SPEC, hugeStageSpec } from '../shared/stageAuthoring.js';
 // 一张图自己的尺寸与分区（shared/layout.js）：编者的 spec 读回一张记录时要带上它们，否则大图一保存就缩回官方尺寸。
 import { clampSize } from '../shared/layout.js';
 import { deriveStage, validateStageRecord, deriveRoutePaths } from '../server/stageAuthoring.js';
@@ -2731,13 +2731,15 @@ export async function createEditorServer(opts = {}) {
         .sort((a, b) => a.id.localeCompare(b.id));
       return sendJson(res, 200, {
         ok: true,
-        templates: [{ id: SAMPLE_STAGE_SPEC.id, name: SAMPLE_STAGE_SPEC.name, note: '仓库自带样板 · 单人视角 · 含 S/E 与一条手画路线', sample: true }, ...official],
+        templates: [{ id: SAMPLE_STAGE_SPEC.id, name: SAMPLE_STAGE_SPEC.name, note: '仓库自带样板 · 单人视角 · 含 S/E 与一条手画路线', sample: true },
+          { id: HUGE_STAGE_SPEC.id, name: HUGE_STAGE_SPEC.name, note: '仓库自带样板 · 大战场 45×60（引擎允许的最大尺寸）· 含 S/E 与一条手画路线', sample: true }, ...official],
       });
     }
 
     if (p === '/api/stages/template' && method === 'GET') {
       const id = url.searchParams.get('id') || '';
       if (id === SAMPLE_STAGE_SPEC.id) return sendJson(res, 200, { ok: true, id, name: SAMPLE_STAGE_SPEC.name, spec: sampleStageSpec() });
+      if (id === HUGE_STAGE_SPEC.id) return sendJson(res, 200, { ok: true, id, name: HUGE_STAGE_SPEC.name, spec: hugeStageSpec() });
       const rec = (readJson(path.join(dataDir, 'stages.json'), {}) || {})[id];
       if (!rec) throw refuse(404, `找不到地图模板 ${id}`);
       return sendJson(res, 200, { ok: true, id, name: rec.name ?? id, spec: specFromStageRecord(id, rec) });

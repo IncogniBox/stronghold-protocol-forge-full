@@ -1,0 +1,321 @@
+{
+  "my_map": {
+    "id": "my_map",
+    "name": "my_map",
+    "weight": 40,
+    "active": true,
+    "modes": [],
+    "size": [
+      45,
+      60
+    ],
+    "layout": {
+      "size": [
+        45,
+        60
+      ],
+      "deployRects": {
+        "normal": [
+          34,
+          38,
+          20,
+          30
+        ],
+        "bossLeft": [
+          1,
+          5,
+          22,
+          30
+        ],
+        "bossRight": [
+          1,
+          5,
+          30,
+          38
+        ]
+      },
+      "battle": {
+        "normal": {
+          "r0": 34,
+          "r1": 38,
+          "c0": 20,
+          "c1": 30
+        },
+        "prep": {
+          "r0": 32,
+          "r1": 38,
+          "c0": 18,
+          "c1": 30
+        },
+        "unite": {
+          "r0": 34,
+          "r1": 38,
+          "c0": 11,
+          "c1": 49
+        },
+        "boss": {
+          "r0": 0,
+          "r1": 5,
+          "c0": 10,
+          "c1": 50
+        },
+        "bossPrep": {
+          "r0": 0,
+          "r1": 5,
+          "c0": 20,
+          "c1": 30
+        }
+      },
+      "pen": {
+        "r0": 40,
+        "r1": 44,
+        "c0": 22,
+        "c1": 28
+      },
+      "mirrorCol": 60
+    },
+    "rows": [
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffSfffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffSfffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    ],
+    "tiles": {
+      "r": {
+        "tileKey": "tile_road",
+        "height": "LOW",
+        "buildable": "ALL",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": null,
+        "bb": {}
+      },
+      "f": {
+        "tileKey": "tile_floor",
+        "height": "LOW",
+        "buildable": "NONE",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": null,
+        "bb": {}
+      },
+      "p": {
+        "tileKey": "tile_floor",
+        "height": "LOW",
+        "buildable": "MELEE",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": null,
+        "bb": {}
+      },
+      "#": {
+        "tileKey": "tile_forbidden",
+        "height": "HIGH",
+        "buildable": "RANGED",
+        "passable": "FLY",
+        "groundPassable": false,
+        "flyPassable": true,
+        "special": null,
+        "bb": {}
+      },
+      "X": {
+        "tileKey": "tile_forbidden",
+        "height": "HIGH",
+        "buildable": "NONE",
+        "passable": "NONE",
+        "groundPassable": false,
+        "flyPassable": false,
+        "special": null,
+        "bb": {}
+      },
+      "a": {
+        "tileKey": "tile_achand",
+        "height": "HIGH",
+        "buildable": "NONE",
+        "passable": "FLY",
+        "groundPassable": false,
+        "flyPassable": true,
+        "special": null,
+        "bb": {}
+      },
+      "b": {
+        "tileKey": "tile_fence_bound",
+        "height": "LOW",
+        "buildable": "ALL",
+        "passable": "FLY",
+        "groundPassable": false,
+        "flyPassable": true,
+        "special": null,
+        "bb": {}
+      },
+      "S": {
+        "tileKey": "tile_start",
+        "height": "LOW",
+        "buildable": "NONE",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": "start",
+        "bb": {}
+      },
+      "E": {
+        "tileKey": "tile_end",
+        "height": "LOW",
+        "buildable": "NONE",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": "end",
+        "bb": {}
+      },
+      "I": {
+        "tileKey": "tile_telin",
+        "height": "LOW",
+        "buildable": "NONE",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": "telin",
+        "bb": {}
+      },
+      "O": {
+        "tileKey": "tile_telout",
+        "height": "LOW",
+        "buildable": "NONE",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": "telout",
+        "bb": {}
+      },
+      "m": {
+        "tileKey": "tile_mire",
+        "height": "LOW",
+        "buildable": "ALL",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": null,
+        "bb": {},
+        "terrain": "mire"
+      },
+      "g": {
+        "tileKey": "tile_smog",
+        "height": "LOW",
+        "buildable": "ALL",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": null,
+        "bb": {},
+        "terrain": "smog"
+      },
+      "d": {
+        "tileKey": "tile_deepsea",
+        "height": "LOW",
+        "buildable": "NONE",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": null,
+        "bb": {},
+        "terrain": "deepsea"
+      },
+      "i": {
+        "tileKey": "tile_infection",
+        "height": "LOW",
+        "buildable": "ALL",
+        "passable": "ALL",
+        "groundPassable": true,
+        "flyPassable": true,
+        "special": null,
+        "bb": {},
+        "terrain": "infection"
+      },
+      "-": {
+        "tileKey": "tile_forbidden",
+        "height": "HIGH",
+        "buildable": "NONE",
+        "passable": "NONE",
+        "groundPassable": false,
+        "flyPassable": false,
+        "special": null,
+        "bb": {},
+        "air": true
+      }
+    },
+    "devices": [],
+    "mapChars": [],
+    "special": {},
+    "runes": [],
+    "globalBuffs": [],
+    "deployTiles": {
+      "normal": {
+        "melee": [],
+        "rangedOnly": [],
+        "changedByDevices": []
+      },
+      "bossLeft": {
+        "melee": [],
+        "rangedOnly": [],
+        "changedByDevices": []
+      },
+      "bossRight": {
+        "melee": [],
+        "rangedOnly": [],
+        "changedByDevices": []
+      }
+    },
+    "groundPaths": {},
+    "groundPathsWithDevices": {},
+    "options": {
+      "characterLimit": 8,
+      "moveMultiplier": 0.5
+    },
+    "config": {}
+  }
+}

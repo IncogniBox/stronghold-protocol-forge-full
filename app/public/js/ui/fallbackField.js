@@ -24,7 +24,8 @@ import { html, TierChip } from './components.js';
 import { GEO } from '../../../shared/constants.js';
 import { itemIconUrl, tokenAvatarUrl, enemyIconUrl } from './assetUrls.js';
 import { avatarUrlOf, currentAppearanceLookup } from './portraitChain.js';
-import { layoutOf, mapRectOf } from '../render/layout.js';
+import { layoutOf, mapRectOf, isDualLayout } from '../render/layout.js';
+import { boardGeo } from '../render/drag.js';
 import { penRect } from '../render/pen.js';
 import { tileKey, hasFlag, UF, penPlacement, fieldTile, ownStandIn, ownDiyRecord } from './gameLogic.js';
 import { t } from '../../../shared/i18n.js';
@@ -39,10 +40,8 @@ function unitArt(m, info) {
   if (!m || !id) return null;
   if (info.side === 'enemy' || String(id).startsWith('enemy_')) return enemyIconUrl(m, id);
   if (String(id).startsWith('token_')) return tokenAvatarUrl(m, id);
-  const chars = m.chars || {};
-  if (chars[id]?.avatar) return chars[id].avatar;
-  if (String(id).endsWith('_2') && chars[id.slice(0, -2)]) return chars[id.slice(0, -2)].avatarE2 || chars[id.slice(0, -2)].avatar;
-  return null;
+  // 走统一解析链（0.2.4 起每一个头像 / 立绘消费点都接它）：同一颗棋子在结算页、手牌、补位板上是同一张图。
+  return avatarUrlOf(m, { isGolden: !!info.golden, assets: { avatar: id } }, { lookup: currentAppearanceLookup() });
 }
 
 /** Look of the stage tile (row, col) on the fallback board (stage coordinates). */
@@ -149,6 +148,8 @@ export function createFallbackView(host, opts = {}) {
   const tilePos = (L, row, col) => ({ x: (col - st.rect.c0) * L.tile, y: (st.rect.r1 - row) * L.tile });
   const handPos = (L, idx) => ({ x: idx * L.tile, y: (L.rows + 0.6) * L.tile });
   const tempPos = (L, idx) => ({ x: (GEO.TEMP_C0 + idx) * L.tile, y: (L.rows + 1.72) * L.tile });
+  /** 这张图棋盘的几何（整备行 / 临时整备行 / 棋盘矩形，棋盘坐标）：官方 = GEO 那一套，大图自己声明的那套。 */
+  const geoNow = () => boardGeo(layoutOf(st.stage), st.deployField || 'normal');
 
   // ---- pieces (prep) ---------------------------------------------------------------------------------------
   function pieceArt(p) {
@@ -299,7 +300,9 @@ export function createFallbackView(host, opts = {}) {
     const h = st.size.h || host.clientHeight || 1;
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 100;
     // the map's own pen band: `stage.config.enemy_place_rect` when the stage declares it, else `layoutOf(stage).pen`
-    const pen = penRect(st.stage);
+    // (or its mirrored `penRight` — a two-half map has one per side, and this side's own is the one shown)
+    const side = st.deployField === 'normalR' || st.deployField === 'bossR' ? 'R' : 'L';
+    const pen = penRect(st.stage, side);
     const cols = pen.c1 - pen.c0 + 1;
     const rows = pen.r1 - pen.r0 + 1;
     const top0 = rem * 1.3;
@@ -307,7 +310,7 @@ export function createFallbackView(host, opts = {}) {
     const bw = tile * cols;
     const left = Math.round(w / 2 - bw / 2);
     const top = Math.round(top0 + (h - top0 - rem * 0.5 - tile * rows) / 2);
-    const models = penPlacement(st.pen, { stage: st.stage });
+    const models = penPlacement(st.pen, { stage: st.stage, side });
     const cells = [];
     for (let r = pen.r1; r >= pen.r0; r--) {
       for (let c = pen.c0; c <= pen.c1; c++) {
@@ -435,7 +438,10 @@ export function createFallbackView(host, opts = {}) {
       // the rect the board draws, in BOARD coordinates: the server's / caller's own rect, else the map's own band of
       // that kind (shared/layout.js; official 19×21 → the historical GEO rects unchanged)
       st.rect = o && o.rect && Number.isFinite(o.rect.r0) ? { ...o.rect } : mapRectOf(L, kind);
-      st.deployField = kind === 'bossPrep' ? (o?.side === 'R' ? 'bossR' : 'bossL') : 'normal';
+      // a boss-prep camera = the boss half; a prep camera on a two-half map = the own ordinary half (by `side`)
+      const sideR = o?.side === 'R';
+      st.deployField = kind === 'bossPrep' ? (sideR ? 'bossR' : 'bossL')
+        : (isDualLayout(L) ? (sideR ? 'normalR' : 'normalL') : 'normal');
       st.camera = kind === 'bossPrep' ? 'prep' : st.camera;
       st.side = o?.side || 'L';
       schedule();
@@ -505,6 +511,7 @@ export function createFallbackView(host, opts = {}) {
       schedule();
     },
     highlightTiles(tiles, style) {
+      if (st.destroyed) return false;
       if (!tiles || !style) { st.highlight.clear(); st.hlGroups.clear(); schedule(); return; }
       if (typeof style === 'object' && style.group) {
         // a named group (direction wheel / selected unit range): replaced as a whole, drawn as a range tile
@@ -552,8 +559,9 @@ export function createFallbackView(host, opts = {}) {
       const br = root.querySelector('.ff-board')?.getBoundingClientRect();
       if (!br) return null;
       let p = null;
-      if (row === GEO.HAND_ROW && col >= 0 && col < GEO.HAND_SIZE && st.mode === 'prep') p = handPos(L, col);
-      else if (row === GEO.TEMP_ROW && col >= GEO.TEMP_C0 && col < GEO.TEMP_C0 + GEO.TEMP_SIZE && st.mode === 'prep') p = tempPos(L, col - GEO.TEMP_C0);
+      const G = geoNow();
+      if (row === G.HAND_ROW && col >= 0 && col < GEO.HAND_SIZE && st.mode === 'prep') p = handPos(L, col);
+      else if (row === G.TEMP_ROW && col >= GEO.TEMP_C0 && col < GEO.TEMP_C0 + GEO.TEMP_SIZE && st.mode === 'prep') p = tempPos(L, col - GEO.TEMP_C0);
       else if (row >= st.rect.r0 && row <= st.rect.r1 && col >= st.rect.c0 && col <= st.rect.c1) p = tilePos(L, row, col);
       if (!p) return null;
       const x0 = br.left + p.x, y0 = br.top + p.y, s = L.tile;

@@ -9,9 +9,9 @@ export const FX_KINDS = Object.freeze({
   // 颂乐人偶 盟约的 Fever 状态（工坊包 workshop/ave-mujica 的战斗逻辑 `server.battle`, 20 s 团队爆发）: a magenta team aura
   fever: { a: 'buff', c: 0xff5fa2, dur: 20 },
   // 多索雷斯 盟约的「特殊水地形」（工坊包 workshop/dossoles 的战斗逻辑 `server.battle`）: the sim re-sends the tile set
-  // every 0.6 game s with `{ tiles: [[r, c]…] }`, and the 'telegraph' archetype pulses that explicit tile list on the
-  // ground (`tileFlash`, warn alpha) — a light-blue ripple over each water tile, never a radius around an anchor
-  dosWater: { a: 'telegraph', c: 0x8fe0ff, dur: 1.2 },
+  // every 0.6 game s with `{ tiles: [[r, c]…] }`. `overlay` = 常驻地块底色（**不闪**、不叠加，同一 `key` 原地替换），
+  // 颜色比原先的电光蓝暗一档（业主 2026-10-21：覆盖太亮、还有闪动）。
+  dosWater: { a: 'overlay', c: 0x3f7f9f, dur: 1.2, alpha: 0.1 },
   // blasts
   // [ASSUMED] Clementia's S3 uses the shared blast placeholder until her official effect is ported.
   blast: { a: 'blast', c: 0xffb35c },

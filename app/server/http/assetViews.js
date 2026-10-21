@@ -14,13 +14,16 @@
 //   * The committed data/assets.json is never written: a view is built in memory from the file and the index, again
 //     when either changes (the file's size / mtime, the index's generation), and once after every index build, so the
 //     index knows the model lists before any page asks.
-//   * No index, or not ready yet: no view (`get` → null) and the files go out as they are.
+//   * Optional local operator chars merge into the served assets manifest before cosmetic layers (§36.28).
+//     Without hashing they use plain URLs. Without local chars or a ready index, files go out as they are.
 
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { hashedPath } from '../../shared/assetPaths.js';
 import { hash16 } from './assetIndex.js';
 import { noopLog } from './config.js';
+import { mergeLocalChars } from '../plugins/artReferences.js';
+export { mergeLocalChars } from '../plugins/artReferences.js';
 
 /** The manifests that have a view, by their name under data/. */
 export const VIEW_MANIFESTS = Object.freeze(['assets.json', 'local-assets.json', 'local-fx.json']);
@@ -83,7 +86,7 @@ export function rewriteManifest(doc, name, index) {
     if (typeof v === 'string') return ART_URL.test(v) ? own(v) : v;
     if (Array.isArray(v)) return v.map(walk);
     if (!isObj(v)) return v;
-    if (name === 'assets.json' && isSpine(v)) {
+    if ((name === 'assets.json' || name === 'local-assets.json') && isSpine(v)) {
       const h = model(spineUrls(v));
       const out = {};
       for (const [k, x] of Object.entries(v)) {
@@ -103,7 +106,11 @@ export function rewriteManifest(doc, name, index) {
     for (const [g, entries] of Object.entries(doc.groups)) {
       if (g.startsWith('spine/') && isObj(entries)) {
         const names = Object.keys(entries).filter((n) => isObj(entries[n]) && typeof entries[n].path === 'string').sort();
-        const h = names.length ? model(names.map((n) => entries[n].path)) : null;
+        const [, kind, id, face] = g.split('/');
+        const operator = kind === 'char' ? doc.chars?.[id]?.spine?.[face] : null;
+        // The same model appears in chars and groups: use its skeleton/atlas/pages order in both views.
+        const urls = isSpine(operator) ? spineUrls(operator) : names.map((n) => entries[n].path);
+        const h = urls.length ? model(urls) : null;
         groups[g] = {};
         for (const [n, e] of Object.entries(entries)) {
           groups[g][n] = h && isObj(e) && typeof e.path === 'string' ? { ...e, path: hashedPath(e.path, h) } : walk(e);
@@ -117,7 +124,7 @@ export function rewriteManifest(doc, name, index) {
 
 /**
  * The views of one server.
- * @param {{ dataDir: string, index: ReturnType<typeof import('./assetIndex.js').createAssetIndex>, log?: object,
+ * @param {{ dataDir: string, index?: ReturnType<typeof import('./assetIndex.js').createAssetIndex> | null, log?: object,
  *           override?: Map<string, Buffer> | null }} opts
  *   override: the `/data/…` bodies a 创意工坊 pack made MERGED (server/http/workshop.js `buildWorkshopDataFiles`, keyed by
  *   the file's name without `.json`) — a view manifest the packs touch is rewritten from the merged object, so the
@@ -131,11 +138,16 @@ export function createManifestViews({ dataDir, index, log = noopLog, override = 
   const pending = new Map();
   const warned = new Set();
 
-  const pushModels = () => index.setModels([...cache.values()].flatMap((c) => c.models));
+  const pushModels = () => index?.setModels([...cache.values()].flatMap((c) => c.models));
+  const plainIndex = { hashOf: () => null, modelHash: () => null };
 
-  /** Build (or reuse) the view of `name`; null without the file, while the index is not ready or empty, or for a broken file. */
+  /** Build a hashed view or a plain local-operator merge; otherwise leave ordinary file serving alone. */
   async function build(name) {
-    if (!index.ready || !index.size) return null;
+    // Local operator art also works with SP_ASSET_INDEX=0 and during the initial hash scan.
+    const localFile = path.join(dir, 'local-assets.json');
+    const localStat = name === 'assets.json' ? await fsp.stat(localFile).catch(() => null) : null;
+    const indexed = index?.ready && index.size > 0;
+    if (!indexed && !localStat) return null;
     const file = path.join(dir, name);
     // the packs' merged body for this manifest, when one exists (a pack with art / voices / skins touches `assets`)
     const alt = override?.get(name.replace(/\.json$/, '')) || null;
@@ -144,7 +156,7 @@ export function createManifestViews({ dataDir, index, log = noopLog, override = 
       if (cache.delete(name)) pushModels();
       return null;
     }
-    const key = `${index.generation}|${alt ? `w${alt.length}` : `${st.size}|${st.mtimeMs}`}`;
+    const key = `${index?.generation || 0}|${alt ? `w${alt.length}` : `${st.size}|${st.mtimeMs}`}|${localStat?.size || 0}|${localStat?.mtimeMs || 0}`;
     const hit = cache.get(name);
     if (hit && hit.key === key) return hit.view;
     let doc;
@@ -156,8 +168,15 @@ export function createManifestViews({ dataDir, index, log = noopLog, override = 
       pushModels();
       return null;
     }
+    if (localStat) {
+      let local;
+      try { local = JSON.parse(await fsp.readFile(localFile, 'utf8')); } catch { /* optional local art */ }
+      const merged = mergeLocalChars(doc, local);
+      if (!indexed && merged === doc) return null;
+      doc = merged;
+    }
     // one synchronous step: the view and the model lists the index checks a model's URLs against
-    const { doc: out, models, hashed, plain } = rewriteManifest(doc, name, index);
+    const { doc: out, models, hashed, plain } = rewriteManifest(doc, name, indexed ? index : plainIndex);
     const body = Buffer.from(JSON.stringify(out));
     const view = { body, hash: hash16(body), hashed, plain };
     cache.set(name, { key, view, models });
@@ -177,8 +196,8 @@ export function createManifestViews({ dataDir, index, log = noopLog, override = 
 
   const rebuildAll = () => Promise.all(VIEW_MANIFESTS.map(get));
   // after every build that changed the hashes (and the first one): the views, and with them the index's model lists
-  index.onChange(() => { rebuildAll(); });
-  index.whenReady().then(() => rebuildAll(), () => {});
+  index?.onChange(() => { rebuildAll(); });
+  index?.whenReady().then(() => rebuildAll(), () => {});
 
   return {
     get,

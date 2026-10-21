@@ -730,8 +730,10 @@ describe('workshop editor: the 3D preview mounts (read-only, and narrow)', () =>
     // Every one of these was found by rendering a real map and reading the frame back. Each failure mode is silent
     // (the canvas just looks black or half-empty), so they are asserted rather than left to the next reader to rediscover.
     const src = await fetch(`${editor.url}/stage3d.js`).then((r) => r.text());
-    // 1. BoardScene builds only the tiles inside its current `area`; the default is a PARTIAL map (137 of 399 tiles)
-    assert.match(src, /setArea\(AREAS\.all\)/, 'must build the whole board (AREAS.all), not the default partial area');
+    // 1. BoardScene builds only the tiles inside its current `area`; the default is a PARTIAL map (137 of 399 tiles).
+    //    `areaFor('all', layout)` is the WHOLE window of the map actually loaded (the official 19×21 rect itself for an
+    //    official record), so a 45×60 map is built whole instead of as a patch in its bottom-left corner.
+    assert.match(src, /setArea\(areaFor\('all'/, 'must build the whole board (areaFor("all", layout) = the map\'s own window), not the default partial area');
     // 2. everything outside the focus rect is dimmed to 28% — without this the board is nearly black
     assert.match(src, /setFocus\(null\)/, 'must light the whole board (setFocus(null) = everything lit)');
     // 3. the scene fogs 17→36 into a near-black colour, tuned for the game\'s ~16-unit camera

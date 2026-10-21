@@ -1,0 +1,128 @@
+/*
+   screens/pre-recon.css — PHASE.PRE_RECON 「预重构」（js/screens/preRecon.js，模式扩展-重构模拟 · 第一轮骨架）。
+   与策略选择屏同一语言：左侧状态列（draft-order 的 .dorder 模子）、中间三块内容（盟约倾向 / 试炼首领 / 重构走向）、
+   右侧摘要与提交。冰蓝（--ice）是本模式的点缀色（大厅入口 .hub-entry--ice、房间选队条 .team-bar 同源）。
+*/
+
+.pre-recon { position: relative; display: flex; flex-direction: column; height: 100%; }
+
+.prc__main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(2.2rem, 2.8rem) minmax(0, 1fr) minmax(2.6rem, 3.2rem);
+  gap: .24rem;
+  padding: .2rem .4rem .3rem;
+}
+
+/* ---- left: 提交状态列 -------------------------------------------------------------------------------- */
+.prc__players { display: flex; flex-direction: column; gap: .1rem; min-height: 0; overflow: auto; }
+.prc-p {
+  display: flex;
+  align-items: center;
+  gap: .1rem;
+  padding: .08rem .12rem;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, .32);
+}
+.prc-p.is-self { border-color: var(--mint-a35); }
+.prc-p.is-done { border-color: var(--mint-600); }
+.prc-p__text { min-width: 0; display: flex; flex-direction: column; }
+.prc-p__text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prc-p__ai { margin-left: .06rem; font-size: calc(.11 * var(--t)); color: var(--text-dim); }
+.prc-p__box { margin-left: auto; color: var(--text-dim); }
+.prc-p.is-done .prc-p__box { color: var(--mint-400); }
+.prc__hint { margin: .06rem 0 0; font-size: calc(.13 * var(--t)); }
+
+/* ---- centre: 三块内容 --------------------------------------------------------------------------------- */
+.prc__body { display: flex; flex-direction: column; gap: .18rem; min-height: 0; overflow: auto; }
+.prc-block { padding: .16rem .2rem .2rem; }
+.prc-block__note { margin: .04rem 0 .14rem; font-size: calc(.14 * var(--t)); color: var(--text-lo); }
+
+.prc-bonds__group + .prc-bonds__group { margin-top: .12rem; }
+.prc-bonds__ghead { display: flex; align-items: baseline; gap: .1rem; margin-bottom: .08rem; color: var(--text-md); }
+.prc-bonds__ghead b { margin-left: auto; color: var(--ice); }
+.prc-bonds__kind { margin-left: .06rem; font-size: calc(.13 * var(--t)); font-weight: 500; color: var(--text-dim); }
+/* 盟约瓦片行（简报的盟约行同一套画法：圆盘 + 图标 + 名称，见 ui/matchInfo.js MatchBondRow）。 */
+.prc-bonds__row { display: flex; flex-wrap: wrap; gap: .14rem .1rem; }
+.prc-bond { position: relative; min-width: .62rem; width: max-content; max-width: 100%; display: flex; justify-content: center;
+  padding: .06rem .04rem .04rem; border: 1px solid transparent; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+.prc-bond:hover:not(.is-locked) { border-color: var(--ice); }
+.prc-bond.is-on { border-color: var(--ice); box-shadow: inset 0 0 0 1px var(--ice), 0 0 .12rem var(--ice-a20); }
+/* 只是「这一格满了」（到上限或被另一组选走），不是「本局禁用」—— 所以不画 BondDisc 的 ✕ 徽标。 */
+.prc-bond.is-locked .bond__core { filter: grayscale(1) brightness(.6); }
+.prc-bond.is-locked .bond__name { color: var(--text-dim); }
+.prc-bond .bond__name { font-size: calc(.15 * var(--t)); max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; }
+
+.prc-trials { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .1rem; }
+.prc-trial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .04rem;
+  padding: .12rem .08rem;
+  border: 1px dashed var(--line-2);
+  background: rgba(0, 0, 0, .22);
+}
+.prc-trial__round { font-weight: 700; letter-spacing: .1em; color: var(--ice); }
+.prc-trial__boss { display: inline-flex; align-items: center; gap: .05rem; font-size: calc(.13 * var(--t)); }
+.prc-trial__boss .icon { width: .14rem; height: .14rem; }
+
+/* 带候选的回合：候选池（单选）。一条候选 = 一位或两位·重构首领（第 8 回合第 3 项是两位，业主确认算**一次**选择），
+   所以瓦片里排的是「首领单元」（图标 + 名字）—— 两只并排，点一下选整条候选。 */
+.prc-trials__pool { margin-top: .1rem; }
+.prc-trials__phead { display: flex; align-items: baseline; gap: .1rem; margin-bottom: .06rem; color: var(--text-md); font-size: calc(.13 * var(--t)); }
+.prc-trials__row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .1rem; }
+.prc-trial-pick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .14rem;
+  padding: .1rem .08rem;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, .32);
+  color: var(--text-hi);
+  cursor: pointer;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.prc-trial-pick:hover { border-color: var(--ice); }
+.prc-trial-pick.is-on { border-color: var(--ice); box-shadow: inset 0 0 0 1px var(--ice), 0 0 .12rem var(--ice-a20); }
+.prc-trial-pick.is-on .prc-trial-pick__name { color: var(--ice); }
+.prc-trial-pick__unit { display: flex; flex-direction: column; align-items: center; gap: .04rem; min-width: 0; }
+.prc-trial-pick__icon { display: flex; align-items: center; justify-content: center; width: .54rem; height: .54rem; }
+.prc-trial-pick__icon img, .prc-trial-pick__icon .icon { width: 100%; height: 100%; object-fit: contain; }
+.prc-trial-pick__name { font-size: calc(.13 * var(--t)); text-align: center; overflow-wrap: anywhere; }
+
+.prc-opts__group + .prc-opts__group { margin-top: .12rem; }
+.prc-opts__ghead { display: flex; align-items: baseline; gap: .1rem; margin-bottom: .08rem; color: var(--text-md); }
+.prc-opts__list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .1rem; }
+.prc-opt {
+  display: flex;
+  flex-direction: column;
+  gap: .05rem;
+  padding: .1rem .14rem;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, .32);
+  color: var(--text-hi);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.prc-opt:hover { border-color: var(--ice); }
+.prc-opt.is-on { border-color: var(--ice); box-shadow: inset 0 0 0 1px var(--ice), 0 0 .12rem var(--ice-a20); }
+.prc-opt.is-on .prc-opt__name { color: var(--ice); }
+.prc-opt__name { letter-spacing: .06em; }
+.prc-opt__desc { font-size: calc(.13 * var(--t)); color: var(--text-lo); }
+
+/* ---- right: 摘要与提交 -------------------------------------------------------------------------------- */
+.prc__side { display: flex; flex-direction: column; gap: .12rem; padding: .16rem .2rem .2rem; height: fit-content; }
+.prc-sum { margin: 0; display: flex; flex-direction: column; gap: .08rem; font-size: calc(.14 * var(--t)); }
+.prc-sum dt { color: var(--text-dim); font-size: calc(.12 * var(--t)); letter-spacing: .08em; }
+.prc-sum dd { margin: 0; color: var(--text-hi); }
+.prc__status { display: flex; align-items: center; gap: .06rem; margin: 0; font-size: calc(.14 * var(--t)); }
+.prc__status .icon { width: .16rem; height: .16rem; }
+
+@media (max-width: 1100px) {
+  .prc__main { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+  .prc__side { height: auto; }
+}

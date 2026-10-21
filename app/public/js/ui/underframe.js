@@ -189,8 +189,10 @@ export function tempRowRule(ready) {
  * @param {{ view: any, count: number, items?: number, label?: boolean, ready?: boolean }} props
  */
 export function TempRowNotice({ view, count, items = 0, label = true, ready = false }) {
-  const a = useTileScreen(view, GEO.TEMP_ROW, GEO.TEMP_C0);
-  const b = useTileScreen(view, GEO.TEMP_ROW, GEO.TEMP_C0 + GEO.TEMP_SIZE - 1);
+  // 临时整备区那一行的位置是**这张图自己**的（drag.boardGeo：官方 8 / 列 4–8；一张把普通带放大到 5×11 的图整行下移）
+  const G = (view && typeof view.boardGeo === 'function' ? view.boardGeo() : null) || GEO;
+  const a = useTileScreen(view, G.TEMP_ROW, G.TEMP_C0);
+  const b = useTileScreen(view, G.TEMP_ROW, G.TEMP_C0 + G.TEMP_SIZE - 1);
   let rem = 100;
   try { rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 100; } catch { /* default */ }
   const vw = globalThis.innerWidth || 1920;

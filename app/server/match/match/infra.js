@@ -5,6 +5,7 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { buildDeployMap } from '../board.js';
+import { isDualLayout } from '../../../shared/layout.js';
 
 export class MatchInfra {
   /** Run a callback with error isolation, then flush the views. */
@@ -49,10 +50,27 @@ export class MatchInfra {
   setDeadline(seconds, fn, { silent = false } = {}) {
     this.cancel(this._phaseTimer);
     this._phaseTimer = null;
-    if (!(seconds > 0) || typeof fn !== 'function') { this.deadline = 0; return; }
+    if (this.test === true) { this._testHeld = null; this._testArmed = null; }
+    // Test matches can hold the callback (g.test timers off). A normal match never enters this branch:
+    // scaling the delay to 0 would fire it at once, and cancelling it without keeping fn would stick
+    // a phase whose only advance is this timer (BATTLE_CHECK → startRound). [ASSUMED] re-arm uses the
+    // original duration, not the leftover.
+    if (this.test === true && this.testTimers === false && seconds > 0 && typeof fn === 'function') {
+      this.deadline = 0;
+      const held = { seconds, fn, silent: !!silent };
+      this._testHeld = held;
+      this._testArmed = held;
+      return;
+    }
+    if (!(seconds > 0) || typeof fn !== 'function') {
+      this.deadline = 0;
+      if (this.test === true) { this._testHeld = null; this._testArmed = null; }
+      return;
+    }
     const ms = this.scaled(seconds * 1000);
     this.deadline = silent ? 0 : this.sched.now() + ms;
-    this._phaseTimer = this.later(ms, () => { this._phaseTimer = null; fn(); });
+    this._phaseTimer = this.later(ms, () => { this._phaseTimer = null; if (this.test === true) { this._testArmed = null; this._testHeld = null; } fn(); });
+    if (this.test === true) this._testArmed = { seconds, fn, silent: !!silent };
   }
 
   /**
@@ -142,14 +160,54 @@ export class MatchInfra {
   }
 
   /**
+   * 这张图的普通带是不是**左右两半**（shared/layout.js `isDualLayout` ⇒ 声明了 `normalLeft` / `normalRight`）：是的话，
+   * 普通回合也像 boss 回合那样**配对同场**，每位棋手有自己的半场（业主 2026-10-21「普通对战部署区左右各一位玩家同时在
+   * 场」）。官方图与所有单块普通带的图恒 false，行为逐字节不变。
+   */
+  get dualNormal() { return isDualLayout(this.layout); }
+
+  /** 存活棋手按座位排序（配对与半场归属的唯一顺序，服务端与客户端 `prepPair` 同一条）。 */
+  _aliveBySeat() { return this.alivePlayers().slice().sort((a, b) => a.seat - b.seat); }
+
+  /**
+   * 一位棋手在**普通带**上的半场：一张左右两半的图上，存活棋手按座位两两一组，组内第 0 位 'L'、第 1 位 'R'；单块普通带
+   * 的图恒 null（没有半场）。
+   * @returns {'L'|'R'|null}
+   */
+  normalSideOf(ps) {
+    if (!ps || !this.dualNormal) return null;
+    const i = this._aliveBySeat().findIndex((p) => p.playerId === ps.playerId);
+    return i < 0 ? null : (i % 2 === 1 ? 'R' : 'L');
+  }
+
+  /**
+   * 普通回合的**同场分组**：单块普通带 = 每位棋手一个组（一组的 players 长度 1 ⇒ 与从前完全一样），左右两半 = 按座位配对
+   * （一组至多两位）。`side` 是组内的半场。
+   * @returns {Array<Array<{ ps: object, side: 'L'|'R' }>>}
+   */
+  normalGroups() {
+    const alive = this._aliveBySeat();
+    if (!this.dualNormal) return alive.map((ps) => [{ ps, side: 'L' }]);
+    const out = [];
+    for (let i = 0; i < alive.length; i += 2) {
+      out.push(alive.slice(i, i + 2).map((ps, j) => ({ ps, side: j === 1 ? 'R' : 'L' })));
+    }
+    return out;
+  }
+
+  /**
    * The field a player deploys on (server/match/board.js DEPLOY_FIELDS): in a boss round (最终攻势 / 隐秘核心, from its
    * ROUND_START on — the pairing exists before PlayerState.startRound's recompute) the player's half of the boss field,
-   * 'bossL' or 'bossR' (bossGroupOf); otherwise its own normal board. User playtest #5 item 7.
-   * @returns {'normal'|'bossL'|'bossR'}
+   * 'bossL' or 'bossR' (bossGroupOf); on a map whose ordinary band is a mirrored pair (dualNormal) its own half of that
+   * band, 'normalL' / 'normalR'; otherwise its own ordinary board. User playtest #5 item 7.
+   * @returns {'normal'|'normalL'|'normalR'|'bossL'|'bossR'}
    */
   deployFieldOf(ps) {
     const g = this.bossGroupOf(ps);
-    return !g ? 'normal' : g.side === 'R' ? 'bossR' : 'bossL';
+    if (g) return g.side === 'R' ? 'bossR' : 'bossL';
+    const side = this.normalSideOf(ps);
+    if (side) return side === 'R' ? 'normalR' : 'normalL';
+    return 'normal';
   }
 
   /**

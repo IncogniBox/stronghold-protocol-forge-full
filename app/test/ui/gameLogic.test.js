@@ -722,7 +722,7 @@ describe('keyboard & settings', () => {
   test('sanitizeSettings', () => {
     assert.deepEqual(sanitizeSettings(null), { ...DEFAULT_SETTINGS });
     assert.deepEqual(sanitizeSettings({ bgm: 3, sfx: -1, voice: 2, muted: 'yes', damageNumbers: false, quality: 'ultra' }),
-      { bgm: 1, sfx: 0, voice: 1, muted: false, damageNumbers: false, officialDamageNumbers: false, ammoCount: false, combatMetrics: false, mysticEnergy: false, workshopSkins: true, workshopSources: true, quality: 'high', officialFx: 'auto', frameRate: 60, textSize: 'sm', keys: { ...DEFAULT_SETTINGS.keys }, voiceLang: DEFAULT_VOICE_LANG, voiceNative: false, voiceLangByChar: {} },
+      { bgm: 1, sfx: 0, voice: 1, muted: false, damageNumbers: false, officialDamageNumbers: false, ammoEnergyCount: false, prepDeployFold: true, otherSkins: true, combatMetrics: false, workshopSkins: true, workshopSources: true, quality: 'high', officialFx: 'auto', frameRate: 60, textSize: 'sm', keys: { ...DEFAULT_SETTINGS.keys }, voiceLang: DEFAULT_VOICE_LANG, voiceNative: false, voiceLangByChar: {} },
       'a saved profile without `keys` (before 0.2.0) gets the default key map (test/ui/feedback5-hotkeys.test.js)');
     // 工坊外观 (workshopSkins): a boolean, default ON, and only a real boolean survives — a hand-edited
     // localStorage must not turn the gate into something the chain reads as "off" by accident.
@@ -752,6 +752,11 @@ describe('keyboard & settings', () => {
     // 配音语言 (v0.7.1): a profile saved before it existed falls back to 默认配音 (DEFAULT_VOICE_LANG) and no per-operator overrides
     assert.equal(sanitizeSettings({ bgm: 0.5 }).voiceLang, DEFAULT_VOICE_LANG);
     assert.deepEqual(sanitizeSettings({ bgm: 0.5 }).voiceLangByChar, {});
+    // 显示其他玩家的皮肤 (docs/SKINS.md): on by default, and off only when the profile says so
+    assert.equal(DEFAULT_SETTINGS.otherSkins, true);
+    assert.equal(sanitizeSettings({ bgm: 0.5 }).otherSkins, true, 'a profile saved before the switch draws other players\' skins');
+    assert.equal(sanitizeSettings({ otherSkins: false }).otherSkins, false);
+    assert.equal(sanitizeSettings({ otherSkins: 'no' }).otherSkins, true, 'only `false` turns it off (the renderer reads it the same way)');
     assert.equal(sanitizeSettings({ bgm: 0.5 }).voice, DEFAULT_SETTINGS.voice, 'a saved profile without `voice` gets the default');
     // 配音语言 (v0.7.1, 0.9.0): the default dub is the manifest's DEFAULT_VOICE_LANG (jp — the owner's decision, the dub
     // the released bundle ships) and every dub of VOICE_LANGS is accepted; a junk value falls back to the default.

@@ -107,6 +107,7 @@ export const actions = {
   // `'equipped items are locked'`，而界面**根本不画**这个按钮（`unequipAllowed()`），所以它正常只在 `allow` 档出现。
   unequip: (itemUid) => act('g.unequip', { itemUid }),
   reward: (idx) => act('g.reward', { idx }),
+  offer: (offer, idx, refresh = false, cardId) => act(refresh ? 'g.offerRefresh' : 'g.offer', { offerId: offer.id, pluginId: offer.pluginId, seq: offer.seq, idx, cardId }),
   choice: (idx, choiceId) => act('g.choice', choiceId === undefined ? { idx } : { idx, choiceId }),
   ready: (ready) => act('g.ready', { ready }, { sfx: ready ? 'ready' : 'back' }),
   emote: (id) => act('g.emote', { id }, { quiet: true }),

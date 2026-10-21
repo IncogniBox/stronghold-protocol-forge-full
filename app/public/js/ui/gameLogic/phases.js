@@ -16,12 +16,14 @@ const PREP_PHASES = new Set([PHASE.PREP, PHASE.SP_DRAFT, PHASE.ROUND_START]);
 /**
  * Which screen family a phase belongs to.
  * @param {string} phase
- * @returns {'loading'|'briefing'|'draft'|'boot'|'prep'|'combat'|'settle'|'result'}
+ * @returns {'loading'|'briefing'|'draft'|'prerecon'|'boot'|'prep'|'combat'|'settle'|'result'}
  */
 export function phaseMode(phase) {
   if (!phase) return 'loading';
   if (phase === PHASE.INFO_CHECK) return 'briefing';
   if (phase === PHASE.BAND_DRAFT) return 'draft';
+  // 预重构（模式扩展-重构模拟）：策略选择之后、协议启动之前的独立一屏（js/screens/preRecon.js）
+  if (phase === PHASE.PRE_RECON) return 'prerecon';
   if (phase === PHASE.BATTLE_CHECK) return 'boot';
   if (phase === PHASE.RESULT) return 'result';
   if (phase === PHASE.SETTLE) return 'settle';
@@ -52,6 +54,8 @@ export function phaseBanner(phase, pub, { alive = true, spectator = false } = {}
   const r = int(pub?.round, 0);
   switch (phase) {
     case PHASE.BATTLE_CHECK: return { title: t('协议启动'), micro: 'PROTOCOL START', tone: 'mint', sub: t('模拟即将开始'), duration: 2600 };
+    // 预重构（模式扩展-重构模拟）：60 秒钉下盟约倾向与重构走向（config.timers.preRecon）
+    case PHASE.PRE_RECON: return { title: t('预重构'), micro: 'PRE-RECON', tone: 'ice', sub: t('定下本局的重构走向') };
     // round income goes to the seats still in only (server/match/match/phases.js startRound; eliminate() zeroes funds
     // and pendingFunds): an eliminated player or a spectator seat reads 观战中, never 资金已到账 (GitHub #236, PR #237)
     case PHASE.ROUND_START: return { title: t('第 {r} 回合', { r }), micro: `ROUND ${String(r).padStart(2, '0')}`, tone: 'mint',
@@ -249,6 +253,8 @@ export function phaseTotalSeconds(pub, config, myId = null) {
     // one countdown: the current turn's (m.public.draft.turnSeconds = Match.BAND_TURN_SECONDS; user playtest #4 item 4)
     case PHASE.BAND_DRAFT: return num(pub.draft?.turnSeconds) ?? num(timers.bandTurn) ?? 30;
     case PHASE.BATTLE_CHECK: return num(timers.battleCheck) ?? 3;
+    // 预重构（模式扩展-重构模拟）：config.timers.preRecon（缺档 60 s，与 server/match/gamedata.js DEFAULTS 同值）
+    case PHASE.PRE_RECON: return num(timers.preRecon) ?? 60;
     case PHASE.SP_DRAFT: {
       const sp = normalizeSp(pub.sp, pub.players);
       const first = !sp || sp.pickedCount === 0;

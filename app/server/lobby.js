@@ -89,6 +89,13 @@
 //     and a change while it runs is stored for the next match (ROOM_STARTED 'stored for the next match'). Every
 //     `welcome` carries `diyKitted` (welcomeInfo): the operators a DIY slot may field, so the client's picker offers
 //     exactly what the server accepts.
+//   * 干员皮肤 (docs/SKINS.md): room.skins { skins } — `{ [charId]: skinId }`, the appearance each operator wears — is
+//     a plain map of charIds to skinIds, at most SKIN_LIMITS.entries (256 [ASSUMED]); a bad shape is BAD_MSG and does
+//     not clear the stored choice. A charId the room's content does not have is dropped (shared/protocol.js
+//     checkSkinSelection). An unknown skinId can do nothing worse than fail to resolve in the client's spineEntry.
+//     Stored on the session and the seat. Unlike
+//     the settings above there is NO phase gate: a match receives seats[].skins when it starts AND takes a later change
+//     at once (match.setSkins, any phase), because the choice is public — a teammate sees your model — and cosmetic.
 //   * Content identity (DESIGN §34, the plugin system's first step): the lobby is given the server's vanilla content
 //     (server/plugins/identity.js; none in unit tests that build a Lobby without it). Every `welcome` carries
 //     `content: { vanilla: <cs> }` — and `plugins: <n>` when this server has n > 0 unofficial plugins (every class but a
@@ -174,10 +181,11 @@
 //     the match are the grace timers already running for its disconnected seats.
 
 import { randomBytes, randomInt } from 'node:crypto';
-import { DIFFICULTIES, ERR, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor, maxSeatsFrom, clampSeats } from '../shared/constants.js';
+import { DIFFICULTIES, ERR, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor, maxSeatsFrom, clampSeats, RECON } from '../shared/constants.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkConflictPicks, checkDiyPicks, charPotentialChanges, PACK_MSG_LIMITS, CHAT_LIMITS } from '../shared/protocol.js';
 import { modSetOf, isModId, modSetDrift } from '../shared/modIdentity.js';
 import { normalizeSupportConfig, checkSupport, supportPicker, supportCapacity, supportTiers } from '../shared/support.js';
+import { checkSkinSelection, operatorCharIds } from '../shared/protocol.js';
 import { encode, isDroppable, isErrCode, sendRaw, sendSession } from './net.js';
 import { getData as defaultGetData, lookup } from './data.js';
 import { Match as DefaultMatch } from './match/Match.js';
@@ -190,7 +198,9 @@ import { getDefaultRegistry } from './match/effectsMeta.js';
 import { KITTED_CHARS } from './sim/content/kits/index.js';
 import { MatchmakeQueue } from './matchmaking.js';
 import { isContentHash } from '../shared/plugins/identity.js';
+import { ruleOption } from '../shared/plugins/rules.js';
 import { msg, wireMessage } from '../shared/i18n.js';
+import { parseTestModeEnv, testModeGate, unrecognizedTestMode } from './testMode.js';
 
 const VANILLA_KITTED = new Set(KITTED_CHARS);
 
@@ -245,6 +255,32 @@ export const BOT_NAMES = Object.freeze(['AI·华法琳', 'AI·阿米娅', 'AI·�
 
 const OK = Object.freeze({ ok: true });
 const fail = (code, detail) => (detail ? { error: code, detail } : { error: code });
+
+/** 重构模拟的编队容量：队数 × 每队上限；其它模式不设这一道（Infinity）。 */
+function reconTeamCapacity(room) {
+  return room.mode === 'recon' ? Math.max(RECON.MIN_TEAMS, room.teamCount || 1) * RECON.TEAM_SIZE : Infinity;
+}
+
+/**
+ * 重构模拟：把在座的人按「每队 ≤ RECON.TEAM_SIZE」摊平。
+ * 已有的合法队伍优先保留；超出上限的（含 AI，以及建队时还没被分配队伍的座位）按 1..teamCount 找第一个空位。
+ * 其它模式直接返回 —— 一个字节不动。业主 2026-10-21：「队伍人数达到上限后自动切换编队，不要超出队伍人数」。
+ */
+function normalizeReconTeams(room) {
+  if (room.mode !== 'recon') return;
+  const count = Math.max(RECON.MIN_TEAMS, room.teamCount || 1);
+  const sizes = new Array(count + 1).fill(0);
+  for (const s of room.seats) {
+    if (!s || s.left) continue;
+    const want = Number.isInteger(s.team) && s.team >= 1 && s.team <= count ? s.team : null;
+    if (want != null && sizes[want] < RECON.TEAM_SIZE) { s.team = want; sizes[want]++; continue; }
+    let t = 1;
+    while (t <= count && sizes[t] >= RECON.TEAM_SIZE) t++;
+    if (t > count) continue; // 编队容量已满：建座前已挡住，这里绝不制造越界
+    s.team = t;
+    sizes[t]++;
+  }
+}
 /** A match's answer to a request as the platform replies it: OK, or its error (an unknown code: INTERNAL). */
 const matchAnswer = (res) => (res && typeof res === 'object' && res.error
   ? fail(isErrCode(res.error) ? res.error : ERR.INTERNAL, typeof res.detail === 'string' ? res.detail : undefined)
@@ -258,6 +294,7 @@ const noopLog = { info() {}, warn() {}, error() {}, debug() {} };
  *             notOwned?: readonly string[] | null, diy?: Readonly<Record<string, DiyLoadout>> | null,
  *             conflict?: Readonly<Record<string, string>> | null,
  *             modConsent?: string | null,
+ *             skins?: Readonly<Record<string, string>> | null,
  *             content?: 'ready' | 'failed' | null, contentGen?: number, loadoutCs?: string | null, notOwnedCs?: string | null,
  *             diyCs?: string | null }} Seat
  *   content: a room with gameplay plugins — whether the player's page loaded and checked its content (header "Gameplay
@@ -370,6 +407,22 @@ function sameModIds(a, b) {
 
 /** One room: `seatCap` seat slots (the server's ceiling, 20 by default, LOBBY_DEFAULTS.maxSeats), host, difficulty,
  * optional running match. */
+
+/**
+ * Frozen copy of a skin selection (docs/SKINS.md), keyed by operator charId.
+ *
+ * A non-plain object, a key that is not a charId, a value that is not a skinId, or a map over the wire cap is refused
+ * (`null` — the caller answers BAD_MSG and does not clear what is already stored). A charId `hasOperator` rejects is
+ * dropped. The stored copy is then at most the operator count of the room's content, and ≤ 256 [ASSUMED].
+ * @param {Record<string, string>} skins `{ [charId]: skinId }`
+ * @param {(charId: string) => boolean} hasOperator
+ * @returns {Readonly<Record<string, string>>|null}
+ */
+function freezeSkins(skins, hasOperator) {
+  const res = checkSkinSelection(skins, hasOperator);
+  if (!res.ok) return null;
+  return Object.freeze({ ...res.skins });
+}
 export class Room {
   /**
    * @param {string} code @param {'solo'|'coop'} mode @param {string} difficulty @param {number} now
@@ -389,6 +442,19 @@ export class Room {
      * put every human seat before every AI seat (Match opts.aiPicksLast). Kept across the room's matches.
      */
     this.aiPicksLast = false;
+    /**
+     * 本房间的 Fever 音乐（颂乐人偶 mod，`room.feverMusic`）：`{ track, start, end }`，`track` 是
+     * `GET /api/music` 的曲目 id；`null` = 包内默认两首。房主、开局前可改，变更即写进 `room.state` 广播给全员。
+     * @type {{ track: string, start: number, end: number } | null}
+     */
+    this.feverMusic = null;
+    /**
+     * 重构模拟（模式扩展-重构模拟，mode 'recon'）的队伍数：1..RECON.MAX_TEAMS，房主建房时定（缺省 1）。
+     * 座位上的 `team`（1..teamCount，缺省 1）是房间层元数据 —— 当前轮次对战仍按全员合作 PVE 跑，
+     * 队伍间对抗留给后续轮次。非 recon 房间恒为 1，`toState` 一个字节不多带。
+     * @type {number}
+     */
+    this.teamCount = 1;
     /** @type {string | null} */
     this.hostId = null;
     /** Seat slots of THIS room (set at creation, 100-seat variant: LOBBY_DEFAULTS.maxSeats). Resized only through
@@ -431,6 +497,8 @@ export class Room {
      *   bytes?: number, dataBytes?: number, modes?: readonly object[], modeId?: string }> | null}
      */
     this.content = null;
+    /** Test room (DESIGN §36.8). Set only at create, and only when the process switch is on. Never flipped later. */
+    this.test = false;
     /** the room's queue (header "Gameplay plugins": Lobby.serial): what is still waiting or running, and its tail */
     this.queue = { pending: 0, tail: Promise.resolve() };
     /**
@@ -537,9 +605,13 @@ export class Room {
        * "the room has 100 and the rest are empty", and the client must not assume a cap of its own.
        */
       ...(this.seatCap !== MAX_SEATS ? { seatCap: this.seatCap } : {}),
+      // 重构模拟的队伍块：只在 recon 房间出现（其它模式一帧不变）。`teamCount` 是房主建房时定的队伍数，
+      // 每个座位的 `team`（1..teamCount）写在下面的 seats 条目里。
+      ...(this.mode === 'recon' ? { teamCount: this.teamCount } : {}),
       seats: this.seats.map((s) => (s
         ? {
           seat: s.seat, playerId: s.playerId, name: s.name, isBot: s.isBot, ready: s.ready, connected: s.connected && !s.left,
+          ...(this.mode === 'recon' ? { team: s.team ?? 1 } : {}),
           // 外观选择（皮肤层）：**别人看到的你** —— `{ picks?, avatar? }`（见 `appearance()`）。
           // 只有选过才有这个键 —— 一个没换装的房间与从前逐字节相同。
           ...(s.appearance && Object.keys(s.appearance).length ? { appearance: s.appearance } : {}),
@@ -548,8 +620,12 @@ export class Room {
         : null)),
       spectators: this.spectators.map((s) => ({ playerId: s.playerId, name: s.name, connected: s.connected, ...(this.modded ? { content: s.content || 'loading' } : {}) })),
       ...(this.modSet ? { mods: this.modSet } : {}),
+      // 房间的 Fever 音乐（颂乐人偶）：没设过就不带这个键 —— 与从前逐字节相同。
+      ...(this.feverMusic ? { feverMusic: this.feverMusic } : {}),
       ...(this.content ? { content: this.content.trusted ? {...this.content, trusted:{...this.content.trusted, consent:Object.fromEntries(this.seats.filter(x => x && !x.isBot).map(x => [x.seat,x.consentCs === this.content.cs]))}} : this.content } : {}),
       ...(support ? { support } : {}),
+      // omitted when false so a normal room.state stays identical
+      ...(this.test ? { test: true } : {}),
     };
   }
 
@@ -614,7 +690,7 @@ export class Lobby {  /**
    *   plugins?: { resolve: (ids: string[], opts?: { scope?: 'room' | 'personal', settings?: object, replacing?: object | null }) => any,
    *     hold?: (vs: string) => void, release?: (vs: string) => void, holdContent?: (cs: string) => void,
    *     releaseContent?: (cs: string) => void, onContentStale?: (fn: (cs: string, ids: string[]) => void) => () => void, onStale?: (fn: (vs: string, ids: string[]) => void) => () => void,
-   *     unofficial?: () => number, defaults?: () => string[], dataOf?: (cs: string) => any, kittedOf?: (cs: string) => any,
+   *     unofficial?: () => number, hasNotices?: () => boolean, defaults?: () => string[], dataOf?: (cs: string) => any, kittedOf?: (cs: string) => any,
    *     contentInUse?: () => number } | null,
    *   hosts?: { create: (cs: string, opts: object) => any, stats?: () => object } | null,
    *   options?: Partial<typeof LOBBY_DEFAULTS>,
@@ -637,6 +713,13 @@ export class Lobby {  /**
     this.getData = getData;
     this.now = now;
     this.seedFn = seedFn || (() => randomInt(2 ** 32));
+    const testModeOpt = options.testMode;
+    const testHostOpt = options.testHost;
+    if (Object.hasOwn(options, 'testMode') || Object.hasOwn(options, 'testHost')) {
+      options = { ...options };
+      delete options.testMode;
+      delete options.testHost;
+    }
     this.opts = { ...LOBBY_DEFAULTS, ...options };
     /**
      * 对局战绩（`SP_ACCOUNTS=1`, server/matchRecords.js, docs/RECORDS.md §3）：每局**完整结算**时落一条。
@@ -709,6 +792,16 @@ export class Lobby {  /**
      * @type {{ digest: string, packs: Array<object> }|null}
      */
     this.modSet = modSetOf(Array.isArray(this.workshop?.mods) ? this.workshop.mods : []);
+    // Test rooms stay off until the bound address is known (setTestHost). An empty host fails closed, so a
+    // server that is about to bind 0.0.0.0 does not briefly accept test rooms on the default. [ASSUMED] the
+    // env words are parsed in server/testMode.js.
+    const rawMode = testModeOpt != null ? testModeOpt : (typeof process !== 'undefined' && process.env ? process.env.SP_TEST_MODE : undefined);
+    this.testMode = parseTestModeEnv(rawMode);
+    this.testUnrecognized = unrecognizedTestMode(rawMode);
+    this.testHost = '';
+    this.testEnabled = false;
+    this.testWarn = this.testUnrecognized;
+    if (testHostOpt != null) this.setTestHost(testHostOpt);
     /** @type {Map<string, Room>} */
     this.rooms = new Map();
     /** @type {Map<string, NodeJS.Timeout>} lobby grace timers by playerId */
@@ -746,6 +839,19 @@ export class Lobby {  /**
      * is why the queue is built here (one Map, no timer) and not in `server/index.js`.
      */
     this.matchmake = new MatchmakeQueue(this, this.opts.queue || undefined);
+  }
+
+  /**
+   * The address this process bound. Test rooms stay disabled until this runs. `host` empty fails closed.
+   * @param {string} host
+   * @returns {{ enabled: boolean, warn: string|null }}
+   */
+  setTestHost(host) {
+    this.testHost = typeof host === 'string' ? host : '';
+    const gate = testModeGate(this.testMode, this.testHost);
+    this.testEnabled = gate.enabled === true;
+    this.testWarn = this.testUnrecognized || gate.warn;
+    return { enabled: this.testEnabled, warn: this.testWarn };
   }
 
   /**
@@ -866,7 +972,7 @@ export class Lobby {  /**
     let online = 0;
     for (const s of this.registry.all()) if (s.connected) online++;
     const rooms = [...this.rooms.values()]
-      .filter((r) => r.mode === 'coop')
+      .filter((r) => r.mode === 'coop' || r.mode === 'recon')
       .sort((a, b) => a.code.localeCompare(b.code))
       .map((r) => {
         const host = r.seats.find((s) => s && !s.isBot && s.playerId === r.hostId) || null;
@@ -1042,8 +1148,12 @@ export class Lobby {  /**
       case 'room.setDifficulty': return this.setDifficulty(session, msg);
       case 'room.setSeatCap': return this.setSeatCap(session, msg);
       case 'room.setAiPicksLast': return this.setAiPicksLast(session, msg);
+      // 重构模拟（mode 'recon'）的自由选队：赛前、本房成员、目标队伍未满（≤ RECON.TEAM_SIZE）
+      case 'room.setTeam': return this.setTeam(session, msg);
       // 房间内改本房间的模组集合（G1/G2，docs/WORKSHOP.md §1.9.3）：房主、开局前、且没有真人已就绪
       case 'room.mods': return this.setRoomMods(session, msg);
+      // 房间的 Fever 音乐（颂乐人偶 mod）：房主、开局前；变更广播 room.state
+      case 'room.feverMusic': return this.setFeverMusic(session, msg);
       case 'room.addBot': return this.addBot(session);
       case 'room.removeBot': return this.removeBot(session, msg);
       case 'room.kick': return this.kick(session, msg);
@@ -1057,6 +1167,7 @@ export class Lobby {  /**
       case 'room.conflict': return this.conflict(session, msg);
       // 外观选择（皮肤层）：别人看到的你长什么样 —— 纯展示，比赛中也接受，变更即广播
       case 'room.appearance': return this.appearance(session, msg);
+      case 'room.skins': return this.skins(session, msg);
       case 'room.spectate': return this.spectate(session, msg);
       case 'room.removeSpectator': return this.removeSpectator(session, msg);
       // 野排匹配 (quick match): the queue lives in server/matchmaking.js; these two cases are its only entry points
@@ -1313,7 +1424,9 @@ export class Lobby {  /**
   // room.* handlers
   // ---------------------------------------------------------------------------------------------------
 
-  create(session, { mode, difficulty, mods, modIds, chatMode, seatCap, dev, stage }) {
+  create(session, { mode, difficulty, mods, modIds, chatMode, seatCap, dev, stage, teamCount, test } = {}) {
+    // A test room exists only when the process switch allowed it. The check runs before the room is built.
+    if (test === true && this.testEnabled !== true) return fail(ERR.TEST_DISABLED);
     const cur = this.roomOf(session);
     if (cur && cur.match) return fail(ERR.ROOM_STARTED, 'leave your running match first');
     const gate = this.checkModSet({ mods });
@@ -1355,7 +1468,7 @@ export class Lobby {  /**
     //
     // **只作用于 co-op**：solo 房今天也是按 `this.opts.maxSeats` 建座位数组的（客户端 `normalizeSeats` 按
     // `mode:'solo'` 只画一张卡），改掉它就会移动每一个 solo 帧 —— 所以 solo 一律忽略这个字段。
-    const roomCap = mode === 'coop' && seatCap != null ? clampSeats(seatCap, this.opts.maxSeats) : this.opts.maxSeats;
+    const roomCap = (mode === 'coop' || mode === 'recon') && seatCap != null ? clampSeats(seatCap, this.opts.maxSeats) : this.opts.maxSeats;
     // 开发者模式（工坊包 dev-ext 的「全量模拟」）：只有 `mode:'solo'` 收；`stage` 必须点名**本服务器已加载的一张图**，
     // 否则**点名拒绝**（不静默忽略 —— 一个打不出来的图会让玩家以为是地图坏了）。校验放在建房之前，避免留下半成品房间。
     //
@@ -1365,6 +1478,11 @@ export class Lobby {  /**
     // 但界面藏起来从来只是「看不见」，拒绝在这里。删掉这段会退回「谁都能开一局全量模拟」。
     if (dev === true && session.local !== true) {
       return fail(ERR.BAD_MSG, 'developer mode is only available from a local (loopback / private network) client');
+    }
+    // 重构模拟（模式扩展-重构模拟，mode 'recon'）同一条本地闸：本地实验模式，客户端入口按 `welcome.devAllowed`
+    // 隐藏，但「看不见」不是拒绝 —— 公网服务器上构造出来的 `room.create` 在这里被点名挡下。
+    if (mode === 'recon' && session.local !== true) {
+      return fail(ERR.BAD_MSG, 'recon simulation is only available from a local (loopback / private network) client');
     }
     const devOn = dev === true && mode === 'solo';
     let devStage = null;
@@ -1377,6 +1495,7 @@ export class Lobby {  /**
     // 开发者模式：这一局跳过 INFO_CHECK / BAND_DRAFT（见 server/match/match/phases.js skipToBattle），并强制打 devStage
     room.dev = devOn;
     room.devStage = devStage;
+    room.test = test === true;
     room.content = this.vanilla;
     // the server owner's default plugins (plugins/config.json `default`; header "Gameplay plugins"): none — the original game
     const defaults = this.plugins?.defaults?.() || [];
@@ -1397,6 +1516,13 @@ export class Lobby {  /**
     if (room.modSet && this.workshop && this.workshop.roomAssets) this.workshop.roomAssets.forRoom(room.modSet);
     room.seats[0] = this.humanSeat(0, session);
     room.hostId = session.playerId;
+    // 重构模拟：队数由建房消息钉下（RECON 界内），房主默认 1 号队（`toState` 对缺席 `team` 读 1）。
+    if (mode === 'recon') {
+      const t = Number.isInteger(teamCount) && teamCount >= RECON.MIN_TEAMS && teamCount <= RECON.MAX_TEAMS ? teamCount : RECON.MIN_TEAMS;
+      room.teamCount = t;
+      room.seats[0].team = 1;
+      normalizeReconTeams(room);
+    }
     // 房主的**同意**就是他钉下的这一份（W7, DESIGN §28.53）：`modIds` 是他自己报的，那份集合的摘要就是他的表态。
     // 没声明集合（`modSet === null`）⇒ 保持 `null`，那一格整条判据都不适用。
     room.seats[0].modConsent = room.modSet ? room.modSet.digest : null;
@@ -1404,7 +1530,7 @@ export class Lobby {  /**
     session.roomCode = code;
     session.notice = null;
     session.pendingResult = null;
-    this.log.info(`[lobby] ${code} created (${mode}/${difficulty}) by ${session.name}`);
+    this.log.info(`[lobby] ${code} created (${mode}/${difficulty}${room.test ? ', test' : ''}) by ${session.name}`);
     this.broadcastState(room);
     // 房间级钩子（§28.20）：房间**已经完全建好**（`rooms` 里有它、房主就位、集合已物化）之后才触发 —— 钩子看到的
     // 就是这个房间真正的样子。装不上的包在 `install` 里已经点名并退场，房间照旧。
@@ -1413,12 +1539,13 @@ export class Lobby {  /**
     return OK;
   }
 
-  join(session, { code, mods, consent }) {
+  join(session, { code, mods, consent, testAck }) {
     const gate = this.checkModSet({ mods });
     if (!gate.ok) return gate;
     const norm = String(code).trim().toUpperCase();
     const room = norm.length === ROOM_CODE_LEN ? this.rooms.get(norm) : undefined;
     if (!room) return fail(ERR.ROOM_NOT_FOUND);
+    if (room.test && testAck !== true) return fail(ERR.TEST_CONFIRM);
     const cur = this.roomOf(session);
     // 服主 pin（W7）：这个房间钉住的那几个包的**字节**还在不在机器上。判在「认不认得出这个房间」之后、「占不占座」
     // 之前 —— 一份已经不在的内容，占了座也是白占。没声明集合的房间在第一行早退。
@@ -1449,8 +1576,12 @@ export class Lobby {  /**
     }
     const idx = room.freeSeat();
     if (idx < 0) return fail(ERR.ROOM_FULL);
+    if (room.mode === 'recon' && room.seats.filter((s) => s && !s.left).length >= reconTeamCapacity(room)) {
+      return fail(ERR.ROOM_FULL, 'all teams are full');
+    }
     if (cur) this.removeMember(cur, session.playerId);
     room.seats[idx] = this.humanSeat(idx, session);
+    normalizeReconTeams(room);
     // 同意落在**座位**上（不是会话上）：同意的是「这一房的这一份字节」，换一房要重新表态。
     room.seats[idx].modConsent = room.modSet ? room.modSet.digest : null;
     session.roomCode = room.code;
@@ -1474,10 +1605,11 @@ export class Lobby {  /**
    * room.spectate: one of a co-op room's MAX_SPECTATORS spectator seats, in its lobby or during its match (header). In a
    * running match the match registers the spectator and resends what it may see (Match.addSpectator).
    */
-  spectate(session, { code }) {
+  spectate(session, { code, testAck }) {
     const norm = String(code).trim().toUpperCase();
     const room = norm.length === ROOM_CODE_LEN ? this.rooms.get(norm) : undefined;
     if (!room) return fail(ERR.ROOM_NOT_FOUND);
+    if (room.test && testAck !== true) return fail(ERR.TEST_CONFIRM);
     const cur = this.roomOf(session);
     if (cur === room) {
       if (!room.spectatorOf(session.playerId)) return fail(ERR.ALREADY, 'seated as a player');
@@ -1610,6 +1742,31 @@ export class Lobby {  /**
   }
 
   /**
+   * `room.setTeam { team }` —— 重构模拟（mode 'recon'）的**自由选队**（模式扩展-重构模拟）：赛前任何**在座真人**
+   * 把自己移到 1..room.teamCount 号队伍，每队 ≤ RECON.TEAM_SIZE。形状层已把 `team` 判在
+   * RECON.MIN_TEAMS..RECON.MAX_TEAMS（shared/protocol.js）；这里再按**本房**的 teamCount 与空位判一次。
+   * 非 recon 房间、对局已开、目标队满都点名拒绝 —— 队伍是房间层元数据（对战仍按全员合作 PVE 跑，
+   * 队伍间对抗留给后续轮次），所以移动队伍不需要重置任何人的 ready。
+   */
+  setTeam(session, { team }) {
+    const room = this.roomOf(session);
+    if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (room.mode !== 'recon') return fail(ERR.WRONG_PHASE, 'only recon rooms have teams');
+    if (room.match) return fail(ERR.ROOM_STARTED);
+    const seat = room.seatOf(session.playerId);
+    if (!seat) return fail(ERR.NOT_IN_ROOM);
+    if (!Number.isInteger(team) || team < RECON.MIN_TEAMS || team > room.teamCount) {
+      return fail(ERR.BAD_TARGET, `team must be 1..${room.teamCount}`);
+    }
+    if ((seat.team ?? 1) === team) return OK;
+    const size = room.seats.filter((s) => s && !s.left && (s.team ?? 1) === team).length;
+    if (size >= RECON.TEAM_SIZE) return fail(ERR.BAD_TARGET, `team ${team} is full (${RECON.TEAM_SIZE})`);
+    seat.team = team;
+    this.broadcastState(room);
+    return OK;
+  }
+
+  /**
    * `room.mods { modIds }` —— **房主在房间里改本房间的模组集合**（G1；docs/WORKSHOP.md §1.9.3）。
    *
    * 为什么需要它：建房的 picker（`room.create.modIds`）是**一次性**的 —— 房主点错了、或者开好房才发现这一房要跑
@@ -1685,6 +1842,34 @@ export class Lobby {  /**
     const hostSeat = room.seatOf(room.hostId);
     if (hostSeat && !hostSeat.isBot) hostSeat.modConsent = room.modSet ? room.modSet.digest : null;
     this.log.info(`[lobby] ${room.code} mod set is now ${room.modSet ? room.modSet.packs.map((p) => p.id).join(', ') : '(none)'} by ${session.name}`);
+    this.broadcastState(room);
+    return OK;
+  }
+
+  /**
+   * `room.feverMusic { track, start, end }`：本房间的 Fever 音乐（颂乐人偶 mod）。
+   *
+   * 与 `room.mods` 同一条边界：**房主、开局前**。形状与范围由协议层判死（`track` 必须是协议允许的 id、
+   * 0 ≤ start < end ≤ 3600 且片段 0.5–600 秒），这里只判「谁、什么时候」，并**不**校验 id 是否真在音乐库里 ——
+   * 曲目表由每个客户端从本服务器的 `GET /api/music` 解析；一个服务端不认识的 id 会让客户端回落到默认两首，
+   * 因此这一格不存在「服务端替客户端取任意 URL」的入口。
+   * @param {import('./net.js').Session} session
+   * @param {{ track?: string|null, start?: number|null, end?: number|null }} msg
+   */
+  setFeverMusic(session, { track = null, start = null, end = null } = {}) {
+    const room = this.roomOf(session);
+    if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
+    if (room.match) return fail(ERR.ROOM_STARTED, 'the running match took this room\'s settings when it started');
+    const next = track == null ? null : Object.freeze({
+      track: String(track),
+      // 一位小数足够（UI 的 step=0.1），也让「同一次设置」逐字节可比。
+      start: Math.round(Number(start) * 10) / 10,
+      end: Math.round(Number(end) * 10) / 10,
+    });
+    if (JSON.stringify(room.feverMusic) === JSON.stringify(next)) return OK;
+    room.feverMusic = next;
+    this.log.info(`[lobby] ${room.code} fever music is now ${next ? `${next.track} ${next.start}-${next.end}s` : '(default)'} by ${session.name}`);
     this.broadcastState(room);
     return OK;
   }
@@ -1825,7 +2010,7 @@ export class Lobby {  /**
       return fail(ERR.INTERNAL);
     }
     if (!r || !r.ok) return fail(r && isErrCode(r.error) ? r.error : ERR.INTERNAL, r && typeof r.detail === 'string' ? r.detail.slice(0, 200) : undefined);
-    const { cs, vs, plugins: list, warnings, bytes, dataBytes, modes, kitted, trusted, execution } = r.set;
+    const { cs, vs, plugins: list, warnings, bytes, dataBytes, modes, kitted, trusted, execution, rules } = r.set;
     const modded = isContentHash(cs) && cs !== this.vanilla.cs;
     const frozen = (a) => Object.freeze((Array.isArray(a) ? a : []).map((p) => Object.freeze({ ...p })));
     // the operators its plugins add to a 自选 slot's list (welcome.diyKitted holds the server's own): the pages' pickers
@@ -1841,6 +2026,7 @@ export class Lobby {  /**
         warnings: Object.freeze([...(warnings || [])]),
         bytes: Number(bytes) || 0,
         ...(modded ? { dataBytes: Number(dataBytes) || 0, modes: frozen(modes), ...(extra.length ? { kittedExtra: Object.freeze(extra) } : {}) } : {}),
+        ...(rules ? { rules } : {}),
       }),
     };
   }
@@ -1938,6 +2124,9 @@ export class Lobby {  /**
     if (room.match) return fail(ERR.ROOM_STARTED);
     this.dropReplay(room, session.playerId);
     if (room.mode === 'solo') return fail(ERR.ROOM_FULL, 'solo rooms cannot have AI teammates');
+    if (room.mode === 'recon' && room.seats.filter((s) => s && !s.left).length >= reconTeamCapacity(room)) {
+      return fail(ERR.ROOM_FULL, 'all teams are full');
+    }
     const idx = room.freeSeat();
     if (idx < 0) return fail(ERR.ROOM_FULL);
     const used = new Set(room.seats.filter((s) => s && s.isBot).map((s) => s.name));
@@ -1945,6 +2134,7 @@ export class Lobby {  /**
     let playerId;
     do playerId = 'ai_' + randomBytes(4).toString('hex'); while (room.seatOf(playerId));
     room.seats[idx] = { seat: idx, playerId, name, isBot: true, ready: true, connected: true, left: false };
+    normalizeReconTeams(room);
     this.broadcastState(room);
     return OK;
   }
@@ -2059,7 +2249,10 @@ export class Lobby {  /**
     if (typeof room.match.setLoadout !== 'function') return fail(ERR.ROOM_STARTED, 'stored for the next match');
     let r;
     try {
-      r = room.match.setLoadout(session.playerId, loadout, opsSet);
+      // Preserve named defaults for prep merging: normalisation drops them, but they mean reset this operator.
+      r = ruleOption(room.content?.rules, 'prepLoadout') === 'prep'
+        ? room.match.setLoadout(session.playerId, entries, ops)
+        : room.match.setLoadout(session.playerId, loadout, opsSet);
     } catch (e) {
       this.log.error(`[lobby] ${room.code} match.setLoadout threw`, e);
       return fail(ERR.INTERNAL);
@@ -2201,6 +2394,27 @@ export class Lobby {  /**
     return OK;
   }
 
+  /**
+   * room.skins (docs/SKINS.md): store the appearances this player chose for their operators, on the session and the
+   * seat, and hand them to a running match.
+   *
+   * Unlike room.loadout there is no phase gate. The loadout is frozen at INFO_CHECK because it changes what a unit
+   * *does*; a skin changes only what it looks like, and it is public — a teammate switching model mid-match is
+   * harmless, and the next `m.public` broadcast carries it to everyone.
+   */
+  skins(session, { skins }) {
+    const room = this.roomOf(session);
+    const ids = operatorCharIds(this.dataFor(room));
+    const kept = freezeSkins(skins, (id) => ids.has(id));
+    if (!kept) return fail(ERR.BAD_MSG, 'bad skin selection');
+    session.skins = kept;
+    if (!room) return OK;
+    const seat = room.seatOf(session.playerId);
+    if (seat) seat.skins = kept;
+    if (!room.match || !seat) return OK;
+    if (typeof room.match.setSkins !== 'function') return fail(ERR.ROOM_STARTED, 'stored for the next match');
+    return matchAnswer(this.callMatch(room, 'setSkins', session.playerId, kept));
+  }
   /** The game data of a room's content (header "Gameplay plugins"): its content set's, else the server's. @param {Room | null} room */
   dataFor(room) {
     if (room?.modded) {
@@ -2270,7 +2484,16 @@ export class Lobby {  /**
       const r = checkDiyPicks({ ...diy }, { data, kitted: this.kittedFor(room) });
       diy = r && 'ok' in r ? freezeDiy(r.picks) : null;
     }
-    return { loadout, ops, notOwned, diy };
+    // 干员皮肤 (docs/SKINS.md): the skinId lives in a cosmetic overlay, not the content set, but the KEY is an operator
+    // of this room. A charId the content does not have is dropped; a map that is no longer a plain charId→skinId
+    // selection is left off the seat rather than handed to the match.
+    let skins = null;
+    if (s.skins && typeof s.skins === 'object') {
+      const ids = operatorCharIds(data);
+      const res = checkSkinSelection(s.skins, (id) => ids.has(id));
+      if (res.ok) skins = Object.freeze({ ...res.skins });
+    }
+    return { loadout, ops, notOwned, diy, skins };
   }
 
   /** Extra fields of every `welcome` (net.js): the operators a 自选 slot may field (shared/diy.js `kitted`), and what
@@ -2323,13 +2546,20 @@ export class Lobby {  /**
     const contentInfo = this.vanilla
       ? { content: n > 0 ? { vanilla: this.vanilla.cs, plugins: n } : { vanilla: this.vanilla.cs } }
       : {};
+    // 目录元信息：只在有已加载插件发布公告时带上，从不进房间或对局（上游 0.3.1 的 notices 提示）
+    if (contentInfo.content) {
+      let hasNotices = false;
+      try { hasNotices = this.plugins?.hasNotices?.() === true; } catch { /* optional catalogue hint */ }
+      if (hasNotices) contentInfo.content.notices = true;
+    }
     return {
       diyKitted: KITTED_CHARS,
       ...contentInfo,
       // 本房座位上限 (业主裁令 2026-10-12): **总是发** —— 缺省上限已经是 20（不是官方 `MAX_SEATS`），没有「官方那一档」
       // 可以省掉它了。`SP_MAX_SEATS=4` 的部署会拿到 `maxSeats: 4`，而它的 `room.state` 帧照旧逐字节不变
       //（`toState` 只在容量 ≠ `MAX_SEATS` 时才带 `seatCap`）。
-      maxSeats: this.opts.maxSeats,
+      // ⚠️ `this.opts` 在单元测试里可能没有（测试直接调 `welcomeInfo.call({ vanilla, plugins })`）⇒ 那时不发这个字段。
+      ...(this.opts ? { maxSeats: this.opts.maxSeats } : {}),
       // 开发者功能（「全量模拟」入口 / 局内开发者面板）**只在本地端会话上生效**：这一格是服务端对客户端的**如实说明**
       // （`session.local`，即对端地址是回环 / 私网；见 server/net.js 与 create 里那道真正的闸）。非本地端——
       // 也就是任何连到公网服务器的浏览器——**这个键一个字都不出现**，于是客户端把那两处 UI 整块藏掉；反过来，
@@ -2341,6 +2571,8 @@ export class Lobby {  /**
       ...(fx.length ? { modFx: fx } : {}),
       ...(theme && theme.vars && Object.keys(theme.vars).length ? { modTheme: theme } : {}),
       ...(transport ? { transport } : {}),
+      // 测试房间模式开着才发这一格（上游 0.3.1 §36.8）：客户端据此显示「测试房间」标记
+      ...(this.testEnabled === true ? { testMode: true } : {}),
     };
   }
 
@@ -2350,6 +2582,7 @@ export class Lobby {  /**
 
   /** @param {Room} room @param {string | null} [key] per-network limit key of the starter */
   startMatch(room, key = null) {
+    if (room.test && !this.testEnabled) return fail(ERR.TEST_DISABLED);
     const host = room.seatOf(room.hostId);
     if (host) host.ready = true;
     // the room's data: its content set's in a room with gameplay plugins (header "Gameplay plugins")
@@ -2369,6 +2602,8 @@ export class Lobby {  /**
         // 助战 (shared/support.js): the human's checked support selection — only ids the server pool allows (bots: none).
         // Passed through as the frozen array the seat holds (the loadout's stance), never re-copied into a mutable one.
         support: s.isBot ? null : (Array.isArray(s.support) ? s.support : null),
+        // 干员皮肤 (docs/SKINS.md): the appearances the human wears, keyed by operator charId (bots always default)
+        skins: own ? own.skins : null,
       };
     });
     // lastPublic / results: the latest m.public broadcast and the m.result frames (encoded), kept for the replay.
@@ -2420,6 +2655,8 @@ export class Lobby {  /**
         // the room's host: the current executor of a delegated bot layout rehearsal (DESIGN §14; setHost follows a
         // migration while the match runs)
         hostId: room.hostId,
+        // only a room created as a test room; a normal match opts object does not grow a test key
+        ...(room.test === true ? { test: true } : {}),
         seed,
         // the room's match number: with the seed it keeps battleIds unique across the room's matches (DESIGN §14)
         matchNo: room.matchCount + 1,
@@ -2428,6 +2665,10 @@ export class Lobby {  /**
         ...(room.content ? { cs: room.content.cs } : {}),
         ...(room.content?.vs ? { vs: room.content.vs } : {}),
         ...(modded ? { requireCs: true } : {}),
+        // The list the lobby just checked the picks with (kittedFor). Vanilla rooms omit it: setDiy stays on
+        // KITTED_CHARS, and the worker payload / test journal of a normal match do not grow a key.
+        ...(modded ? { kitted: this.kittedFor(room) } : {}),
+        ...(room.content?.rules ? { rules: room.content.rules } : {}),
         data,
         // 工坊行为层: the same kits must reach the battles the server runs AND the browser's (see the Lobby constructor)
         workshopKits: assets ? assets.kits : (this.workshop && this.workshop.kits ? this.workshop.kits : null),
@@ -2475,7 +2716,7 @@ export class Lobby {  /**
       room.matchKey = key;
       room.replay = null;
       room.matchCount++;
-      this.log.info(`[lobby] ${room.code} match #${room.matchCount} starting (${room.mode}/${room.difficulty}, ${seats.length} seats, seed ${seed}${modded ? `, content ${room.content.cs.slice(0, 8)}${match.hosted ? ' in its match host' : ''}` : ''})`);
+      this.log.info(`[lobby] ${room.code} match #${room.matchCount} starting (${room.mode}/${room.difficulty}, ${seats.length} seats, seed ${seed}${room.test ? ', test' : ''}${modded ? `, content ${room.content.cs.slice(0, 8)}${match.hosted ? ' in its match host' : ''}` : ''})`);
       this.broadcastState(room);
       match.start();
     } catch (e) {
@@ -2686,13 +2927,17 @@ export class Lobby {  /**
   routeGameNow(session, msg) {
     const room = this.roomOf(session);
     if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (msg.t === 'g.test') {
+      if (!this.testEnabled) return fail(ERR.TEST_DISABLED);
+      if (room.test !== true) return fail(ERR.TEST_FORBIDDEN);
+    }
     if (!room.match) return fail(ERR.WRONG_PHASE, 'no running match');
     if (msg.t === 'g.leave') {
       this.removeMember(room, session.playerId);
       return OK;
     }
     // a spectator only watches (header): nothing else of it ever reaches the match
-    if (msg.t !== 'g.watch' && room.spectatorOf(session.playerId)) return fail(ERR.SPECTATOR);
+    if (msg.t !== 'g.watch' && !(room.test && msg.t === 'g.test') && room.spectatorOf(session.playerId)) return fail(ERR.SPECTATOR);
     let res;
     try {
       res = room.match.handle(session.playerId, msg);
@@ -2784,6 +3029,9 @@ export class Lobby {  /**
       notOwned: session.notOwned || null,
       diy: session.diy || null,
       conflict: session.conflict || null,
+      // 干员皮肤 (docs/SKINS.md): the appearances this player wears, keyed by operator charId (PUBLIC: the match
+      // publishes them to teammates)
+      skins: session.skins || null,
       // the content each was checked for (header "Gameplay plugins": filtered at the match start when it is another)
       loadoutCs: session.loadoutCs ?? null,
       notOwnedCs: session.notOwnedCs ?? null,

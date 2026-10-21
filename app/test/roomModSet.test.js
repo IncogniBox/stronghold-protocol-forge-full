@@ -401,16 +401,18 @@ describe('room.create { modIds } declares the room set (W-A, DESIGN §28.9)', ()
     // 本房座位上限 (业主裁决 B5, docs/META.md §1.9) 再加 `seatCap`: 房主建的这个房间开几张座位卡。
     // 开发者模式（工坊包 dev-ext 的「全量模拟」）再加两个**可选**字段：`dev`（跳过 INFO_CHECK / BAND_DRAFT）与
     // `stage`（强制这一局打的那张图）—— 与 `seatCap` 同一条「缺省 = 旧客户端」的写法。
-    assert.deepEqual(C2S['room.create'].$optional, ['mods', 'modIds', 'chatMode', 'seatCap', 'dev', 'stage']);
+    // 本仓的 `teamCount` 与上游 0.3.1 的 `test`（测试房间）同样可选。
+    assert.deepEqual(C2S['room.create'].$optional, ['mods', 'modIds', 'chatMode', 'seatCap', 'dev', 'stage', 'teamCount', 'test']);
     assert.equal(validateC2S({ ...base, dev: true }), null, 'dev:true is accepted');
     assert.equal(validateC2S({ ...base, dev: 1 }), 'bad field dev');
     assert.equal(validateC2S({ ...base, stage: 'dev_full_sim' }), null, 'a stage id is accepted');
     assert.equal(validateC2S({ ...base, stage: 'has space' }), 'bad field stage');
     assert.equal(validateC2S({ ...base, stage: '' }), 'bad field stage');
+    assert.equal(validateC2S({ ...base, test: true }), null, 'test:true is accepted');
     // W7（§28.53）多了一格**可选**的 `consent`：进一个声明了集合的房间要每名真人明确同意。它与 `mods` 是**两种
     // 表态**（`mods` = 「我读到了服务器装着哪些包」的握手回执，`consent` = 「我同意跑这一房声明的那一份字节」），
     // 所以两格并列而不是合成一格；形状见 shared/protocol.js 那一处。
-    assert.deepEqual(C2S['room.join'].$optional, ['mods', 'consent'], 'room.join takes no modIds: the set is the host\'s to declare');
+    assert.deepEqual(C2S['room.join'].$optional, ['mods', 'consent', 'testAck'], 'room.join takes no modIds: the set is the host\'s to declare');
   });
 });
 

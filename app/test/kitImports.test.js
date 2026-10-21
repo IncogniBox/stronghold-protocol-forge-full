@@ -264,7 +264,7 @@ const KIT_IMPORT_EXPORTS = {
   "server/sim/content/support/mod.js": [
     "registerBondInstaller", "registerGarrisonInstaller", "registerGarrisonReader", "registerItemBehaviour",
     "reached", "onLayers", "onUnitDamaged", "isEnemyTarget", "ownTag", "bondBb", "byUnit",
-    "fireGain", "garrisonIdsOf", "bp", "isProc", "procTags", "memberOf", "addShieldLayer", "ids", "bondOrder",
+    "fireGain", "garrisonIdsOf", "bp", "isProc", "procTags", "memberOf", "addShieldLayer", "itemStatMods", "ids", "bondOrder",
     "chessOnBoard", "metaBonds", "frontPiece", "num", "battleStore", "bondLayers", "bondMembers", "bondActive",
     "bondTier", "bondState", "bondRecord", "buffParams", "buffsOf", "directMods", "passiveBuff", "gainLayers",
     "playerOps", "player", "isMember", "isOp", "onField", "itemsOf", "itemKeyOf", "itemRecord", "garrisonRecord",

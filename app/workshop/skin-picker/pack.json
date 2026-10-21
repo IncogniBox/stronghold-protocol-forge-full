@@ -3,6 +3,7 @@
  "name": "时装切换",
  "version": "1.1.0",
  "author": "the skin-picker mod",
+ "gameVersion": "0.3.1",
  "description": "在两个地方提供时装切换按钮：干员调配的详情卡右上角，以及自选编队每一格已填的干员卡（干员名字旁边；1.1.0 起）。读取各包用 pack.json.skins 声明的时装（合并进 assets.skins），选择写入本地偏好并对同房广播（room.appearance）。本包只提供界面，不携带任何素材。该干员一套时装都没有时按钮整块隐藏。",
  "client": {
   "panels": [

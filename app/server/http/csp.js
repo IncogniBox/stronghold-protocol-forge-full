@@ -30,7 +30,7 @@ export function assetCdnOrigin(base = process.env.SP_CDN_BASE) {
 
 export function siteCsp(publicDir, cdnBase = process.env.SP_CDN_BASE) {
   const hashes = new Set();
-  for (const rel of ['index.html', 'studio/index.html', 'dev/game-mock.html', 'dev/render-demo.html', 'dev/battle-perf.html', 'dev/uikit.html']) {
+  for (const rel of ['index.html', 'studio/index.html', 'studio/console.html', 'dev/game-mock.html', 'dev/render-demo.html', 'dev/battle-perf.html', 'dev/uikit.html']) {
     let html;
     try { html = fs.readFileSync(path.join(publicDir, rel), 'utf8'); } catch { continue; }
     for (const m of html.matchAll(/<script\s+type=["']importmap["']\s*>([\s\S]*?)<\/script>/g)) {
@@ -45,5 +45,9 @@ export function siteCsp(publicDir, cdnBase = process.env.SP_CDN_BASE) {
   const cdn = assetCdnOrigin(cdnBase);
   const imgSrc = `img-src 'self' data: blob:${cdn ? ` ${cdn}` : ''};`;
   const connectSrc = `connect-src 'self'${cdn ? ` ${cdn}` : ''};`;
-  return `default-src 'self'; script-src 'self'${hashes.size ? ' ' + [...hashes].join(' ') : ''}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; ${imgSrc} ${connectSrc} worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'`;
+  // `media-src` 显式放行 `blob:`：本地上传的大厅音乐与「工坊曲目整段 fetch 成 Blob」的 Fever 音乐都靠它播放。
+  // 没有这一条时它们落回 `default-src 'self'`，浏览器直接拒播（实测报错：Loading media from 'blob:…' violates
+  // default-src 'self'）。音频与图片同属**被动**资源，所以 CDN 源也照 `img-src` 那条规矩进这里。
+  const mediaSrc = `media-src 'self' blob:${cdn ? ` ${cdn}` : ''};`;
+  return `default-src 'self'; script-src 'self'${hashes.size ? ' ' + [...hashes].join(' ') : ''}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; ${imgSrc} ${mediaSrc} ${connectSrc} worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'`;
 }

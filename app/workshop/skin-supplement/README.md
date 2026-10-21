@@ -6,7 +6,7 @@
 它**不新增任何棋子、盟约、装备或行为**（`content: []`）：装进一局里唯一的可见变化是「干员调配」详情卡右上角与
 「自选编队」每一格的时装浮层里多出这些选项，选中即同时替换立绘、头像与对局模型。
 
-- `gameVersion` 0.2.6，`content: []`，无 `server` / 无 `client` / 无 `kits`。
+- `gameVersion` 0.3.1，`content: []`，无 `server` / 无 `client` / 无 `kits`。
 - 素材自带（每套 立绘 + 头像 + Front/Back 模型），`license` 声明为 `GPL-3.0-or-later`；
   《明日方舟》相关美术版权归鹰角网络，工坊素材的授权需自行确认。
 - 切换界面由**前置包** `workshop/skin-picker`（客户端面板 `ui/skins.js`）提供，本包与它**零耦合**：

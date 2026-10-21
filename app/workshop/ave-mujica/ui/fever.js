@@ -32,6 +32,7 @@ import { useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { battleRunner } from '/js/battle/runner.js';
 import { audio } from '/js/audio.js';
+import { effectiveFeverMusic, resolveFeverTrack, primeFeverTrack } from '/js/ui/feverMusic.js';
 
 const html = htm.bind(h);
 
@@ -115,6 +116,10 @@ const state = {
   /** Fever 音乐状态：on = 上一帧的 Fever 开关；fading = 正在 1 秒淡出；resume = 每条曲「上次没播完时中断到的秒数」；
    *  pendingFrom = 还没落地的起播时间点（元数据未就绪时先记下来，到了再 seek+play）。 */
   music: { on: false, el: null, which: null, t0: 0, fading: false, fadeStart: 0, prevBgm: null, resume: { inst: null, vocal: null }, pendingFrom: null, retryAt: 0,
+    /** 当前这一首的片段规格 `{ url, start, end }`（默认两首或房间里选的服务器曲目）。 */
+    spec: null,
+    /** 房间里选的 Fever 曲目：`{ id, url, spec, pending }`（解析中 / 失效时回落默认两首）。 */
+    custom: { id: null, url: null, spec: null, pending: null },
     /** 每首曲子各自一个**长期复用**的 `<audio>`（`which -> el`）：提前预取、换曲不再动 `src`（改 src 会打断正在加载的流）。 */
     pool: Object.create(null),
     /** 场地 BGM 是否已被我们压掉（`bgmMuted`）—— `MUSIC_START_GRACE` 的兜底要靠它决定要不要放回来。 */
@@ -410,13 +415,13 @@ function paintNotes(raw, mod) {
  * 取 / 建某一首 Fever 曲的 `<audio>`（**每首一个、长期复用**）。
  * ⚠️ 这个元素**只建一次**：新建元素会丢掉「用户手势解锁」的状态 ⇒ 浏览器自动播放门会把 `play()` 直接挡掉
  * （rejected promise 被静默吞 ⇒ 听不到声音）。这里也**不再动 `src`**（改 src 会打断正在加载的流）。
+ * `key` 是池的身份（默认两首 = `inst` / `vocal`；自定义曲目 = `custom:<url>`），`spec` 给出它的 URL。
  */
-function musicEl(which) {
+function musicElFor(key, spec) {
   const m = state.music;
-  const cached = m.pool[which];
+  const cached = m.pool[key];
   if (cached) return cached;
-  const spec = MUSIC[which];
-  if (!spec) return null;
+  if (!spec || !spec.url) return null;
   let el = null;
   try { el = new Audio(); } catch { return null; }
   el.preload = 'auto';
@@ -424,7 +429,7 @@ function musicEl(which) {
   el.volume = 0;
   el.muted = false;
   el.src = spec.url;
-  m.pool[which] = el;
+  m.pool[key] = el;
   try { el.load(); } catch { /* ignore */ }
   return el;
 }
@@ -435,8 +440,43 @@ function musicEl(which) {
  * 一整段下载等待；`preload='auto'` 只是提示、不保证下完 —— 真没下完也不会再播错位置。
  */
 function preloadMusic() {
-  musicEl('inst');
-  musicEl('vocal');
+  musicElFor('inst', MUSIC.inst);
+  musicElFor('vocal', MUSIC.vocal);
+  syncCustom();
+}
+
+/**
+ * 把房间里选的服务器曲目解析成可播放的片段（官方曲目直接给 URL；工坊曲目先整段抓成 Blob URL）。
+ * 解析失败 / 还没好时 `custom.spec` 为 null ⇒ `driveMusic` 回落包内默认两首。
+ */
+function syncCustom() {
+  const m = state.music;
+  const sel = effectiveFeverMusic();
+  const c = m.custom;
+  if (!sel.track) { c.id = null; c.url = null; c.spec = null; return; }
+  if (c.id === sel.track && c.spec && c.spec.start === sel.start && c.spec.end === sel.end) return;
+  c.id = sel.track;
+  if (c.pending) return;
+  c.spec = null;
+  c.url = null;
+  c.pending = resolveFeverTrack(sel.track)
+    .then((track) => (track ? primeFeverTrack(track) : null))
+    .then((url) => {
+      if (!url || m.custom.id !== sel.track) return;
+      m.custom.url = url;
+      m.custom.spec = { url, start: sel.start, end: sel.end };
+      if (m.pool[`custom:${url}`] == null) musicElFor(`custom:${url}`, m.custom.spec);
+    })
+    .catch(() => { /* 回落默认两首 */ })
+    .finally(() => { c.pending = null; });
+}
+
+/** 这一帧该播哪一首：房间里选了可用的服务器曲目就用它，否则按「五名是否齐全」用默认两首。 */
+function chooseMusic(full) {
+  const c = state.music.custom;
+  if (c.id && c.spec) return { key: `custom:${c.spec.url}`, spec: c.spec };
+  const key = full ? 'vocal' : 'inst';
+  return { key, spec: MUSIC[key] };
 }
 
 /** 压掉场地 BGM（记下原曲目，供 Fever 收尾 / 兜底恢复）。幂等。 */
@@ -466,19 +506,20 @@ function stopMusic(restore = true) {
 }
 
 /** 起播一首 Fever 曲：压低场地 BGM、从 `start` 秒（或上次中断处）起播、音量 0 起（1 秒淡入由 driveMusic 推进）。 */
-function startMusic(which, now) {
+function startMusic(choice, now) {
   stopMusic(false); // 换曲前的清理：BGM 交给 muteBgm / restoreBgm 统一处理
-  const spec = MUSIC[which];
-  if (!spec) return;
+  if (!choice || !choice.spec) return;
+  const spec = choice.spec;
   const m = state.music;
-  const el = musicEl(which);
+  const el = musicElFor(choice.key, spec);
   if (!el) return;
   m.el = el;
   muteBgm();
   // 上一次这段没播完（Fever 提前结束）⇒ **从上次中断处续播**；整段播完过 / 换了一场战斗 ⇒ 从 `start` 重来。
-  const from = Math.max(spec.start, Number.isFinite(m.resume[which]) ? m.resume[which] : spec.start);
+  const resumeAt = Number.isFinite(m.resume[choice.key]) ? m.resume[choice.key] : spec.start;
+  const from = Math.max(spec.start, Math.min(spec.end, resumeAt));
   el.volume = 0;
-  m.which = which; m.t0 = now; m.fading = false; m.fadeStart = 0;
+  m.which = choice.key; m.spec = spec; m.t0 = now; m.fading = false; m.fadeStart = 0;
   m.lastPos = null; m.stuckSince = null;
   // ⚠️ **先定位、再 play**：片段起点是 0 ⇒ 全新的 Fever **不需要 seek**；这一路只服务「同一场内续播」那个
   // 几秒的 `from`（元数据还没到就写 `currentTime = x`，浏览器会把它丢掉，于是从 0 开始播 —— 那只影响续播点）。
@@ -500,7 +541,7 @@ function startMusic(which, now) {
 /** 片段**整段播完**之后才允许的「再播一次」：回到起点重播（同一元素，不换 BGM）。 */
 function replayMusic(now) {
   const m = state.music;
-  const spec = MUSIC[m.which];
+  const spec = m.spec;
   if (!m.el || !spec) return;
   m.resume[m.which] = null;      // 这一整段已经播完了 ⇒ 续播点作废，下一次从头开始
   m.pendingFrom = null;          // ⚠️ 守卫也要一并作废：否则 driveMusic 每帧会把位置再 seek 回 `end`（见下）
@@ -517,23 +558,28 @@ function replayMusic(now) {
 function driveMusic(on, full) {
   const m = state.music;
   const now = nowSec();
-  if (on && !m.on) startMusic(full ? 'vocal' : 'inst', now);
-  else if (!on && m.on) {
+  const sel = effectiveFeverMusic();
+  const vol = clamp(sel.volume, 0, 1);      // 音量来自本浏览器的设置（房间里也只听自己这份）
+  const onNow = on && vol > 0;
+  // 换了曲目 / 上次解析没成（`spec` 仍为空）⇒ 重新解析；解析期间不重复发起。
+  if (sel.track !== m.custom.id ? !m.custom.pending : sel.track && !m.custom.spec && !m.custom.pending) syncCustom();
+  if (onNow && !m.on) startMusic(chooseMusic(full), now);
+  else if (!onNow && m.on) {
     if (m.el && !m.fading) {
       // 记下**中断位置**：这一段没播完（确实停在**片段中间**）⇒ 下一次 Fever 从这儿接着播（业主 2026-10-17 裁决）。
       // ⚠️ 判据必须两头都卡住：Fever 时长 == 片段时长（都是 20 s）⇒ 正常结束往往恰好停在 `end`，
       // 若把 `end` 记成续播点，下一次 Fever 会「从 end 起播」→ 立刻触发末尾重播分支 → 整段静音（业主 2026-10-18 报的回归）。
       const pos = Number.isFinite(m.el.currentTime) ? m.el.currentTime : null;
-      const sp = m.which ? MUSIC[m.which] : null;
+      const sp = m.spec;
       if (pos != null && sp && pos > sp.start + 0.25 && pos < sp.end - 0.25) m.resume[m.which] = pos;
       m.fading = true;
       m.fadeStart = now;
     }
   }
-  m.on = on;
+  m.on = onNow;
   const el = m.el;
   if (!el) return;
-  const spec = MUSIC[m.which];
+  const spec = m.spec;
   if (!spec) return;
   // 自动播放门 / 卡顿兜底：**只看「位置有没有在往前走」，不看 `el.paused`** —— `play()` 被挡时返回 rejected
   // promise，某些浏览器在它落地之前 `paused` 已经变回 false，只盯 paused 会漏掉这一种（表现就是整场没声音）。
@@ -561,7 +607,7 @@ function driveMusic(on, full) {
   if (m.fading) {
     const k = 1 - (now - m.fadeStart) / MUSIC_FADE;
     if (k <= 0) { stopMusic(true); return; }
-    el.volume = clamp(k, 0, 1);
+    el.volume = clamp(k, 0, 1) * vol;
     return;
   }
   const pos = Number.isFinite(el.currentTime) ? el.currentTime : spec.start;
@@ -577,7 +623,7 @@ function driveMusic(on, full) {
   m.stuckSince = null;
   const fadeIn = clamp((now - m.t0) / MUSIC_FADE, 0, 1);        // 起播 1 秒淡入
   const fadeOut = clamp((spec.end - pos) / MUSIC_FADE, 0, 1);   // 末尾 1 秒淡出
-  el.volume = Math.min(fadeIn, fadeOut);
+  el.volume = Math.min(fadeIn, fadeOut) * vol;
 }
 
 // ---- 每帧：定位 + 填进度 ------------------------------------------------------------------------------------
@@ -605,6 +651,17 @@ function liveModule(url) {
 function currentBattle() {
   if (!battleRunner || typeof battleRunner.currentBattle !== 'function') return null;
   return battleRunner.currentBattle() || null;
+}
+
+/**
+ * 这一场战斗的身份（与包侧 `FEVER_LIVE` 记录里的 `key` 同一条）：只取两处都拿得到的那几项。
+ * ⚠️ 不用 `battleId`：包里的 installer 在 Battle 的构造期跑，那时 `battle.battleId` 还没赋值（见 `battle/main.mjs`）。
+ * @param {{ fieldId?: any, kind?: any, spec?: any }} b
+ * @returns {string}
+ */
+function battleKeyOf(b) {
+  const s = (b && b.spec) || {};
+  return `${b && b.fieldId != null ? b.fieldId : ''}|${s.round ?? 0}|${s.seed ?? 1}|${(b && b.kind) || ''}`;
 }
 
 /** 本机当前这一场的战斗模块 URL（来自 spec；没有战斗 / 没有本包 ⇒ null）。 */
@@ -680,10 +737,14 @@ function paint() {
   if (key !== state.battleKey) {
     state.battleKey = key;
     stopMusic(true);
-    state.music.resume = { inst: null, vocal: null };
+    state.music.resume = {};          // 换场 ⇒ 续播点作废（键按曲目身份，这里整表清空）
     // `on` 也归零：换场时若它还停在 `true`，新一场的 Fever **不会再触发 `startMusic`**（那一支只看 off→on 边沿）
     // —— 那也是「有时听不到音乐」的一条路径。⭐ 同时**预取两首 Fever 曲**（战斗一开始就抓，Fever 触发时不必现下载）。
     state.music.on = false;
+    // 上一场那条曲子/片段一并作废：新一场的 `startMusic` 会按当前的设置重新选曲、重新取规格。
+    state.music.el = null;
+    state.music.which = null;
+    state.music.spec = null;
     state.music.lastPos = null;
     state.music.stuckSince = null;
     if (b) preloadMusic();
@@ -694,8 +755,12 @@ function paint() {
   const mod = url ? liveModule(url) : null;
 
   // 没在战斗 / 没视图 / 本包战斗模块还没到 ⇒ 全部收起（不清表：等下一次条件满足再画）
-  const live = canAnchor && mod && mod.FEVER_LIVE && state.feed.myId != null
+  // ⚠️ 只认**这一场**写的记录（`key` 相同）：`FEVER_LIVE` 是模块级表、跨战斗不清 —— 上一场在 Fever 进行中
+  // 结束时留下的 `on: true` 会被新一场直接当成「Fever 正在开」，于是音乐在战斗一开始就起播、片段播完还
+  // `replayMusic` 一直循环（业主 2026-10-20 报的「Fever 音乐在战斗开始后异常出现，需要刷新页面」）。
+  const rec = canAnchor && b && mod && mod.FEVER_LIVE && state.feed.myId != null
     ? mod.FEVER_LIVE.byPid[state.feed.myId] : null;
+  const live = rec && rec.key === battleKeyOf(b) ? rec : null;
   if (!canAnchor || !live) {
     for (const e of state.els.values()) hide(e);
     hideNotesFrom(0);
@@ -791,7 +856,7 @@ export function mount(ctx) {
       state.noteSeen.clear();
       clearNoteFx();
       stopMusic(true); // 离开对局：收掉 Fever 曲并恢复场地 BGM
-      state.music.resume = { inst: null, vocal: null }; // 离开对局 ⇒ 续播点作废
+      state.music.resume = {}; // 离开对局 ⇒ 续播点作废
       state.music.on = false;                           // 同理归零：下次进入对局的 Fever 才能重新起播
     },
   };

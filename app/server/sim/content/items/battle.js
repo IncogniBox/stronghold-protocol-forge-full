@@ -100,6 +100,30 @@ function statMods(p) {
   return any ? m : null;
 }
 
+/**
+ * 一件装备的**属性贡献**（`statMods` 那一套，与 `installItem` 实际挂到携带者身上的数是同一份）：
+ * 只认属性 buff（`STAT_BUFFS` 点名的那些 bbKey），加法项相加、乘法项（`*Mul`）累乘。
+ *
+ * 为什么值得导出：内容层偶尔要**按条件缩放某件装备的效果**（重构模拟的「装备负载」：装备阶级高于携带者时
+ * 该装备效果 -50%），而装备的属性数值只在这一模块里推导 —— 要一个包自己再推一遍，就是同一件事的第二份真相。
+ * 拿到这里的 mods 之后，那条规则的做法是挂一条**补偿 buff**（把要减掉的那一半减回去）。
+ * @param {object} rec item record（`data/items.json`）
+ * @returns {object|null} mods（没有属性 buff 时为 null）
+ */
+export function itemStatMods(rec) {
+  const m = {};
+  for (const b of buffsOf(rec)) {
+    if (!STAT_BUFFS.has(b.bbKey)) continue;
+    const s = statMods(b.p);
+    if (!s) continue;
+    for (const [k, v] of Object.entries(s)) {
+      if (k.endsWith('Mul')) m[k] = (m[k] ?? 1) * v;
+      else m[k] = (m[k] ?? 0) + v;
+    }
+  }
+  return Object.keys(m).length ? m : null;
+}
+
 // ---- hammers (蒸汽之心) — derived from data: hammer records carry bbStr.big_hammer on their special buff
 const STEAM_KEY = 'chess_item_6_05_e';
 const STEAM_BUFF = 'act1autochess_equip_acarm079_global_buff';

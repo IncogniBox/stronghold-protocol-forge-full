@@ -101,10 +101,20 @@ describe('workshop: the overlay', () => {
   });
 
   test('the official data stays a clean baseline when no (or no) pack is used', () => {
-    assert.equal(Object.keys(getData({ log: quiet }).chess).length, 266, 'the process singleton must not see workshop content');
+    // 「仅官方」的基线：`workshopDir: null` 那条路 —— 官方文件本身 266 名干员，一个包的记录都不在里面。
     assert.equal(Object.keys(loadData(DATA_DIR, { log: quiet, workshopDir: null }).chess).length, 266);
-    // 仓库随包带了 workshop/ 下的 mod（发行包要开箱即用），但它们不参与上面这条「仅官方」基线
-    assert.ok(loadWorkshop(WORKSHOP_DIR, { log: quiet }).packs.length >= 1, 'the bundled packs live under workshop/, outside the official baseline');
+    // 仓库随包带了 workshop/ 下的 mod（发行包要开箱即用），而 `getData()` 的**默认** workshopDir 就是它
+    // ⇒ 进程单例的默认视图是「官方 + 随包 mod」合并后的那一份，而不是仅官方。这不是污染：单例与不带包的
+    // 基线只差各包自己新增的那几条，官方记录一条不少（下面逐条钉住），所以不能拿单例去量「仅官方」的基线。
+    const bundled = loadWorkshop(WORKSHOP_DIR, { log: quiet });
+    assert.ok(bundled.packs.length >= 1, 'the bundled packs live under workshop/, outside the official baseline');
+    const merged = loadData(DATA_DIR, { log: quiet, workshopDir: WORKSHOP_DIR });
+    assert.ok(Object.keys(merged.chess).length > 266, 'the bundled packs add operators of their own');
+    const singleton = getData({ log: quiet });
+    assert.deepEqual(Object.keys(singleton.chess).sort(), Object.keys(merged.chess).sort(),
+      'the process singleton is the merged view: official + the bundled packs (never a pack-free view)');
+    const official = loadData(DATA_DIR, { log: quiet, workshopDir: null });
+    for (const id of Object.keys(official.chess)) assert.ok(singleton.chess[id], `${id} must survive the overlay`);
   });
 
   // 「试玩里是一张贴图而不是模型」的数据侧安全网：手写包、CLI 写出来的包、编辑器写出来的包走的是同一层，

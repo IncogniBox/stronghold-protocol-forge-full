@@ -244,7 +244,7 @@ test('槽位那半**已经做了**：effect 必须写明它动了装备位，四
   assert.match(effect, /slot/i, 'plus 档的 effect 必须写明它改了装备位语义');
   assert.equal(/NOT implemented in this build/.test(effect), false, '那一半已经做了，不许再留「未实现」的免责句');
   for (const rel of ['server/match/player/items.js', 'server/match/player/acquire.js', 'server/match/bot.js', 'server/match/invariants.js']) {
-    assert.match(readFileSync(join(ROOT, rel), 'utf8'), /matchSlotPolicy/, `${rel} 的装备位判定必须读这一局的策略`);
+    assert.match(readFileSync(join(ROOT, rel), 'utf8'), /matchSlotPolicy|morphSlotPolicy/, `${rel} 的装备位判定必须读这一局的策略`);
   }
   // 而 `gamedata.equipPerChess` 的槽位数也一字未动（两件装备位是官方的，策略只回答「占几格」）
   const gdSrc = readFileSync(join(ROOT, 'server/match/gamedata.js'), 'utf8');

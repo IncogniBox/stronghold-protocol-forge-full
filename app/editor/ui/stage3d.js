@@ -22,6 +22,17 @@ import { t } from './i18n.js';
 const MANIFEST_URL = '/data/local-assets.json';
 const THREE_URL = '/vendor/three.module.js';
 
+/**
+ * 主题的中文显示名。**故意放在编辑器里而不是 board3d/themes.js**：编辑器的 i18n 词典以「中文原文」为键，而
+ * test/editorI18n.test.js 只认 `t('…')` 字面量、且要求每个键都能在 editor/ui 的源码里找到（否则算死键）——
+ * 所以显示名由编辑器持有（写法同下面的 PRESETS.label），themes.js 只管数据。词典见 editor/ui/i18n.en.stage.js。
+ */
+const THEME_LABELS = {
+  autochess: () => t('标准（卫戍协议）'),
+  skymirror: () => t('炎国 天镜阁'),
+  suilingcave: () => t('炎国 岁陵'),
+};
+
 /** 空格 = 临时的平移手（与 stage.js 的 2D 画布同一套动作）。模块自己收键盘事件，不去读别的模块的隐藏全局。 */
 let spaceDown = false;
 if (typeof globalThis.addEventListener === 'function') {
@@ -95,26 +106,44 @@ function miniAssets() {
 /**
  * Try to build the 3D view. Never throws: resolves { ok: false, reason } when the preview is unavailable, so the caller
  * simply keeps its 2D canvas and can say WHY (missing art / no WebGL2 / three failed / pack failed).
- * @param {{ canvas: HTMLCanvasElement, getStage: () => object|null, onError?: (e: any) => void }} opts
- * @returns {Promise<{ ok: true, update: () => void, resize: () => void, dispose: () => void, stats: () => object }
- *   | { ok: false, reason: string }>}
+ *
+ * `theme` picks the board theme (board3d/themes.js — the backdrop + the mood; the tile atlas stays the official one).
+ * A theme is baked into the pack and into the scene built from it, so there is no `setTheme`: the caller switches it by
+ * disposing this view and building a new one (stage.js reload3dTheme).
+ *
+ * @param {{ canvas: HTMLCanvasElement, getStage: () => object|null, onError?: (e: any) => void, theme?: string }} opts
+ * @returns {Promise<{ ok: true, update: () => void, resize: () => void, dispose: () => void, stats: () => object,
+ *   themes: () => {id: string, label: string}[], theme: () => string } | { ok: false, reason: string }>}
  */
-export async function createStageView3d({ canvas, getStage, onError } = {}) {
+export async function createStageView3d({ canvas, getStage, onError, theme } = {}) {
   const assets = miniAssets();
   try {
     const { boardArtListed, loadBoardPack, loadThree, webgl2Available } = await import('/client/js/render/board3d/load.js');
+    const { BOARD_THEMES, BOARD_THEME_IDS, DEFAULT_BOARD_THEME } = await import('/client/js/render/board3d/themes.js');
+    const themeId = BOARD_THEMES[theme] ? theme : DEFAULT_BOARD_THEME;
     if (!(await boardArtListed(assets))) {
       return { ok: false, reason: t('本机没有官方棋盘素材（data/local-assets.json 未列出棋盘图集），已退回 2D') };
     }
     if (!webgl2Available()) return { ok: false, reason: t('这台设备没有可用的 WebGL2，已退回 2D') };
     const THREE = await loadThree(THREE_URL);
     if (!THREE) return { ok: false, reason: t('three.js 没加载成功，已退回 2D') };
-    const pack = await loadBoardPack(assets);
+    const pack = await loadBoardPack(assets, themeId);
     if (!pack) return { ok: false, reason: t('棋盘素材包不完整，已退回 2D') };
+    // Offer only the themes this machine can actually dress: every theme needs its backdrop, and a theme that brings its
+    // own tile atlas (themes.js `atlas`) also needs that atlas installed — otherwise its pack would not load at all.
+    const themesList = BOARD_THEME_IDS
+      .filter((id) => {
+        const bt = BOARD_THEMES[id];
+        if (id === DEFAULT_BOARD_THEME) return true;
+        if (!assets.localUrl(...bt.bg)) return false;
+        return !bt.atlas || !!assets.localUrl(bt.bg[0], bt.atlas.d);
+      })
+      .map((id) => ({ id, label: (THEME_LABELS[id] || (() => id))() }));
 
     const { BoardScene } = await import('/client/js/render/board3d/scene.js');
     const { Camera, DEFAULT_OPTICS } = await import('/client/js/render/projection.js');
-    const { AREAS } = await import('/client/js/render/board3d/layout.js');
+    const { areaFor } = await import('/client/js/render/board3d/layout.js');
+    const { layoutOf } = await import('/client/js/render/layout.js');
 
     // preserveDrawingBuffer: a preview is something you want to capture (and that a test can read pixels from). The game
     // client leaves it off for throughput; an editor frame is not in a performance race, and losing the buffer on
@@ -129,9 +158,11 @@ export async function createStageView3d({ canvas, getStage, onError } = {}) {
     //     fog, which reads as "black canvas" and sends you hunting for a lighting bug that is not there.
     // An OVERVIEW has to build the WHOLE board: BoardScene only builds the tiles inside its current `area`, and the
     // default (AREAS.normal — the left battle half plus the lower-right island) is a PARTIAL map. Framing that partial
-    // build is what made an earlier version of this file look like a featureless plane. AREAS.all is the project's own
-    // whole-19x21 rect, so the preview uses it instead of restating the numbers.
-    scene.setArea(AREAS.all);
+    // build is what made an earlier version of this file look like a featureless plane. `areaFor('all', layout)` is the
+    // project's own whole-window rect **for THIS map** — 19×21 for an official stage (byte-for-byte AREAS.all), the
+    // map's own 45×60 window for the 大战场 sample, so a big map is built whole instead of only its bottom-left corner
+    // (`ensureArea`, below: re-applied whenever the map's window changes).
+    scene.setArea(areaFor('all', null));
     // Light the WHOLE board. BoardScene dims everything outside its focus rect (materials.js uFocusDim 0.72), and the
     // uniform's default is a small rect — so a preview that never calls this renders a correctly built but nearly black
     // board. `setFocus(null)` is the scene's own "everything lit" (scene.js:503).
@@ -171,6 +202,7 @@ export async function createStageView3d({ canvas, getStage, onError } = {}) {
     let cssW = 672, cssH = 608;
     let framedKey = null;
     let resizeKey = '';
+    let areaKey = '';
     /**
      * Aim at whatever the board actually built, and fit it to the frame.
      *
@@ -195,6 +227,21 @@ export async function createStageView3d({ canvas, getStage, onError } = {}) {
       Object.assign(home, { tx: cam.tx, ty: cam.ty, scale: cam.scale });
     }
 
+    /**
+     * Build the WHOLE of the map currently loaded: `areaFor('all', layoutOf(stage))` — the official 19×21 for an official
+     * record, the map's own window (e.g. 45×60) for one that declares a bigger `size`. Re-applied only when that window
+     * actually changes (a size switch in the size box), and the frame cache is dropped so the next `frameBoard()` re-fits
+     * the new extent — otherwise a big map renders as a small patch in the corner (the complaint 「3D 预览区域没有更改」).
+     */
+    function ensureArea(stage) {
+      const a = areaFor('all', layoutOf(stage));
+      const key = a.map((r) => `${r.r0},${r.r1},${r.c0},${r.c1}`).join('|');
+      if (key === areaKey) return;
+      areaKey = key;
+      scene.setArea(a);
+      framedKey = null;
+    }
+
     let disposed = false;
     let frames = 0;
 
@@ -204,7 +251,12 @@ export async function createStageView3d({ canvas, getStage, onError } = {}) {
         const stage = getStage();
         // 没有 record 也要能画：第一次推导回来之前，棋盘本身就是要看的东西。
         // setStage(null) 会清掉几何，所以这里只在真的没有 stage 时才走那一步。
-        scene.setStage(stage ? { id: stage.id, rows: stage.rows, devices: stage.devices } : null);
+        // **`size` / `layout` 必须一起带上**：BoardScene 用 `mapSize(layoutOf(stage))` 算它自己的网格，只给
+        // `{id, rows, devices}` 的话它永远算成官方 19×21，整张图就只画出标准地图那一片（业主：「3D 预览的显示不全，
+        // 只会显示标准地图的」）。
+        scene.setStage(stage ? { id: stage.id, rows: stage.rows, devices: stage.devices, size: stage.size, layout: stage.layout } : null);
+        // 整张图（这张图自己的窗口）都要建出来：换了尺寸就重设一次 area，并让下一次 frameBoard 重新取景
+        ensureArea(stage);
         view.resize();
         scene.render(cam, performance.now() / 1000);
         frames++;
@@ -320,6 +372,10 @@ export async function createStageView3d({ canvas, getStage, onError } = {}) {
         return true;
       },
       presets: () => PRESETS.map(({ id, label }) => ({ id, label: label() })),
+      /** The board themes this install can actually show (board3d/themes.js), for the picker. */
+      themes: () => themesList.map((x) => ({ ...x })),
+      /** The theme this view was built with (the caller switches it by building a new view). */
+      theme: () => themeId,
       stats: () => ({ frames, dist: Math.round(cam.dist), tilt: Math.round(cam.tilt), scale: Math.round(cam.scale), board3d: scene.stats?.() ?? null }),
       /** The live scene, for the devtools console (`__spEditor3d.stats()`) and for automated checks. */
       scene: () => scene,

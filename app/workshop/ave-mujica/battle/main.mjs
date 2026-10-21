@@ -236,6 +236,11 @@ function installAveMujica(battle, pid, bb, members) {
   battle.every(0.5, refreshTeam);
 
   // ---- Timoris / Mortis / Fever 的伤害钩子（对每个己方干员注册；丰川祥子在场时非成员吃 25%）
+  /** 本场的身份，随读数一起发出去（客户端面板只认「本场」的记录）。
+   *  ⚠️ 不能用 `battle.battleId`：`installContent` 在 Battle 的**构造函数里**跑，而 `battleId` 是构造完之后
+   *  （`sim/spec.js` `createBattleFromSpec`）才赋给这个对象的 ⇒ 这里读到的永远是 undefined。改用 spec 上
+   *  两边都拿得到的那几项拼一条（面板从 `battleRunner.currentBattle().spec` 算同一条）。 */
+  const liveKey = `${battle.fieldId ?? ''}|${battle.round ?? 0}|${battle.seed ?? 1}|${battle.kind ?? ''}`;
   /** 把本玩家当前的 Fever 读数写进模块级表（客户端面板读它画积攒进度条）。 */
   const pub = () => {
     // `full`（五名不同成员是否全在场上 ⇒ 面板据此选 Fever 音乐）与 `len`（一段 Fever 的总时长，面板据此把
@@ -244,6 +249,9 @@ function installAveMujica(battle, pid, bb, members) {
     FEVER_LIVE.byPid[pid] = {
       fever: st.fever, cap: FEVER_CAP, on: feverOn(), until: st.until, len: FEVER_TIME,
       full: !!(r.amoris && r.timoris && r.mortis && r.doloris && r.oblivionis),
+      // 面板只认**这一场**的记录（`ui/fever.js` 的 paint）：模块级表跨战斗不清，没有它时上一场的
+      // `on: true` 会被下一场直接当成「Fever 正在开」（业主 2026-10-20 报的音乐异常）。
+      key: liveKey,
     };
   };
   const gainFever = (n) => {
@@ -803,6 +811,9 @@ function installAveMujica(battle, pid, bb, members) {
   }, { immediate: true });
 
   pub(); // 开场先发一份（面板在第一次 tick 之前也读得到 0/450）
+  // 战斗结束：把本场的记录收尾成 `on: false` —— 面板只认同 `battleId` 的记录，所以这一条让「本场停在 Fever 中」
+  // 不会以 `on: true` 留给下一场（`FEVER_LIVE` 是模块级表、跨战斗不清；业主 2026-10-20 报的 Fever 音乐异常）。
+  battle.on('battleEnd', () => { st.until = -Infinity; pub(); });
 }
 
 registerBondInstaller('aveMujica', installAveMujica);

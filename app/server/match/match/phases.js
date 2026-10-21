@@ -125,6 +125,7 @@ export class MatchPhases {
     const d = this.draft;
     this.cancel(this._turnTimer);
     this._turnTimer = null;
+    if (this.test) this.setDeadline(0);
     while (d.idx < d.order.length && d.picks[d.order[d.idx]]) d.idx++; // loop-cap: draft order
     if (d.idx >= d.order.length) {
       d.turnDeadline = 0;
@@ -138,11 +139,13 @@ export class MatchPhases {
       d.turnDeadline = this.sched.now() + ms;
       // the step's countdown IS the turn's (one number everywhere)
       this.deadline = d.turnDeadline;
-      this._turnTimer = this.later(ms, () => {
+      const expire = () => {
         if (this.phase !== PHASE.BAND_DRAFT || token !== this._turnToken) return;
         const pid = this.draftTurn();
         if (pid) this._applyBand(this.players.get(pid), this.timeoutBand(pid));
-      });
+      };
+      if (this.test) { this.setDeadline(ms / 1000 / (this.timerScale || 1), expire); d.turnDeadline = this.deadline; }
+      else this._turnTimer = this.later(ms, expire);
     } else {
       d.turnDeadline = 0;
       this.deadline = 0;
@@ -281,7 +284,64 @@ export class MatchPhases {
       this.markPrivate(ps);
     }
     void timeout;
+    // 重构模拟（模式扩展-重构模拟）：策略选择之后插入「预重构」（盟约倾向 / 首领与协助负载的占位选择）；
+    // 其它模式逐字节走今天那条路。
+    if (this.gd.isRecon) this.enterPreRecon(); else this.enterBattleCheck();
+  }
+
+  /**
+   * 预重构（PHASE.PRE_RECON，模式扩展-重构模拟专属，room mode 'recon' ⇒ mode_recon_*）：策略选择之后、协议启动
+   * 之前的 60 s（config.timers.preRecon）。玩家在这一屏交 `g.reconChoice`（盟约倾向 / 首领占位 / 协助与负载占位）；
+   * 当前轮次只**记录**（m.public.reconChoices，机制轮再消费：盟约概率、4/8/12/16 首领、全局增益/减益）。
+   * 全员提交齐 ⇒ 提前结束；计时耗尽 ⇒ 没交的按「空选择」处理（各占位机制轮的默认值）。AI 座位立刻交空选择。
+   */
+  enterPreRecon() {
+    if (this.phase !== PHASE.BAND_DRAFT) return;
+    this.phase = PHASE.PRE_RECON;
+    /** @type {Record<string, { major?: string[], minor?: string[], story?: string|null, bosses?: object|null, assist?: string|null, load?: string|null }>} */
+    this.reconChoices = {};
+    for (const ps of this.order) if (ps.botControlled) this.reconChoices[ps.playerId] = {};
+    this.setDeadline(this.soloUntimed ? 0 : this.gd.timer('preRecon'), () => this.finishPreRecon());
+    this.markPublic();
+    this.flush(true);
+    this.maybeEndPreRecon();
+  }
+
+  maybeEndPreRecon() {
+    if (this.phase !== PHASE.PRE_RECON || this._reconAdvanceTimer) return;
+    if (this.order.every((p) => p.isBot || p.left || this.reconChoices[p.playerId])) {
+      this._reconAdvanceTimer = this.later(0, () => {
+        this._reconAdvanceTimer = null;
+        if (this.phase === PHASE.PRE_RECON) this.finishPreRecon();
+      });
+    }
+  }
+
+  finishPreRecon() {
+    if (this.phase !== PHASE.PRE_RECON) return;
+    this.setDeadline(0);
     this.enterBattleCheck();
+  }
+
+  /**
+   * `g.reconChoice`：一名玩家在预重构阶段提交（可多次，后到覆盖先到；空选择也是合法提交 —— 表示「看完了，
+   * 不另选」）。形状层（shared/protocol.js）已卡过形状；这里只认在场活人。
+   */
+  reconChoice(ps, msg) {
+    if (this.phase !== PHASE.PRE_RECON) return fail(ERR.WRONG_PHASE);
+    if (!ps.alive) return fail(ERR.ELIMINATED);
+    const cur = this.reconChoices[ps.playerId] || {};
+    this.reconChoices[ps.playerId] = {
+      major: msg.major !== undefined ? [...msg.major] : cur.major,
+      minor: msg.minor !== undefined ? [...msg.minor] : cur.minor,
+      story: msg.story !== undefined ? msg.story : cur.story,
+      bosses: msg.bosses !== undefined ? (msg.bosses ? { ...msg.bosses } : null) : cur.bosses,
+      assist: msg.assist !== undefined ? msg.assist : cur.assist,
+      load: msg.load !== undefined ? msg.load : cur.load,
+    };
+    this.markPublic();
+    this.maybeEndPreRecon();
+    return OK;
   }
 
   /**
@@ -302,11 +362,29 @@ export class MatchPhases {
 
   enterBattleCheck() {
     this.phase = PHASE.BATTLE_CHECK;
-    this.setDeadline(this.gd.timer('battleCheck'), () => this.startRound(1), { silent: this.soloUntimed });
+    this.setDeadline(this.gd.timer('battleCheck'), () => this.afterBattleCheck(), { silent: this.soloUntimed });
     this.markPublic();
   }
 
-  startRound(r) {
+  /**
+   * BATTLE_CHECK is over: R1 is about to begin. A plugin window declared at `battleCheck` for this round opens here —
+   * "before the round begins", the host's own step first (docs/PLUGINS.md §10b) — and holds R1 back until it closes; a
+   * content set without a window continues exactly as before (`openOfferWindow` returns before it touches anything).
+   */
+  afterBattleCheck() {
+    this.startRound(1);
+  }
+
+  startRound(r, afterStart = null) {
+    // Every round, including boss rounds. [ASSUMED] Expire nonblocking windows at the next round.
+    for (const w of this.offerWin) this._closeOffer(w);
+    this.offersDispose(); // A test-console round jump must discard the older continuation too.
+    const step = () => { this._startRoundAfterOffers(r); afterStart?.(); };
+    if (this.openOfferWindow('battleCheck', r) !== 'open') { step(); return; }
+    this._offerResume = step;
+  }
+
+  _startRoundAfterOffers(r) {
     this.phase = PHASE.ROUND_START;
     this.round = r;
     this.fields = [];
@@ -339,6 +417,12 @@ export class MatchPhases {
       // 出怪才始终只有面板加的那些（否则 >15 的回合会退回模式的官方波次）
       this.wave = buildNormalWave(this.gd, this.rngWaves, this.factions, this.devWaveRound(r), this.stageId);
     }
+    // 重构模拟的「试炼首领」（模式扩展-重构模拟，reconTrials.js）：预重构里选定的那一只「·重构」由本局**最靠前的
+    // 座位**的合法选择定下（没人交 ⇒ 从独占种子流抽一只），作为**普通敌人**追加进这一回合的出怪表（预览与战斗是
+    // 同一份列表 —— combat.js _normalOpts / views.js nextEnemiesFor），与开发者面板的 devExtraEnemies 逐条同形、
+    // 同一回合有效。首领回合（isBoss）不追加：它的出怪表另有来源。**官方对局连这一格都不写**（`this.gd.isRecon`
+    // 为假 ⇒ 不赋值，读点全走缺省路径）。注意：这一步不消费任何既有随机流（reconTrialBossFor 自带一口流）。
+    if (this.gd.isRecon) this.reconTrialSpawns = this.reconTrialSpawnsFor(r, isBoss);
     for (const ps of alive) ps.startRound(r);
     // 助战 (shared/support.js): re-check what each player brought against the pool ONE more time at the first round's
     // start and record what it really got (data/support.json can change between the lobby check and here). Nothing is
@@ -402,13 +486,17 @@ export class MatchPhases {
     // 开发者面板强制的首领回合：本回合号在官方表里没有首领模板，取**官方首领回合**那一套（模板 / 波次 / 血量）
     const wr = this.devBossRound === r ? this.gd.bossRound : r;
     const bossId = r === this.gd.hiddenRound && r !== this.gd.bossRound ? this.hiddenBossId : this.bossId;
+    // 重构模拟的 R20 预选：波次仍按通常抽到的首领取模板，只把首领本体的 spawn 换成「·重构」
+    const reconKey = this.gd.isRecon && r === this.gd.bossRound ? this.reconBossSpawnKeyFor(r) : null;
     // Pairing uses an independent seeded draw, consuming no shop, wave, draft or battle randomness.
     const groups = pairPlayers(this.alivePlayers(), createRng(deriveSeed(this.seed, 'boss-pairs')), this.bossPairs);
     this.bossPairs = groups.map(g => g.map(p => p.playerId));
     this.bossWaves = groups.map((g) => ({
       players: g.map((p) => p.playerId),
-      wave: buildBossWave(this.gd, this.rngWaves, this.factions, wr, { bossId, solo: this.isSolo || g.length === 1 }, this.stageId),
+      wave: this.reconBossWaveFor(r, buildBossWave(this.gd, this.rngWaves, this.factions, wr, { bossId, solo: this.isSolo || g.length === 1 }, this.stageId)),
     }));
+    // 首领战自身的 id（HUD / 血池）也切到候选那一只：pack 记录不在 bosses 表里时按 500000 的池子兜底
+    if (reconKey) this.bossId = reconKey;
   }
 
   /**
@@ -427,6 +515,14 @@ export class MatchPhases {
 
   afterRoundStart() {
     if (this.gd.spRounds().includes(this.round)) this.enterSpDraft();
-    else this.enterPrep();
+    else this.beforePrepOffers();
+  }
+
+  beforePrepOffers() {
+    // The official round start and its draw/draft finish first; only entering prep waits.
+    this.sp = null;
+    const step = () => this.enterPrep();
+    if (this.openOfferWindow('prep', this.round) !== 'open') { step(); return; }
+    this._offerResume = step;
   }
 }

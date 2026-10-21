@@ -26,8 +26,9 @@
 // handler): a chess gained during its dispatch — 贾维's gift, the elite that gift completes — waits for the next refresh.
 // 投资人 (investShip) active ⇒ SERVER_GAIN garrisons run ×2 (×3 at ≥ 100 layers) — owned by the dispatcher.
 // ctx.triggerGarrisons(uid, eventType) re-runs another piece's garrisons (铃兰, "触发…的获得时效果", 特质相同).
-// Items: onEquip / onArt / onDestroy go to the item's own handler only; every other hook runs for items equipped on
-// owned chess (ev.source.holder). That step walks a snapshot — the owned chess and each holder's items as they stand
+// Items: onEquip / onArt / onDestroy go to the item's own handler only (`global:` handlers see them too, 0.3.1 — that
+// dispatch goes through `dispatchItem`, not `dispatch`, so globals used to be skipped there); every other hook runs for
+// items equipped on owned chess (ev.source.holder). That step walks a snapshot — the owned chess and each holder's items as they stand
 // when it begins (every [holder, item] pair, taken before the first item runs) — and runs an item only if, when its
 // turn comes, it is still equipped on that holder and the holder is still owned: handlers move and destroy pieces
 // mid-walk (突变细胞 destroys its holder, returns the equipment to the hand and gains an operator; normal 博士投影
@@ -41,6 +42,7 @@
 // An eliminated player gets no dispatch, except the persistent effects whose handler sets `afterElimination: true`
 // (onRoundStart, EffectDispatcher.dispatchEliminated: 信标's gift — GitHub #86).
 
+import { dispatchOperatorTraits, operatorTraitHandler } from './operatorTraits.js';
 import { itemKey } from './gamedata.js';
 // 部署位天花板（`DEPLOY_CAP_MAX`，shared/constants.js）：从前这里是硬编码的 `12`，与 `shared/variants.js` 的
 // `deploy: "max"` 口径各写一遍 —— 一个数两个真相，本刀收到常量里。
@@ -290,6 +292,7 @@ export class EffectDispatcher {
         const h = reg.get(key);
         if (h) this._call(ps, key, h, hook, { kind: 'bond', key, bondId, bond: ps.bonds[bondId] ?? null }, ev);
       }
+      dispatchOperatorTraits(this, ps, hook, ev);
       // 4. garrisons (onPrice: already run as step 0)
       if (hook !== 'onPrice') this._garrisons(ps, hook, ev, refreshed);
       // 5. equipped items (not for the item-specific hooks): every [holder, item] pair of the owned chess, taken before
@@ -411,7 +414,8 @@ export class EffectDispatcher {
         const g = gd.garrison(gid);
         if (!g || g.eventType !== eventType) continue;
         const key = `garrison:${g.effectKey}`;
-        const h = this.registry.get(key);
+        const h = g.operatorTrait && eventType === 'SERVER_GAIN'
+          ? operatorTraitHandler(g.operatorTrait, hook) : this.registry.get(key);
         if (!h) continue;
         const ev = hook === 'onGain' ? { piece: self, kind: 'chess', source: 'trigger' }
           : hook === 'onSold' ? { piece: self, gain: 0 }
@@ -435,10 +439,16 @@ export class EffectDispatcher {
     if (!item || this.depth >= MAX_DEPTH) return ev;
     const key = `item:${itemKey(this.m.gd.item(item.id)?.effectRef ?? item.id)}`;
     const h = this.registry.get(key);
-    if (!h) return ev;
+    // `global:` 也看这三个钩子（0.3.1 起）。它们的契约是「每一名玩家的每一个钩子」（effectsMeta.js 文件头那一行），
+    // 而这条路**不经过 `dispatch`**（onEquip / onArt / onDestroy 是 item 作用域的，只有这一处发），所以从前 globals
+    // 被无声跳过 —— 官方的 global 处理器一个都没有（builtinMeta 只注册 `item:` / `effect:`），所以这条扩宽对官方内容
+    // 是零改动，对包是「声明的 global 终于真的收到这三个钩子」。重构模拟的「装备重构」正是靠它数销毁次数。
+    const globals = this.registry.globals();
+    if (!h && !globals.length) return ev;
     this.depth++;
     try {
-      this._call(ps, key, h, hook, { kind: 'item', key, piece: item, holder, item: this.m.gd.item(item.id) }, ev);
+      if (h) this._call(ps, key, h, hook, { kind: 'item', key, piece: item, holder, item: this.m.gd.item(item.id) }, ev);
+      for (const [gkey, gh] of globals) this._call(ps, gkey, gh, hook, { kind: 'global', key: gkey }, ev);
     } finally {
       this.depth--;
     }
@@ -582,7 +592,11 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
     pieceAt: (row, col) => { const p = Number.isInteger(row) && Number.isInteger(col) ? ps.board.get(tileKey(row, col)) : null; return p ? ps.pieceView(p, [row, col]) : null; },
     chessRecord: (id) => gd.chess(id),
     /** Bonds a chess piece counts for: its own + those granted by 变形同构体 pairings. */
-    pieceBonds: (uid) => { const l = ps.find(uid); return l && l.piece.kind === 'chess' ? bondsOfPiece(gd, l.piece) : []; },
+    pieceBonds: (uid, fallbackPiece = null) => {
+      const piece = ps.find(uid)?.piece || (source?.piece?.uid === uid ? source.piece : null)
+        || (fallbackPiece?.uid === uid ? fallbackPiece : null);
+      return piece?.kind === 'chess' ? bondsOfPiece(gd, piece, ps.m?.rules) : [];
+    },
     /** 特质 of a chess piece: [{ garrisonId, effectKey, eventType, bb, bbStr, desc }]. */
     garrisonsOf: (uid) => {
       const l = ps.find(uid);
@@ -738,6 +752,25 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
       ps.recompute();
       return true;
     },
+    /**
+     * 这一局**这名玩家**在「预重构」（PHASE.PRE_RECON）交上来的重构走向，或 null。
+     *
+     * 为什么值得一格读：重构模拟（模式扩展 mode-recon）的「重构协助 / 熔芯负载」是**预重构阶段的选择**，而那一层
+     * （`g.reconChoice` → `Match.reconChoices`）与内容层之间原本没有任何通道 —— 包既读不到它，也就无从按它生效。
+     * 形状与 `shared/protocol.js` 的 `g.reconChoice` 逐字相同（`{ major, minor, story, bosses, assist, load }`，全字段可选），
+     * 返回的是**拷贝**（`major` / `minor` 两个数组也是），内容层改不动引擎手里那一份。非该模式的房间恒为 null。
+     * @returns {object|null}
+     */
+    recon: () => {
+      const all = m.reconChoices;
+      const own = all && typeof all === 'object' ? all[ps.playerId] : null;
+      if (!own || typeof own !== 'object') return null;
+      return {
+        ...own,
+        major: Array.isArray(own.major) ? [...own.major] : [],
+        minor: Array.isArray(own.minor) ? [...own.minor] : [],
+      };
+    },
     destroyPiece: (uid) => {
       const l = ps.find(uid);
       if (!l) return false;
@@ -759,6 +792,14 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
       ps.recompute();
       return true;
     },
+    /**
+     * 内容层的**无条件**销毁一件道具（手牌 / 临时 / 已装备都行；装备与法术都是 `kind: 'item'` 的件，
+     * `destroyPiece` 销毁的是棋子，它的装备退回手牌）。
+     * 走 `PlayerState.destroyItem`（server/match/player/items.js）—— 不过玩家意图那道 `_gate()`，收尾与 `g.destroy` 相同：
+     * 归还装备池、发 `onDestroy`（`reason` 缺省 `'content'`）、recompute。真销毁了返回 true。
+     * @param {number} uid @param {{ reason?: string }} [opts]
+     */
+    destroyItem: (uid, opts = {}) => (typeof ps.destroyItem === 'function' ? ps.destroyItem(uid, opts && typeof opts.reason === 'string' ? opts.reason : 'content') : false),
     /** Queue a free pick-one offer of chess (shop.rewardOffer; `label` defaults to offerLabel(source), the bar's header). */
     offerChess: (ids, opts = {}) => !!ps.pushRewardOffer(opts.source || source.key || 'effect', { ids, tier: opts.tier ?? null, label: opts.label ?? offerLabel(gd, source) }),
     /** Queue a free pick-one offer of items (shop.rewardOffer with slots of kind 'item'). */

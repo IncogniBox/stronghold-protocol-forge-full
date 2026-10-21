@@ -25,6 +25,8 @@
 
 import { layerGainRoom } from '../../shared/constants.js';
 import { memberBonds } from '../../shared/morph.js';
+import { grantedBondsByMorph, ruleOption } from '../../shared/plugins/rules.js';
+
 
 export const HARMONY_BOND = 'maniShip';
 export const DEPUTY_BOND = 'deputShip';
@@ -40,20 +42,25 @@ export const DEPUTY_BOND = 'deputShip';
  * 这类盟约「不算作任何棋子的盟约」—— 不计入归属与激活、不进战斗输入 —— 于是它在这一局里对这些棋子等同于不存在。
  * @param {import('./gamedata.js').GameData} gd
  * @param {{ id: string, items?: Array<{ id: string }> }} piece
- * @param {Set<string>|null} [removed] 本局摘除的盟约 id
+ * @param {Set<string>|Record<string,string>|{ rules?: Record<string,string>|null, removed?: Set<string>|null }|null} [arg]
+ *   本仓的调用方传「本局摘除的盟约」集合（`removedBondsSet`）；上游 0.3.1 的调用方传**房间规则对象**
+ *   （`m.rules`）；两者都需要的调用方传 `{ rules, removed }`。
  * @returns {string[]}
  */
-export function pieceBonds(gd, piece, removed = null) {
+export function pieceBonds(gd, piece, arg = null) {
+  const removed = arg instanceof Set ? arg : (arg && arg.removed instanceof Set ? arg.removed : null);
+  const rules = arg instanceof Set ? null : (arg && arg.rules !== undefined ? arg.rules : arg);
   const c = gd.chess(piece.id);
   const items = Array.isArray(piece.items) ? piece.items : [];
   const recs = items.map((it) => gd.item(it.id)).filter(Boolean);
   // 成员资格的**合并**在 `shared/morph.js` 的 `memberBonds`（一处判据、三处同源）：自己的 `bonds` ∪ 装备授予 ∪
   // **特质授予**（`c.trait.grantsBonds`，DESIGN §28.49）。这一处、战斗里的 `unitBonds` 与客户端的 `pieceBondIds`
   // 调的是同一个函数 —— 三处各写一份 push 循环正是这条规则历史上最容易分叉的地方。
+  const mode = ruleOption(rules, 'morphPairing');
   let out = memberBonds(c && Array.isArray(c.bonds) ? c.bonds : [], {
     trait: c && c.trait,
     recs,
-    morphed: gd.morphPairing,
+    morphed: mode !== 'official' ? mode : gd.morphPairing,
     hasBond: (id) => !!gd.bond(id),
   });
   // 引擎级额外授予（`piece.meta.data.bondGrants`，内容钩子经 `ctx.setPieceData` 写入 —— 哥伦比亚 mod 的源石辅助仪
@@ -80,11 +87,11 @@ function membership(gd, ps) {
   for (const p of boardChess) {
     const base = gd.baseIdOf(p.id);
     const golden = gd.isGolden(p.id);
-    for (const b of pieceBonds(gd, p, removed)) { add(onBoard, b, base); add(onBoardVariant, b, `${base}|${golden ? 1 : 0}`); }
+    for (const b of pieceBonds(gd, p, { rules: ps.m?.rules, removed })) { add(onBoard, b, base); add(onBoardVariant, b, `${base}|${golden ? 1 : 0}`); }
   }
   for (const p of handChess) {
     const base = gd.baseIdOf(p.id);
-    for (const b of pieceBonds(gd, p, removed)) add(inHand, b, base);
+    for (const b of pieceBonds(gd, p, { rules: ps.m?.rules, removed })) add(inHand, b, base);
   }
   return { onBoard, onBoardVariant, inHand, goldenOnBoard: boardChess.filter((p) => gd.isGolden(p.id)).length };
 }

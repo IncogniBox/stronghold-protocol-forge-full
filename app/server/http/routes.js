@@ -63,7 +63,9 @@
 // → `room.listed`，见 `docs/META.md` §1.7b）。**本文这一段的 HTTP 面口径一个字都没变**：`/api/rooms` 仍然只给一个整数、
 // 永远不回答房号 —— 协议面那条是另一刀（只发给**已连接的客户端**，不是匿名 HTTP 面）。
 
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
 import { PROTOCOL_VERSION, UPSTREAM_VERSION } from '../../shared/constants.js';
 import { buildTag } from './buildTag.js';
 import { setSecurityHeaders, sendError, sendJson, splitUrl } from './common.js';
@@ -103,6 +105,89 @@ const RECORDS_BUCKET_IDLE_MS = 10 * 60_000;
 export const PUBLIC_ROOMS_URL = '/api/rooms';
 
 /**
+ * 服务器音乐库（颂乐人偶 Fever 音乐选择）：官方提取的 BGM（`public/assets/audio/bgm`）与已装工坊包的
+ * `assets/bgm`（经 `/workshop-assets/<pack>/bgm/…` 送达）。只读、无需会话；客户端用 `id` 记选择，
+ * 用 `url` 试听/播放。曲目在服务端启动后变了（换包）下次请求自然反映，缓存只挡一小段时间。
+ */
+export const MUSIC_LIBRARY_URL = '/api/music';
+/** @type {RegExp} */
+/**
+ * 只收**两条路由都认**的音频扩展名：官方静态目录认识的类型比工坊 `WORKSHOP_ASSET_TYPES` 多，但后者是
+ * `/workshop-assets/**` 的准入门槛（`.mp3` / `.ogg` / `.wav` / `.m4a`）—— 列一个取回来是 404 的曲目没有意义。
+ */
+const AUDIO_EXT_RE = /\.(mp3|ogg|wav|m4a)$/i;
+const MUSIC_CACHE_MS = 15_000;
+/** 协议允许的 id 上限（`shared/protocol.js` isId）。 */
+const MUSIC_ID_MAX = 64;
+/** id 只留协议允许的字符；文件名里的其它字符一律折成 `_`。 */
+const musicIdPart = (s, max = 48) => String(s).replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, max);
+
+/**
+ * 扫一个目录里的音频文件，追加到 `out`。
+ * @param {string} dir @param {'official'|'workshop'} kind @param {string|null} pack
+ * @param {Array<{ id: string, kind: string, pack?: string, packName?: string, name: string, url: string, bytes: number }>} out
+ * @param {string|null} [packName] 工坊包的显示名（没有就显示 id）
+ */
+function collectMusic(dir, kind, pack, out, packName = null) {
+  let names;
+  try { names = readdirSync(dir); } catch { return; }
+  const prefix = kind === 'official' ? 'official:' : `pack:${musicIdPart(pack, 24)}:`;
+  // 文件名那段能吃下的长度：整个 id 必须 ≤ 64（`isId` 的上限），前缀之外全给文件名。
+  const stemRoom = Math.max(8, MUSIC_ID_MAX - prefix.length);
+  for (const file of names.sort()) {
+    if (file.startsWith('.') || !AUDIO_EXT_RE.test(file)) continue;
+    const abs = path.join(dir, file);
+    let bytes;
+    try { const st = statSync(abs); if (!st.isFile()) continue; bytes = st.size; } catch { continue; }
+    const stem = file.replace(/\.[^.]+$/, '');
+    // 折过字符 / 截过长的文件名再挂 6 位摘要：中文标题折出来只剩一串 `_`（`KillKiss人声` 与 `KillKiss伴奏` 都是
+    // `KillKiss__`），只靠后缀编号去重会让「加一首新歌」改写已保存的选择。摘要跟着文件名走 ⇒ 同一首歌的 id 永不变。
+    const plain = musicIdPart(stem, stemRoom);
+    const hash = plain === stem ? '' : `-${createHash('sha1').update(stem).digest('hex').slice(0, 6)}`;
+    out.push({
+      id: prefix + musicIdPart(stem, stemRoom - hash.length) + hash,
+      kind,
+      ...(pack ? { pack } : {}),
+      ...(pack && packName ? { packName } : {}),
+      name: stem,
+      url: kind === 'official'
+        ? `/assets/audio/bgm/${encodeURIComponent(file)}`
+        : `/workshop-assets/${encodeURIComponent(pack)}/bgm/${encodeURIComponent(file)}`,
+      bytes,
+    });
+  }
+}
+
+/**
+ * 本服务器的音乐库（官方 BGM + 工坊包 bgm）。
+ * @param {string|undefined} publicDir @param {Map<string, string>|null|undefined} workshopAssets pack id → pack dir
+ * @param {Map<string, string>|null} [packNames] pack id → 显示名（`pack.json.name`）
+ */
+export function musicLibrary(publicDir, workshopAssets, packNames = null) {
+  const tracks = [];
+  if (publicDir) collectMusic(path.join(publicDir, 'assets', 'audio', 'bgm'), 'official', null, tracks);
+  if (workshopAssets && typeof workshopAssets.forEach === 'function') {
+    workshopAssets.forEach((dir, pack) => {
+      if (typeof dir === 'string' && dir) collectMusic(path.join(dir, 'assets', 'bgm'), 'workshop', pack, tracks, packNames?.get(pack) || null);
+    });
+  }
+  // 不同文件名折出来的 id 可能撞车（例如 `KillKiss人声` / `KillKiss伴奏` 都折成 `KillKiss__`）：
+  // 按目录里的固定顺序给后来者加 `-2` / `-3`，让每一条都仍是协议合法的唯一 id。
+  const seen = new Map();
+  for (const track of tracks) {
+    const n = (seen.get(track.id) || 0) + 1;
+    seen.set(track.id, n);
+    if (n > 1) {
+      const suffix = `-${n}`;
+      track.id = `${track.id.slice(0, MUSIC_ID_MAX - suffix.length)}${suffix}`;
+    }
+  }
+  tracks.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'official' ? -1 : 1)
+    || String(a.pack || '').localeCompare(String(b.pack || '')) || a.name.localeCompare(b.name));
+  return tracks;
+}
+
+/**
  * The GET /healthz body.
  *
  * `modHealth`（可选）是包的服务端模块贡献的字段（DESIGN §28.14）：一个**函数**（每次请求现算，因为那三件要报的是
@@ -123,7 +208,10 @@ export const PUBLIC_ROOMS_URL = '/api/rooms';
 function pluginCount(lobby) {
   let n;
   try { n = Number(lobby?.plugins?.unofficial?.()) || 0; } catch { n = 0; }
-  return n > 0 ? { plugins: n } : {};
+  // 目录元信息：只在有已加载插件发布公告时带上，从不进房间或对局
+  let notices = false;
+  try { notices = lobby?.plugins?.hasNotices?.() === true; } catch { /* optional catalogue hint */ }
+  return { ...(n > 0 ? { plugins: n } : {}), ...(notices ? { notices: true } : {}) };
 }
 
 /** The content sets with gameplay plugins rooms hold now (DESIGN **§34.6**，上游原文 `§32.6`; 0 without any). */
@@ -178,9 +266,11 @@ const wantsTraffic = (query) => /(?:^|&)traffic(?:=(?:1|true|yes))?(?:&|$)/i.tes
  *   trustProxy: whose forwarding headers name the client (net.js clientAddress; the server's TRUST_PROXY)
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createRequestHandler({ serveStatic, health, log, records = null, accounts = null, modsCatalog, modsPanels, httpLanes, publicDir, trustProxy = 'auto', largeAssets = null, assetPack = null, workshopConflicts = null, studio = null, csp = null, trustedRuntime = null }) {
+export function createRequestHandler({ serveStatic, health, log, records = null, accounts = null, modsCatalog, modsPanels, httpLanes, publicDir, trustProxy = 'auto', largeAssets = null, assetPack = null, workshopConflicts = null, workshopAssets = null, workshopPackNames = null, studio = null, csp = null, trustedRuntime = null }) {
   /** @type {Map<string, TokenBucket>} 客户端地址 → 只读战绩路由的桶（见文件头那条「已知边界」） */
   const recordBuckets = new Map();
+  /** @type {{ at: number, tracks: any[] } | null} 音乐库的短缓存（见 MUSIC_LIBRARY_URL） */
+  let musicCache = null;
 
   /**
    * 这两条只读路由的准入。true = 放行。超限回 429（带 `Retry-After`），而不是静默降级成空结果 —— 客户端/机器人
@@ -247,6 +337,13 @@ export function createRequestHandler({ serveStatic, health, log, records = null,
       // **只有一个整数字段**：加任何一个别的键（房号、房主名、在局中、人数、容量）都是把「数」变成侧写，
       // 那正是这一格被收窄掉的东西。`sendJson` 自带 `Cache-Control: no-store`。
       sendJson(req, res, 200, { publicRooms: health.lobby.roomCounts().publicRooms });
+      return;
+    }
+    if (parts.rawPath === MUSIC_LIBRARY_URL) {
+      // 服务器音乐库（官方 BGM + 工坊包 bgm）：只读、无会话、无令牌；客户端据此列出可选的 Fever 曲目。
+      const now = Date.now();
+      if (!musicCache || now - musicCache.at > MUSIC_CACHE_MS) musicCache = { at: now, tracks: musicLibrary(publicDir, workshopAssets, workshopPackNames) };
+      sendJson(req, res, 200, { tracks: musicCache.tracks });
       return;
     }
     // 账号名规则**先**判：它与房间号规则共用 `/api/records/` 前缀，而账号名不一定是 4 个字母。

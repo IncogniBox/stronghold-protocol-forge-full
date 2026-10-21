@@ -1,13 +1,15 @@
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
-import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_ROOM_MODS, EMOTES, GEO, maxSeatsFrom, MIN_SEATS } from './constants.js';
+import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_ROOM_MODS, EMOTES, GEO, maxSeatsFrom, MIN_SEATS, RECON } from './constants.js';
 import { isDroppableChess } from './standIn.js';
 import { diySlotIds, validateDiyPicks } from './diy.js';
 import { isSupportEntries } from './support.js';
 import { cultivatedStats, isPotential, isCultivate, POTENTIAL_DEFAULT, CULTIVATE_DEFAULT, hasPotentialData } from './potential.js';
 import { isContentHash } from './plugins/identity.js';
 import { isPluginId } from './plugins/manifest.js';
+import { isTestCommand } from './testMode.js';
+import { PLUGIN_OFFER_SLOTS } from './plugins/limits.js';
 
 /**
  * 座位校验的上界 (100 人版移植; 缺省上限 20 座, 业主裁令 2026-10-12): `SP_MAX_SEATS` when the deployment set it,
@@ -36,6 +38,10 @@ const isInt = (v, lo = -Infinity, hi = Infinity) => Number.isInteger(v) && v >= 
 const isStr = (v, max = 64) => typeof v === 'string' && v.length <= max;
 const isBool = (v) => typeof v === 'boolean';
 const isId = (v) => typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_\-.:]+$/.test(v);
+/** Fever 音乐片段（`room.feverMusic`）的上限：曲目本身 ≤ 1 小时，片段 0.5 秒 – 10 分钟。 */
+const FEVER_MUSIC_MAX_SECONDS = 3600;
+const FEVER_MUSIC_MIN_SEGMENT = 0.5;
+const FEVER_MUSIC_MAX_SEGMENT = 600;
 const isUid = (v) => isInt(v, 1, 2 ** 31);
 const isNum = (v, lo = -Infinity, hi = Infinity) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 const isPlain = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
@@ -134,7 +140,7 @@ const isModVal = (v) => v === null || isNum(v, -BIG, BIG) || isStr(v, 64) || isB
 const isLeak = (l) => isPlain(l) && isId(l.enemyKey)
   && (l.mods === undefined || l.mods === null || isMap(l.mods, RESULT_LIMITS.mods, (k) => isStr(k, 32), isModVal))
   && optional((v) => isNum(v, 0, 1000))(l.lpr) && nullable(isId)(l.sourcePlayerId) && nullable((v) => isStr(v, 16))(l.tag)
-  && optional(isBool)(l.counted) && optional(isBool)(l.boss) && optional(isBool)(l.spawned);
+  && optional(isBool)(l.counted) && optional(isBool)(l.boss) && optional(isBool)(l.spawned) && optional(isBool)(l.uniteRuntime);
 const isUnitEnd = (u) => isPlain(u) && nullable(isUid)(u.uid) && isNum(u.hpPct, 0, 1) && isNum(u.sp, 0, 1e5) && isBool(u.alive)
   && optional(isBool)(u.skillActive) && nullable(isId)(u.defId);
 const isUnitStat = (u) => isPlain(u) && nullable(isUid)(u.uid) && nullable(isId)(u.defId) && optional((v) => isStr(v, 16))(u.kind)
@@ -356,6 +362,88 @@ export function checkLoadoutOps(ops, isOperator, changesWithPotential = null) {
     out[id] = { potential, cultivate };
   }
   return { ok: true, ops: out };
+}
+
+// ---- 干员皮肤 (docs/SKINS.md): room.skins { skins } ------------------------------------------------------------
+
+/**
+ * `room.skins { skins }`: `skins` = `{ [charId]: skinId }` — which appearance each operator wears, one entry per
+ * OPERATOR, so it covers the normal chess, its elite and a 自选 slot fielding the same operator (the skin catalogue of
+ * the composed asset manifest is grouped per operator too: `chars[charId].skins`, docs/PLUGINS.md §9).
+ *
+ * A skin comes from an enabled cosmetic plugin's overlay (one the server's owner installed, switched on by each player
+ * in 设置 → 外观插件 — `scope: ["personal"]`, so a room is never part of it). Unlike `room.loadout` these are PUBLIC:
+ * they ride in `Match.publicView().players[]`, which is how a teammate sees your skin.
+ *
+ * The wire refuses the shape of the whole map (a non-plain object, a key that is not an operator charId, a value that
+ * is not a skinId, or more than `SKIN_LIMITS.entries` pairs). Whether the operator is one this room's content has is
+ * `checkSkinSelection`: that entry is dropped and the rest kept. A skinId the manifest does not hold still draws the
+ * operator's default model (`spineEntry`).
+ */
+export const SKIN_LIMITS = Object.freeze({
+  // [ASSUMED] absolute ceiling of one message. The practical cap is the operator count of the room's content
+  // (checkSkinSelection drops the rest); 256 is above the vanilla roster (210) and the same order as the loadout's
+  // operator map. A larger map is refused whole, the way an over-long loadout is.
+  entries: 256, idLen: 64, charIdLen: 64,
+});
+/** A skinId. NOT `isId`: that allows only `[A-Za-z0-9_\-.:]`, while a skin key carries `@` and `#` (`char_002_amiya@winter#1`). The same character class as shared/plugins/visual.js `isSkinKey`. */
+export const isSkinId = (v) => typeof v === 'string' && v.length > 0 && v.length <= SKIN_LIMITS.idLen && /^[A-Za-z0-9_][A-Za-z0-9_@#+.\-]*$/.test(v);
+/**
+ * An operator charId. Official ids are `char_<digits>_<token>` (character_table / data/chess.json: `char_498_inside`,
+ * `char_1012_skadi2`, `char_4145_ulpia`, `char_616_pithst`). A plugin operator is `char_x_<id>`
+ * (shared/plugins/recordsSchema.js). A chess id (`chess_char_1_01_a`) is not one: `isId` would accept it.
+ */
+export const CHAR_ID = /^char_(?:x_[A-Za-z0-9_-]+|[0-9]+_[A-Za-z0-9_]+)$/;
+export const isCharId = (v) => typeof v === 'string' && v.length <= SKIN_LIMITS.charIdLen && CHAR_ID.test(v);
+/**
+ * Structural check of `room.skins.skins`: a plain object of ≤ 256 entries, keyed by an operator charId, each value a
+ * skinId. Anything else — an array, a null-prototype object, a chess id, a bad skin id, one more entry — is refused
+ * as a whole (BAD_MSG). The room's own operator list is not known here.
+ */
+export const isSkinSelection = (v) => isMap(v, SKIN_LIMITS.entries, isCharId, isSkinId);
+
+const SKIN_OPS = new WeakMap();
+/**
+ * The operators a room's content has, as charIds: every chess record (hidden and golden share the base charId), the
+ * stand-in bodies (`backups.units`), and the 自选 picks (`diy.ownedPool`, `diy.operators`). Not chess ids.
+ * @param {{ chess?: Record<string, any>, backups?: any }|null|undefined} data
+ * @returns {Set<string>}
+ */
+export function operatorCharIds(data) {
+  if (!data || typeof data !== 'object') return new Set();
+  let ids = SKIN_OPS.get(data);
+  if (ids) return ids;
+  ids = new Set();
+  const chess = data.chess && typeof data.chess === 'object' ? data.chess : null;
+  if (chess) for (const c of Object.values(chess)) if (c && isCharId(c.charId)) ids.add(c.charId);
+  const backups = data.backups && typeof data.backups === 'object' ? data.backups : null;
+  const units = backups?.units && typeof backups.units === 'object' ? backups.units : null;
+  if (units) for (const id of Object.keys(units)) if (isCharId(id)) ids.add(id);
+  const diy = backups?.diy && typeof backups.diy === 'object' ? backups.diy : null;
+  if (Array.isArray(diy?.ownedPool)) for (const id of diy.ownedPool) if (isCharId(id)) ids.add(id);
+  const ops = diy?.operators && typeof diy.operators === 'object' ? diy.operators : null;
+  if (ops) for (const id of Object.keys(ops)) if (isCharId(id)) ids.add(id);
+  SKIN_OPS.set(data, ids);
+  return ids;
+}
+
+/**
+ * A skin selection the room may store. The shape is `isSkinSelection` (a failure refuses the whole map). A charId the
+ * room's content does not have is dropped; the rest is kept, so the stored map is at most the operator count, and at
+ * most `SKIN_LIMITS.entries` [ASSUMED].
+ * @param {any} skins
+ * @param {(charId: string) => boolean} [hasOperator]
+ * @returns {{ ok: true, skins: Record<string, string>, dropped: number } | { error: 'BAD_MSG', detail: string }}
+ */
+export function checkSkinSelection(skins, hasOperator) {
+  if (!isSkinSelection(skins)) return { error: 'BAD_MSG', detail: 'bad skin selection' };
+  const out = {};
+  let dropped = 0;
+  for (const id of Object.keys(skins)) {
+    if (typeof hasOperator === 'function' && !hasOperator(id)) { dropped++; continue; }
+    out[id] = skins[id];
+  }
+  return { ok: true, skins: out, dropped };
 }
 
 // ---- operator ownership (干员持有, 0.2.0 补位): room.ownership { notOwned } -------------------------------------------
@@ -621,7 +709,11 @@ const isDir = (v) => DIRS.includes(v);
 
 const target = (v) => {
   if (!v || typeof v !== 'object') return false;
-  if (v.area === 'board') return isInt(v.row, 0, GEO.ROWS - 1) && isInt(v.col, 0, GEO.COLS - 1);
+  // A board target is bounded by the CANVAS, not by the official 19×21: a map is a window inside the canvas
+  // (shared/layout.js), and a big map's own deploy rects can sit ABOVE the official rows — a 27×33 stage's normal
+  // band is rows 17–20, so the official bound silently refused its top two rows (the sim still judges the tile:
+  // the canvas outside the window is impassable, so an out-of-window drop is refused there, as it always was).
+  if (v.area === 'board') return isInt(v.row, 0, GEO.CANVAS_ROWS - 1) && isInt(v.col, 0, GEO.CANVAS_COLS - 1);
   if (v.area === 'hand') return isInt(v.idx, 0, GEO.HAND_SIZE - 1);
   return false;
 };
@@ -649,7 +741,7 @@ export const C2S = {
     noReplace: isBool, claimAt: (v) => isNum(v, 0, Number.MAX_SAFE_INTEGER), $optional: ['token', 'version', 'auth', 'password', 'noReplace', 'claimAt'] },
   ping: { c: (v) => typeof v === 'number' && Number.isFinite(v) },
   'room.create': {
-    mode: (v) => v === 'solo' || v === 'coop',
+    mode: (v) => v === 'solo' || v === 'coop' || v === 'recon',
     difficulty: (v) => DIFFICULTIES.includes(v),
     mods: (v) => v == null || isModDigest(v),
     // the room's own mod set (W-A, DESIGN §28.9): pack ids the server has loaded, sorted+deduped server-side.
@@ -677,7 +769,11 @@ export const C2S = {
     //   改成房间字段。非法值**点名拒绝**（`dev` 非布尔 / `stage` 形状不对都是 `BAD_MSG`），不静默忽略。
     dev: (v) => v === undefined || v === null || isBool(v),
     stage: (v) => v === undefined || v === null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.-]+$/.test(v)),
-    $optional: ['mods', 'modIds', 'chatMode', 'seatCap', 'dev', 'stage'],
+    // 重构模拟（mode 'recon'）的队伍数（RECON.MIN_TEAMS..RECON.MAX_TEAMS，缺省 1）：房主建房时定，赛前不可改。
+    teamCount: (v) => v === undefined || v === null || isInt(v, RECON.MIN_TEAMS, RECON.MAX_TEAMS),
+    // test 房间（DESIGN §36.8，上游 0.3.1）：只认字面 true；普通房间不发这个键
+    test: (v) => v === true,
+    $optional: ['mods', 'modIds', 'chatMode', 'seatCap', 'dev', 'stage', 'teamCount', 'test'],
   },
   // 房间同意（W7, DESIGN §28.53）：进一个**声明了模组集合**的房间（`room.state.mods`）时，真人玩家必须**明确
   // 同意**才继续 —— 这是「我知道这一局要跑别人写的内容」那句话的落点。它与 `checkModSet` 要客户端回一个摘要
@@ -694,8 +790,12 @@ export const C2S = {
     code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v),
     mods: (v) => v == null || isModDigest(v),
     consent: (v) => v === undefined || v === null || v === true,
-    $optional: ['mods', 'consent'],
+    // testAck：进测试房间时的确认（上游 0.3.1）
+    testAck: (v) => v === true,
+    $optional: ['mods', 'consent', 'testAck'],
   },
+  // test: only the literal true (DESIGN §36.8). Omit it for a normal room — `false` is a bad field, so a
+  // string cannot sneak in as "not a test". The server still refuses it unless SP_TEST_MODE is on.
   'room.leave': {},
   // 上局战绩（`SP_ACCOUNTS=1`, server/matchRecords.js, docs/RECORDS.md）：空消息，答案走 `records.latest`
   // 给**请求者本人**。开着账号时它是「我这个账号的最近一局」；关着账号时按会话 playerId 查（每次连接的新 id，
@@ -719,6 +819,11 @@ export const C2S = {
     code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v),
     seatCap: (v) => isInt(v, MIN_SEATS, SEAT_CAP),
   },
+  // 重构模拟（模式扩展-重构模拟，mode 'recon'）：自由选队 —— 赛前任何在座玩家把自己移到 1..RECON.MAX_TEAMS
+  // 号队伍（RECON.MIN_TEAMS..MAX_TEAMS，每队 ≤ RECON.TEAM_SIZE；共享常量见 shared/constants.js）。
+  // 新增 C2S 类型 ⇒ `PROTOCOL_VERSION` 不动（先例 `records.mine` / `g.unequip`）：老客户端一个字节都不发，
+  // 非 recon 房间收到时处理器回 WRONG_PHASE。超载拒绝在处理器（`TEAM_FULL`），形状层只管范围。
+  'room.setTeam': { team: (v) => isInt(v, RECON.MIN_TEAMS, RECON.MAX_TEAMS) },
   // the co-op room option 「AI 队友最后选择」 (GitHub #338; host, before the match): the strategy and 机变 drafts order every
   // human seat before every AI seat (server/match/match/phases.js humansFirst); room.state.aiPicksLast
   'room.setAiPicksLast': { on: isBool },
@@ -730,6 +835,20 @@ export const C2S = {
   // 缺了它，「声明空集合」与「消息坏了」就分不开了 —— 而这两种情况的修法正好相反。
   'room.mods': {
     modIds: (v) => Array.isArray(v) && v.length <= MAX_ROOM_MODS && v.every(isModId),
+  },
+  // 房间的 Fever 音乐（颂乐人偶 mod）：`track` = `GET /api/music` 的曲目 id（`null` = 包内默认的
+  // KillKiss 伴奏 / 人声），`start` / `end` = 裁剪出的片段秒数。房主、开局前可改；曲目字节由每个客户端
+  // 从**本服务器的音乐库**解析（服务端只认 id，不认 URL，因此这里不存在任意 URL 的入口）。
+  'room.feverMusic': {
+    // ⚠️ 有 `$check` 时协议层**不再逐字段跑**上面那些判据（`validateC2S` 的早退，见该函数），所以整条形状
+    // 都写在这一个判据里：`track` 的形状与秒数的范围缺一不可。
+    $check: (m) => {
+      if (m.start != null && !isNum(m.start, 0, FEVER_MUSIC_MAX_SECONDS)) return false;
+      if (m.end != null && !isNum(m.end, 0, FEVER_MUSIC_MAX_SECONDS)) return false;
+      if (m.track == null) return true;
+      return isId(m.track) && isNum(m.start, 0, FEVER_MUSIC_MAX_SECONDS) && isNum(m.end, 0, FEVER_MUSIC_MAX_SECONDS)
+        && m.end > m.start && m.end - m.start >= FEVER_MUSIC_MIN_SEGMENT && m.end - m.start <= FEVER_MUSIC_MAX_SEGMENT;
+    },
   },
   'room.addBot': {},
   'room.removeBot': { seat: (v) => isInt(v, 0, SEAT_CAP - 1) },
@@ -746,6 +865,9 @@ export const C2S = {
   // player brings as supports, stored per session/seat like the loadout. The pool is the SERVER's (data/support.json):
   // an operator it does not list is DISABLED and refuses the whole message — there is deliberately no fallback.
   'room.support': { entries: isSupportEntries },
+  // 干员皮肤 (docs/SKINS.md): the appearances the player wears, keyed by operator charId; PUBLIC, so it is accepted in
+  // any room phase (the loadout locks at INFO_CHECK because it changes what a unit does; a skin changes only the model)
+  'room.skins': { skins: isSkinSelection },
   // operator ownership (干员持有, 0.2.0 补位): stored per session / seat; a match takes the list its seat had when it
   // started (an out-of-match setting — during a match it is stored for the next one: ROOM_STARTED)
   'room.ownership': { notOwned: isNotOwnedList },
@@ -767,7 +889,7 @@ export const C2S = {
   // spectator seats (remake feature, community report #26; MAX_SPECTATORS): take one of a co-op room's spectator seats —
   // in its lobby or while its match runs — never a player seat; the host frees one by playerId (the spectator gets
   // room.closed { reason: 'kicked' }). room.leave / g.leave leave a spectator seat like a player seat.
-  'room.spectate': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
+  'room.spectate': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.removeSpectator': { playerId: isId },
   // the room's plugins (DESIGN **§34**，上游原文 `§32`, P1a; host, before the match — like a difficulty change it
   // un-readies the others): the plugins of this server the room switches on, in any order (the server closes the set over
@@ -866,6 +988,19 @@ export const C2S = {
   // the strategy highlighted in the draft screen (user playtest #4 item 4): a turn that runs out takes it while it is
   // free (Match.timeoutBand); absent / null clears it
   'g.bandFocus': { bandId: nullable(isId), $optional: ['bandId'] },
+  // 预重构提交（模式扩展-重构模拟，PHASE.PRE_RECON）：盟约倾向（主 ≤2 / 副 ≤3 / 故事集 ≤1，具体键在
+  // config.recon.assistPools）与占位选择。全部键可选 —— 一帧可以只带玩家刚改的那一组；形状层只管形状，
+  // 归属 / 计数 / 是否可选在处理器（Match.reconChoice）按 config.recon 判。新增 C2S 类型 ⇒ `PROTOCOL_VERSION`
+  // 不动（先例 `g.unequip`）；非 PRE_RECON 阶段收到回 WRONG_PHASE。
+  'g.reconChoice': {
+    major: (v) => Array.isArray(v) && v.length <= 2 && v.every(isId),
+    minor: (v) => Array.isArray(v) && v.length <= 3 && v.every(isId),
+    story: (v) => v === undefined || v === null || isId(v),
+    bosses: (v) => v === undefined || v === null || (typeof v === 'object' && Object.keys(v).length <= 8 && Object.values(v).every((x) => x === null || isId(x))),
+    assist: (v) => v === undefined || v === null || isId(v),
+    load: (v) => v === undefined || v === null || isId(v),
+    $optional: ['major', 'minor', 'story', 'bosses', 'assist', 'load'],
+  },
   'g.buy': { slot: (v) => isInt(v, 0, 15) },
   'g.refresh': {},
   'g.freeze': {},
@@ -876,15 +1011,23 @@ export const C2S = {
   // replaceUid: with both of the target's slots used, the equipped item the replace dialog picked (research 09 §1.2
   // UseEquipUp.unloadInstId; absent ⇒ the oldest; not one of the target's items ⇒ BAD_TARGET)
   'g.equip': { itemUid: isUid, targetUid: isUid, replaceUid: nullable(isUid), $optional: ['replaceUid'] },
-  'g.art': { itemUid: isUid, row: (v) => isInt(v, 0, GEO.ROWS - 1), col: (v) => isInt(v, 0, GEO.COLS - 1), dir: isDir, $optional: ['dir'] },
+  // 这里的内联上界与 `target()` 同一条理由：棋盘落点以**画布**为界（一张图是画布里的窗口，见 shared/layout.js），
+  // 大图自己的部署矩形可以落在官方 19×21 之上 —— 27×33 那张图的普通带就是 17–20 行。
+  'g.art': { itemUid: isUid, row: (v) => isInt(v, 0, GEO.CANVAS_ROWS - 1), col: (v) => isInt(v, 0, GEO.CANVAS_COLS - 1), dir: isDir, $optional: ['dir'] },
   'g.destroy': { uid: isUid },
   // 装备拆卸（行为开关 `unequip: "allow"`，DESIGN §28.43.1）：把一件**已装备**的装备从干员身上取下，退回手牌
   // （手牌满则进临时整备区）。**新增的 C2S 类型，`PROTOCOL_VERSION` 不动**（先例 `records.mine`）：老客户端不发它
   // 就一切照旧，而**缺省档（`official`）下这个意图逐字回今天那句 `'equipped items are locked'`**（见
   // server/match/player/items.js）。形状只有一个字段，与 `g.equip.itemUid` / `g.destroy.uid` 同一个 `isUid`。
   'g.unequip': { itemUid: isUid },
+  // unequip (DESIGN §36.15): one equipped item back to the hand, else the visible temp window. Official rooms refuse it.
   'g.reward': { idx: (v) => isInt(v, 0, 5) },
   'g.choice': { idx: (v) => isInt(v, 0, 5), choiceId: isId, $optional: ['choiceId'] },
+  // a plugin interaction window (PLUGIN API v2, docs/PLUGINS.md §10b): offerId is the window's declared id, idx the
+  // slot picked; g.offerRefresh redraws one slot (the window's own `refresh.perSlot` bounds how often). The host
+  // applies the window's declared effect primitive — a plugin never receives these messages itself.
+  'g.offer': { offerId: isId, pluginId: isId, seq: (v) => isInt(v, 0, 1000000), cardId: optional(isId), idx: (v) => isInt(v, 0, PLUGIN_OFFER_SLOTS - 1) },
+  'g.offerRefresh': { offerId: isId, pluginId: isId, seq: (v) => isInt(v, 0, 1000000), cardId: optional(isId), idx: (v) => isInt(v, 0, PLUGIN_OFFER_SLOTS - 1) },
   'g.ready': { ready: isBool },
   'g.emote': { id: (v) => EMOTES.includes(v) },
   // playerId: the player tapped in the team panel (a 联防 / boss pair field shows two) — what an eliminated viewer or a
@@ -902,6 +1045,9 @@ export const C2S = {
   // unicast full m.public; a spectator seat may ask too (watching includes resyncing what it watches)
   'g.publicFull': {},
   'g.leave': {},
+  // host test commands (DESIGN §36.8 phase 2). The server applies them only in a test match. `args` is checked
+  // again by shared/testMode.js parseTestArgs (ids, bounds). Unknown keys inside args fail there, not here.
+  'g.test': { cmd: isTestCommand, args: (v) => v === undefined || (isPlain(v) && Object.keys(v).length <= 8), $optional: ['args'] },
 
   // 本地调试指令（本 Forge 发行版自加的 dev 通道，非上游协议）—— 动作闭枚举见文件顶部的 `DEV_ACTIONS`。两种门禁：
   //   * `SP_DEV=1`：只认旧形状 `{ funds }`（浏览器控制台 `__SP__.net.send('g.dev', { funds: 1000 })`）；

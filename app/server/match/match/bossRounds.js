@@ -71,10 +71,7 @@ export class MatchBoss {
     if (!alive.length) { this.finish({ victory: false, reason: 'eliminated' }); return; }
     this.phase = hidden ? PHASE.HIDDEN_CORE : PHASE.FINAL_ASSAULT;
     this.lastResults = new Map();
-    if (!hidden) {
-      this.teamLp = alive.reduce((s, p) => s + Math.max(0, p.lp), 0);
-      for (const ps of alive) ps.lpAtFinal = Math.max(0, ps.lp);
-    }
+    if (!hidden) this._openTeamLp();
     const bossId = hidden ? this.hiddenBossId : this.bossId;
     // BOSS_HIT tickers ("对敌方领袖造成的伤害超过20% / 50% / 80%"): the player's damage to THIS leader over its pool —
     // the pool's own per-player tally, one pool per boss round. stats.bossDamage (the result's 领袖伤害) adds up both
@@ -101,19 +98,22 @@ export class MatchBoss {
     const reuse = this.bossWaves && this.bossWaves.length === groups.length && this.bossWaves.every((w, i) => w.players.join() === groups[i].map((p) => p.playerId).join());
     this.fields = groups.map((g, i) => {
       const solo = this.isSolo || g.length === 1;
-      const wave = reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo }, this.stageId);
+      const wave = hidden ? (reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo }, this.stageId))
+        : this.reconBossWaveFor(this.round, reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo }, this.stageId));
       // one spawn list per field, shared by the field's players' onBattleStart handlers (edit it in place)
       const spawns = wave.spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
       // bounties with battles left (a multi-round card lasts MULTI_ROUND_BOUNTY_BATTLES) follow their player into the
       // boss field, on the player's half
+      // the map's own half boundary: the two boss halves meet at the window's middle column (shared/layout.js bandMidOf)
+      const mid = this.layout.mirrorCol / 2;
       g.forEach((ps, j) => {
-        for (const b of bountySpawns(this.gd, this.round, wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: j === 0 ? 'L' : 'R' })) spawns.push(b);
+        for (const b of bountySpawns(this.gd, this.round, wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: j === 0 ? 'L' : 'R', mid })) spawns.push(b);
       });
       const inputs = g.map((ps, j) => {
         const input = ps.battleInput({ side: j === 0 ? 'L' : 'R', colOffset: j === 0 ? 0 : 8 });
         input.lpForBoss = this.teamLp;
         // `side` + `routes`: the player's half of a pair field (spawn-list edits for one player, e.g. 鸭爵's swap)
-        const ev = { input, kind: hidden ? 'hidden' : 'boss', round: this.round, spawns, routes: wave.routes, side: g.length > 1 ? (j === 0 ? 'L' : 'R') : null };
+        const ev = { input, kind: hidden ? 'hidden' : 'boss', round: this.round, spawns, routes: wave.routes, side: g.length > 1 ? (j === 0 ? 'L' : 'R') : null, mid };
         this.dispatch(ps, 'onBattleStart', ev);
         return ev.input && typeof ev.input === 'object' ? ev.input : input;
       });
@@ -166,6 +166,18 @@ export class MatchBoss {
       onDone: (runner) => this._finalDone(runner, hidden),
     });
     this.runner.start();
+  }
+
+  /**
+   * Merged team LP at the moment a Final Assault first opens. The Hidden Core keeps whatever is left;
+   * it does not call this again. A test jump straight into the hidden round calls it once when the
+   * assault that would have opened the pool was skipped. [ASSUMED] that sum is the alive players'
+   * current LP, not a leftover after a fight that did not happen.
+   */
+  _openTeamLp() {
+    const alive = this.alivePlayers();
+    this.teamLp = alive.reduce((s, p) => s + Math.max(0, p.lp), 0);
+    for (const ps of alive) ps.lpAtFinal = Math.max(0, ps.lp);
   }
 
   _startFinalClient(hidden) {

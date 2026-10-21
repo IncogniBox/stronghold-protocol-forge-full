@@ -37,6 +37,7 @@
 
 import { createRng, deriveSeed } from '../sim/rng.js';
 import { PLUGIN_ACTION_UNITS } from '../../shared/plugins/limits.js';
+import { OFFICIAL_LAYOUT } from '../../shared/layout.js';
 
 const ACLOON = 'enemy_9012_acloon';
 const DEFAULT_PLACEHOLDERS = Object.freeze({
@@ -478,17 +479,22 @@ export function buildBossWave(gd, rng, factions, round, { bossId, solo }, stageI
   };
 }
 
-/** Boss-field column that splits the left (L) and the right (R) player's half (the goals are at cols 2–3 / 17). */
-const BOSS_MID_COL = 10;
+/**
+ * Boss-field column that splits the left (L) and the right (R) player's half — the OFFICIAL layout's middle column,
+ * where the two halves meet (the goals are at cols 2–3 / 17). A map carries its own: the middle column is
+ * `layout.mirrorCol / 2` (shared/layout.js `bandMidOf`), so every boss-field caller passes it in.
+ */
+const OFFICIAL_MID_COL = OFFICIAL_LAYOUT.mirrorCol / 2;
 
 /**
  * Route index of the first template route with the requested motion (fallback 0). `side` ('L' | 'R') prefers a route
- * that ends on that player's half of a boss field (pair templates route to both goals).
+ * that ends on that player's half of a boss field (pair templates route to both goals). `mid` is that field's middle
+ * column (the map's own; OFFICIAL_MID_COL when omitted).
  */
-export function routeByMotion(routes, fly, side = null) {
+export function routeByMotion(routes, fly, side = null, mid = OFFICIAL_MID_COL) {
   const ok = (r) => r && (fly ? r.motion === 'FLY' : r.motion !== 'FLY' && r.motion !== 'E_NUM');
   if (side === 'L' || side === 'R') {
-    const j = routes.findIndex((r) => ok(r) && Array.isArray(r.end) && (side === 'R' ? r.end[1] > BOSS_MID_COL : r.end[1] < BOSS_MID_COL));
+    const j = routes.findIndex((r) => ok(r) && Array.isArray(r.end) && (side === 'R' ? r.end[1] > mid : r.end[1] < mid));
     if (j >= 0) return j;
   }
   const i = routes.findIndex(ok);
@@ -530,8 +536,8 @@ function hostAction(gd, wave, { fly, token = false }) {
  * Hidden Core included (`side`: the player's half of the boss field, see routeByMotion).
  * @param {Array<{ id: string, card: object }>} bounties
  */
-export function bountySpawns(gd, round, wave, bounties, playerId, { solo = false, side = null } = {}) { // eslint-disable-line no-unused-vars
-  return bountyPlan(gd, round, wave, bounties, playerId, side).specs;
+export function bountySpawns(gd, round, wave, bounties, playerId, { solo = false, side = null, mid = OFFICIAL_MID_COL } = {}) { // eslint-disable-line no-unused-vars
+  return bountyPlan(gd, round, wave, bounties, playerId, side, mid).specs;
 }
 
 /** Runs of consecutive equal markers: [{ v, start, len }]. */
@@ -545,7 +551,7 @@ function runsOf(list) {
   return out;
 }
 
-function bountyPlan(gd, round, wave, bounties, playerId, side) {
+function bountyPlan(gd, round, wave, bounties, playerId, side, mid = OFFICIAL_MID_COL) {
   const scale = scaleFor(gd, round);
   const routes = (wave && wave.routes) || [];
   const acts = Array.isArray(wave && wave.actions) ? wave.actions : [];
@@ -587,11 +593,11 @@ function bountyPlan(gd, round, wave, bounties, playerId, side) {
     for (const run of runs) {
       if (run.v === OWN) continue;
       const { b, c, fly } = run.v;
-      let routeIndex = hs && Number.isInteger(hs.routeIndex) ? hs.routeIndex : routeByMotion(routes, fly, side);
+      let routeIndex = hs && Number.isInteger(hs.routeIndex) ? hs.routeIndex : routeByMotion(routes, fly, side, mid);
       const r = routes[routeIndex];
       const motionOk = r && (fly ? r.motion === 'FLY' : r.motion !== 'FLY' && r.motion !== 'E_NUM');
-      const sideOk = !(side === 'L' || side === 'R') || (r && Array.isArray(r.end) && (side === 'R' ? r.end[1] > BOSS_MID_COL : r.end[1] < BOSS_MID_COL));
-      if (!motionOk || !sideOk) routeIndex = routeByMotion(routes, fly, side);
+      const sideOk = !(side === 'L' || side === 'R') || (r && Array.isArray(r.end) && (side === 'R' ? r.end[1] > mid : r.end[1] < mid));
+      if (!motionOk || !sideOk) routeIndex = routeByMotion(routes, fly, side, mid);
       const spec = {
         time: time + run.start * step,
         enemyKey: c.enemyKey,
@@ -617,8 +623,8 @@ function bountyPlan(gd, round, wave, bounties, playerId, side) {
  * followed by the bounty specs. Use it instead of `[...wave.spawns, ...bountySpawns(…)]`, which keeps the host
  * action's own spacing.
  */
-export function withBounties(gd, round, wave, bounties, playerId, { side = null } = {}) {
-  const { specs, retime } = bountyPlan(gd, round, wave, bounties, playerId, side);
+export function withBounties(gd, round, wave, bounties, playerId, { side = null, mid = OFFICIAL_MID_COL } = {}) {
+  const { specs, retime } = bountyPlan(gd, round, wave, bounties, playerId, side, mid);
   const out = [];
   for (const s of wave.spawns || []) {
     const rt = s.tag !== 'bounty' && Number.isInteger(s.actionIndex) ? retime.get(s.actionIndex) : null;

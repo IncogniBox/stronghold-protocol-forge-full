@@ -446,7 +446,7 @@ export async function validateWorkshop({ root = WORKSHOP_DIR, only = null, log =
       const atlasRel = spine.atlas;
       const skelOk = checkFile(`${field}.skel`, skelRel);
       checkFile(`${field}.atlas`, atlasRel);
-      const derivedAtlas = skelRel.replace(/\.skel$/i, '.atlas');
+      const derivedAtlas = skelRel.replace(/\.(?:skel|json)$/i, '.atlas');
       if (atlasRel !== derivedAtlas) {
         add({ field: `${field}.atlas`, code: 'ART_ATLAS_NAME_MISMATCH', severity: 'error', message: `the loader derives the atlas from the skeleton ("${derivedAtlas}") but pack.json names "${atlasRel}"`, hint: 'put the atlas beside the skeleton under the same name: <name>.skel + <name>.atlas' });
       }
@@ -479,9 +479,21 @@ export async function validateWorkshop({ root = WORKSHOP_DIR, only = null, log =
       }
       if (!skelOk) return;
       let skelInfo;
-      try { skelInfo = parseSkel(new Uint8Array(fs.readFileSync(path.join(assetsDir, skelRel)))); } catch (e) {
-        add({ field: `${field}.skel`, code: 'ART_SPINE_VERSION', severity: 'error', message: `this .skel cannot be read as a Spine 3.8 skeleton (${e && e.message ? e.message : e})`, hint: 'export the model as Spine 3.8.x binary — the client parses it with @pixi-spine/runtime-3.8 and stays silent on failure' });
-        return;
+      const skelAbs = path.join(assetsDir, skelRel);
+      if (/\.json$/i.test(skelRel)) {
+        // Spine 3.8 **JSON**：客户端用同一个 pixi-spine 加载器（按扩展名选 SkeletonJson），这里只读版本与 clip 名。
+        try {
+          const j = JSON.parse(fs.readFileSync(skelAbs, 'utf8'));
+          skelInfo = { version: String(j && j.skeleton && j.skeleton.spine || ''), animations: Object.keys((j && j.animations) || {}) };
+        } catch (e) {
+          add({ field: `${field}.skel`, code: 'ART_SPINE_VERSION', severity: 'error', message: `this .json cannot be read as a Spine skeleton (${e && e.message ? e.message : e})`, hint: 'export the model as Spine 3.8.x (binary .skel or JSON)' });
+          return;
+        }
+      } else {
+        try { skelInfo = parseSkel(new Uint8Array(fs.readFileSync(skelAbs))); } catch (e) {
+          add({ field: `${field}.skel`, code: 'ART_SPINE_VERSION', severity: 'error', message: `this .skel cannot be read as a Spine 3.8 skeleton (${e && e.message ? e.message : e})`, hint: 'export the model as Spine 3.8.x binary — the client parses it with @pixi-spine/runtime-3.8 and stays silent on failure' });
+          return;
+        }
       }
       if (!/^3\.8\./.test(skelInfo.version)) {
         add({ field: `${field}.skel`, code: 'ART_SPINE_VERSION', severity: 'error', message: `the skeleton's version is "${skelInfo.version}" — only 3.8.x is accepted`, hint: 're-export as 3.8.x: the shipped parser may also read 3.7 / 4.0 / 4.1, but every official model is 3.8' });

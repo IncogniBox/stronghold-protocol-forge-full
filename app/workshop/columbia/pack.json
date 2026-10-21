@@ -5,7 +5,7 @@
  "author": "the Columbia mod",
  "license": "GPL-3.0-or-later",
  "description": "哥伦比亚 mod：新增核心盟约【哥伦比亚】（源石辅助仪 / 随机进阶装备 / 视为额外携带装备）、策略【混沌本质】（图标干员：谬因）、4 件新装备（源石辅助仪 / 沙盘·α / 沙盘·β / 同行者）与【哥伦比亚】盟约干员。数据与素材走创意工坊叠加层，官方 data/*.json 不被改动。",
- "gameVersion": "0.3.0",
+ "gameVersion": "0.3.1",
  "combat": true,
  "stripDiyOverlaps": true,
  "behaviour": [

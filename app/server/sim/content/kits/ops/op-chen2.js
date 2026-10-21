@@ -186,6 +186,8 @@ function leaveSlime(battle, unit, b) {
   const fresh = !tiles.size;
   const until = battle.time + life;
   for (const k of unit.rangeKeys) tiles.set(k, { until, ms, def });
+  // 粘液的**画面**：以**她自己脚下的地块**为圆心（r=2）——攻击特效属于她那一格，不跟目标/攻击范围走
+  // （业主 2026-10-21：「攻击特效应该在威龙陈自己所处的地块上，不是敌人那一格」；上一版按 rangeKeys 铺会落到敌人那边）。
   if (fresh) battle.fx('zone', { x: unit.x, y: unit.y, radius: 2, dur: life, id: unit.id, skill: 'chen2:slime' });
 }
 

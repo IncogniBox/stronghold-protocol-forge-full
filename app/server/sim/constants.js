@@ -10,7 +10,7 @@ export const SNAPSHOT_EVERY = 3;
 
 /**
  * The sim's grid stride: the **canvas**, not the official map size. A map is a window inside it (shared/layout.js),
- * so a big map (up to 27×33) needs no dynamic stride anywhere — every `r * COLS + c` key in the sim stays a constant
+ * so a big map (up to 45×60) needs no dynamic stride anywhere — every `r * COLS + c` key in the sim stays a constant
  * multiply, and an official 19×21 stage simply leaves the rest of the canvas impassable and undrawn.
  * Semantic "the board is 19×21" readers use GEO.ROWS / GEO.COLS instead.
  */

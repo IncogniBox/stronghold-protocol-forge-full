@@ -12,7 +12,8 @@
 //            piece is always a slotted slot of its owner's, and a DIY shop / reward card one of its stocked slots
 //   economy  funds / pendingFunds non-negative integers, LP finite, shop level in range, prices ≥ 0
 //   pieces   unique uids; hand 10 / temp 5 slots; temp holds pieces only while the hand is full (a free hand slot pulls
-//            a temp piece in, PlayerState._fillHandFromTemp); chess carry ≤ equipPerChess known items; a normal piece
+//            a temp piece in, PlayerState._fillHandFromTemp); chess carry ≤ equipPerChess known items
+//            (morphPairing plus: a 变形同构体 does not count toward that cap); a normal piece
 //            holds ≤ 1 copy, an elite ≤ goldenCopies; merges are immediate (never `mergeCount` normal copies of one
 //            chess, never two copies of a mergeable normal item); every token's owner chess is deployed
 //   board    tiles inside the own region and legal for the piece (a range-bound summon inside its owner's attack
@@ -29,10 +30,11 @@
 //   match    phase known; teamLp / boss pool within range; combat fields match the alive players
 
 import { PHASE, BOND_LAYER_CAP } from '../../shared/constants.js';
-import { FIELD, canPlace, placeClass, positionClass, parseKey } from './board.js';
+import { ruleOption } from '../../shared/plugins/rules.js';
+import { inField, FIELD, canPlace, placeClass, positionClass, parseKey } from './board.js';
 import { computeBonds } from './bondsMeta.js';
 // 装备位语义（第 7 段）：不变量里「占几格 / 最多几件 / 最多一件变形同构体」读这一局的策略（缺省档 = 官方那条算术）。
-import { matchSlotPolicy } from '../../shared/morph.js';
+import { matchSlotPolicy, morphPairingOf } from '../../shared/morph.js';
 
 const PHASES = new Set(Object.values(PHASE));
 
@@ -117,11 +119,13 @@ export function collectViolations(m, { limit = 25 } = {}) {
         if (rec.isDiy && !rec.diyFor) fail(`${id}: owns ${p.id}, a 自选 slot it has not filled`);
         if (!Array.isArray(p.items)) fail(`${id}: ${p.id} carries no item array`);
         else {
-          // 装备位不变量：**占几格**与**最多几件** —— 占几格走这一局的装备位策略（`shared/morph.js`；缺省档就是
-          // `items.length`，`plus` 档下变形同构体不占位、而它自己**每名干员最多一件**），一共几格是**本引擎的容量**
-          // （官方 2 + 携带者的 `params.slot_cap`，源石辅助仪 +2/+4）。缺省档下逐字就是从前那条
-          // `p.items.length > gd.equipPerChess`。
-          const policy = matchSlotPolicy(m);
+          // 装备位不变量：**占几格**与**最多几件** —— 占几格走这一局的装备位策略（房间规则优先，其次模块层
+          // behaviour；缺省档就是 `items.length`，`plus` 档下变形同构体不占位、而它自己**每名干员最多一件**），
+          // 一共几格是**本引擎的容量**（官方 2 + 携带者的 `params.slot_cap`，源石辅助仪 +2/+4）。缺省档下逐字
+          // 就是从前那条 `p.items.length > gd.equipPerChess`。
+          const rule = ruleOption(m.rules, 'morphPairing');
+          const mode = rule !== 'official' ? rule : (m.behaviour ? morphPairingOf(m.behaviour) : 'official');
+          const policy = matchSlotPolicy({ behaviour: [{ switch: 'morphPairing', option: mode }] });
           const cap = gd.equipCapacity(p.items);
           const slots = policy.slotsUsed(p.items, (id) => gd.item(id));
           if (slots > cap) fail(`${id}: ${p.id} uses ${slots} equipment slots`);
@@ -162,13 +166,15 @@ export function collectViolations(m, { limit = 25 } = {}) {
     // a pure read (Match.deployMapFor: the field the player deploys on now) — PlayerState.deployMap() would update the
     // player's cached field / legality flag, and this checker must not change when a later recompute moves pieces
     const dmap = typeof m.deployMapFor === 'function' ? m.deployMapFor(ps) : ps.deployMap();
+    // the field that map was built for — a map's board is its own shape, and its boss half is narrower (shared/layout.js)
+    const dfield = typeof m.deployFieldOf === 'function' ? m.deployFieldOf(ps) : 'normal';
     for (const [k, p] of ps.board) {
       const [r, c] = parseKey(k);
-      if (!(r >= FIELD.r0 && r <= FIELD.r1 && c >= FIELD.c0 && c <= FIELD.c1)) fail(`${id}: piece outside the board at ${k}`);
+      if (!inField(r, c, m.layout, dfield)) fail(`${id}: piece outside the board at ${k}`);
       if (p.kind === 'item') { fail(`${id}: item ${p.id} stands on the board`); continue; }
       const rec = p.kind === 'token' ? pgd.token(p.id) : pgd.chess(p.id);
       const cls = p.kind === 'chess' ? placeClass(ps, rec) : positionClass(rec);
-      if (rec && !canPlace(dmap, cls, r, c)) fail(`${id}: ${p.id} on an illegal tile ${k}`);
+      if (rec && !canPlace(dmap, cls, r, c, m.layout, dfield)) fail(`${id}: ${p.id} on an illegal tile ${k}`);
       // a "只能部署在召唤者攻击范围内" summon inside its owner's attack range (PlayerState.summonRange: a pure read)
       const range = p.kind === 'token' && typeof ps.summonRange === 'function' ? ps.summonRange(p) : null;
       if (range && !range.has(k)) fail(`${id}: ${p.id} on ${k}, outside its owner's attack range`);

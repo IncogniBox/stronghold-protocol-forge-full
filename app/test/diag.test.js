@@ -4,7 +4,7 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  recordError, errorLog, errorCount, clearErrorLog, messageOf, stackOf, stripHosts, redact, redactValues, secretsOf, buildDiagnostics,
+  recordError, errorLog, errorCount, clearErrorLog, messageOf, eventReasonText, stackOf, stripHosts, redact, redactValues, secretsOf, buildDiagnostics,
   setBattleSource, currentBattle, LOG_MAX, STACK_LINES, contentLine,
 } from '../public/js/diag.js';
 import { APP_VERSION } from '../shared/constants.js';
@@ -39,6 +39,32 @@ describe('the error log', () => {
     assert.equal(messageOf(null), 'null');
     assert.ok(messageOf('x'.repeat(500)).length <= 300);
     assert.equal(stripHosts('see http://10.0.0.2:3000/x.js and https://a.b/c'), 'see /x.js and /c');
+  });
+
+  test('a DOM Event handed to reject (an onerror that passes the raw event) is named by type and target, not {"isTrusted":true}', () => {
+    // the shape of a failing <img> load: a browser-dispatched Event with the element as its target
+    const ev = { type: 'error', isTrusted: true, target: { tagName: 'IMG', currentSrc: 'http://192.168.1.5:3000/assets/a.png?v=2' } };
+    assert.equal(eventReasonText(ev), 'event "error" on IMG (/assets/a.png)');
+    assert.equal(messageOf(ev), 'event "error" on IMG (/assets/a.png)', 'the report line says what failed');
+    // a synthetic event (the page dispatched it) is marked: app code pointed at, not the browser
+    assert.equal(messageOf({ type: 'error', isTrusted: false, target: { tagName: 'VIDEO' } }), 'event "error" on VIDEO [synthetic]');
+    // an ErrorEvent (a script error on a resource) keeps its message; a window target names itself
+    assert.equal(messageOf({ type: 'error', isTrusted: true, target: globalThis, message: 'boom' }), 'event "error" on window: boom');
+    // anything that is not event-shaped keeps its old reading, byte for byte
+    assert.equal(messageOf({ a: 1 }), '{"a":1}');
+    assert.equal(messageOf({ isTrusted: true }), '{"isTrusted":true}', 'no type ⇒ not an event: the old fallback');
+    assert.equal(messageOf({ type: 'error', isTrusted: true }), 'event "error"', 'no target: type only');
+    assert.equal(eventReasonText(new Error('x')), null, 'an Error is never an event');
+    assert.equal(eventReasonText(null), null);
+    assert.equal(eventReasonText({ code: 'TIMEOUT' }), null);
+    // recorded, it reaches the report as one readable entry (and two different targets are two entries, not a merged xN)
+    clearErrorLog();
+    recordError('rejection', ev, null, 1000);
+    recordError('rejection', { type: 'error', isTrusted: true, target: { tagName: 'LINK' } }, null, 2000);
+    const lines = buildDiagnostics({ state: {}, now: 2000, pageStart: 0 }).split('\n');
+    assert.ok(lines.includes('#1 00:00:02 rejection: event "error" on LINK'));
+    assert.ok(lines.includes('#2 00:00:01 rejection: event "error" on IMG (/assets/a.png)'));
+    clearErrorLog();
   });
 
   test('the same error again raises the count of its entry; another source or message is a new entry', () => {

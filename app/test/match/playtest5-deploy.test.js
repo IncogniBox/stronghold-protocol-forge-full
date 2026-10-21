@@ -306,7 +306,10 @@ describe('#7 audit: every stage × deploy field (server = official level data = 
     }
     const src = readFileSync(join(ROOT, 'public/js/ui/fallbackField.js'), 'utf8');
     assert.match(src, /fieldTile\(st\.deployField, row, col\)/, 'the fallback maps its board tiles through fieldTile in prep');
-    assert.match(src, /st\.deployField = kind === 'bossPrep' \? \(o\?\.side === 'R' \? 'bossR' : 'bossL'\) : 'normal'/);
+    assert.match(src, /st\.deployField = kind === 'bossPrep' \? \(sideR \? 'bossR' : 'bossL'\)/,
+      'the boss-prep camera picks the boss half');
+    assert.match(src, /isDualLayout\(L\) \? \(sideR \? 'normalR' : 'normalL'\) : 'normal'/,
+      'a two-half ordinary map keeps the own half');
     const game = readFileSync(join(ROOT, 'public/js/screens/game.js'), 'utf8');
     // 大图: the prep camera reads the map's own window, so a big map's prep board is framed on that map (shared/layout.js)
     assert.match(game, /const prepCam = prepCamera\(pub, myId, stageLayout\);/, 'the match screen hands the fallback view the boss prep camera too');

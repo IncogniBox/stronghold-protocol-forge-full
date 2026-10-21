@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GEO } from '../../shared/constants.js';
-import { layoutForSize, OFFICIAL_LAYOUT, isOfficialLayout } from '../../shared/layout.js';
+import { layoutForSize, bandMidOf, OFFICIAL_LAYOUT, isOfficialLayout } from '../../shared/layout.js';
 import { sampleStageSpec } from '../../shared/stageAuthoring.js';
 import { deriveStage } from '../../server/stageAuthoring.js';
 import {
@@ -318,12 +318,13 @@ describe('棋盘↔地图（客户端与服务器同一套布局）', () => {
     assert.equal(mirrorColOf(null), 20);
   });
 
-  test('大图：棋盘跟着部署矩形走，bossR 过它自己的镜像轴（仍是 20）', () => {
+  test('大图：棋盘跟着部署矩形走，bossR 过它自己的镜像轴（默认锚仍是 20）', () => {
     assert.deepEqual(fieldTile('normal', 9, 2, BIG_L), [13, 2], '棋盘左上角 → 普通矩形左上角');
     assert.deepEqual(fieldTile('normal', 12, 10, BIG_L), [16, 10]);
     assert.deepEqual(fieldTile('bossL', 10, 8, BIG_L), [3, 8], 'boss 带没动');
     assert.deepEqual(fieldTile('bossR', 10, 8, BIG_L), [3, 12]);
     assert.deepEqual(boardTile('bossR', 3, 12, BIG_L), [10, 8]);
+    assert.deepEqual(fieldTile('bossR', 10, 2, BIG_L), [3, 18], '右半场的棋盘第 2 列落在它外沿那一列');
     assert.equal(mirrorColOf(BIG_L), 20);
   });
 
@@ -332,8 +333,15 @@ describe('棋盘↔地图（客户端与服务器同一套布局）', () => {
     assert.deepEqual(L.size, [23, 27]);
     assert.deepEqual(L.deployRects.normal, [13, 16, 2, 10]);
     assert.deepEqual(L.deployRects.bossLeft, [1, 5, 2, 10]);
+    assert.deepEqual(L.deployRects.bossRight, [1, 5, 10, 18]);
     assert.deepEqual(penRect({ size: [23, 27] }), { r0: 18, r1: 22, c0: 7, c1: 13 });
     assert.deepEqual(fieldTile('normal', 9, 2, L), [13, 2]);
+    // 自己声明一整套居中时（45×60 的大战场样板就是这么声明的，中心列 30），这张图才跟着居中
+    const centered = layoutForSize([45, 60], bandMidOf([45, 60]));
+    assert.deepEqual(centered.deployRects.bossRight, [1, 5, 30, 38]);
+    assert.deepEqual(fieldTile('normal', 9, 2, centered), [35, 22]);
+    assert.deepEqual(fieldTile('bossR', 10, 2, centered), [3, 38], '右半场过它自己的镜像轴 60');
+    assert.deepEqual(penRect({ size: [45, 60], layout: centered }), { r0: 40, r1: 44, c0: 27, c1: 33 });
   });
 
   test('bossPrepField(side, layout)：官方与历史变换逐格相等，大图带自己的布局', () => {

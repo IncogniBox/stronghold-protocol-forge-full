@@ -5,7 +5,7 @@
  "author": "the server-ext mod",
  "license": "GPL-3.0-or-later",
  "description": "给大厅、房间与对局补社区界面，并自带一套**账号服务**。界面：大厅左栏底部的公共频道（「大厅交流」+「同盟邀约」）、房间「房内聊天」标题旁的「同盟邀约」按钮、对局左下角可折叠的半透明「房内聊天」框，以及两块**账号界面**：起名页卡片里的内联「注册 / 登录」，与**统计页（右上角个人入口）个人那一栏里的账号区块**（身份卡/头像待审/改名改密/云配置/名称审核后台），外加房间旁栏一块**成员名单**（头像 + `昵称#编号`）。前两块界面走本包自己的**大厅通道**（client.panels[].scope: 'lobby'）；第三块用**引擎的房间聊天**（订阅 chat.msg、发送 room.chat）。账号服务走本包自己的**服务端模块**（server.modules，`write: true` 落盘 + 自带的 WebSocket lane `/mod-ws/server-ext/accounts`），不新增任何引擎协议类型。",
- "gameVersion": "0.3.0",
+ "gameVersion": "0.3.1",
  "server": {
   "modules": [
    {

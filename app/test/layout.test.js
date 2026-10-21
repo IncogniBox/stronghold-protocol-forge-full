@@ -9,14 +9,16 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { GEO } from '../shared/constants.js';
+import { validateC2S } from '../shared/protocol.js';
 import {
   OFFICIAL_LAYOUT, OFFICIAL_SIZE, SIZE_PRESETS, MIN_ROWS, MIN_COLS, MAX_ROWS, MAX_COLS,
   layoutForSize, normalizeLayout, layoutOf, isOfficialLayout, sizeOf, clampSize, isSize, sizePresetOf, presetStep,
-  deployRectOf, deployRectName, stageRowOfBoard, stageColOfBoard, fieldTileOf, boardTileOf, viewRectOf,
+  deployRectOf, deployRectName, stageRowOfBoard, stageColOfBoard, fieldTileOf, boardTileOf, viewRectOf, bandMidOf,
+  boardRectOf, handRowOf, tempRowOf,
 } from '../shared/layout.js';
 import {
   DEPLOY_RECTS, STAGE_ZONES, GATE_PAIRS, STAGE_ROWS, STAGE_COLS, zonesOf, deployRectsOf, gatePairsFor,
-  deployRectsAt, roadsOutsideDeployRects, sampleStageSpec, validateStage, stageErrors,
+  deployRectsAt, roadsOutsideDeployRects, sampleStageSpec, validateStage, stageErrors, HUGE_STAGE_SPEC, hugeStageSpec,
 } from '../shared/stageAuthoring.js';
 import { deriveStage, validateStageRecord, deriveGroundPaths } from '../server/stageAuthoring.js';
 import { buildDeployMap, fieldTile } from '../server/match/board.js';
@@ -33,7 +35,7 @@ describe('官方零变化：19×21 解出来的就是今天那一套', () => {
     assert.equal(MIN_COLS, GEO.COLS);
     assert.equal(ROWS, GEO.CANVAS_ROWS, 'sim 的步长是画布，不是地图窗口');
     assert.equal(COLS, GEO.CANVAS_COLS);
-    deep(SIZE_PRESETS.map((p) => p.size), [[19, 21], [23, 27], [27, 33]]);
+    deep(SIZE_PRESETS.map((p) => p.size), [[19, 21], [23, 27], [27, 33], [33, 39], [45, 60]]);
   });
 
   test('三块部署矩形与 stageAuthoring 的官方常量逐条相等（数组形状也一样）', () => {
@@ -86,14 +88,19 @@ describe('官方零变化：19×21 解出来的就是今天那一套', () => {
 });
 
 describe('大图：带位锚法、形状约束与回落', () => {
-  test('三档尺寸的带位：等待区贴顶、普通带离顶第 7–10 行、boss 贴底第 1–5 行', () => {
+  test('五档尺寸的带位：等待区贴顶、普通带离顶第 7–10 行、boss 贴底第 1–5 行', () => {
     for (const { size } of SIZE_PRESETS) {
       const [R, C] = size;
       const L = layoutForSize(size);
       deep(L.size, size);
+      // 列**默认不随尺寸变**：任何尺寸解出来都是官方那套（大图默认与官方同锚）
       deep(L.pen, { r0: R - 5, r1: R - 1, c0: 7, c1: 13 }, `${R}×${C} 等待区`);
       deep([L.deployRects.normal[0], L.deployRects.normal[1]], [R - 10, R - 7], `${R}×${C} 普通带`);
+      deep([L.deployRects.normal[2], L.deployRects.normal[3]], [2, 10], `${R}×${C} 普通带列`);
       deep([L.deployRects.bossLeft[0], L.deployRects.bossLeft[1]], [1, 5], `${R}×${C} boss 带`);
+      deep([L.deployRects.bossLeft[2], L.deployRects.bossLeft[3]], [2, 10], `${R}×${C} boss 左半列`);
+      deep([L.deployRects.bossRight[2], L.deployRects.bossRight[3]], [10, 18], `${R}×${C} boss 右半列`);
+      assert.equal(L.mirrorCol, 20, `${R}×${C} 镜像轴仍是 20`);
       deep(L.battle.unite, { r0: R - 10, r1: R - 7, c0: 0, c1: C - 1 }, `${R}×${C} 联防满宽`);
       deep(L.battle.boss, { r0: 0, r1: 5, c0: 0, c1: C - 1 }, `${R}×${C} boss 满宽`);
       // 三块矩形永远在窗口里，且之间的先后关系不变（中间战场在 boss 与普通之间）
@@ -114,29 +121,57 @@ describe('大图：带位锚法、形状约束与回落', () => {
     deep(bad.deployRects.bossLeft, L.deployRects.bossLeft, '形状对、位置合法 → 保留');
     const outside = normalizeLayout({ deployRects: { normal: [20, 30, 2, 10] } }, [23, 27]);
     deep(outside.deployRects.normal, L.deployRects.normal, '越界 → 默认');
-    // 挪行是允许的：整块上移 2 行
+    // 挪行是允许的：整块上移 2 行（列仍由这张图的相接列定出来 —— 这张图没声明，就是官方那两列）
     const moved = normalizeLayout({ deployRects: { normal: [11, 14, 2, 10] } }, [23, 27]);
     deep(moved.deployRects.normal, [11, 14, 2, 10]);
     deep(fieldTileOf(moved, 'normal', 9, 2), [11, 2], '棋盘左上角跟着矩形走');
-    // 挪列一律拉回定死的那两列：棋盘 9 列、两个半场在 col 10 相接，挪了列对战镜像就对不上了
+    // 挪列一律拉回这张图的那两列：棋盘 9 列、两个半场在相接列会合，挪了列对战镜像就对不上了
     const colsMoved = normalizeLayout({ deployRects: { normal: [11, 14, 4, 12] } }, [23, 27]);
     deep(colsMoved.deployRects.normal, [11, 14, 2, 10], '列被归一化回 2..10');
   });
 
-  test('镜像轴由那两列定死（20），声明的值说了不算', () => {
+  test('镜像轴由相接列定死（默认 20），声明的值说了不算', () => {
     assert.equal(normalizeLayout({ mirrorCol: 26 }, [23, 27]).mirrorCol, 20, '镜像轴不是可挑的参数');
-    deep(deployRectOf(layoutForSize([27, 33]), 'bossRight'), [1, 5, 10, 18], '大图上 boss 半场列不变');
+    deep(deployRectOf(layoutForSize([27, 33]), 'bossRight'), [1, 5, 10, 18], '大图默认与官方同锚：boss 半场列不变');
+  });
+
+  test('一张图可以自己声明一整套居中的分区 —— 声明它的那张图才变，别的图不动', () => {
+    // 45×60 的中心列是 30（业主点的「整张地图的中心位置」）：两个半场在 30 会合、镜像轴 60
+    const centered = layoutForSize([45, 60], bandMidOf([45, 60]));
+    deep(centered.deployRects.normal, [35, 38, 22, 30]);
+    deep(centered.deployRects.bossLeft, [1, 5, 22, 30]);
+    deep(centered.deployRects.bossRight, [1, 5, 30, 38]);
+    deep(centered.pen, { r0: 40, r1: 44, c0: 27, c1: 33 }, '等待区跟着居中');
+    deep(centered.battle.normal, { r0: 35, r1: 38, c0: 20, c1: 30 }, '战斗矩形跟着居中（棋盘左界再往左 2 列）');
+    assert.equal(centered.mirrorCol, 60);
+    // 整套声明绕一圈：normalizeLayout 认它（相接列说得出来）
+    const kept = normalizeLayout({ deployRects: { normal: [35, 38, 22, 30], bossLeft: [1, 5, 22, 30], bossRight: [1, 5, 30, 38] } }, [45, 60]);
+    deep(kept.deployRects.normal, [35, 38, 22, 30]);
+    deep(kept.deployRects.bossRight, [1, 5, 30, 38]);
+    assert.equal(kept.mirrorCol, 60, '镜像轴 = 相接列 × 2');
+    // 三块说不出一条相接列 = 坏数据：整组退回默认锚（官方那套）
+    const mixed = normalizeLayout({ deployRects: { normal: [35, 38, 22, 30], bossLeft: [1, 5, 22, 30], bossRight: [1, 5, 2, 10] } }, [45, 60]);
+    deep(mixed.deployRects.normal, [35, 38, 2, 10], '退回默认锚');
+    assert.equal(mixed.mirrorCol, 20);
+    // 别的尺寸/别的图不受影响：同一张 45×60 的图**不声明**时仍是官方锚
+    const plain = layoutForSize([45, 60]);
+    deep(plain.deployRects.normal, [35, 38, 2, 10]);
+    assert.equal(plain.mirrorCol, 20);
   });
 
   test('尺寸工具：合法区间、档位来回、脏值回落', () => {
-    assert.ok(isSize([19, 21]) && isSize([27, 33]) && isSize([23, 25]));
-    for (const bad of [[18, 21], [28, 33], [19, 20], [19], 'x', null, [19, 21, 1]]) assert.ok(!isSize(bad), JSON.stringify(bad));
+    assert.ok(isSize([19, 21]) && isSize([27, 33]) && isSize([23, 25]) && isSize([33, 39]) && isSize([45, 60]));
+    for (const bad of [[18, 21], [46, 60], [19, 20], [19, 61], [19], 'x', null, [19, 21, 1]]) assert.ok(!isSize(bad), JSON.stringify(bad));
     deep(clampSize([23, 27]), [23, 27]);
     deep(clampSize('nope'), [19, 21]);
     assert.equal(sizePresetOf([23, 27]), 'large');
+    assert.equal(sizePresetOf([33, 39]), 'gigantic');
+    assert.equal(sizePresetOf([45, 60]), 'colossal');
     assert.equal(sizePresetOf([23, 25]), null, '自定尺寸没有档位名');
     assert.equal(presetStep('large', 1), 'huge');
-    assert.equal(presetStep('huge', 1), 'huge', '到头就停');
+    assert.equal(presetStep('huge', 1), 'gigantic');
+    assert.equal(presetStep('gigantic', 1), 'colossal');
+    assert.equal(presetStep('colossal', 1), 'colossal', '到头就停');
     assert.equal(presetStep('standard', -1), 'standard');
     assert.equal(presetStep('nope', 1), 'large', '脏 id 当作第一档');
   });
@@ -148,6 +183,96 @@ describe('大图：带位锚法、形状约束与回落', () => {
     assert.equal(isOfficialLayout(layoutOf({ id: 'x', rows: [] })), true);
     assert.equal(isOfficialLayout(layoutOf({ size: [23, 27] })), false);
     deep(layoutOf({ size: [23, 27] }).deployRects.normal, [13, 16, 2, 10]);
+  });
+});
+
+// 业主 2026-10-20：一张 27×33 的图，普通部署带是 17–20 行，而 g.move / g.art 的棋盘落点以前以**官方 19×21**
+// 为界（shared/protocol.js 的 target() 用 GEO.ROWS/GEO.COLS）—— 那两行因此**发不出落点**（真客户端在这张图上
+// 放不下第 19/20 行）。一张图是画布里的窗口，所以线上那道界的正确值就是画布本身。
+describe('大图与线上：棋盘落点以画布为界（官方界外的 19/20 行不再是禁区）', () => {
+  const mv = (row, col) => validateC2S({ t: 'g.move', uid: 1, to: { area: 'board', row, col }, dir: 'UP' });
+  const art = (row, col) => validateC2S({ t: 'g.art', itemUid: 1, row, col, dir: 'UP' });
+
+  test('27×33 的部署带整条都在线上（含官方界外的 19/20 行）', () => {
+    const [r0, r1, c0, c1] = deployRectOf(layoutForSize([27, 33]), 'normal');
+    assert.ok(r1 > GEO.ROWS - 1, `这条带伸到官方 19×21 之外（到第 ${r1} 行）—— 否则这个用例没意义`);
+    for (let row = r0; row <= r1; row++) for (let col = c0; col <= c1; col++) {
+      assert.equal(mv(row, col), null, `g.move (${row},${col}) 在部署带里`);
+      assert.equal(art(row, col), null, `g.art (${row},${col}) 在部署带里`);
+    }
+  });
+
+  test('越出画布仍被拒 —— 界放宽了，但不是没有界', () => {
+    assert.equal(mv(GEO.CANVAS_ROWS - 1, GEO.CANVAS_COLS - 1), null, '画布最后一格合法');
+    assert.match(String(mv(GEO.CANVAS_ROWS, 0)), /^bad field /, '画布之外的行');
+    assert.match(String(mv(0, GEO.CANVAS_COLS)), /^bad field /, '画布之外的列');
+    assert.match(String(art(GEO.CANVAS_ROWS, 0)), /^bad field /, 'g.art 那条内联上界同一条界');
+  });
+});
+
+describe('棋盘形状：一张图把自己的部署区放大（业主 2026-10-20「从 4×9 扩大到 5×11」）', () => {
+  const HUGE = layoutForSize([45, 60], bandMidOf([45, 60]), { rows: 5, cols: 11, normalMargin: 0 });
+
+  test('官方那副棋盘是缺省：boardRectOf / 整备行 / 临时整备行就是 GEO.FIELD 与 GEO.HAND_ROW / TEMP_ROW', () => {
+    const box = (r) => [r.r0, r.r1, r.c0, r.c1];
+    deep(box(boardRectOf(OFFICIAL_LAYOUT)), [GEO.FIELD.r0, GEO.FIELD.r1, GEO.FIELD.c0, GEO.FIELD.c1]);
+    assert.deepEqual([boardRectOf(OFFICIAL_LAYOUT).rows, boardRectOf(OFFICIAL_LAYOUT).cols], [4, 9]);
+    deep(box(boardRectOf(OFFICIAL_LAYOUT, 'bossL')), [GEO.FIELD.r0, GEO.FIELD.r1, GEO.FIELD.c0, GEO.FIELD.c1], 'boss 半场与普通带同形（官方）');
+    assert.equal(handRowOf(OFFICIAL_LAYOUT), GEO.HAND_ROW);
+    assert.equal(tempRowOf(OFFICIAL_LAYOUT), GEO.TEMP_ROW);
+    // 一张没声明 layout 的大图（任何尺寸）也还是官方那副棋盘 —— 列不随窗口变
+    deep(box(boardRectOf(layoutForSize([45, 60]))), [9, 12, 2, 10]);
+    deep(box(boardRectOf(layoutForSize([27, 33]))), [9, 12, 2, 10]);
+  });
+
+  test('45×60 的大战场样板：部署区 5×11（34–38 × 20–30），棋盘行 8–12 / 列 2–12', () => {
+    deep(HUGE.deployRects.normal, [34, 38, 20, 30]);
+    deep(HUGE.deployRects.bossLeft, [1, 5, 22, 30], 'boss 先不变');
+    deep(HUGE.deployRects.bossRight, [1, 5, 30, 38]);
+    assert.equal(HUGE.mirrorCol, 60);
+    // 普通战斗矩形与部署区**同宽同高**（这一张图不要那 2 列场地边距）；整备矩形同比扩到 7 行，且保住那 2 列
+    deep(HUGE.battle.normal, { r0: 34, r1: 38, c0: 20, c1: 30 });
+    deep(HUGE.battle.prep, { r0: 32, r1: 38, c0: 18, c1: 30 });
+    deep(HUGE.battle.bossPrep, { r0: 0, r1: 5, c0: 20, c1: 30 });
+    deep(HUGE.pen, { r0: 40, r1: 44, c0: 27, c1: 33 });
+    // 棋盘本身：行 8–12（5 行）、列 2–12（11 列），整备行因此下移到 6、临时整备行 7
+    const B = boardRectOf(HUGE);
+    deep([B.r0, B.r1, B.c0, B.c1], [8, 12, 2, 12]);
+    assert.deepEqual([B.rows, B.cols], [5, 11]);
+    assert.equal(handRowOf(HUGE), 6);
+    assert.equal(tempRowOf(HUGE), 7);
+    // 两个 boss 半场仍是 4×9 的棋盘（棋盘第 8 行/第 11–12 列在半场上没有位置）
+    const bossB = boardRectOf(HUGE, 'bossL');
+    deep([bossB.r0, bossB.r1, bossB.c0, bossB.c1], [9, 12, 2, 10]);
+    // 棋盘↔地图：棋盘第 12 行 = 部署矩形顶行、第 2 列 = 部署矩形左列；多出来的那一行一列也落在矩形里
+    deep(fieldTileOf(HUGE, 'normal', 12, 2), [38, 20]);
+    deep(fieldTileOf(HUGE, 'normal', 8, 12), [34, 30]);
+    deep(boardTileOf(HUGE, 'normal', 34, 30), [8, 12]);
+    deep(fieldTileOf(HUGE, 'bossL', 10, 8), [3, 28], 'boss 带没动（左半场 22–30）');
+  });
+
+  test('整套声明绕一圈：normalizeLayout / validateStage 都认它（列就是那条相接列、又比官方棋盘宽）', () => {
+    const again = normalizeLayout(HUGE, [45, 60]);
+    deep(again.deployRects, HUGE.deployRects);
+    deep(again.battle, HUGE.battle);
+    assert.equal(again.mirrorCol, 60);
+    assert.deepEqual(stageErrors(validateStage(hugeStageSpec())), []);
+    // 样板自己的记录：部署图是这一张图的棋盘（5×11 = 55 格），不是官方那 36 格
+    const derived = deriveStage(hugeStageSpec(), { paths: false });
+    assert.ok(derived.ok, JSON.stringify(derived.errors));
+    const rec = derived.stage;
+    const normal = buildDeployMap(rec, { field: 'normal' });
+    assert.equal(normal.size, 55, '普通带 5×11');
+    assert.ok([...normal.keys()].every((k) => { const [r, c] = String(k).split(',').map(Number); return r >= 8 && r <= 12 && c >= 2 && c <= 12; }));
+    // boss 半场的棋盘仍是官方那 4×9（板内有多少格可部署，由那一段地形决定 —— 样板那一段多半是普通地面）
+    const bossMap = buildDeployMap(rec, { field: 'bossL' });
+    assert.ok(bossMap.size > 0 && [...bossMap.keys()].every((k) => { const [r, c] = String(k).split(',').map(Number); return r >= 9 && r <= 12 && c >= 2 && c <= 10; }),
+      'boss 半场不出官方那 4×9 的棋盘');
+    // 越界声明仍然回落到默认锚（列被拉回那条相接列；形状小于官方棋盘也回落）
+    const smaller = normalizeLayout({ deployRects: { normal: [35, 37, 22, 30] } }, [45, 60]);
+    deep(smaller.deployRects.normal, [35, 38, 2, 10], '3 行不是棋盘 → 整块回落到默认（官方锚那 4×9）');
+    const offSeam = normalizeLayout({ deployRects: { normal: [34, 38, 18, 28], bossLeft: [1, 5, 22, 30], bossRight: [1, 5, 30, 38] } }, [45, 60]);
+    deep(offSeam.deployRects.normal, [34, 38, 2, 10], '右缘不在相接列上 ⇒ 整套说不出一条列 ⇒ 列回到官方锚（行照旧留着）');
   });
 });
 

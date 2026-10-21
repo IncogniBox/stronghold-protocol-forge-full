@@ -18,7 +18,7 @@ export class MatchSpDraft {
   enterSpDraft() {
     const draft = generateDraft(this.gd, this.rngDraft, this.round, { stageId: this.stageId, bondAvailable: (bondId) => this.bondLive(bondId), itemAvailable: id => this.itemPool.canGain(id) });
     const alive = this.alivePlayers();
-    if (!draft || !alive.length) { this.enterPrep(); return; }
+    if (!draft || !alive.length) { this.beforePrepOffers(); return; }
     this.phase = PHASE.SP_DRAFT;
     let order = alive.map((p) => p.playerId);
     if (!this.isSolo) this.rngDraft.shuffle(order);
@@ -113,7 +113,7 @@ export class MatchSpDraft {
     if (this.phase !== PHASE.SP_DRAFT) return;
     this.cancel(this._turnTimer);
     this._turnTimer = null;
-    this.enterPrep();
+    this.beforePrepOffers();
   }
 
   /**
@@ -185,11 +185,14 @@ export class MatchSpDraft {
   /** Random item id: a choices.json server pool ({ pool }), a tier, or ≤ maxTier shop-eligible items.
    * `also` (pool_equip_kathe: 突变细胞) joins the draw even though it is shopExcluded. The shop item slot does not
    * read it. `pick` still drops ids that `canGain` refuses, so an empty shop item stays out and an uncapped `also`
-   * id can still be drawn. */
-  rollItemId({ pool = null, tier = null, maxTier = 6, shopLevel = 6 } = {}) {
+   * id can still be drawn. `minTier`（缺省 null = 1）把下界抬起来：「不低于某件装备的阶级」那条规则用的就是它
+   * （`ctx.rollItem({ minTier })`，DESIGN §28.43.2 那一类内容层规则）。`tier` 与它**互斥**：写了 `tier` 就只抽那一档。
+   * `exclude` removes ids before sampling (Cathy's match-long allowance / distinct choices). */
+  rollItemId({ pool = null, tier = null, minTier = null, maxTier = 6, shopLevel = 6, exclude = [] } = {}) {
     const pools = this.gd.choices.pools && typeof this.gd.choices.pools === 'object' ? this.gd.choices.pools : {};
     const p = typeof pool === 'string' && Object.hasOwn(pools, pool) ? pools[pool] : null;
     const rng = this.rngMeta;
+    const pick = (ids, weights = null) => this.itemPool.pick(rng, ids.filter((id) => !exclude.includes(id)), weights);
     const tierList = (lo, hi) => { const out = []; for (let t = lo; t <= hi; t++) for (const id of this.gd.shopItemsByTier[t] || []) out.push(id); return out; };
     const also = p && Array.isArray(p.also) ? p.also.filter((id) => typeof id === 'string' && this.gd.item(id)) : [];
     const withAlso = (list) => {
@@ -201,19 +204,22 @@ export class MatchSpDraft {
       if (Array.isArray(p.weighted) && p.weighted.length) {
         const pairs = p.weighted.filter((x) => Array.isArray(x) && this.gd.item(x[0]) && this.itemPool.canGain(x[0]));
         for (const id of also) if (!pairs.some((x) => x[0] === id)) pairs.push([id, 1]);
-        return this.itemPool.pick(rng, pairs.map(x => x[0]), new Map(pairs));
+        return pick(pairs.map(x => x[0]), new Map(pairs));
       }
       if (Array.isArray(p.items) && p.items.length) {
         const items = p.items.filter((id) => this.gd.item(id));
-        return this.itemPool.pick(rng, withAlso(items));
+        return pick(withAlso(items));
       }
       let list;
       if (Array.isArray(p.tiers) && p.tiers.length) list = p.tiers.flatMap((t) => this.gd.shopItemsByTier[t] || []);
       else list = tierList(1, p.maxTier === 'shopLevel' ? Math.max(1, Math.min(6, shopLevel)) : 6);
-      return this.itemPool.pick(rng, withAlso(list));
+      return pick(withAlso(list));
     }
-    const list = Number.isInteger(tier) ? tierList(tier, tier) : tierList(1, Math.max(1, Math.min(6, maxTier)));
-    return this.itemPool.pick(rng, list);
+    const clampTier = (t, d) => (Number.isInteger(t) ? Math.max(1, Math.min(6, t)) : d);
+    const list = Number.isInteger(tier)
+      ? tierList(clampTier(tier, 1), clampTier(tier, 1))
+      : tierList(clampTier(minTier, 1), clampTier(maxTier, 6));
+    return pick(list);
   }
 
   /**
@@ -226,14 +232,14 @@ export class MatchSpDraft {
    * docs/PS100-MIGRATION.md §10-A; the identical object when the switch is off).
    * @returns {{ kind: 'item'|'chess', id: string, golden?: boolean } | null}
    */
-  rollPool(poolId, { shopLevel = 6, extra = null, chessOf = null, pool = null } = {}) {
-    const src = pool || this.pool;
+    rollPool(poolId, { shopLevel = 6, extra = null, chessOf = null, pool = null, exclude = [] } = {}) {
+      const src = pool || this.pool;
     const pools = this.gd.choices.pools && typeof this.gd.choices.pools === 'object' ? this.gd.choices.pools : {};
     const p = typeof poolId === 'string' && Object.hasOwn(pools, poolId) ? pools[poolId] : null;
     if (!p || typeof p !== 'object') return null;
     const lvl = Math.max(1, Math.min(6, Number.isInteger(shopLevel) ? shopLevel : 6));
     if (p.kind === 'equip') {
-      const id = this.rollItemId({ pool: poolId, shopLevel: lvl });
+      const id = this.rollItemId({ pool: poolId, shopLevel: lvl, exclude });
       return id ? { kind: 'item', id } : null;
     }
     if (p.kind !== 'chess') return null;

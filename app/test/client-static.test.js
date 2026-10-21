@@ -1134,9 +1134,10 @@ describe('screen helpers', () => {
     // ② 判据只有一处：两个渲染点共用同一个谓词（闭枚举/判据只有一份实现）
     assert.equal((source.match(/\$\{hasRoomModPicker\(roomMode\) \? html/g) || []).length, 2, '两个渲染点共用同一个判据');
     const { hasRoomModPicker, ROOM_MOD_PICKER_MODES } = await mod('screens/lobby.js');
-    assert.deepEqual([...ROOM_MOD_PICKER_MODES], ['solo', 'coop'], '两种会建房间的模式都要能声明集合');
+    assert.deepEqual([...ROOM_MOD_PICKER_MODES], ['solo', 'coop', 'recon'], '会建房间的模式都要能声明集合');
     assert.equal(hasRoomModPicker('solo'), true, 'solo 房要拿得到 picker');
     assert.equal(hasRoomModPicker('coop'), true);
+    assert.equal(hasRoomModPicker('recon'), true, '重构模拟房同样能声明集合');
     assert.equal(hasRoomModPicker('bogus'), false, '别的模式照旧不给（不是「一律给」）');
     // ③ 干净安装逐字节不变：选择器自己按「这台服务器声明过包吗」收尾
     assert.match(source, /if \(!available\.length\) return null;/, '没有包时 ModPicker 自己返回 null');
@@ -1529,4 +1530,28 @@ describe('explicit local match recovery (#431)', () => {
       local.setItem('sp.matches', bad); assert.deepEqual(a.recoverable(), []);
     }
   });
+});
+
+test('the hud slot stays above the hand, plugin frames declare a dark scheme, and the test-console command row wraps', () => {
+  const css = readFileSync(path.join(PUBLIC, 'css/components.css'), 'utf8');
+  assert.match(css, /\.ui-slot__frame \{[^}]*color-scheme: dark/);
+  assert.match(css, /\.gm__ui-slot \{[^}]*right: \.92rem; bottom: calc\(4\.76rem \+ \.12rem\)/);
+  assert.match(css, /\.gm__ui-slot \{[^}]*max-height: calc\(100% - 4\.88rem - 1\.7rem\)/);
+  assert.match(css, /\.ui-slot__tabs \{[^}]*flex-wrap: wrap/);
+  const game = readFileSync(path.join(PUBLIC, 'css/screens/game.css'), 'utf8');
+  assert.match(game, /\.testconsole__run \{ flex: 0 0 auto; \}/);
+  assert.match(game, /\.testconsole__row \.testconsole__field \{ flex: 1 1 8em; \}/);
+  const consoleSrc = readFileSync(path.join(PUBLIC, 'js/ui/testConsole.js'), 'utf8');
+  const at = consoleSrc.lastIndexOf("cmd === 'choice'");
+  const open = consoleSrc.lastIndexOf('class="testconsole__row"', at);
+  const run = consoleSrc.indexOf('testconsole__run', at);
+  const close = consoleSrc.indexOf('</div>', at);
+  assert.ok(open >= 0 && run > at && run < close, 'the 机变 fields and 执行 share one wrapping row');
+  const frame = readFileSync(path.join(PUBLIC, 'js/ui/pluginFrame.js'), 'utf8');
+  assert.match(frame, /ui-slot__tab/);
+  assert.match(frame, /chosenSlot/);
+  const skeleton = readFileSync(path.join(ROOT, 'server/plugins/forgeImport.js'), 'utf8');
+  assert.match(skeleton, /color-scheme:dark/);
+  const template = readFileSync(path.join(ROOT, 'plugins/_template/ui/ui/index.html'), 'utf8');
+  assert.match(template, /color-scheme: dark/);
 });

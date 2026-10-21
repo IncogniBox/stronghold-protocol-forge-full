@@ -1,0 +1,41 @@
+{
+  "bond_recon": {
+    "bondId": "bond_recon",
+    "name": "重构",
+    "identifier": 32,
+    "isCore": false,
+    "bondType": "REGULAR",
+    "bondOrder": 90,
+    "powerIdList": [],
+    "iconId": "icon_bond_recon",
+    "activeCount": 1,
+    "thresholds": [
+      1
+    ],
+    "maxCount": null,
+    "thresholdTemplate": "count_threshold_upward",
+    "countMode": "BOARD",
+    "countsHand": false,
+    "countsGoldenOnly": false,
+    "activeType": "ALL",
+    "isActiveInDeck": false,
+    "noStack": true,
+    "weight": 0,
+    "maxInactiveBondCount": -1,
+    "layerMilestones": [],
+    "desc": "【重构模拟】的特训盟约，由【重构协议·特训】授予学员。\n学员将继承教官的技能效果、特质与天赋。\n（占位 · 机制开发中，本盟约暂不提供战斗效果）",
+    "descRaw": "【重构模拟】的特训盟约，由【重构协议·特训】授予学员。\n学员将继承教官的技能效果、特质与天赋。\n（占位 · 机制开发中，本盟约暂不提供战斗效果）",
+    "effectId": null,
+    "effectName": "重构",
+    "effectDesc": "【重构模拟】的特训盟约，由【重构协议·特训】授予学员。\n学员将继承教官的技能效果、特质与天赋。\n（占位 · 机制开发中，本盟约暂不提供战斗效果）",
+    "effectDescRaw": "【重构模拟】的特训盟约，由【重构协议·特训】授予学员。\n学员将继承教官的技能效果、特质与天赋。\n（占位 · 机制开发中，本盟约暂不提供战斗效果）",
+    "effectDescParams": [],
+    "bb": {},
+    "bbStr": {},
+    "buffs": [],
+    "baseParams": [],
+    "perStackParams": [],
+    "members": [],
+    "visibleMembers": []
+  }
+}

@@ -1,10 +1,11 @@
 // render/board3d/load.js — loading of three.js and the official board art (local-client extraction, DESIGN §13/§15).
 //
 //   const THREE = await loadThree()            // '/vendor/three.module.js' (tools/vendor.mjs), null when missing
-//   const pack = await loadBoardPack(assets)   // null when the board art is not installed (→ 2D board)
-//   → { key, images: { D, N?, R?, E?, common?, commonE?, BG?, wind?, gate?, waterN?, caustics?, noise? },
-//       meshes: { crate?, blower?, bgPlane?, gate: { startDown?, startUp?, startBack?, endDown?, endUp? } },
-//       tiles, uv, materials: { theme?, fx? } }
+//   const pack = await loadBoardPack(assets, themeId?)   // null when the board art is not installed (→ 2D board);
+//                                                        // themeId picks the backdrop + mood (board3d/themes.js)
+//   → { key, theme, mood, images: { D, N?, R?, E?, common?, commonE?, BG?, wind?, gate?, waterN?, caustics?, noise?, platform?, crate? },
+//       meshes: { crate?, box?, platform?, blower?, bgPlane?, gate: { startDown?, startUp?, startBack?, endDown?, endUp? } },
+//       tiles, uv, materials: { theme?, fx?, trap? } }
 //   const scene = await loadScenePack(assets, stageId)   // the stage's official scene (tools/local-extract/scenes.py),
 //   → { key, stage, doc, chunks: [{ material, lightmap, group, bounds, position, uv, uv1, normal, color, index }],
 //       groups: { name: [x0, y0, x1, y1] }, images: { tex: { name: img }, lm: [img|null] } }     null when not extracted
@@ -15,6 +16,7 @@
 
 import { resolveUvTable } from './atlas.js';
 import { parseObj } from './obj.js';
+import { BOARD_THEMES, DEFAULT_BOARD_THEME, boardTheme } from './themes.js';
 
 export const THREE_URL = '/vendor/three.module.js';
 
@@ -70,21 +72,50 @@ export const PACK_IMAGES = Object.freeze({
   caustics: ['map/water', 'TX_Caustics256'],
   noise: ['map/water', 'T_noise_clouds_01'],
   platform: ['mesh/trap_110', 'TX_trap_1106_achplat'],
+  crate: ['mesh/trap_110', 'TX_trap_1105_accrate'],
 });
 
 export const PACK_MESHES = Object.freeze({
-  crate: ['mesh/s_common_box_01', 'pCube2'],
+  crate: ['mesh/trap_110', 'trap_1105_accrate'],
+  box: ['mesh/s_common_box_01', 'pCube2'],
   blower: ['mesh/s_wind_device', 'S_wild_wind_device'],
   bgPlane: ['mesh/s_background_common', 'pPlane1'],
   platform: ['mesh/trap_110', 'trap_1106_achplat'],
 });
+
+/**
+ * Theme → image slots: the official tile atlas + the shared art, with the theme's own backdrop (BG) — and, for a theme
+ * that carries its own `atlas` (themes.js), that theme's diffuse / emission / device atlases in place of the autochess
+ * ones. The shared slots (wind / gate / water / the 射击台) always stay the official art.
+ */
+export function packImages(themeId = DEFAULT_BOARD_THEME) {
+  const bt = boardTheme(themeId);
+  const out = { ...PACK_IMAGES, BG: bt.bg };
+  const a = bt.atlas;
+  if (a) {
+    // A theme that brings its own tile atlas: the board samples ITS diffuse / emission / device atlases instead, with
+    // the relief the extraction derives from the Unity _N / _M pair (tools/local-extract DERIVED — the same derivation
+    // the autochess atlas gets). A missing derived map just drops that slot: flat shading beats a normal map belonging to
+    // other pixels.
+    const grp = bt.bg[0];
+    out.D = [grp, a.d];
+    if (a.n) out.N = [grp, a.n]; else delete out.N;
+    if (a.r) out.R = [grp, a.r]; else delete out.R;
+    if (a.e) out.E = [grp, a.e];
+    // The theme's own high-ground material (a whole image, not a crop): the board draws it on its own (pack.woodUv).
+    if (a.wood) out.wood = [grp, a.wood[0]];
+    if (a.common) out.common = [grp, a.common];
+    if (a.commonE) out.commonE = [grp, a.commonE];
+  }
+  return out;
+}
 
 /** The official gate / objective boxes: prefab node → pack slot (meshes resolved through map/fx/prefab.json). */
 export const GATE_NODES = Object.freeze({
   startDown: 'Start_down', startUp: 'Start_up', startBack: 'Start_back', endDown: 'Start_down1', endUp: 'Start_up1',
 });
 
-let cached = null;
+const packs = new Map();   // theme id → its in-flight / loaded pack
 
 /**
  * Does the local-art manifest list the board atlas? Reads the manifest only (no images): decides whether the
@@ -108,17 +139,20 @@ async function fetchJson(url) {
  * Load the board pack through the asset store of public/js/assets.js (needs local(), localUrl(), image()).
  * @returns {Promise<object|null>}
  */
-export function loadBoardPack(assets) {
-  if (cached) return cached;
+export function loadBoardPack(assets, themeId = DEFAULT_BOARD_THEME) {
+  const id = BOARD_THEMES[themeId] ? themeId : DEFAULT_BOARD_THEME;
+  if (packs.has(id)) return packs.get(id);
   const pending = (async () => {
     if (!assets || typeof assets.local !== 'function' || typeof assets.localUrl !== 'function' || typeof assets.image !== 'function') return null;
     const manifest = await assets.local().catch(() => null);
     if (!isObj(manifest)) return null;
     const url = (g, n) => { const u = assets.localUrl(g, n); return typeof u === 'string' && u ? encodeURI(u) : null; };
-    const dUrl = url(...PACK_IMAGES.D);
+    const slots = packImages(id);
+    const bt = boardTheme(id);
+    const dUrl = url(...slots.D);
     if (!dUrl) return null;
     const images = {};
-    await Promise.all(Object.entries(PACK_IMAGES).map(async ([k, [g, n]]) => {
+    await Promise.all(Object.entries(slots).map(async ([k, [g, n]]) => {
       const u = url(g, n);
       if (!u) return;
       const img = await assets.image(u, { retry: true }).catch(() => null);
@@ -127,7 +161,9 @@ export function loadBoardPack(assets) {
     if (!images.D) return null;
     const dir = dUrl.replace(/\/[^/]*$/, '');
     const [tiles, theme, fxMats, fxPrefab, trapMats] = await Promise.all([
-      fetchJson(`${dir}/tiles.json`),
+      // A theme that carries its own atlas keeps its rects in themes.js; its directory has no tiles.json, and asking for
+      // one only logs a failed request.
+      bt.atlas ? Promise.resolve(null) : fetchJson(`${dir}/tiles.json`),
       (async () => { const u = url('map/autochess', 'materials'); return u ? fetchJson(u) : null; })(),
       (async () => { const u = url('map/fx', 'materials'); return u ? fetchJson(u) : null; })(),
       (async () => { const u = url('map/fx', 'prefab'); return u ? fetchJson(u) : null; })(),
@@ -151,16 +187,26 @@ export function loadBoardPack(assets) {
     }));
     return {
       key: `${dUrl}#${tiles?.version || 0}`,
-      images, meshes, tiles: isObj(tiles) ? tiles : null, uv: resolveUvTable(isObj(tiles) ? tiles : null),
+      theme: id, mood: bt.mood, themeAtlas: !!bt.atlas,
+      // The theme's own high-ground material, as the FULL rect of its image: raised tiles whose surface is in `woodOn`
+      // sample it instead of the tile atlas (layout.js `wood` bucket + scene.js woodMaterial). null when it has none.
+      woodUv: bt.atlas && bt.atlas.wood && images.wood
+        ? { src: 'wood', rect: [0, 0, bt.atlas.wood[1], bt.atlas.wood[2]], rot: 0, flipX: false, sw: bt.atlas.wood[1], sh: bt.atlas.wood[2] }
+        : null,
+      woodOn: bt.atlas && bt.atlas.woodOn ? bt.atlas.woodOn : null,
+      images, meshes, tiles: isObj(tiles) ? tiles : null,
+      // A theme with its own atlas carries its own rect table (themes.js): the autochess one is measured against a
+      // 2048² image and would sample the wrong pixels of a 1024² theme atlas.
+      uv: bt.atlas ? resolveUvTable({ board3d: bt.atlas.surfaces }, bt.atlas.sources) : resolveUvTable(isObj(tiles) ? tiles : null),
       materials: { theme: isObj(theme) ? theme : null, fx: isObj(fxMats) ? fxMats : null, trap: isObj(trapMats) ? trapMats : null },
     };
   })().catch((err) => { console.warn('[board3d] art load failed', err); return null; }).then((pack) => {
     // A timeout / failed atlas is not proof the host lacks 3D art. A later mount or visibility change may retry.
     // An older attempt finishing after reset must not discard a newer cached request.
-    if (!pack && cached === pending) cached = null;
+    if (!pack && packs.get(id) === pending) packs.delete(id);
     return pack;
   });
-  cached = pending;
+  packs.set(id, pending);
   return pending;
 }
 
@@ -312,9 +358,10 @@ export async function sceneListed(assets, stageId) {
 }
 
 /**
- * Load a stage's official scene (scene.json + scene.bin + lightmap pages + the materials' albedo (`images.tex`) and
- * normal / metallic-gloss (`images.data`) textures + the reflection atlas `images.env`). A missing texture, lightmap
- * page or atlas only drops that map; a missing or malformed scene gives null (→ the procedural board).
+ * Load a stage's official scene (scene.json + scene.bin + lightmap pages + the materials' albedo and emission
+ * (`images.tex`, sRGB) and normal / metallic-gloss (`images.data`, linear) textures + the reflection atlas
+ * `images.env`). A missing texture, lightmap page or atlas only drops that map; a missing or malformed scene
+ * gives null (→ the procedural board). scene.json `version` stays the mesh layout (SCENE_VERSION).
  * @returns {Promise<object|null>}
  */
 export function loadScenePack(assets, stageId) {
@@ -335,7 +382,7 @@ export function loadScenePack(assets, stageId) {
     };
     const mats = isObj(doc.materials) ? doc.materials : {};
     const namesOf = (...keys) => [...new Set(Object.values(mats).flatMap((m) => keys.map((k) => (isObj(m) && typeof m[k] === 'string' ? m[k] : null))).filter(Boolean))];
-    const names = namesOf('map'), dataNames = namesOf('normalMap', 'glossMap');
+    const names = namesOf('map', 'emissionMap'), dataNames = namesOf('normalMap', 'glossMap');
     const pages = Math.max(0, Math.min(16, doc.lightmaps | 0));
     const [texList, dataList, lm, env] = await Promise.all([
       Promise.all(names.map((n) => img(url(SCENE_TEX_GROUP, n)))),
@@ -356,4 +403,4 @@ export function loadScenePack(assets, stageId) {
 }
 
 /** Forget the cached pack and the three.js import attempt (tests / hot reload). */
-export function resetBoardPack() { cached = null; threePromise = null; threeFailures = 0; sceneCache.clear(); }
+export function resetBoardPack() { packs.clear(); threePromise = null; threeFailures = 0; sceneCache.clear(); }

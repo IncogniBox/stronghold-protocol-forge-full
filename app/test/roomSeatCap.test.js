@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { ERR, ERR_TEXT, DEFAULT_MAX_SEATS, MAX_SEATS, MIN_SEATS, clampSeats, maxSeatsFrom } from '../shared/constants.js';
+import { ERR, ERR_TEXT, DEFAULT_MAX_SEATS, MAX_SEATS, MIN_SEATS, clampSeats, maxSeatsFrom, RECON } from '../shared/constants.js';
 import { validateC2S, C2S } from '../shared/protocol.js';
 import { LOBBY_DEFAULTS, Lobby, Room } from '../server/lobby.js';
 import { MATCHMAKE_DEFAULTS } from '../server/matchmaking.js';
@@ -889,3 +889,41 @@ test('roomSeatCap §10: the slider is in the ROOM bar, host-only, and the seat l
   assert.equal(/^\.seats\b/m.test(css), false);
 });
 
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// §7 重构模拟的编队：满员后自动换队，任何一队都不超过 RECON.TEAM_SIZE（业主 2026-10-21）
+
+test('roomSeatCap §7: 重构模拟的新座位（AI 与真人）自动换到下一支未满的队伍，且绝不超过每队 4 人', () => {
+  const lobby = bareLobby();
+  const host = { ...fakeSession('p_host'), local: true }; // 重构模拟的本地闸：会话必须是本机 / 私网
+  assert.deepEqual(lobby.create(host, { mode: 'recon', difficulty: 'NORMAL', teamCount: 5 }), { ok: true });
+  const room = lobby.rooms.get(host.roomCode);
+  assert.equal(room.teamCount, 5);
+  // 房主 1 人 + 7 个 AI = 8 人 ⇒ 1 队满 4 后自动换到 2 队
+  for (let i = 0; i < 7; i++) assert.equal(lobby.addBot(host).ok, true, 'bot ' + (i + 1));
+  const sizes = new Array(room.teamCount + 1).fill(0);
+  for (const s of room.seats) if (s && !s.left) sizes[s.team ?? 1]++;
+  assert.deepEqual(sizes.slice(1), [RECON.TEAM_SIZE, RECON.TEAM_SIZE, 0, 0, 0], '1 / 2 队各 4 人，没有队伍超限');
+  for (const s of room.seats) if (s) assert.ok(s.team >= 1 && s.team <= room.teamCount, '每个座位都有合法队伍');
+  lobby.shutdown();
+});
+
+test('roomSeatCap §7: 编队容量（队数 × 4）满了以后，即使房间还有空座位也不再放人进来', () => {
+  const lobby = bareLobby();
+  const host = { ...fakeSession('p_host'), local: true };
+  // 3 队 × 4 = 12 的编队容量，而房间有 20 个座位 ⇒ 8 个座位永远不该被填上
+  assert.deepEqual(lobby.create(host, { mode: 'recon', difficulty: 'NORMAL', teamCount: 3, seatCap: 20 }), { ok: true });
+  const room = lobby.rooms.get(host.roomCode);
+  for (let i = 0; i < 11; i++) assert.equal(lobby.addBot(host).ok, true, 'bot ' + (i + 1));
+  assert.deepEqual(room.seats.filter(Boolean).map((s) => s.team ?? 1), [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3], '12 人正好填满 3 队');
+  const bot = lobby.addBot(host);
+  assert.equal(bot.error, ERR.ROOM_FULL, 'AI 加不进第 13 个人');
+  assert.match(bot.detail, /all teams are full/);
+  const guest = { ...fakeSession('p_guest'), local: true };
+  const joined = lobby.join(guest, { code: host.roomCode });
+  assert.equal(joined.error, ERR.ROOM_FULL, '真人同样按编队容量被挡住（不是按座位数）');
+  assert.match(joined.detail, /all teams are full/);
+  assert.equal(room.seats.filter(Boolean).length, RECON.TEAM_SIZE * 3, '没有多出第 13 个座位');
+  lobby.shutdown();
+});

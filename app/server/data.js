@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { forgetOfficialBounds, rememberOfficialBounds } from '../shared/plugins/officialBounds.js';
 import { loadWorkshop, WORKSHOP_DIR } from './workshop.js';
 import { applyWorkshop, workshopSummary } from '../shared/workshop.js';
+import { modeWithRecon } from '../shared/reconModes.js';
 
 /** Repository root (…/Stronghold-Protocol). */
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -228,5 +229,7 @@ export function getConfig(data = getData()) {
  */
 export function getMode(modeId, data = getData()) {
   const cfg = getConfig(data);
-  return cfg ? ownRecord(cfg.modes, modeId) : null;
+  // 重构模拟（模式扩展-重构模拟）：`mode_recon_*` 不落盘，缺项时由 shared/reconModes.js 运行时合成（同一函数
+  // 也服务客户端）；官方键照旧走 ownRecord，一个字节不动。
+  return cfg ? modeWithRecon(modeId, cfg.modes) : null;
 }

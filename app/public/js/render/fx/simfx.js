@@ -90,8 +90,9 @@ export class FxSim {
       case 'wall': {
         // a line of burning tiles through the anchor tile along `axis` ('col' | 'row', from the sim event)
         const rect = this.ctx.fieldRect ? this.ctx.fieldRect() : null;
-        this.tileFlash(wallTiles(Number(x), Number(y), ex.axis === 'row' ? 'row' : 'col', rect), col, Math.max(0.6, dur || 1.5));
-        this.zone(at.x, at.y, at.z, 0.6, col, Math.max(0.6, dur || 1.5), spec.tex);
+        const owner = this._viewOf(ex.id);
+        this.tileFlash(wallTiles(Number(x), Number(y), ex.axis === 'row' ? 'row' : 'col', rect), col, Math.max(0.6, dur || 1.5), false,
+          owner ? { owner, axis: ex.axis, dir: ex.dir || owner.dir } : null);
         break;
       }
       case 'telegraph': {
@@ -99,6 +100,14 @@ export class FxSim {
         if (r >= 12) { this.flashScreen(col, 0.45, d); break; }
         if (ex.tiles) this.tileFlash(tilesAround(at.x, at.y, r, ex.tiles), col, d, true);
         else this.zone(at.x, at.y, at.z, r, col, d, 'ring', true);
+        break;
+      }
+      // 常驻地块底色（多索雷斯的水地形 / 假日威龙陈的粘液）：同一 `key` 原地替换 ⇒ 不叠加、不闪；
+      // 透明度固定在 spec.alpha（默认 0.14），只有在 sim 停止重发后才淡出。
+      case 'overlay': {
+        const d = Math.max(0.4, dur || 1.2);
+        const tiles = ex.tiles ? tilesAround(at.x, at.y, r, ex.tiles) : null;
+        if (tiles) this.tileFlash(tiles, col, d, false, null, ex.key != null ? String(ex.key) : null, true, num(ex.alpha, spec.alpha ?? 0.14));
         break;
       }
       // 盟约寒风 (谢拉格's field-wide wind — the device emits it with no anchor unit): a blizzard up the field and a

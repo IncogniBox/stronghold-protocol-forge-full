@@ -75,9 +75,9 @@ import { canTargetEnemy, enemyStealthed, extendedGrid } from '../../../targeting
 import { normDir, rotateOffset, localOrder, localBefore } from '../../../dir.js';
 import { bodyKeys, bodyInRange } from '../../../body.js';
 import { applyRedirectCut, isHpLoss, redirectShare } from '../../../damage.js';
-// 本仓库把 `COLS` 改成了「画布步长」(GEO.CANVAS_COLS = 33，百人线留的余量)，官方的 19×21 图幅另有 `FIELD_COLS`
+// 本仓库把 `COLS` 改成了「画布步长」(GEO.CANVAS_COLS = 60，百人线留的余量)，官方的 19×21 图幅另有 `FIELD_COLS`
 // (= GEO.COLS = 21)。上游 0.2.4 的 `raidBoard` 是在上游 `COLS === GEO.COLS` 的前提下写的，于是那里的 COLS 是
-// **图幅**语义 ⇒ 移植到本仓库必须改用 `FIELD_COLS`，否则空半场的列上界会从 18 悄悄放宽到 30。
+// **图幅**语义 ⇒ 移植到本仓库必须改用 `FIELD_COLS`，否则空半场的列上界会从 18 悄悄放宽到 57。
 import { BOSS_ROW_OFFSET, FIELD_COLS } from '../../../constants.js';
 import { GEO } from '../../../../../shared/constants.js';
 import {

@@ -1,0 +1,324 @@
+{
+  "id": "my_map",
+  "name": "",
+  "weight": 40,
+  "modes": [],
+  "rows": [
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffSfffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffSfffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  ],
+  "tiles": {
+    "r": {
+      "tileKey": "tile_road",
+      "height": "LOW",
+      "buildable": "ALL",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": null,
+      "bb": {}
+    },
+    "f": {
+      "tileKey": "tile_floor",
+      "height": "LOW",
+      "buildable": "NONE",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": null,
+      "bb": {}
+    },
+    "p": {
+      "tileKey": "tile_floor",
+      "height": "LOW",
+      "buildable": "MELEE",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": null,
+      "bb": {}
+    },
+    "#": {
+      "tileKey": "tile_forbidden",
+      "height": "HIGH",
+      "buildable": "RANGED",
+      "passable": "FLY",
+      "groundPassable": false,
+      "flyPassable": true,
+      "special": null,
+      "bb": {}
+    },
+    "X": {
+      "tileKey": "tile_forbidden",
+      "height": "HIGH",
+      "buildable": "NONE",
+      "passable": "NONE",
+      "groundPassable": false,
+      "flyPassable": false,
+      "special": null,
+      "bb": {}
+    },
+    "a": {
+      "tileKey": "tile_achand",
+      "height": "HIGH",
+      "buildable": "NONE",
+      "passable": "FLY",
+      "groundPassable": false,
+      "flyPassable": true,
+      "special": null,
+      "bb": {}
+    },
+    "b": {
+      "tileKey": "tile_fence_bound",
+      "height": "LOW",
+      "buildable": "ALL",
+      "passable": "FLY",
+      "groundPassable": false,
+      "flyPassable": true,
+      "special": null,
+      "bb": {}
+    },
+    "S": {
+      "tileKey": "tile_start",
+      "height": "LOW",
+      "buildable": "NONE",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": "start",
+      "bb": {}
+    },
+    "E": {
+      "tileKey": "tile_end",
+      "height": "LOW",
+      "buildable": "NONE",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": "end",
+      "bb": {}
+    },
+    "I": {
+      "tileKey": "tile_telin",
+      "height": "LOW",
+      "buildable": "NONE",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": "telin",
+      "bb": {}
+    },
+    "O": {
+      "tileKey": "tile_telout",
+      "height": "LOW",
+      "buildable": "NONE",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": "telout",
+      "bb": {}
+    },
+    "m": {
+      "tileKey": "tile_mire",
+      "height": "LOW",
+      "buildable": "ALL",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": null,
+      "bb": {},
+      "terrain": "mire"
+    },
+    "g": {
+      "tileKey": "tile_smog",
+      "height": "LOW",
+      "buildable": "ALL",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": null,
+      "bb": {},
+      "terrain": "smog"
+    },
+    "d": {
+      "tileKey": "tile_deepsea",
+      "height": "LOW",
+      "buildable": "NONE",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": null,
+      "bb": {},
+      "terrain": "deepsea"
+    },
+    "i": {
+      "tileKey": "tile_infection",
+      "height": "LOW",
+      "buildable": "ALL",
+      "passable": "ALL",
+      "groundPassable": true,
+      "flyPassable": true,
+      "special": null,
+      "bb": {},
+      "terrain": "infection"
+    },
+    "-": {
+      "tileKey": "tile_forbidden",
+      "height": "HIGH",
+      "buildable": "NONE",
+      "passable": "NONE",
+      "groundPassable": false,
+      "flyPassable": false,
+      "special": null,
+      "bb": {},
+      "air": true
+    }
+  },
+  "devices": [],
+  "options": {
+    "characterLimit": 8,
+    "moveMultiplier": 0.5
+  },
+  "size": [
+    45,
+    60
+  ],
+  "layout": {
+    "size": [
+      45,
+      60
+    ],
+    "deployRects": {
+      "normalLeft": [
+        34,
+        38,
+        20,
+        30
+      ],
+      "normalRight": [
+        34,
+        38,
+        30,
+        40
+      ],
+      "bossLeft": [
+        1,
+        5,
+        22,
+        30
+      ],
+      "bossRight": [
+        1,
+        5,
+        30,
+        38
+      ]
+    },
+    "battle": {
+      "normal": {
+        "r0": 34,
+        "r1": 38,
+        "c0": 20,
+        "c1": 40
+      },
+      "prep": {
+        "r0": 32,
+        "r1": 38,
+        "c0": 18,
+        "c1": 40
+      },
+      "unite": {
+        "r0": 34,
+        "r1": 38,
+        "c0": 11,
+        "c1": 49
+      },
+      "boss": {
+        "r0": 0,
+        "r1": 5,
+        "c0": 10,
+        "c1": 50
+      },
+      "bossPrep": {
+        "r0": 0,
+        "r1": 5,
+        "c0": 20,
+        "c1": 30
+      }
+    },
+    "pen": {
+      "r0": 40,
+      "r1": 44,
+      "c0": 22,
+      "c1": 28
+    },
+    "mirrorCol": 60,
+    "penRight": {
+      "r0": 40,
+      "r1": 44,
+      "c0": 32,
+      "c1": 38
+    }
+  },
+  "routes": [],
+  "_meta": {
+    "schema": 1,
+    "source": "Stronghold-Protocol-Forge",
+    "author": "mode-recon mod",
+    "pack": "mode-recon",
+    "created": "2026-10-20T01:42:30.410Z",
+    "modified": "2026-10-20T01:42:30.410Z",
+    "copyright": {
+      "zh": "本 Option 的著作权归创建它的作者本人所有。创作者可自由分享、分发自己的 Option，并可通过其获得合理回报。",
+      "en": "This Option is the property of the author who created it. Creators may freely share and distribute their own Options and may reasonably profit from them."
+    },
+    "antiResale": {
+      "zh": "禁止未经授权从公开渠道收集他人 Option 并打包、转售或批量分发；转载、整合或二次分发他人 Option 必须保留原作者署名与来源信息。",
+      "en": "No one may, without authorization, collect Options created by others from public sources and package, resell, or bulk-distribute them. Any redistribution must retain the original author's attribution and source information."
+    },
+    "scope": "本声明只针对 Option 创作内容，不改变本项目代码的 GPL-3.0-or-later 授权，也不附加任何限制。"
+  }
+}

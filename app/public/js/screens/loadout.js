@@ -1,4 +1,4 @@
-import { skinsStore, setSkins } from '../ui/skins.js';
+import { skinsStore, setSkins, SKINS_KEY } from '../ui/skins.js';
 import { SkinSection } from '../ui/skinPicker.js';
 // 干员调配 (Operator loadout, DESIGN §16): choose the equipped skill of every chess and the module of its elite before a
 // match (official rule: "开始游戏前无法调整干员的等级，但可调整其所携带的技能和模组"). A full-screen overlay opened
@@ -382,6 +382,7 @@ function Detail({ m, chess, golden, entries, ops = {}, onChange, onOps, onReset,
     ${onConflict ? html`<${ConflictSwitch} conflicts=${conflicts} picks=${conflict} chess=${chess} golden=${golden} onPick=${onConflict} />` : null}
     <div class="lo-detail__body" ref=${bodyRef}>
       <${OperatorVoice} charId=${chess.charId} />
+      <${SkinSection} charId=${chess.charId} />
       <${CultivationSection} charId=${chess.charId} ops=${ops} onSet=${onOps} standIn=${notOwned} />
       <${LoadoutGarrisons} chess=${level === 'elite' && golden ? golden : chess} m=${m} />
       <section class="lo-sec">
@@ -417,7 +418,6 @@ function Detail({ m, chess, golden, entries, ops = {}, onChange, onOps, onReset,
         </div>
         ${modOpt ? html`<${ModuleInfo} m=${m} golden=${golden} opt=${modOpt} potential=${cv.potentialOn ? cv.potential : null} />` : null}
       </section>` : null}
-      <${SkinSection} chess=${chess} />
       ${notOwned ? html`<p class="lo-locknote lo-locknote--standin" data-testid="loadout-standin-note"><${Icon} name="info" />${standInName(chess) ? t('干员持有中标记为未持有：此棋子由替补干员 {name} 上场，技能与模组固定（补位干员技能不可更改）；这里的调配在改回「持有」后生效', { name: standInName(chess) })
         : t('干员持有中标记为未持有：此棋子由替补干员上场，技能与模组固定（补位干员技能不可更改）；这里的调配在改回「持有」后生效')}</p>` : null}
       ${locked ? html`<p class="lo-locknote"><${Icon} name="info" />${t('本局的调配已锁定，修改将在下一局生效')}</p>` : null}
@@ -919,7 +919,7 @@ function LoadoutScreen({ st, leaving = false }) {
   const openExport = () => setIo(tab === 'ownership'
     ? { mode: 'export', kind: 'ownership', text: serializeOwnership(loadoutStore.get().notOwned) }
     : tab === 'diy' ? { mode: 'export', kind: 'diy', text: serializeDiy(loadoutStore.get().diy) }
-      : { mode: 'export', kind: 'loadout', text: serializeExport(loadoutStore.get().entries, { ops: loadoutStore.get().ops, skins: skinsStore.get().entries }) });
+      : { mode: 'export', kind: 'loadout', text: serializeExport(loadoutStore.get().entries, { ops: loadoutStore.get().ops, skins: skinsStore.get()[SKINS_KEY] }) });
   const openImport = () => setIo({ mode: 'import', kind: tab, text: '' });
   const ioCopy = async () => {
     const ok = await copyText(ioText);
@@ -970,7 +970,7 @@ function LoadoutScreen({ st, leaving = false }) {
     const { applied, dropped } = r;
     const nOps = r.ops ?? 0;
     const skinsApplied = res.skins ? Object.keys(res.skins).length : 0;
-    if (skinsApplied) setSkins(mergeSkins(skinsStore.get().entries, res.skins));
+    if (skinsApplied) setSkins(mergeSkins(skinsStore.get()[SKINS_KEY], res.skins));
     // nothing survived sanitising (unknown chess, or every choice already the default): keep the current loadout
     if (!applied && !nOps && !skinsApplied) { toast(t('导入失败：这份数据在当前版本没有可用的调配，未做任何改动'), 'error'); return; }
     setIo(null);
@@ -1265,12 +1265,14 @@ function LoadoutScreen({ st, leaving = false }) {
  * (the strategy draft needs the player), or opened from the lobby / room and a match started (its briefing takes over).
  * @param {{ open: boolean, from: string|null }} st @param {string|null} phase @param {boolean} inMatch @param {boolean} wasInMatch
  */
-export function shouldAutoClose(st, phase, inMatch, wasInMatch) {
+export function shouldAutoClose(st, phase, inMatch, wasInMatch, ready = false) {
   if (!st || !st.open) return false;
   // 行为开关 `prepLoadout` 的客户端半之二（DESIGN §28.43.3）：简报那一支原来写死 `phase !== PHASE.INFO_CHECK` ——
   // 于是在声明了 `prep` 的房间，玩家刚进 `PREP`（正是服务端允许改调配的那一段）面板就被自动收走了。现在读同一份
   // 相位表（缺省 ⇒ `[INFO_CHECK]`，与写死逐相位等价）。
   if (st.from === 'briefing') return !!phase && !currentLoadoutLockPhases().includes(phase);
+  // 从休整期那一格打开的：离开 PREP、或者**这一局已经按了准备**就收起来（上游 0.3.1 的第五个参数）。
+  if (st.from === 'prep') return phase !== PHASE.PREP || !!ready;
   return inMatch && !wasInMatch;
 }
 

@@ -74,7 +74,7 @@ test('render/app.js: the leader leaves the pen for the boss field, red hit tiles
   assert.equal(leaderShown('prep'), false);
   assert.equal(leaderShown('pen', 'bossPrep'), true, 'a flight from the boss-field prep');
   const app = read('public/js/render/app.js');
-  assert.match(app, /const pen = layoutPen\(stand \? list\.filter\(\(e\) => e !== stand\.entry\) : list, \{ stage: stageRec \}\);/);
+  assert.match(app, /const pen = layoutPen\(stand \? list\.filter\(\(e\) => e !== stand\.entry\) : list, \{ stage: stageRec, side: prepSideNow\(\) \}\);/);
   assert.match(app, /\[\.\.\.hlReq\.keys\(\)\]\.some\(\(g\) => RANGE_GROUPS\.has\(g\)\)/);
 });
 

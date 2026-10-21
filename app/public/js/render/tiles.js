@@ -32,7 +32,7 @@
 
 import { tileAtlas, fxAtlas, rng, groundTexture } from './textures.js';
 import { GLYPH, TILEKEY_GLYPH, TILE_H, COLORS, ORIGINIUM } from './style.js';
-import { parsePenRect } from './pen.js';
+import { penRects } from './pen.js';
 import { layoutOf, mapSize } from './layout.js';
 
 /**
@@ -121,11 +121,13 @@ export function parseStage(stage, band = null, field = [0, 13], layout = null) {
     }
     grid.push(row);
   }
-  // the enemy preview pen's floor (enemy_place_rect, else the map's own pen band) is the glass hatch of the official pen
-  const pen = parsePenRect(stage?.config?.enemy_place_rect) || L.pen;
-  for (let r = pen.r0; r <= pen.r1; r++) for (let c = pen.c0; c <= pen.c1; c++) {
-    const t = grid[r]?.[c];
-    if (t && (t.glyph === 'f' || t.glyph === 'p')) t.mat = 'penGlass';
+  // the enemy preview pen's floor (enemy_place_rect, else the map's own pen bands — one, or the left + right pair of a
+  // map that declared two) is the glass hatch of the official pen
+  for (const pen of penRects(stage)) {
+    for (let r = pen.r0; r <= pen.r1; r++) for (let c = pen.c0; c <= pen.c1; c++) {
+      const t = grid[r]?.[c];
+      if (t && (t.glyph === 'f' || t.glyph === 'p')) t.mat = 'penGlass';
+    }
   }
   // distance (Chebyshev) to the nearest playable tile → fade / skip the margin
   const INF = 99;
@@ -746,11 +748,11 @@ export class TileField {
     // the field's gates / objectives, and the enemy preview pen's two gates (the red cubes behind which the next
     // round's enemies wait) whenever the pen's rows are drawn — the prep and pen cameras (render/app/view.js bandFor),
     // also as dim scenery
-    const pen = parsePenRect(this.stage?.config?.enemy_place_rect) || this.layout.pen;
+    const penRectsNow = penRects(this.stage);
     for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
       const tile = this.grid[r][c];
       if (!tile.drawn || (tile.glyph !== 'S' && tile.glyph !== 'E')) continue;
-      const penGate = tile.glyph === 'S' && r >= pen.r0 && r <= pen.r1 && c >= pen.c0 && c <= pen.c1;
+      const penGate = tile.glyph === 'S' && penRectsNow.some((p) => r >= p.r0 && r <= p.r1 && c >= p.c0 && c <= p.c1);
       if ((tile.scenery || r > this.field[1]) && !penGate) continue;
       const g = new this.P.Graphics();
       g.blendMode = this.P.BLEND_MODES.ADD;

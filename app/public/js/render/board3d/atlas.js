@@ -34,6 +34,10 @@ export const SURFACES = Object.freeze({
   concreteArrow: S('D', [768, 256, 256, 256]),
   concreteRed: S('D', [768, 512, 256, 256]),
   hatch: S('D', [549, 1787, 255, 256]),
+  // The official 'X' block: the SAME pixels as `hatch` (the official board draws # and X alike — the "▨" hatched blocks
+  // of the boss field / arena), separated only so a theme can dress the two differently (天镜阁's X is a plank platform,
+  // its # stays a dark block). On the official atlas nothing changes.
+  blockX: S('D', [549, 1787, 255, 256]),
   lift: S('D', [804, 1790, 234, 234]),
   ringHatch: S('D', [1290, 1400, 190, 190]),
   slats: S('D', [1036, 480, 404, 216]),
@@ -72,10 +76,10 @@ export const SURFACES = Object.freeze({
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** Validate one surface record (from tiles.json) → a clean record or null. */
-export function cleanSurface(v) {
-  if (!isObj(v) || !SOURCES[v.src] || !Array.isArray(v.rect) || v.rect.length !== 4) return null;
+export function cleanSurface(v, sources = SOURCES) {
+  if (!isObj(v) || !sources[v.src] || !Array.isArray(v.rect) || v.rect.length !== 4) return null;
   const [x, y, w, h] = v.rect.map(Number);
-  const src = SOURCES[v.src];
+  const src = sources[v.src];
   if (![x, y, w, h].every(Number.isFinite) || w < 4 || h < 4 || x < 0 || y < 0 || x + w > src.w || y + h > src.h) return null;
   const rot = [0, 90, 180, 270].includes(v.rot) ? v.rot : 0;
   const out = { src: v.src, rect: [x, y, w, h], rot, flipX: !!v.flipX };
@@ -83,12 +87,20 @@ export function cleanSurface(v) {
   return out;
 }
 
-/** Surface table: defaults overridden by a tiles.json `board3d` section (invalid entries ignored). */
-export function resolveUvTable(tiles) {
+/**
+ * Surface table: defaults overridden by a tiles.json `board3d` section (invalid entries ignored).
+ *
+ * `sources` overrides SOURCES for a theme whose atlas is a different size (themes.js `atlas.sources`): every cleaned
+ * surface then carries its source's pixel size (`sw`/`sh`), because `surfaceUV` divides a rect by the atlas its texture
+ * really is — a 1024² theme atlas measured with the autochess rects would otherwise be sampled at half scale.
+ */
+export function resolveUvTable(tiles, sources = null) {
+  const S = sources ? { ...SOURCES, ...sources } : SOURCES;
+  const stamp = (c) => (c ? { ...c, sw: S[c.src].w, sh: S[c.src].h } : null);
   const out = {};
-  for (const [k, v] of Object.entries(SURFACES)) out[k] = cleanSurface(v);
+  for (const [k, v] of Object.entries(SURFACES)) out[k] = stamp(cleanSurface(v, S));
   const extra = isObj(tiles) && isObj(tiles.board3d) ? tiles.board3d : null;
-  if (extra) for (const [k, v] of Object.entries(extra)) { const c = cleanSurface(v); if (c) out[k] = c; }
+  if (extra) for (const [k, v] of Object.entries(extra)) { const c = stamp(cleanSurface(v, S)); if (c) out[k] = c; }
   return out;
 }
 
@@ -100,7 +112,7 @@ export function resolveUvTable(tiles) {
  * keeps mip filtering inside the region.
  */
 export function surfaceUV(surface, sub = null, inset = 2) {
-  const src = SOURCES[surface.src] || SOURCES.D;
+  const src = (surface.sw && surface.sh) ? { w: surface.sw, h: surface.sh } : (SOURCES[surface.src] || SOURCES.D);
   let [x, y, w, h] = surface.rect;
   if (sub) {
     const [a, b, c, d] = sub;

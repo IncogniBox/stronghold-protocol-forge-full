@@ -192,7 +192,7 @@ test('`allow` 档 · 分支二：手牌满 ⇒ 进临时整备区', () => {
 // **不会因为超过 15 个而丢失**」）。所以在 0.3.0 之后「手牌与临时都满 ⇒ HAND_FULL」**不再可达** ——
 // 这条在 0.3.0 合入前（合入前 `stow` 的 temp 分支是 `freeSlot(this.temp)`，满则 `return null`）是真的。
 // 因此本用例改为**钉住新语义**：手牌满 ⇒ 进无界的临时整备区（追加在 5 个显示格之后），装备不丢、手牌一位不动。
-test('`allow` 档 · 分支三（0.3.0 起）：手牌满且 5 个显示格也满 ⇒ 追加进**无界**的临时整备区', () => {
+test('`allow` 档 · 分支三：手牌满且 5 个显示格也满 ⇒ 进无界的临时整备区（追加在 5 个显示格之后）', () => {
   const h = prep();
   const { m } = h; const ps = h.ps('p_0');
   const { piece, itemUid } = wearer(h);
@@ -202,21 +202,16 @@ test('`allow` 档 · 分支三（0.3.0 起）：手牌满且 5 个显示格也�
   assert.equal(fill(m, ps, 'temp', needTemp), needTemp, '临时区的显示格填满');
   assert.equal(ps.hand.some((x) => x == null), false, '手牌满了');
   assert.equal(ps.temp.slice(0, TEMP_SIZE).some((x) => x == null), false, '前 5 个显示格也满了');
-  const idxBefore = piece.items.findIndex((x) => x.uid === itemUid);
   const hand = ps.hand.map((x) => x && x.uid);
   const tempBefore = ps.temp.length;
 
   m.behaviour = declOf('allow');
-  assert.deepEqual(m.handle('p_0', { t: 'g.unequip', itemUid }), { ok: true }, '无界队列 ⇒ 绝不失败');
-  assert.equal(piece.items.some((x) => x.uid === itemUid), false, '装备离开了干员');
-  const at = ps.temp.findIndex((x) => x && x.uid === itemUid);
-  assert.ok(at >= TEMP_SIZE, `装备排在 5 个显示格之后（下标 ${at} ≥ ${TEMP_SIZE}）`);
-  assert.equal(ps.temp.length, tempBefore + 1, '队列增长了一格，五格窗口之外');
-  assert.deepEqual(ps.hand.map((x) => x && x.uid), hand, '手牌一位都没动');
-  assert.equal(piece.items.includes(undefined), false, '装备行没有留下空位');
-  // 失败路径不再可达 ⇒ 装备的下标也不会因回滚而变（那里已无回滚可走）
-  assert.equal(piece.items.findIndex((x) => x.uid === itemUid), -1, '装备已不在干员身上（不是失败后的原下标）');
-  assert.equal(idxBefore >= 0, true, '夹具前提：它原本确实装在干员身上');
+  // 本仓 0.3.0 起临时整备区是**无界队列**（见上面那段注释）：两处都满时装备追加到队列尾部，不拒绝。
+  assert.deepEqual(m.handle('p_0', { t: 'g.unequip', itemUid }), { ok: true }, '两处都满 ⇒ 排队进临时区');
+  assert.equal(piece.items.some((x) => x.uid === itemUid), false, '装备已从干员身上取下');
+  assert.equal(ps.hand.map((x) => x && x.uid).join('|'), hand.join('|'), '手牌一位都没动');
+  assert.equal(ps.temp.length, tempBefore + 1, '临时队列长度 +1');
+  assert.equal(ps.temp[ps.temp.length - 1]?.uid, itemUid, '装备排在临时队列尾部');
   h.invariants();
 });
 
@@ -254,13 +249,12 @@ test('客户端：发送点接上既有 `act()`、按钮**只在开关开时画*
   const roomMods = readFileSync(join(ROOT, 'public/js/roomMods.js'), 'utf8');
   assert.match(roomMods, /setUnequipAllowed\(behaviourValue\(decl, 'unequip'\) === 'allow'\)/, 'roomMods 从 welcome.mods 派生');
   const panel = readFileSync(join(ROOT, 'public/js/ui/detailPanel.js'), 'utf8');
-  assert.match(panel, /unequipAllowed\(\)/, 'ItemRow / ItemDetail 读它');
-  assert.match(panel, /const canDetach = typeof onUnequip === 'function' && Number\.isInteger\(uid\) && unequipAllowed\(\)/,
-    '「卸下」按钮的判据：有人传 onUnequip + 有 uid + 开关开');
+  assert.match(panel, /const canDetach = typeof onUnequip === 'function' && Number\.isInteger\(uid\) && unequipAllowed\(\);/,
+    '「卸下」按钮的判据：有人传 onUnequip + 有 uid + 本房开关 allow');
   assert.match(panel, /拖拽至干员身上进行配发（每名干员最多 2 件，配发后无法取下）/, '官方档那句提示**还在**');
   assert.match(panel, /拖拽至干员身上进行配发（每名干员最多 2 件）/, 'allow 档另有一句（不带“无法取下”）');
   const game = readFileSync(join(ROOT, 'public/js/screens/game.js'), 'utf8');
-  assert.match(game, /onUnequip=\$\{\(itemUid\) => actions\.unequip\(itemUid\)\}/, '游戏屏把它接到 DetailPanel');
+  assert.match(game, /onUnequip=\$\{editable && unequipAllow \? \(itemUid\) => actions\.unequip\(itemUid\) : null\}/, '游戏屏按开关决定传不传 onUnequip');
 });
 
 test('客户端：四个 i18n 包都有新词条（`卸下` 与不带“无法取下”的那句）', () => {

@@ -32,10 +32,12 @@
 // 30 steps a second (performance proposal §1).
 
 import { useLayoutEffect, useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { catalog, loadCatalog, cosmeticPlugins, installedCount, personal, personalApplied, personalSet, pluginName, setPersonalPlugin } from '../content.js';
+import { catalog, loadCatalog, cosmeticPlugins, installedCount, personal, personalApplied, personalSet, pluginName, setPersonalPlugin, isPersonalCosmetic } from '../content.js';
 import { setUiPlugin, uiPluginEntries, uiPlugins } from './uiPlugins.js';
 import { UI_LIMITS } from '../../../shared/plugins/ui.js';
 import { toast, describeError } from './toasts.js';
+import { resolveThemeVars, themeVarsOf } from '../../../shared/plugins/theme.js';
+import { hasAnySkinChoices } from './skins.js';
 import { pluginMicro } from './pluginTag.js';
 import { fxAvailable } from '../render/vfx/available.js';
 import { resolveOfficialFx } from '../render/vfx/tier.js';
@@ -67,7 +69,7 @@ import { ScreenFitSection } from './screenFit.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
-/** Settings store: { bgm, sfx, voice, voiceLang, voiceNative, voiceLangByChar, muted, damageNumbers, officialDamageNumbers, workshopSkins, workshopSources, ammoCount, combatMetrics, mysticEnergy, quality, textSize, keys }. */
+/** Settings store: { bgm, sfx, voice, voiceLang, voiceNative, voiceLangByChar, muted, damageNumbers, officialDamageNumbers, workshopSkins, workshopSources, ammoEnergyCount, combatMetrics, prepDeployFold, otherSkins, quality, frameRate, textSize, keys }. */
 export const settingsStore = createStore(sanitizeSettings(loadPref('settings', null)));
 
 /**
@@ -170,7 +172,7 @@ function Toggle({ label, micro, value, onChange }) {
   </div>`;
 }
 
-const QUALITY = [['high', N_('高')], ['medium', N_('中')], ['low', N_('低')]];
+const QUALITY = [['low', N_('低')], ['medium', N_('中')], ['high', N_('高')]];
 /**
  * 官方特效 (0.3.0, render/vfx): the official battle effects the server's owner extracted from their own client (the
  * server serves them: every player of that server sees the owner's extraction) — normal attacks, projectiles, hits,
@@ -340,18 +342,39 @@ function CosmeticSection() {
   const cat = useStore((s) => s, Object.is, catalog);
   const ids = useStore((s) => s.ids, Object.is, personal);
   const installed = useStore(installedCount);
+  const s = useSettings();
   useEffect(() => { if (installed) loadCatalog({ force: true }); }, [installed]);
-  const list = installed ? cosmeticPlugins(cat.plugins, 'personal') : [];
-  if (!list.length) return null;
-  const set = personalSet(ids, list.filter((p) => typeof p.vs === 'string'));
+  const entries = installed ? cosmeticPlugins(cat.plugins, 'personal') : [];
+  const list = entries.filter(isPersonalCosmetic);
+  // The 显示其他玩家的皮肤 switch is on screen with or without a PERSONAL plugin — an appearance can also come from a
+  // set the player is not in (a watched match's cosmetics are the watcher's own layers), and a switch that appears only
+  // when the catalogue happens to have loaded would look like a bug. It follows the same GLOBAL rule the 皮肤 section
+  // does (ui/skins.js hasAnySkinChoices: at least one operator of the composed manifest has a wear-able skin), so a
+  // session with no such appearance draws nothing here — an installation without a cosmetic layer keeps exactly the
+  // settings it had before this feature, the switch included (test/ui/plugins.e2e.test.js asserts the section is absent
+  // on a server without plugins). The list below is NOT gated: it is where a switched-off plugin is switched back on.
+  if (!list.length) {
+    if (!hasAnySkinChoices()) return null;
+    return html`<section class="set-plugins" aria-labelledby="set-skins-title" data-testid="personal-plugins">
+      <div class="set-keys__head"><span class="set-row__label" id="set-skins-title">${t('外观插件')}<${MicroLabel}>COSMETIC PLUGINS<//></span></div>
+      <${OtherSkinsRow} value=${s.otherSkins !== false} onSet=${(v) => updateSettings({ otherSkins: v })} />
+    </section>`;
+  }
+  const set = personalSet(ids, entries);
   const applied = new Set(set.order);
   const auto = new Set(set.auto);
+  const winners = resolveThemeVars(set.order.map((id) => {
+    const p = entries.find((x) => x.id === id);
+    return { id, vars: themeVarsOf(p) };
+  }));
   const flip = (id, on) => { const r = setPersonalPlugin(id, on); if ('error' in r) toast(describeError(r.error), 'warn'); };
   return html`<section class="set-plugins" aria-labelledby="set-plugins-title" data-testid="personal-plugins">
     <div class="set-keys__head">
       <span class="set-row__label" id="set-plugins-title">${t('外观插件')}<${MicroLabel}>COSMETIC PLUGINS<//></span>
     </div>
     <p class="set-hint">${t('只改变你自己看到的画面和声音，不影响其他博士，也不影响战斗；插件为非官方制作。')}</p>
+    <${OtherSkinsRow} value=${s.otherSkins !== false} onSet=${(v) => updateSettings({ otherSkins: v })} />
+    ${winners.map((w) => html`<p key=${w.name} class="set-hint set-theme-win">${t('{token} 由「{name}」生效', { token: w.name, name: pluginName(list.find((p) => p.id === w.pluginId) || { id: w.pluginId }) })}</p>`)}
     ${list.map((p) => {
       // on: applied (chosen, or 「自动」: another one needs it) — or chosen but left out now (a conflict): switch it off
       const skipped = set.skipped.includes(p.id);
@@ -439,6 +462,21 @@ function VoiceLangRow({ value, native }) {
 }
 
 /**
+ * 设置「显示其他玩家的皮肤」 (docs/SKINS.md): whether this browser draws the appearance another player chose
+ * (`UnitInfo.skin`, published by the match — `Match.publicView().players[].skins`).
+ *
+ * Pure client preference, never sent: turning it off makes every OTHER seat's piece draw the operator's own model,
+ * 干员调配 its own choice alone. The asymmetry is deliberate and documented — their screen keeps showing their skin, so
+ * a co-op's players may see different models for the same piece. On by default: the appearance is what its owner chose
+ * it for, and this is the switch for a player who prefers the official model of everyone else.
+ * @param {{ value: boolean, onSet: (v: boolean) => void }} props
+ */
+function OtherSkinsRow({ value, onSet }) {
+  return html`<${Toggle} label=${t('显示其他玩家的皮肤')} micro="OTHER SKINS"
+    value=${value} onChange=${(v) => onSet(v)} />`;
+}
+
+/**
  * Settings modal.
  * @param {{ open: boolean, onClose: Function }} props
  */
@@ -476,10 +514,8 @@ export function SettingsModal({ open, onClose }) {
       <${Toggle} label=${t('显示伤害数字')} micro="DAMAGE NUMBERS" value=${s.damageNumbers} onChange=${(v) => updateSettings({ damageNumbers: v })} />
       <${Toggle} label=${t('官方伤害数字')} micro="OFFICIAL NUMBERS" value=${s.officialDamageNumbers} onChange=${(v) => updateSettings({ officialDamageNumbers: v })} />
       <p class="set-hint">${t('只显示达到官方暴击条件的红色数字。关闭时仍显示每一次命中。')}</p>
-      <${Toggle} label=${t('弹药数量')} micro="AMMO COUNT" value=${s.ammoCount} onChange=${(v) => updateSettings({ ammoCount: v })} />
-      <p class="set-hint">${t('弹药类技能开启时，在弹药条下方显示剩余弹药 / 总弹药数（如 13/14）。官方界面没有这个数字。')}</p>
-      <${Toggle} label=${t('秘术师能量')} micro="STORED ENERGY" value=${s.mysticEnergy} onChange=${(v) => updateSettings({ mysticEnergy: v })} />
-      <p class="set-hint">${t('在秘术师的血条下方显示储存的攻击能量 / 上限（如 2/3）。官方用干员身上的特效表示，没有这个数字。')}</p>
+      <${Toggle} label=${t('显示弹药与能量数量')} micro="AMMO & ENERGY" value=${s.ammoEnergyCount} onChange=${(v) => updateSettings({ ammoEnergyCount: v })} />
+      <p class="set-hint">${t('弹药类技能开启时，在弹药条下方显示剩余弹药 / 总弹药数（如 13/14）；秘术师的血条下方显示储存的攻击能量 / 上限（如 2/3）。官方界面没有这些数字。')}</p>
       <${Toggle} label=${t('作战统计')} micro="COMBAT STATS" value=${s.combatMetrics} onChange=${(v) => updateSettings({ combatMetrics: v })} />
       <p class="set-hint">${t('打开后，对局左下角可以查看自己干员的伤害、治疗和 DPS / HPS。官方界面没有这个窗口。改变玩法的插件对局在 Worker 里演算，统计不到，按钮不显示。')}</p>
       <${Toggle} label=${t('工坊外观')} micro="WORKSHOP SKINS" value=${s.workshopSkins} onChange=${(v) => updateSettings({ workshopSkins: v })} />

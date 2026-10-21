@@ -1,31 +1,31 @@
 // server/match/player/items.js — PlayerState methods: items — g.equip (max 2, a 3rd replaces the one the player picks;
-// consume-on-equip items), g.art (Arts on a tile, rotated by the facing) and g.destroy (hand / temp items; equipped
-// ones are locked).
+// consume-on-equip items), g.art (Arts on a tile, rotated by the facing), g.destroy (hand / temp items; equipped
+// ones are locked) and g.unequip (DESIGN §36.15, only when the room's unequip rule is allow).
 // Installed on PlayerState.prototype by server/match/PlayerState.js (a method container: never instantiated; `this` is
 // the player state).
 
-import { ERR } from '../../../shared/constants.js';
-import { behaviourIsDefault } from '../../../shared/behaviour.js';
-import { tileKey, inField, parseDir } from '../board.js';
+import { ERR, GEO } from '../../../shared/constants.js';
+import { morphSlotPolicy, ruleOption } from '../../../shared/plugins/rules.js';
+import { behaviourValue } from '../../../shared/behaviour.js';
+import { matchSlotPolicy } from '../../../shared/morph.js';
+import { tileKey, inField, parseDir, freeSlot } from '../board.js';
 import { offsetTile } from '../../sim/dir.js';
 import { itemKey } from '../gamedata.js';
-// 装备位语义（第 7 段）：策略对象来自 `shared/morph.js`（**同一格开关的另外半条**）。缺省档拿到的
-// `OFFICIAL_SLOT_POLICY` 是共享的冻结单例，每一个方法都逐字是引擎今天那条算术 ⇒ 下面三处的缺省路径逐字节不变。
-import { matchSlotPolicy } from '../../../shared/morph.js';
 import { OK, fail } from './common.js';
 
 /**
- * **行为开关 `unequip` 的读取点**（DESIGN §28.43.1）：这一局允不允许卸下已装备的装备。
- * 判据只有一份（`shared/behaviour.js` 的 `behaviourIsDefault`）：没声明这一格 / 声明成 `official`（缺省）⇒ `false`
- * = 引擎今天的行为（装上就只能靠精英化 / 合成 / 卖出离开）；`allow` ⇒ `true`。
- *
- * 写成模块层的**纯**函数：一是 `PlayerState.unequip` 只读它、不写死，二是它是 `shared/modSurface.js` 里
- * `behaviour` 那一格可锚的导出名（改名 / 挪走 = 打断所有声明这一格的包）。
- * @param {Array<{ switch: string, option: string }>|null|undefined} decl 本局合成后的行为声明
+ * 装备拆卸是否被允许（行为开关 `unequip: "allow"`）：**工坊包声明依赖的读取点**
+ * （`shared/modSurface.js` 里 `{ symbol: "unequipAllowed", module: "items" }` 那一条）。
+ * 判据只有一份 —— 玩家状态的 `unequip()` 与它读同一个开关。
+ * @param {Record<string, string>|null|undefined} rules 这一局的房间规则
  * @returns {boolean}
  */
-export function unequipAllowed(decl) {
-  return !behaviourIsDefault(decl, 'unequip');
+export function unequipAllowed(rules, decl = null) {
+  // 两种调用形态都收：**传数组 = 模块层的归一化声明**（老调用方 `unequipAllowed(decl)`），
+  // **传对象 = 这一局的房间规则**（新口径，与 `ruleOption` 一致）。
+  if (Array.isArray(rules)) { decl = rules; rules = null; }
+  if (ruleOption(rules, 'unequip') === 'allow') return true;
+  return decl ? behaviourValue(decl, 'unequip') === 'allow' : false;
 }
 
 export class PlayerItems {
@@ -46,10 +46,6 @@ export class PlayerItems {
    * oldest); the replaced item is destroyed. A `replaceUid` that is not one of the target's equipped items is refused.
    * A consume-on-equip item replaces the same way before it resolves (GitHub #263): the carrier keeps a free slot, and a
    * target its effect refuses (博士投影 on an elite) gets the picked item back — nothing is destroyed.
-   *
-   * `plus`（第 7 段，`shared/morph.js` 的 `PLUS_SLOT_POLICY`）另外两条：变形同构体**每名干员最多一件**（再装一件
-   * 回 `BAD_TARGET`），而 `replaceUid` 只认**真正占格**的那几件（变形同构体在加强档下不占位，所以它不是可顶替的
-   * 对象，也永远不会被第三件顶掉）。缺省档下这两条**一个字都不生效**。
    */
   equip(itemUid, targetUid, replaceUid = null) {
     const g = this._gate(); if (g) return g;
@@ -61,21 +57,16 @@ export class PlayerItems {
     if (!tloc || tloc.piece.kind !== 'chess' || tloc.area === 'equipped') return fail(ERR.BAD_TARGET);
     const item = iloc.piece;
     const target = tloc.piece;
-    const policy = matchSlotPolicy(this.m);
-    if (policy.active) {
-      const row = target.items || [];
-      // `plus`：变形同构体每名干员最多一件（`OFFICIAL_SLOT_POLICY.active` 为假 ⇒ 这一条在缺省档一个字都不生效）
-      if (policy.isSlotless(rec) && row.some((x) => policy.isSlotless(this.gd.item(x.id)))) {
-        return fail(ERR.BAD_TARGET, 'one slotless item per carrier');
-      }
-      // `plus`：顶替只认**真正占格**的那一件（它不占位，所以既不是可顶替的对象，也不会被第三件顶掉）
-      if (replaceUid != null && !(Number.isInteger(replaceUid) && row.some((x) => x.uid === replaceUid && !policy.isSlotless(this.gd.item(x.id))))) {
-        return fail(ERR.BAD_TARGET, 'replace: not a slotted item of the target');
-      }
+    if (replaceUid != null && !(Number.isInteger(replaceUid) && (target.items || []).some((x) => x.uid === replaceUid))) return fail(ERR.BAD_TARGET, 'replace: not equipped on the target');
+    const policy = this._slotPolicy();
+    // 顶替点必须是一件**真占格**的装备：变形同构体不占位，顶掉它等于凭空销毁（plus 档的 [ASSUMED] 口径）。
+    // official 档 `occupies` 恒真，所以这一条对它逐字无影响。
+    if (replaceUid != null) {
+      const picked = (target.items || []).find((x) => x.uid === replaceUid);
+      if (picked && !policy.occupies(picked)) return fail(ERR.BAD_TARGET, 'replace: not a slotted item');
     }
-    if (replaceUid != null && !(Number.isInteger(replaceUid) && (target.items || []).some((x) => x.uid === replaceUid))) {
-      return fail(ERR.BAD_TARGET, 'replace: not equipped on the target');
-    }
+    // 每名干员最多一件变形同构体：第二件在**任何东西动之前**就拒（official 档 `accepts` 恒真）。
+    if (!policy.accepts(target.items || [], rec)) return fail(ERR.BAD_TARGET, 'morph already equipped');
     const consume = typeof rec.kind === 'string' && rec.kind.startsWith('consume_on_equip');
     if (consume) {
       const key = 'item:' + itemKey(item.id);
@@ -84,7 +75,7 @@ export class PlayerItems {
       // 装备替换为将要佩戴的装备，并销毁被指定的装备"; GitHub #263): the pick (else the oldest) comes off before the effect —
       // which so sees the carrier without it (its bonds) — and is destroyed once the effect went through, leaving the slot
       // free (the normal 博士投影 then takes it: ev.keep, so it no longer pushes the oldest item out). A refusal puts it back.
-      const off = this._takeReplaced(target, replaceUid);
+      const off = this._takeReplaced(target, replaceUid, rec);
       const ev = { item, target, golden: !!rec.isGolden, keep: false, error: null, consumed: true };
       this.m.dispatchItem(this, item, target, 'onEquip', ev);
       if (ev.error) {
@@ -127,23 +118,44 @@ export class PlayerItems {
   /**
    * Attach an item. With both slots used the item `replaceUid` names (the player's pick) is replaced, else the oldest;
    * the replaced item is destroyed.
-   *
-   * 「两格满了」由这一局的**装备位策略**回答（`slotPolicy.slotsUsed`）：缺省档逐字就是
-   * `target.items.length >= this.gd.equipPerChess`，`plus` 档下变形同构体不计数、且它**永远不是**被顶掉的那一件
-   * （`slotPolicy.replacedIndex` 只挑真正占格的）。缺省档下策略就是官方那一条，循环体与从前同一批算术。
    */
+  /** The room's equip-slot policy. Official returns the shared frozen singleton, so the numbers stay today's. */
+  _slotPolicy() {
+    // 房间规则（上游 0.3.1）优先；没声明时退到我们自有的模块层 behaviour.morphPairing。
+    // 两条来源都归一成**一份声明**，交给 `matchSlotPolicy`（这一格唯一的对局入口）——
+    // 服务端四处读取点与不变量因此读的是同一个对象，不会各算一套。
+    const rule = ruleOption(this.m?.rules, 'morphPairing');
+    const decl = rule !== 'official' ? [{ switch: 'morphPairing', option: rule }] : (this.m?.behaviour ?? null);
+    const p = matchSlotPolicy({ behaviour: decl });
+    // 这一页的项是**棋子**（带 uid + id，没有 canGiveBond）；判据要的那条信息在 items 记录里。
+    // 把解析器绑进来，调用点就不必各传一次（漏传会静默把变形同构体当成普通装备 —— 真出过一次）。
+    const getItem = (arg) => this.gd.item(arg && typeof arg === 'object' ? arg.id : arg);
+    return {
+      active: p.active,
+      maxItems: p.maxItems,
+      isSlotless: (rec) => p.isSlotless(getItem(rec)),
+      occupies: (rec) => p.occupies(rec, getItem),
+      accepts: (items, rec) => p.accepts(items, rec, getItem),
+      canHold: (items, rec, cap) => p.canHold(items, rec, cap, getItem),
+      slotsUsed: (items) => p.slotsUsed(items, getItem),
+      slotCap: (cap) => p.slotCap(cap),
+      replacedIndex: (items, uid) => p.replacedIndex(items, uid, getItem),
+    };
+  }
+
   _attach(target, item, replaceUid = null) {
     target.items = target.items || [];
-    const policy = matchSlotPolicy(this.m);
-    const used = () => policy.slotsUsed(target.items, (id) => this.gd.item(id));
-    while (used() >= this.gd.equipCapacity(target.items, item)) { // loop-cap: splices one item each pass
-      const i = policy.replacedIndex(target.items, replaceUid, (id) => this.gd.item(id));
+    const policy = this._slotPolicy();
+    const rec = this.gd.item(item.id);
+    // 上限 = 官方 2 + 携带装备的 params.slot_cap（源石辅助仪 +2/+4，`shared/equipSlots.js`）：`equipCapacity`
+    // 把**这一件**也算进去，所以满格的携带者仍能装下装置。A plus morph does not occupy a slot, so this while does
+    // not run for it. Official occupies() is always true and slotsUsed is items.length, so the comparison and the
+    // splice index stay today's.
+    while (policy.occupies(rec) && policy.slotsUsed(target.items) >= this.gd.equipCapacity(target.items, item)) { // loop-cap: splices one item each pass
+      const i = policy.replacedIndex(target.items, replaceUid);
       const [old] = target.items.splice(i >= 0 ? i : 0, 1);
       replaceUid = null;
       this.m.dispatchItem(this, old, target, 'onDestroy', { item: old, holder: target, reason: 'replace' });
-      // D15：上游 0.3.0 的加法（#624 共享装备欠账的偿还）。**我们的 `matchSlotPolicy`（第 7 段）保留为来源** ——
-      // 上游那一版用的是裸 `target.items.length >= equipPerChess`，取它会丢掉 `plus` 档的两条（变形同构体不占位、
-      // 每名干员最多一件）。⇒ 结构取上游、判定仍走我们的策略。
       this.releaseItemStock(old);
     }
     target.items.push(item);
@@ -151,14 +163,16 @@ export class PlayerItems {
 
   /**
    * A consume-on-equip item on a full carrier: take the item `replaceUid` names (else the oldest) off `target` — not yet
-   * destroyed — and return { piece, idx } (null while a slot is free). 「满」与「挑哪一件」都走这一局的装备位策略
-   * （`plus`：变形同构体既不占位、也不会被挑走）；缺省档逐字是 `items.length < equipPerChess` 与「找不到 ⇒ 0」。
+   * destroyed — and return { piece, idx } (null while a slot is free).
    */
-  _takeReplaced(target, replaceUid = null) {
+  _takeReplaced(target, replaceUid = null, incoming = null) {
     target.items = target.items || [];
-    const policy = matchSlotPolicy(this.m);
-    if (policy.slotsUsed(target.items, (id) => this.gd.item(id)) < this.gd.equipCapacity(target.items)) return null;
-    const idx = policy.replacedIndex(target.items, replaceUid, (id) => this.gd.item(id));
+    const policy = this._slotPolicy();
+    // A plus morph does not replace anyone. Official occupies() is always true.
+    if (incoming && !policy.occupies(incoming)) return null;
+    // 同上：`equipCapacity` 把**这一件**算进去（源石辅助仪的 +2/+4 —— 装置自身能把格位撑开）。
+    if (policy.slotsUsed(target.items) < this.gd.equipCapacity(target.items, incoming)) return null;
+    const idx = policy.replacedIndex(target.items, replaceUid);
     const [piece] = target.items.splice(idx >= 0 ? idx : 0, 1);
     return { piece, idx: idx >= 0 ? idx : 0 };
   }
@@ -172,7 +186,7 @@ export class PlayerItems {
     if (!loc || loc.piece.kind !== 'item' || (loc.area !== 'hand' && loc.area !== 'temp')) return fail(ERR.BAD_TARGET);
     const rec = this.gd.item(loc.piece.id);
     if (!rec || rec.itemType !== 'MAGIC') return fail(ERR.BAD_TARGET, 'not an art');
-    if (!inField(row, col)) return fail(ERR.BAD_TILE);
+    if (!this._inField(row, col)) return fail(ERR.BAD_TILE);
     if (this.round.arts >= this.gd.maxArtsPerRound) return fail(ERR.BAD_TARGET, 'art limit');
     const key = 'item:' + itemKey(loc.piece.id);
     if (!this.m.registry.has(key)) return fail(ERR.BAD_TARGET, 'effect not available');
@@ -213,6 +227,32 @@ export class PlayerItems {
   }
 
   /**
+   * 内容层（`ctx.destroyItem`）用的**无条件**销毁：手牌 / 临时 / **已装备**三处都能销毁。
+   *
+   * 与 `destroy(uid)`（`g.destroy`，玩家意图）的两条差别，都是刻意的：
+   *   * **不过 `_gate()`** —— 内容层的销毁是「某条规则到期了」，不该因为玩家点了就绪、或当前不在休整期就停下
+   *     （`destroy` 的那道闸正是为玩家意图设的）；
+   *   * **已装备的也销毁** —— 玩家意图那条路一律锁着已装备的装备（research 04 §2「只能在精英化 / 合成 / 卖出时
+   *     离开干员」，`unequip` 那一格才是把它放回手牌）。
+   *
+   * 收尾与 `destroy(uid)` 逐字相同：移出原位 → 归还装备池 → 发 `onDestroy`（`reason` 由调用方给）→ recompute。
+   * 一件都没销毁（uid 不存在 / 不是装备件）返回 false，不抛。
+   * @param {number} uid @param {string} [reason] 写进 `onDestroy` 的理由（DESIGN §28.43.2 的「另立一刀」）
+   * @returns {boolean} 真的销毁了一件
+   */
+  destroyItem(uid, reason = 'content') {
+    const loc = this.find(uid);
+    if (!loc || !loc.piece || loc.piece.kind !== 'item') return false;
+    const piece = loc.piece;
+    const holder = loc.holder || null;
+    this._detach(loc);
+    this.releaseItemStock(piece);
+    this.m.dispatchItem(this, piece, holder, 'onDestroy', { item: piece, holder, reason: String(reason || 'content') });
+    this.recompute();
+    return true;
+  }
+
+  /**
    * g.unequip {itemUid}（行为开关 `unequip: "allow"`，DESIGN §28.43.1）：把一件**已装备**的装备从干员身上取下，
    * 放回手牌（右→左优先），手牌满则进**临时整备区**（`stow`，pieces.js）。
    *
@@ -231,21 +271,23 @@ export class PlayerItems {
    * **不发内容钩子**（刻意的第一版决定，DESIGN §28.43.2）：`HOOKS` 那 19 个是契约面（进 `META`），而「卸下」用
    * 哪一个都不贴切（不是 `onDestroy`、不是 `onEquip`），今天也没有任何包需要被通知。将来真有需要，另立一刀并
    * 按 `META` 契约面扩展。
+   *
+   * 判据只有一份（`unequipAllowed`，`shared/modSurface.js` 的 `items` 锚）：房间规则（`m.rules`，上游 0.3.1）
+   * 与模块层 `behaviour`（本仓的包声明）两处来源都读它。
    */
   unequip(itemUid) {
     const g = this._gate(); if (g) return g;
-    if (!unequipAllowed(this.m && this.m.behaviour)) return fail(ERR.BAD_TARGET, 'equipped items are locked');
+    if (!unequipAllowed(this.m?.rules, this.m?.behaviour)) return fail(ERR.BAD_TARGET, 'equipped items are locked');
     const loc = this.find(itemUid);
-    if (!loc || loc.piece.kind !== 'item' || loc.area !== 'equipped') return fail(ERR.BAD_TARGET, 'not equipped on an operator');
+    if (!loc || loc.piece.kind !== 'item') return fail(ERR.BAD_TARGET);
+    if (loc.area !== 'equipped') return fail(ERR.BAD_TARGET, 'not equipped on an operator');
     const holder = loc.holder;
     const idx = holder && Array.isArray(holder.items) ? holder.items.indexOf(loc.piece) : -1;
     const piece = loc.piece;
     this._detach(loc);
+    // 归宿：手牌右→左优先，其次临时整备区。本仓的 `stow`（pieces.js）把临时区当作**无界队列**（五个显示格只是
+    // 窗口，不是容量）⇒ `allowTemp` 为真时它不再返回 null；这里保留原子回滚，装备永不凭空消失。
     if (!this.stow(piece, { allowTemp: true })) {
-      // ⚠️ 0.3.0 起此分支**不可达**：临时整备区成了无界队列（`pieces.js` stow：「Five visible slots are a window,
-      // not a capacity limit」），`allowTemp` 为真时 `stow` 不再返回 null ⇒ 保留了回滚（无害的防御），
-      // 但「两处都满 ⇒ HAND_FULL」不再是 `allow` 档能走到的结局。合入前（temp 是 `freeSlot` 有界）它是真的。
-      // 没地方放 ⇒ 原子回滚（原下标）并点名。装备不会消失。
       if (holder && Array.isArray(holder.items)) holder.items.splice(idx < 0 ? 0 : Math.min(idx, holder.items.length), 0, piece);
       return fail(ERR.HAND_FULL);
     }

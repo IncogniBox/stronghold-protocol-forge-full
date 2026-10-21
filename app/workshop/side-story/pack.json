@@ -8,7 +8,7 @@
   "announcement": "notice/announcement.json"
  },
  "description": "「故事集（SIDE STORY）」盟约类型的前置 mod —— 把这一类盟约的公共层沉淀下来：①类型约定：盟约记录写 bondType=SIDE_STORY 即被本包识别（引擎对 bondType 不做枚举校验，工坊管线原样放行）；②客户端预设：改写 game.bondStrip，按合并后的 bonds 表给故事集圆盘打「故事集」金环徽标；③简报分区：改写 briefing.bonds / briefing.banned，在「确认本局信息」的附加盟约下面新开「故事集盟约 SIDE STORY BONDS」一栏、在本局禁用干员下面新开「本局禁用故事集干员 BANNED SIDE STORY OPERATORS」一栏；④本局禁用规则：matchBondPolicy 接管故事集盟约的抽签（N≥3 禁 1 个，此后每多 2 个再禁 1 个），被禁盟约的专属干员随之进本局禁用、其他成员只是身上该盟约本局不作数；⑤服务端预设：数据驱动的故事集运行时（story_aspd / story_res / story_sp / story_redeploy 及各自 *_per_stack 黑板键 → 攻速/法抗/每秒技力/再部署，随层数重算）；⑥不占用任何 bondId 的 battle installer 槽位，专属效果仍由各故事集包自己 registerBondInstaller；⑦盟约报告分区：改写 `sweep.bonds` —— 在 S.W.E.E.P.报告的「盟约报告」里把故事集盟约从「附加盟约」里拿出来、新开一栏「故事集盟约」（栏图标由本包自带）。独立故事集包只写数据即生效，零客户端代码。本包不含任何干员/盟约/策略，只提供这一类型的公共接口。",
- "gameVersion": "0.3.0",
+ "gameVersion": "0.3.1",
  "combat": true,
  "server": {
   "battle": {

@@ -4,7 +4,7 @@
 本仓库能直接使用的工坊内容。这些文件是本项目的官方创作接口 —— 它们和编辑器、CLI、校验器共用同一批
 `shared/*Authoring.js` 规则，所以**AI 写出来的东西与人在编辑器里点出来的东西完全一样**。
 
-> **本版基线**：本仓库 **0.19.1** / 打包的上游游戏本体 **0.3.0**。下面写的字段、枚举与推导规则都是这一版的引擎
+> **本版基线**：本仓库 **0.19.1** / 打包的上游游戏本体 **0.3.1**。下面写的字段、枚举与推导规则都是这一版的引擎
 > 实际在跑的那一套；上游换了基线而这几份 prompt 没跟上，就会出现「文档对、引擎不接受」的情况。
 
 | Prompt | 用于 | 状态 |
@@ -72,7 +72,7 @@ node tools/workshop-validate.mjs <包目录> --json    # 机器可读：每条�
 
 - **`rows` 的行数与列数由 `size` 决定**（不写 `size` 就是官方的 19 行 × 21 列），字符取自 `TILE_PALETTE`
   （`shared/stageAuthoring.js`）；`S` 敌方入口、`E` 保护目标。`row 0` 是最下面一行（与引擎存储一致）。
-- **大图（0.9.2）**：`size` 可以写 `[19,21]`（官方）、`[23,27]`（大）或 `[27,33]`（特大），中间任意尺寸也行，
+- **大图（0.9.2）**：`size` 可以写 `[19,21]`（官方）、`[23,27]`（大）、`[27,33]`（特大）、`[33,39]`（巨型）或 `[45,60]`（超巨），中间任意尺寸也行，
   但只能比官方大、不能小（`shared/layout.js` 的 `MIN/MAX_ROWS/COLS`）。大图的行带按同一个锚法重排：等待区贴顶
   5 行、普通带离顶第 7–10 行、boss 贴底第 1–5 行，多出来的行全进**中间战场**；三块部署矩形的**列**不变
   （2–10 / 2–10 / 10–18，镜像轴 20 —— 棋盘 9 列，列一挪对战镜像就对不上），只有**行**能挪。
@@ -242,11 +242,11 @@ node tools/workshop-validate.mjs <包目录> --json    # 机器可读：每条�
 | 规则 | 说明 |
 |---|---|
 | **语言只有四个** | `cn` `jp` `en` `kr`（`shared/constants.js` 的 `VOICE_LANGS`）。写别的整包被拒：`VOICE_LANG_UNKNOWN`（`shared/workshop.js:1977`） |
-| **默认语种 `jp` 不能写进 `voiceLangs`** | 默认语种那批台词写在 `voices` 里；写进 `voiceLangs["jp"]` 会被拒：`VOICE_LANG_DEFAULT`（`shared/workshop.js:2119`）。理由是同一批台词有两个写法的话，「客户端到底读哪一份」就成了作者猜不出来的事 |
+| **默认语种 `jp` 不能写进 `voiceLangs`** | 默认语种那批台词写在 `voices` 里；写进 `voiceLangs["jp"]` 会被拒：`VOICE_LANG_DEFAULT`（`shared/workshop.js:2313`）。理由是同一批台词有两个写法的话，「客户端到底读哪一份」就成了作者猜不出来的事 |
 | **一个语种至少要有一个干员** | 空表被拒：`VOICE_LANG_EMPTY`（`shared/workshop.js:2310`）；整个 `voiceLangs` 不是对象是 `VOICE_LANG_BAD_SHAPE`（`shared/workshop.js:2209`） |
 | **路径与授权规则同 `voices`** | 相对 `assets/`、不许绝对路径 / `..` / `.` / 反斜杠 / 盘符（`VOICE_PATH_UNSAFE`，`shared/workshop.js:1949`）；有 `assets/` 就必须有 `license`（`VOICE_NEEDS_ASSETS`，`shared/workshop.js:2214`） |
 | **只配一种语言也合法** | `voiceLangs` 本身就算「这个包贡献了什么」（`shared/workshop.js:4196` 的 `packDeclaresVoices`，此处认的是 `voiceLangs` 键本身），所以 `content: []` + 只写 `voiceLangs` 不会被当成空包 |
-| **写法顺序不影响产物** | 合并前按 `VOICE_LANGS` 的固定顺序重排（`shared/workshop.js:2305` 的 `orderedLangLines`），`pack.json` 里先写 `cn` 还是 `en` 都一样 |
+| **写法顺序不影响产物** | 合并前按 `VOICE_LANGS` 的固定顺序重排（`shared/workshop.js:2322` 的 `orderedLangLines`），`pack.json` 里先写 `cn` 还是 `en` 都一样 |
 
 **送达与回退**：默认语种的台词并进 `assets.audio.voice`，其它语种并进 `assets.audio.voiceLangs[<lang>]`
 （`shared/workshop.js:4167` 的 `appendVoiceLines`，两处调用在 `:4217` 与 `:4234`；是**追加**，不替换官方已有的台词，客户端仍在这些台词里随机）。播放侧按玩家选的配音语言取

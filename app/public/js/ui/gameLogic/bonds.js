@@ -127,10 +127,10 @@ export function grantedBonds(items, getItem = () => null) {
  * @param {((id:string)=>boolean)|null} hasBond bonds.json lookup（拿不到权威名单时给 null）
  * @returns {string[]}
  */
-const grantedBondsOf = (own, trait, items, getItem, hasBond) => {
+const grantedBondsOf = (own, trait, items, getItem, hasBond, mode = null) => {
   const list = Array.isArray(items) ? items : [];
   const recs = list.map((it) => getItem(typeof it === 'string' ? it : it?.id)).filter(isObj);
-  return memberBonds(own, { trait, recs, morphed: morphOption(), hasBond });
+  return memberBonds(own, { trait, recs, morphed: mode ?? morphOption(), hasBond });
 };
 
 /**
@@ -143,9 +143,16 @@ const grantedBondsOf = (own, trait, items, getItem, hasBond) => {
  * @param {Set<string>|null} [removed] 本局被摘除的盟约 id
  * @returns {string[]}
  */
-export function pieceBondIds(chess, items, getItem = () => null, hasBond = null, removed = null) {
+export function pieceBondIds(chess, items, getItem = () => null, modeOrHasBond = null, hasBondOrRemoved = null) {
   const own = (Array.isArray(chess?.bonds) ? chess.bonds : []).filter((b) => typeof b === 'string');
-  let out = grantedBondsOf(own, chess?.trait, items, getItem, hasBond);
+  // 第 4 参两种形态都收：**字符串 = 这一局的形态档位**（上游 0.3.1 的签名），**函数 = bonds.json 名单**（我们更早的调用方）。
+  const mode = typeof modeOrHasBond === 'string' ? modeOrHasBond : null;
+  let filter = typeof modeOrHasBond === 'function' ? modeOrHasBond : null;
+  // 第 5 参也一样：本仓的调用方传「本局被摘除的盟约」集合，上游的形态把 bonds.json 名单放在这里。
+  let removed = null;
+  if (hasBondOrRemoved instanceof Set) removed = hasBondOrRemoved;
+  else if (typeof hasBondOrRemoved === 'function' && !filter) filter = hasBondOrRemoved;
+  let out = grantedBondsOf(own, chess?.trait, items, getItem, filter, mode);
   if (removed && removed.size) out = out.filter((b) => !removed.has(b));
   return out;
 }
@@ -260,7 +267,9 @@ export function harmonyMembers(priv, getChess = () => null) {
  */
 export function bondMembers(bond, priv, banned = [], getChess = () => null, getItem = () => null, pieceRecord = null, hasBond = null) {
   const bannedSet = banned instanceof Set ? banned : new Set(Array.isArray(banned) ? banned : []);
-  const members = Array.isArray(bond?.visibleMembers) && bond.visibleMembers.length ? bond.visibleMembers : (Array.isArray(bond?.members) ? bond.members : []);
+  // visibleMembers 只要是数组就用它 —— **包括空数组**（一个盟约的目录成员全是隐藏的时候，
+  // 它一行都不该画）。members 仍然给「授予」那条路留下那些隐藏 id。缺 visibleMembers（老载荷）才退回 members。
+  const members = Array.isArray(bond?.visibleMembers) ? bond.visibleMembers : (Array.isArray(bond?.members) ? bond.members : []);
   const baseOf = (id) => getChess(id)?.baseId || (typeof id === 'string' ? id.replace(/_b$/, '_a') : id);
   const onBoard = new Set();
   const owned = new Set();

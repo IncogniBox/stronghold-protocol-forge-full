@@ -90,6 +90,7 @@ test('generated script harness runs with tools/plugin.mjs test, with SDK registr
   // Node 24 默认打印 spec 汇总（`ℹ pass 1`），更早的 Node 打印 TAP（`# pass 1`）；`tools/plugin.mjs test` 不指定
   // reporter，所以两种版式都收。要考的是那一格真的过了，不是表格长什么样。
   assert.match(run.stdout, /^(?:#|ℹ) pass 1$/m);
+  assert.match(run.stdout, /ℹ pass 1\b/); // the spec report on every Node version (Node 22's default here would be TAP)
 });
 
 test('mode wizard economy, DP and round timers reach GameData while the base mode stays unchanged', async t => {

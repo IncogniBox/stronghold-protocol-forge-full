@@ -5,7 +5,7 @@
 玩起来是一套**围绕「携带装备数量」滚雪球**的阵营：源石辅助仪每回合把干员身上其余装备的数值与效果吸收进自己、随盟约层数放大，
 盟约再把这件装备的件数折算成攻击力，越到后期越强。
 
-`pack.json`：`version 1.2.3`、`gameVersion 0.3.0`、`author "the Columbia mod"`、`license "GPL-3.0-or-later"`、`combat: true`、
+`pack.json`：`version 1.2.3`、`gameVersion 0.3.1`、`author "the Columbia mod"`、`license "GPL-3.0-or-later"`、`combat: true`、
 `stripDiyOverlaps: true`、`behaviour: [{ switch: "unequip", option: "allow" }]`（休整期可把已装备的装备从干员身上卸下，
 走引擎既有的 `g.unequip` 意图，见 §6.3）。盟约记录 `bondType: "SEASON"`、`isCore: true` —— 它是**核心盟约**，**不依赖任何前置包**
 （`workshop/side-story` 只服务 `bondType: "SIDE_STORY"` 的附加盟约；本包没有用到它）。数据与素材走创意工坊叠加层，

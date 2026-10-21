@@ -9,7 +9,7 @@
 玩起来：集齐 5 名成员把盟约铺满 5 层，成员不断用普通攻击给团队 Fever 充能，满 450 触发 20 秒 Fever 状态，
 期间成员近乎无视技力持续开技能；5 人成型时「所有效果翻倍」——攻速/停顿/凋亡损伤/资金/部署位全面拉满。
 
-- `gameVersion`：**0.3.0**（`pack.json`；包自身版本 `version` 见文件头）。
+- `gameVersion`：**0.3.1**（`pack.json`；包自身版本 `version` 见文件头）。
 - **前置依赖：无。** 它的盟约 `bondType` 是 **`SEASON`**、`isCore: true`，是**核心盟约**（不是 `SIDE_STORY`），
   既不需要也不走 `workshop/side-story` 的那套接口。与 `workshop/rimbilliton`（雷姆必拓）**兼容**：若叶睦同时带
   `rimBilliton` 盟约，两包各自把自己那条盟约算进 5 人判定，互不覆盖（本包 `overrides` 为空）。

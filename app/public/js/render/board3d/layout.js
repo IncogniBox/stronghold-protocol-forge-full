@@ -35,7 +35,7 @@
 
 import { SURFACES, surfaceUV, sideRect, tintRgb } from './atlas.js';
 import { GLYPH, TILEKEY_GLYPH, TILE_H } from '../style.js';
-import { penRect } from '../pen.js';
+import { penRects } from '../pen.js';
 import { layoutOf, OFFICIAL_LAYOUT, mapSize } from '../layout.js';
 
 /** How far the island's cliff faces go down (tiles). */
@@ -85,8 +85,18 @@ const growOf = (layout) => {
  */
 export function areaFor(kind, layout = null) {
   const L = layout || OFFICIAL_LAYOUT;
+  const [R, C] = mapSize(L);
+  // `all` = the WHOLE map window, and it is **the window itself** (rows 0..R−1 × cols 0..C−1), not a shifted band: the
+  // `growOf` delta moves a BAND up/right (its top edge follows the map), which for the whole-grid rect would cut off the
+  // rows below it (a 45×60 map came out as rows 26–44). This is what a preview builds; the official window returns
+  // `AREAS.all` itself, so nothing changes for a 19×21 map.
+  if (kind === 'all') {
+    return R === OFFICIAL_ROWS && C === OFFICIAL_COLS ? AREAS.all : [{ r0: 0, r1: R - 1, c0: 0, c1: C - 1 }];
+  }
   const { dr, dc } = growOf(L);
-  const set = kind === 'unite' ? AREAS.unite : kind === 'boss' || kind === 'hidden' || kind === 'bossPrep' ? AREAS.boss : AREAS.normal;
+  const set = kind === 'unite' ? AREAS.unite
+    : kind === 'boss' || kind === 'hidden' || kind === 'bossPrep' ? AREAS.boss
+      : AREAS.normal;
   if (!dr && !dc) return set;
   return set.map((a) => ({ r0: a.r0 + dr, r1: a.r1 + dr, c0: a.c0, c1: a.c1 + dc }));
 }
@@ -167,11 +177,11 @@ export function uvAt(uv, fx, fy) {
  * areas (inclusive tile rects, see AREAS): content outside them is not built, like the client which only builds the
  * areas of the current phase (configBlackBoard leftNormal / rightNormal / leftBoss / rightBoss + the preview pen).
  */
-export function classifyStage(stage, area = null) {
+export function classifyStage(stage, area = null, opts = {}) {
   const rows = Array.isArray(stage?.rows) ? stage.rows : [];
   const L = layoutOf(stage);
   const [R, C] = mapSize(L);
-  const pen = penRect(stage);
+  const pens = penRects(stage);
   const legend = stage && typeof stage.tiles === 'object' && stage.tiles ? stage.tiles : {};
   const grid = [];
   for (let r = 0; r < R; r++) {
@@ -203,13 +213,18 @@ export function classifyStage(stage, area = null) {
     t.tint = [1, 1, 1];
     t.surf = 'concrete';
     t.rot = 0; t.flipX = false;
-    const h = hash2(t.r, t.c);
+    // `opts.stableTiles` pins the per-tile hash to 0: every road / flat tile then keeps ONE orientation. A theme atlas
+    // (themes.js) carries directional art — a grid, a weave, a stripe — so the official random turn made the same block
+    // show up in four orientations and the whole board read as crooked (业主：「这些地块有点歪，而且方向没有统一」).
+    // The autochess atlas is a 2×2 slab whose turn is invisible, so it keeps the variation. The connectivity-driven
+    // turns of the high-ground plates below are semantic (a strip's direction) and are left alone either way.
+    const h = opts.stableTiles ? 0 : hash2(t.r, t.c);
     switch (t.glyph) {
       case 'r': t.rot = (h % 4) * 90; t.flipX = ((h >> 3) & 1) === 1; break;
       case 'R': t.surf = 'concreteStripe'; t.rot = (h & 1) ? 180 : 0; break;
       case 'f': case 'p':
         t.surf = 'hatch'; t.rot = (h % 4) * 90; if (t.glyph === 'p') t.tint = [0.9, 0.92, 0.95];
-        t.glass = t.r >= pen.r0 && t.r <= pen.r1 && t.c >= pen.c0 && t.c <= pen.c1;
+        t.glass = pens.some((p) => t.r >= p.r0 && t.r <= p.r1 && t.c >= p.c0 && t.c <= p.c1);
         break;
       case 'b': t.rot = (h % 4) * 90; break;
       case 'S': t.surf = 'concreteArrow'; break;
@@ -224,9 +239,11 @@ export function classifyStage(stage, area = null) {
       case 'a': t.surf = t.r <= 1 ? 'concrete' : 'padReinf'; t.side = 'benchRail'; if (t.r <= 1) { t.tint = [0.3, 0.32, 0.35]; t.panels = true; } break;
       case 'A': t.surf = t.r <= 1 ? 'concrete' : 'padEquip'; t.side = 'benchRail'; if (t.r <= 1) { t.tint = [0.3, 0.32, 0.35]; t.panels = true; } break;
       case 'h': t.side = 'goldSide'; break;
-      // forbidden blocks and separators: the dark hatched ("▨") blocks of the official boss field / arena rows
+      // forbidden blocks and separators: the dark hatched ("▨") blocks of the official boss field / arena rows.
+      // `#` keeps `hatch`; `X` uses `blockX` — the same pixels on the official atlas, but a theme can dress the two
+      // differently (board3d/atlas.js `blockX`).
       case '#': t.surf = 'hatch'; t.rot = (h & 1) ? 90 : 0; t.tint = [0.34, 0.36, 0.39]; t.side = 'graySide'; t.sideTint = [0.52, 0.55, 0.58]; break;
-      case 'X': t.surf = 'hatch'; t.tint = [0.36, 0.38, 0.41]; t.side = (t.c % 5 === 2) ? 'evacPanel' : 'restPanel'; t.sideTint = [0.8, 0.82, 0.86]; break;
+      case 'X': t.surf = 'blockX'; t.tint = [0.36, 0.38, 0.41]; t.side = (t.c % 5 === 2) ? 'evacPanel' : 'restPanel'; t.sideTint = [0.8, 0.82, 0.86]; break;
       default: break;
     }
   }
@@ -336,19 +353,32 @@ function sideFace(g, uvTable, surfName, dir, x0, x1, y0, y1, zb, zt, colBottom, 
 
 /**
  * Build the whole board of a stage.
- * @param {any} stage data/stages.json entry
- * @param {{ uv?: object, devices?: boolean, platformMesh?: boolean }} [opts] uv = resolveUvTable(tiles.json) (defaults
- *   to the built-in table); platformMesh: the 射击台 are drawn with the official model (scene.js), so they get no slab
+ * @param {{ any }|undefined} stage data/stages.json entry
+ * @param {{ uv?: object, devices?: boolean, platformMesh?: boolean, stableTiles?: boolean, woodUv?: object,
+ *   woodOn?: string[] }} [opts] uv = resolveUvTable(tiles.json) (defaults to the built-in table); platformMesh: the
+ *   射击台 are drawn with the official model (scene.js), so they get no slab; stableTiles: no random per-tile turn (a
+ *   theme atlas, see classifyStage); woodUv: raised tiles whose `surf` is in woodOn (default ['hatch']) sample this
+ *   surface — the theme's own high-ground material — instead of the tile atlas
  */
 export function buildBoard(stage, opts = {}) {
   const uvTable = opts.uv || null;
   const UVT = uvTable || Object.fromEntries(Object.entries(SURFACES).map(([k, v]) => [k, { ...v, rect: [...v.rect] }]));
-  const grid = classifyStage(stage, opts.area || null);
+  const grid = classifyStage(stage, opts.area || null, { stableTiles: !!opts.stableTiles });
   const [R, C] = mapSize(layoutOf(stage));
   const at = (r, c) => grid[r]?.[c] || null;
   const topZ = (t) => (t.glyph === 'd' ? -BASIN : t.h);
   const board = new Geom(), decal = new Geom(), pipe = new Geom(), glass = new Geom();
   const raised = new Geom(), raisedDecal = new Geom();
+  // A theme may dress the high-ground TOP faces with a whole material image of their own (themes.js `atlas.wood`:
+  // 天镜阁's high ground is one continuous plank floor, not a slab cropped out of the tile atlas). Those faces go into
+  // their own bucket so the scene can draw them with a second texture; `woodUv` is that image's full rect.
+  const wood = new Geom();
+  // `bevelTop` looks its surface up by name, so the wood table has to answer for EVERY name (the tile it dresses can be
+  // any surface in woodOn) — every entry points at the one image, whose full rect is the whole face.
+  const WUVT = opts.woodUv ? Object.fromEntries(Object.keys(UVT).map((k) => [k, opts.woodUv])) : null;
+  // Which surfaces the theme dresses with that image (`themes.js atlas.woodOn`, default the raised blocks' 'hatch').
+  // A tile's TOP is routed here when it is raised and its surface is one of these.
+  const WOOD_ON = new Set(Array.isArray(opts.woodOn) && opts.woodOn.length ? opts.woodOn : ['hatch']);
   const gates = [], terrain = { water: [], mire: [], smog: [], infection: [] };
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
@@ -370,7 +400,8 @@ export function buildBoard(stage, opts = {}) {
     };
     const ao = [occl(-1, -1), occl(1, -1), occl(1, 1), occl(-1, 1)];
     const [inset, drop] = t.raised ? BEVEL.block : BEVEL.low;
-    bevelTop(t.glass ? glass : board, UVT, t, zt, inset, t.glyph === 'd' ? 0 : drop, ao, tint);
+    const plateTop = !!WUVT && t.raised && WOOD_ON.has(t.surf);
+    bevelTop(plateTop ? wood : (t.glass ? glass : board), plateTop ? WUVT : UVT, t, zt, inset, t.glyph === 'd' ? 0 : drop, ao, tint);
     if (t.panels) benchPanels(board, UVT, t, zt, ao);
     const zEdge = zt - (t.glyph === 'd' ? 0 : drop);
     // sides: towards lower drawn neighbours (block sides / basin walls) and the island edge (cliffs)
@@ -478,7 +509,7 @@ export function buildBoard(stage, opts = {}) {
 
   return {
     grid, gates, devices, terrain, edges,
-    buckets: { board: board.finish(), decal: decal.finish(), pipe: pipe.finish(), glass: glass.finish(), raised: raised.finish(), raisedDecal: raisedDecal.finish() },
+    buckets: { board: board.finish(), decal: decal.finish(), pipe: pipe.finish(), glass: glass.finish(), raised: raised.finish(), raisedDecal: raisedDecal.finish(), wood: wood.finish() },
     bounds: { x0: minX, x1: maxX, y0: minY, y1: maxY },
     stats: { tiles: grid.flat().filter((t) => t.drawn).length, vertices: board.vertexCount + decal.vertexCount + pipe.vertexCount },
   };
@@ -579,8 +610,8 @@ export function objToBoard(obj, s = 1) {
 
 /**
  * Box-project UVs of a (board-space) mesh onto atlas surfaces: faces pointing up take `top`, the others `side`
- * (mapped across the face's horizontal extent × height). Used for the official crate mesh (s_common_box_01), whose
- * own material is assigned at runtime by the client.
+ * (mapped across the face's horizontal extent × height). Kept for the legacy s_common_box_01 fallback and mounds;
+ * the extracted 阻隔工事 (trap_1105_accrate) uses its authored UVs instead.
  */
 export function boxProjectUV(mesh, top, side) {
   const p = mesh.position, n = mesh.normal;

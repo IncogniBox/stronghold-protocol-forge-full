@@ -43,7 +43,7 @@ export const APP_VERSION = '0.19.1';
  * `scripts/make-update-package.mjs` tell "the next release" from "the very release I am building"
  * (a bundle that only names `0.14.0` cannot: 0.14.0-0.2.3 and 0.14.0-0.2.4 look identical to it).
  */
-export const UPSTREAM_VERSION = '0.3.0';
+export const UPSTREAM_VERSION = '0.3.1';
 /**
  * The version a **plugin** manifest's `app` range is judged against — the **upstream half**, NOT `APP_VERSION`.
  *
@@ -81,7 +81,7 @@ export const DEV_BUILD = /-dev$/.test(APP_VERSION);
  * is written for (`api`); a level outside min…current keeps the plugin out. The level rises when the data shapes, the
  * DSL vocabulary or the SDK a plugin relies on change incompatibly (CHANGELOG says how to migrate). [ASSUMED]
  */
-export const PLUGIN_API = Object.freeze({ current: 1, min: 1 });
+export const PLUGIN_API = Object.freeze({ current: 2, min: 1 });
 
 /**
  * The voice slots a pack may ship lines for (角色语音台词) — the ONE copy of this vocabulary: the workshop validator
@@ -164,6 +164,14 @@ export function maxSeatsFrom(env) {
 export const MIN_SEATS = 2;
 
 /**
+ * 重构模拟（模式扩展-重构模拟，room mode 'recon'）的房间形状——引擎只加不改：全部新键，缺省路径一个字不动。
+ * 房间分 1–5 支队伍（自由选队，赛前阶段），每队最多 4 人；房间座位仍受本机 `SEAT_CAP`（缺省 20）约束。
+ * 当前轮次的对战规则仍按全员合作 PVE 跑（共享池 / 共享 LP / 首领配对照旧）；`teams` 只是房间层元数据，
+ * 队伍间对抗留给后续轮次。
+ */
+export const RECON = Object.freeze({ MIN_TEAMS: 1, MAX_TEAMS: 5, TEAM_SIZE: 4 });
+
+/**
  * 一局里一名玩家能同时站在场上的干员数上限（部署位）—— **一个数只许一个真相**。
  *
  * 它从前是**两处**硬编码的 `12`，本刀把它收到这里：
@@ -228,14 +236,18 @@ export const DIFFICULTIES = ['FUNNY', 'NORMAL', 'HARD', 'ABYSS'];
 export const DIFFICULTY_NAMES = { FUNNY: N_('标准模拟'), NORMAL: N_('险境模拟'), HARD: N_('绝境模拟'), ABYSS: N_('终极模拟') };
 export const DIFFICULTY_COLORS = { FUNNY: '#f6a329', NORMAL: '#e85a1a', HARD: '#e73118', ABYSS: '#ff0024' };
 
-// modeId in data/config.json = `mode_${type}_${difficulty.toLowerCase()}` with type single|multi
+// modeId in data/config.json = `mode_${type}_${difficulty.toLowerCase()}` with type single|multi; the 重构模拟 mode
+// (room mode 'recon', 模式扩展-重构模拟) maps to its own generated `mode_recon_<difficulty>` entries (tools/build-data.mjs).
 export const modeIdFor = (roomMode, difficulty) =>
-  `mode_${roomMode === 'solo' ? 'single' : 'multi'}_${difficulty.toLowerCase()}`;
+  `mode_${roomMode === 'solo' ? 'single' : roomMode === 'recon' ? 'recon' : 'multi'}_${difficulty.toLowerCase()}`;
 
 export const PHASE = Object.freeze({
   LOBBY: 'LOBBY',
   INFO_CHECK: 'INFO_CHECK',
   BAND_DRAFT: 'BAND_DRAFT',
+  // 预重构（模式扩展-重构模拟，room mode 'recon'）：策略选择之后、协议启动之前的模式专属阶段
+  // （盟约倾向 / 首领与协助负载选择占位），计时见 config.timers.preRecon。
+  PRE_RECON: 'PRE_RECON',
   BATTLE_CHECK: 'BATTLE_CHECK',
   ROUND_START: 'ROUND_START',
   SP_DRAFT: 'SP_DRAFT',
@@ -249,7 +261,7 @@ export const PHASE = Object.freeze({
 });
 
 export const PHASE_NAMES = {
-  LOBBY: N_('等待中'), INFO_CHECK: N_('确认本局信息'), BAND_DRAFT: N_('选择策略'), BATTLE_CHECK: N_('协议启动'),
+  LOBBY: N_('等待中'), INFO_CHECK: N_('确认本局信息'), BAND_DRAFT: N_('选择策略'), PRE_RECON: N_('预重构'), BATTLE_CHECK: N_('协议启动'),
   ROUND_START: N_('回合开始'), SP_DRAFT: N_('机变阶段'), PREP: N_('休整期'), COMBAT: N_('作战中'), UNITE: N_('联防阶段'),
   SETTLE: N_('结算'), FINAL_ASSAULT: N_('最终攻势'), HIDDEN_CORE: N_('隐秘核心'), RESULT: N_('模拟结束'),
 };
@@ -263,7 +275,7 @@ export const PHASE_NAMES = {
 // OFFICIAL layout's numbers: the default and the fallback, read per map through `layoutOf(stage)`.
 export const GEO = Object.freeze({
   ROWS: 19, COLS: 21,
-  CANVAS_ROWS: 27, CANVAS_COLS: 33,
+  CANVAS_ROWS: 45, CANVAS_COLS: 60,
   FIELD: { r0: 9, r1: 12, c0: 2, c1: 10 },        // own deployable board region (board coordinates)
   NORMAL_RECT: { r0: 9, r1: 12, c0: 0, c1: 10 },  // simulation rect of a normal battle (official layout)
   UNITE_RECT: { r0: 9, r1: 12, c0: 0, c1: 20 },
@@ -442,6 +454,10 @@ export const ERR = Object.freeze({
   PLUGIN_INCOMPATIBLE: 'PLUGIN_INCOMPATIBLE',
   PLUGIN_BUSY: 'PLUGIN_BUSY',
   CONTENT_NOT_READY: 'CONTENT_NOT_READY',
+  PLUGIN_RULE_CONFLICT: 'PLUGIN_RULE_CONFLICT',
+  TEST_CONFIRM: 'TEST_CONFIRM',
+  TEST_DISABLED: 'TEST_DISABLED',
+  TEST_FORBIDDEN: 'TEST_FORBIDDEN',
   INTERNAL: 'INTERNAL',
 });
 
@@ -471,6 +487,10 @@ export const ERR_TEXT = {
   PLUGIN_SCRIPT_OVERRIDE: N_('插件未声明要替换的官方技能'),
   PLUGIN_SCRIPT_CHECK: N_('脚本未通过兼容性检查'),
   CONTENT_NOT_READY: N_('仍有博士未载入房间的插件内容'),
+  PLUGIN_RULE_CONFLICT: N_('两个插件把同一个规则开关设成了不同的选项'),
+  TEST_CONFIRM: N_('这是测试房间，不计入任何记录。确认加入？'),
+  TEST_DISABLED: N_('测试模式未开启'),
+  TEST_FORBIDDEN: N_('这不是测试房间'),
 };
 
 // ---- Emotes (交流, research 09 §4) -----------------------------------------------------------------------------

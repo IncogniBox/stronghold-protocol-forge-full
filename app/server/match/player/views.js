@@ -11,6 +11,8 @@ import { bountyText, bountyCard } from '../choices.js';
 export class PlayerViews {
   pieceView(p, rc = null) {
     const rec = p.kind === 'item' ? this.gd.item(p.id) : p.kind === 'token' ? this.gd.token(p.id) : this.gd.chess(p.id);
+    // 皮肤 (docs/SKINS.md): skinFor resolves the effective body, including stand-ins and 自选 picks, on every surface.
+    const skinId = p.kind === 'chess' ? this.skinFor(rec) : null;
     const v = {
       uid: p.uid,
       kind: p.kind,
@@ -20,6 +22,9 @@ export class PlayerViews {
       items: p.kind === 'chess' ? (p.items || []).map((it) => ({ uid: it.uid, id: it.id })) : [],
       count: p.kind === 'token' ? (p.count || 1) : 1,
       ownerUid: p.kind === 'token' ? p.ownerUid ?? null : null,
+      // 皮肤: the prep board / hand / temp views carry it too, so a piece shows its appearance before it is deployed and
+      // the deploy wheel's preview matches the model that will actually fight
+      ...(skinId ? { skin: skinId } : {}),
     };
     // 装备声明的「已继承」数据（`item.params.inherited_key`，例如 `'columbia'`）：把该件棋子 `meta.data[<键>]` 里
     // 那一份原样下发，装备卡据此列出「已继承的装备」。只送**装备自己声明过的**键，不整包透传 `meta.data`；

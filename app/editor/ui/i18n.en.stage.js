@@ -137,6 +137,11 @@ export const EN_STAGE = Object.freeze({
   '这台设备没有可用的 WebGL2，已退回 2D': 'This device has no usable WebGL2 — stayed on 2D',
   'three.js 没加载成功，已退回 2D': 'three.js failed to load — stayed on 2D',
   '棋盘素材包不完整，已退回 2D': 'The board art pack is incomplete — stayed on 2D',
+  // 棋盘主题（board3d/themes.js）：一个主题只换天幕与色调，地块图集仍是官方那张；label 是游戏数据里的地名，不翻会像没做中文
+  '棋盘主题：只换天幕与色调（地块仍用官方卫戍协议的图集）': 'Board theme: only the backdrop and the mood change (the tiles keep the official Stronghold Protocol atlas)',
+  '标准（卫戍协议）': 'Standard (Stronghold Protocol)',
+  '炎国 天镜阁': 'Yan · Sky-Mirror Pavilion',
+  '炎国 岁陵': 'Yan · Sui Mausoleum',
 
   // ---- 回合绑定（这张图自己的出怪表） ----
   '回合绑定（这张图自己的出怪表）': 'Round bindings (this map’s own wave tables)',
@@ -160,6 +165,8 @@ export const EN_STAGE = Object.freeze({
   '标准': 'Standard',
   '大': 'Large',
   '特大': 'Huge',
+  '巨型': 'Gigantic',
+  '超巨': 'Colossal',
   '自定（{0}）': 'Custom ({0})',
   '放大尺寸会保留左下角已有的地形，多出来的行列填成空气（地图外），分区重置为这个尺寸的默认。': 'Enlarging keeps the terrain already painted in the lower-left corner, fills the added rows and columns with air (outside the map), and resets the zones to this size’s defaults.',
   '已把地图改成 {0}：多出来的行列填成空气（地图外），分区重置为这个尺寸的默认。': 'Map resized to {0}: the added rows and columns are air (outside the map) and the zones are reset to this size’s defaults.',
@@ -173,9 +180,9 @@ export const EN_STAGE = Object.freeze({
   '这里能改的是「分区」：部署区、战斗矩形、怪物等待区。左右拖只对没定死的那些矩形有效，上下拖都能挪。': 'What you change here are the zones: deploy fields, battle rects and the enemy pen. Dragging left/right only works on rects that are not fixed; up/down always moves them.',
   '{0}（改这一格就是改分区）': '{0} (changing this number moves the zone)',
   '{0}（改这一格就是整块棋盘上下挪）': '{0} (changing this number moves the whole board up or down)',
-  '{0} 由棋盘定死（两个半场在 col 10 相接、镜像轴 20），不能改': '{0} is fixed by the board (the two halves meet at col 10, the mirror axis is 20) and cannot be changed',
+  '{0} 由棋盘定死（两个半场在 col {1} 相接、镜像轴 {2}），不能改': '{0} is fixed by the board (the two halves meet at col {1}, the mirror axis is {2}) and cannot be changed',
+  '镜像轴：两个 boss 半场在第 {0} 列相接、右半场就是过它翻过来的（由这张图声明的分区定死，只作标注）。': 'Mirror axis: the two boss halves meet at column {0}, and the right half is the left one mirrored across it (fixed by the zones this map declares — a label only).',
   '镜像轴': 'Mirror axis',
-  '镜像轴：boss 右半场就是过第 {0} 列翻过来的（由棋盘定死，只作标注）。': 'Mirror axis: the boss right half is the left half mirrored across column {0} (fixed by the board, a label only).',
   '重置为尺寸默认': 'Reset to the size’s defaults',
   '分区已重置为 {0} 的默认布局。': 'Zones reset to the default layout of {0}.',
   '分区有问题（保存会被拦下）：{0}': 'The zones have a problem (saving will be blocked): {0}',
@@ -188,6 +195,8 @@ export const EN_STAGE = Object.freeze({
   'boss 整备矩形': 'Boss prep rect',
   '普通': 'Normal',
   'boss 左半': 'Boss left half',
+  '普通左半': 'Normal left half',
+  '普通右半': 'Normal right half',
   'boss 右半': 'Boss right half',
 
   // ---- 分区视图（业主 2026-10-08：一张 19×21 里住着三个区） ----
@@ -198,6 +207,8 @@ export const EN_STAGE = Object.freeze({
   '整图（专业检修）': 'Whole grid (pro inspection)',
   '只画这一区（区外压暗）；「整图」是三合一的老画面，留给专业检修': 'Edit only this zone (the rest is dimmed); “Whole grid” is the old three-in-one view, kept for pro inspection',
   '普通对战部署区': 'Normal deploy field',
+  '普通对战部署区·左半': 'Normal deploy field · left half',
+  '普通对战部署区·右半': 'Normal deploy field · right half',
   'boss 左半部署区': 'Boss left-half deploy field',
   'boss 右半部署区': 'Boss right-half deploy field',
   '从官方图取这一区…': 'Take this zone from an official map…',

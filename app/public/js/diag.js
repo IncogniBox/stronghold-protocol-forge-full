@@ -13,6 +13,9 @@
 //                                      error the battle isolated) | 'runner' (the local battle runner) | 'request'
 //                                      (a failed request or error push the player was shown)
 //   errorLog() / errorCount() / clearErrorLog()
+//   messageOf(err) / eventReasonText(err)   the one-line text of a value: an Error, a {code, msg} push, a string — or a
+//                                      DOM Event handed to throw/reject, which gets a type+target line instead of
+//                                      the `{"isTrusted":true}` JSON.stringify would keep
 //   setBattleSource(fn)                the battle runner registers how to read the battle on screen
 //   installTrafficMeter() / recordResourceEntry(entry) / trafficSummary() / clearTraffic()   the page's download totals
 //   buildDiagnostics(input)            the report text (pure: the state, the environment and the battle are passed in)
@@ -37,16 +40,38 @@ let total = 0;
 let dropped = 0;
 const pageStart = Date.now();
 
+/**
+ * A **DOM Event** handed to `throw` / `reject` unwrapped — the shape an `onerror` callback produces when it passes the
+ * raw event along instead of an Error (a failing `<img>` / `<video>` / resource load). `JSON.stringify` alone is
+ * useless here: Chrome keeps exactly ONE own enumerable property on an Event (`isTrusted`), so every such reason
+ * reaches the report as the same `{"isTrusted":true}`. Name its type and target instead — that is what identifies the
+ * failing load, and `[synthetic]` separates an event the page dispatched itself (app code) from the browser's own.
+ * @param {any} err
+ * @returns {string|null} the description, or null when this is not an event-shaped value
+ */
+export function eventReasonText(err) {
+  if (!err || typeof err !== 'object' || err instanceof Error) return null;
+  if (typeof err.type !== 'string' || !err.type || !('isTrusted' in err)) return null;
+  const t = err.target || null;
+  const name = t ? (t.tagName || t.nodeName || (t === globalThis ? 'window' : '?')) : null;
+  const url = t && (t.currentSrc || t.src);
+  const at = typeof url === 'string' && url ? stripHosts(url).split('?')[0] : null;
+  const text = typeof err.message === 'string' && err.message ? `: ${err.message}` : ''; // an ErrorEvent carries one
+  return `event "${err.type}"${name ? ` on ${name}` : ''}${at ? ` (${at})` : ''}${text}${err.isTrusted === false ? ' [synthetic]' : ''}`;
+}
+
 /** `name: message (code)` of an Error, a NetError, a {code, msg} push, a string or anything else. */
 export function messageOf(err) {
   let s;
   if (err == null) s = String(err);
   else if (typeof err === 'string') s = err;
   else if (typeof err === 'object') {
+    const event = eventReasonText(err);
     const name = typeof err.name === 'string' && err.name && err.name !== 'Error' ? `${err.name}: ` : '';
     const text = typeof err.message === 'string' && err.message ? err.message : typeof err.msg === 'string' ? err.msg : '';
     const code = typeof err.code === 'string' || typeof err.code === 'number' ? String(err.code) : '';
-    if (text) s = `${name}${text}${code && !text.includes(code) ? ` (${code})` : ''}`;
+    if (event) s = event;
+    else if (text) s = `${name}${text}${code && !text.includes(code) ? ` (${code})` : ''}`;
     else if (code) s = `${name}${code}`;
     else { try { s = JSON.stringify(err); } catch { s = Object.prototype.toString.call(err); } }
   } else s = String(err);
@@ -319,7 +344,7 @@ export function buildDiagnostics(input) {
       b.done ? 'done' : b.loading ? 'loading' : 'running', b.paused ? 'paused' : null, Number.isFinite(b.speed) ? `${b.speed}x` : null)}`);
   }
   if (settings) {
-    lines.push(`settings: ${join(`quality ${settings.quality}`, settings.damageNumbers ? 'damage numbers' : null, settings.officialDamageNumbers ? 'official damage numbers' : null, settings.ammoCount ? 'ammo count' : null, settings.mysticEnergy ? 'mystic energy' : null, settings.combatMetrics ? 'combat metrics' : null, settings.officialFx && settings.officialFx !== 'auto' ? `official fx ${settings.officialFx}` : null, settings.muted ? 'muted' : null)}`);
+    lines.push(`settings: ${join(`quality ${settings.quality}`, settings.damageNumbers ? 'damage numbers' : null, settings.officialDamageNumbers ? 'official damage numbers' : null, settings.ammoEnergyCount ? 'ammo and energy counts' : null, settings.combatMetrics ? 'combat metrics' : null, settings.officialFx && settings.officialFx !== 'auto' ? `official fx ${settings.officialFx}` : null, settings.muted ? 'muted' : null, settings.prepDeployFold === false ? 'deploy fold off' : null)}`);
   }
   const tl = trafficLine(trafficTotals);
   if (tl) lines.push(`traffic: ${tl}`);

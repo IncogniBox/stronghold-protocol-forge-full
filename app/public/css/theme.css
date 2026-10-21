@@ -196,6 +196,8 @@ h1, h2, h3, h4, p { margin: 0; }
 .micro--mint { color: var(--mint-700); }
 .micro--gold { color: #9c7c16; }
 .micro--hi { color: var(--text-lo); }
+/* 重构模拟（模式扩展-重构模拟）的冰蓝点缀：队伍条 / 预重构屏的 techno 小标。 */
+.micro--ice { color: #5d88aa; }
 .t-mint { color: var(--mint-500); }
 .t-gold { color: var(--gold); }
 .t-amber { color: var(--amber); }

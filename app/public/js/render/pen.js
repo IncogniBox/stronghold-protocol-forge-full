@@ -29,7 +29,7 @@
 // else the map's own pen band `layoutOf(stage).pen` (shared/layout.js: the top 5 rows of the map's window, official
 // (14,7)–(18,13) for a 19×21 stage). `PEN_RECT` below is only the official fallback — a big map never sees it.
 
-import { layoutOf } from './layout.js';
+import { layoutOf, penRectOf } from './layout.js';
 
 export const PEN_RECT = Object.freeze({ r0: 14, r1: 18, c0: 7, c1: 13 });
 export const MAX_PREVIEW = 50;
@@ -74,12 +74,25 @@ export function parsePenRect(v) {
 }
 
 /**
- * The pen rect of a stage: `stage.config.enemy_place_rect` (the official configBlackBoard field — the ONLY thing an
- * official record declares) when it parses, else the map's own pen band (`layoutOf(stage).pen`, shared/layout.js). A big
- * map therefore gets its own pen, and an official one keeps `(14,7)–(18,13)` exactly as before.
+ * The pen band of a stage for one side: `stage.config.enemy_place_rect` (the official configBlackBoard field — the
+ * ONLY thing an official record declares) when it parses, else the map's own pen band (`layoutOf(stage).pen`, shared/layout.js
+ * `penRectOf`: the left band, or the mirrored right one on a map that declares a second pen). A big map therefore gets
+ * its own pen, and an official one keeps `(14,7)–(18,13)` exactly as before.
  */
-export function penRect(stage) {
-  return parsePenRect(stage?.config?.enemy_place_rect) || layoutOf(stage).pen;
+export function penRect(stage, side = 'L') {
+  return parsePenRect(stage?.config?.enemy_place_rect) || penRectOf(layoutOf(stage), side);
+}
+
+/**
+ * Every pen band of a stage (its floor art): the single one for a one-pen map, the left + right pair for a map that
+ * declares two (业主 2026-10-21「怪物等待区也复制一份」).
+ * @returns {Array<{r0:number,r1:number,c0:number,c1:number}>}
+ */
+export function penRects(stage) {
+  const custom = parsePenRect(stage?.config?.enemy_place_rect);
+  if (custom) return [custom];
+  const L = layoutOf(stage);
+  return L.penRight ? [L.pen, L.penRight] : [L.pen];
 }
 
 /** Layout of the pen's own band: it is `pen.r1 − pen.r0 + 1` rows deep, its gates in its left column, one unused row. */
@@ -95,8 +108,8 @@ const PEN_SHAPE = Object.freeze({ rows: 5, emptyRow: 2, lowerAnchor: 1, upperAnc
  * nearest to it in Manhattan distance. Only when the stage's tiles yield no anchor at all (no stage data, or a pen with
  * no gate tiles) do the anchors fall back to the rect's own shape: the same 1 / 4 rows down, the left column.
  */
-export function penZones(stage) {
-  const rect = penRect(stage);
+export function penZones(stage, side = 'L') {
+  const rect = penRect(stage, side);
   const rows = Array.isArray(stage?.rows) ? stage.rows : null;
   const legend = isObj(stage?.tiles) ? stage.tiles : {};
   const glyph = (r, c) => (rows && typeof rows[r] === 'string' ? rows[r][c] : null);
@@ -201,7 +214,7 @@ export function thinPreview(entries, max = MAX_PREVIEW) {
 export function layoutPen(list, opts = {}) {
   const entries = penEntries(list);
   const sig = penSignature(list);
-  const Z = penZones(opts.stage);
+  const Z = penZones(opts.stage, opts.side === 'R' ? 'R' : 'L');
   const max = Number.isInteger(opts.max) && opts.max > 0 ? opts.max : MAX_PREVIEW;
   const perTile = Number.isInteger(opts.perTile) && opts.perTile > 0 ? opts.perTile : PER_TILE;
   const plan = thinPreview(entries, max);

@@ -1,0 +1,13 @@
+{
+  "id": "enemy-ext",
+  "name": "新增敌人扩展",
+  "version": "0.1.0",
+  "author": "enemy-ext mod",
+  "license": "CC0-1.0",
+  "description": "把游戏本体（data/enemies.json，249 个敌人）里没有的敌人补进来，供日后「选择首领敌人」等玩法引用。本包只携带一份 enemies.json 叠加层：61 个首领（塔露拉 / 霜星，“冬痕” / 爱国者 / 特雷西斯，黑冠尊主 / 岁 系列 / AMa-10 系列 / 熔戈者，护王余火 … 等），记录逐字段照抄官方 enemy_database + enemy_handbook_table（数值、法抗、天赋黑板、技能、图鉴能力文本一律照抄，不另编数值）。本包不含素材：这些首领的模型不在本安装的 assets.json 里，所以它们画成平面图标、不播放模型动画。逐首领的技能实现（kit）与首领表接线留后续轮次 —— 本轮只保证数据被引擎接受、可被选进对局。",
+  "gameVersion": "0.3.1",
+  "combat": true,
+  "content": [
+    "enemies"
+  ]
+}

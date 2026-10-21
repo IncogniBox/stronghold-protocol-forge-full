@@ -271,6 +271,43 @@
 .specbar__who.is-offline { color: var(--text-dim); }
 .specbar__who > .icon { width: .16rem; height: .16rem; }
 
+/* ---- recon teams （重构模拟 · 自由选队条，模式扩展-重构模拟） ------------------------------------------------------ */
+.team-bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .1rem .14rem;
+  padding: .1rem .6rem .04rem;
+  font-size: calc(.15 * var(--t));
+  color: var(--text-lo);
+}
+.team-bar__name { font-weight: 700; color: var(--text-md); }
+.team-bar__list { display: flex; flex-wrap: wrap; gap: .1rem; }
+.team-bar__team {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .1rem;
+  min-height: .36rem;
+  padding: 0 .16rem;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, .32);
+  color: var(--text-hi);
+  cursor: pointer;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.team-bar__team:hover:not(:disabled) { border-color: var(--ice); }
+.team-bar__team.is-on { border-color: var(--ice); box-shadow: inset 0 0 0 1px var(--ice), 0 0 .14rem var(--ice-a20); }
+.team-bar__team:disabled { cursor: default; opacity: .55; }
+.team-bar__team.is-on:disabled { opacity: 1; }
+.team-bar__team b { letter-spacing: .06em; }
+.team-bar__team .num { color: var(--ice); }
+.team-bar__lock { font-size: calc(.13 * var(--t)); }
+/* 座位卡顶条上的队伍徽标（与 P# 同一行，recon 房间限定）。 */
+.rseat__team { margin-left: auto; font-weight: 700; letter-spacing: .08em; color: var(--ice) !important; }
+.rseat.is-ready .rseat__team { color: #0b2a3d !important; }
+
 /* ---- bottom bar ----------------------------------------------------------------------------------------- */
 .room-bar {
   position: relative;
@@ -397,3 +434,67 @@
 }
 .chatp__go[disabled] { opacity: .45; cursor: default; }
 .chatp__note { margin-top: .1rem; font-size: calc(.14 * var(--t)); color: var(--text-lo); }
+
+/* ---- 重构模拟的房间：队伍色 / 编队网格 / 紧凑聊天 ------------------------------------------------ */
+/* 队伍色（红、黄、蓝、绿、紫）：座位卡边框、顶条、队标与队伍条读同一个 --team-color（room.js 的 TEAM_COLORS）。 */
+.rs--recon .rseat[data-team] .rseat__art { border-color: var(--team-color); }
+.rs--recon .rseat[data-team].is-ready .rseat__art {
+  border-color: var(--team-color);
+  box-shadow: 0 0 .2rem rgba(79, 232, 192, .3);
+  box-shadow: 0 0 .2rem color-mix(in srgb, var(--team-color) 38%, transparent);
+}
+.rs--recon .rseat[data-team] .rseat__strip { background: var(--team-color); }
+.rs--recon .rseat[data-team] .rseat__strip i { background: repeating-linear-gradient(90deg, rgba(8, 12, 12, .55) 0 3px, transparent 3px 5px); }
+.rs--recon .rseat[data-team] .rseat__strip span { color: #0d1110; }
+.rs--recon .rseat[data-team] .rseat__plate { border-color: var(--team-color); border-color: color-mix(in srgb, var(--team-color) 55%, transparent); }
+.rs--recon .rseat[data-team] .rseat__clip { background: var(--team-color); }
+.rs--recon .rseat[data-team] .rseat__team { color: var(--team-color) !important; }
+.rs--recon .rseat[data-team].is-ready .rseat__team { color: #0b2a3d !important; }
+.team-bar__team[data-team] { border-color: var(--line-2); border-color: color-mix(in srgb, var(--team-color) 45%, var(--line-2)); }
+.team-bar__team[data-team] .num { color: var(--team-color); }
+.team-bar__team[data-team].is-on {
+  border-color: var(--team-color);
+  box-shadow: inset 0 0 0 1px var(--team-color), 0 0 .14rem rgba(0, 0, 0, .35);
+  box-shadow: inset 0 0 0 1px var(--team-color), 0 0 .14rem color-mix(in srgb, var(--team-color) 30%, transparent);
+}
+
+/* 编队网格：座位按两行铺开（--cols = ceil(座位数 / 2)），5 队 × 4 人 = 20 席也不会横向滚动。 */
+.rs--recon .rs-seats {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: .12rem;
+  align-items: stretch;
+  overflow: auto;
+  padding: .24rem .4rem .12rem;
+}
+.rs--recon .rseat { --w: auto; width: auto; min-width: 0; }
+
+/* 房内聊天：缩小并固定在左下角（业主 2026-10-21）。.screen 本身已是 absolute inset:0，
+   所以 .chatp 的 absolute 直接锚在房间屏上；不要再给 .rs 写 position（会盖掉 .screen 的 absolute）。 */
+.rs .chatp {
+  position: absolute;
+  left: max(.18rem, 12px);
+  bottom: max(.92rem, 60px);
+  width: min(4.4rem, 30vw);
+  z-index: 7;
+  border-color: rgba(255, 255, 255, .16);
+  background: rgba(10, 12, 12, .92);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 .1rem .28rem rgba(0, 0, 0, .45);
+}
+.rs .chatp .panel__head { padding: .06rem .1rem; }
+.rs .chatp .panel__title { font-size: calc(.18 * var(--t)); }
+.rs .chatp .panel__body { padding: .08rem; }
+.rs .chatp .chatp__list { max-height: 1.3rem; padding: .06rem .08rem; }
+.rs .chatp .chatp__row { font-size: calc(.14 * var(--t)); }
+.rs .chatp .chatp__empty { font-size: calc(.14 * var(--t)); }
+.rs .chatp .chatp__quick { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-top: .06rem; }
+.rs .chatp .chatp__quick::-webkit-scrollbar { display: none; }
+.rs .chatp .chatp__q { flex: none; font-size: calc(.12 * var(--t)); padding: .02rem .08rem; }
+.rs .chatp .chatp__input { font-size: calc(.14 * var(--t)); }
+.rs .chatp .chatp__go { font-size: calc(.13 * var(--t)); }
+@media (max-width: 900px) {
+  .rs .chatp { width: min(5.4rem, 56vw); }
+}

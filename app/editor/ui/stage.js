@@ -20,8 +20,8 @@ import { zonesOf, zoneOf, deployRectsAt, roadsOutsideDeployRects, validateStage 
 // 一张图自己的**尺寸与分区**（业主 2026-10-08：「把地图做得更大些，加入对大图的支持」）：只有 shared/layout.js 一份口径。
 // 画布永远是最大档位（引擎世界的步长），作者真正画的是**这张图的窗口**（mapSize()），窗口里怎么切块由 mapLayout() 说了算。
 import {
-  SIZE_PRESETS, MAX_ROWS, MAX_COLS, OFFICIAL_SIZE, FIXED_DEPLOY_COLS,
-  sizeOf, sizePresetOf, layoutForSize, layoutOf, normalizeLayout,
+  SIZE_PRESETS, MAX_ROWS, MAX_COLS, OFFICIAL_SIZE, BAND_ROWS,
+  sizeOf, sizePresetOf, layoutForSize, layoutOf, normalizeLayout, isDualLayout,
 } from '../../shared/layout.js';
 
 const $ = (s) => document.querySelector(s);
@@ -63,6 +63,8 @@ const state = {
   autoFrame: true,
   // 3D 预览: the game's own renderer over this map, or a documented reason to stay 2D (no local art / no WebGL2 / …)
   mode3d: false, view3d: null, reason3d: null,
+  // 棋盘主题（board3d/themes.js：只换天幕与色调，地块图集仍是官方那张）。null = 还没选过，用默认主题（标准）。
+  theme3d: null,
   // `?board=`（游戏客户端自己的约定，public/js/render/app.js）：`2d` 强制 2D 画布，`3d` 立刻打开 3D。
   // **不带参数时也打开 3D** —— 官方棋盘贴图才是让作者看懂一张地图的东西，而任何失败都留在 2D 并写明原因
   // （没有本机素材 / 没有 WebGL2 / 渲染器抛错），所以「默认 3D」不会让谁卡在一块空白画布上。
@@ -162,8 +164,8 @@ const rectArr = (r) => [r.r0, r.r1, r.c0, r.c1];
 /**
  * 交给服务器的 rows：**这张图自己的窗口**，不是整块画布。
  *
- * 画布永远铺满最大档位（大图画得下），而记录里的 rows 是这张图的 19×21 / 23×27 / 27×33 —— 两者必须是同一件事，
- * 否则一张官方图会带着 27×33 的 rows 而没有 size，被校验器判成尺寸不符。
+ * 画布永远铺满最大档位（大图画得下），而记录里的 rows 是这张图的 19×21 / 23×27 / 27×33 / 33×39 / 45×60 —— 两者必须是同一件事，
+ * 否则一张官方图会带着 45×60 的 rows 而没有 size，被校验器判成尺寸不符。
  */
 const rowsFromCells = () => {
   const [R, C] = mapSize();
@@ -230,6 +232,8 @@ const SIZE_LABEL = {
   standard: () => t('标准'),
   large: () => t('大'),
   huge: () => t('特大'),
+  gigantic: () => t('巨型'),
+  colossal: () => t('超巨'),
 };
 const sizeLabel = (id) => (SIZE_LABEL[id] ? SIZE_LABEL[id]() : id);
 /** `[19, 21]` → `19×21`：界面上到处在说的那个尺寸。 */
@@ -298,10 +302,10 @@ function resizeBoard() {
 }
 
 /**
- * fit-to-view 的比例：**这张图的窗口**（大图就是它自己那 23×27 / 27×33）塞进画布，四边各留 VIEW_MARGIN。
+ * fit-to-view 的比例：**这张图的窗口**（大图就是它自己那 23×27 / 27×33 / 33×39 / 45×60）塞进画布，四边各留 VIEW_MARGIN。
  *
  * 为什么按窗口而不是画布：作者画的是这张图，而多出来的画布行列只是空气 —— 按画布 fit 会让一张 19×21 的官方图
- * 在 27×33 的画布里缩到中间一小块。
+ * 在 45×60 的画布里缩到中间一小块。
  *
  * 下限 0.01：画布比网格还小时（或者被压缩到几十像素）不能算出负数比例 —— 那会把整张图推到视野之外，
  * 屏幕上看着就是「什么都没画」。真实页面里 .stage-view 有 min-height:200px，这条只是兜底。
@@ -355,12 +359,12 @@ const currentZone = () => zoneOf(state.zone);
 function zonesNow() {
   const size = mapSize();
   const lay = mapLayout();
-  const defaults = new Map(zonesOf(size).map((z) => [z.id, z]));
+  const defaults = new Map(zonesOf(size, lay).map((z) => [z.id, z]));
   const withRows = (id, rows) => {
     const base = defaults.get(id);
     return { id, rows, deployRects: base ? [...base.deployRects] : [] };
   };
-  const [nR0, nR1] = lay.deployRects.normal;
+  const [nR0, nR1] = lay.deployRects.normalLeft || lay.deployRects.normal;
   const [bR0, bR1] = lay.deployRects.bossLeft;
   return [
     withRows('pen', [lay.pen.r0, lay.pen.r1]),
@@ -382,6 +386,8 @@ const ZONE_LABEL = {
 };
 const RECT_LABEL = {
   normal: () => t('普通对战部署区'),
+  normalLeft: () => t('普通对战部署区·左半'),
+  normalRight: () => t('普通对战部署区·右半'),
   bossLeft: () => t('boss 左半部署区'),
   bossRight: () => t('boss 右半部署区'),
 };
@@ -559,9 +565,16 @@ function draw() {
       ctx.fillStyle = color;
       for (const [r, c] of list) if (r >= 0 && r < ROWS && c >= 0 && c < COLS) ctx.fillRect(c * CELL + 4, py(r) + 4, CELL - 8, CELL - 8);
     };
-    paint(rec.deployTiles.normal.melee, '#4ec98a55');
-    paint(rec.deployTiles.normal.rangedOnly, '#5b9dff55');
-    paint(rec.deployTiles.bossLeft.melee.concat(rec.deployTiles.bossRight.melee), '#4ec98a25');
+    // 普通带：单块普通带的图是 `normal`，一张左右两半的图是 `normalLeft` / `normalRight`（每半各画各的）。直接读
+    // `deployTiles.normal.melee` 会在左右两半的图上炸成 `Cannot read properties of undefined (reading 'melee')`。
+    const dt = rec.deployTiles;
+    for (const name of ['normal', 'normalLeft', 'normalRight']) {
+      const t = dt[name];
+      if (!t) continue;
+      paint(t.melee ?? [], '#4ec98a55');
+      paint(t.rangedOnly ?? [], '#5b9dff55');
+    }
+    paint((dt.bossLeft?.melee ?? []).concat(dt.bossRight?.melee ?? []), '#4ec98a25');
   }
   // 「显示寻路」：叠的是引擎的流场寻路表。业主口径是**默认不画、不许自动生成**，所以
   // showPaths 默认 false，这里再兜一道：表是空的就什么都不画（开着也不会有假线）。
@@ -659,9 +672,11 @@ const battleLabel = (key) => (BATTLE_LABEL[key] ? BATTLE_LABEL[key]() : key);
 const PEN_LABEL = () => t('怪物等待区');
 const MIRROR_LABEL = () => t('镜像轴');
 
-/** 部署场名字（普通 / boss 左半 / boss 右半）—— 与 shared 那边的字段名同一套。 */
+/** 部署场名字（普通 / 普通左右半 / boss 左半 / boss 右半）—— 与 shared 那边的字段名同一套。 */
 const FIELD_LABEL = {
   normal: () => t('普通'),
+  normalLeft: () => t('普通左半'),
+  normalRight: () => t('普通右半'),
   bossLeft: () => t('boss 左半'),
   bossRight: () => t('boss 右半'),
 };
@@ -746,21 +761,25 @@ function drawZoneEditor() {
     strokeRectArr(rect, battleColors[key]);
     drawHandles('battle', key, rect);
   }
-  // 怪物等待区
-  const penRect = rectArr(lay.pen);
+  // 怪物等待区（一张左右两半的图有**两个**：左半一个、右半是它过镜像轴的镜像 —— 业主 2026-10-21「也复制一份」）
   labelOfRect = PEN_LABEL;
-  strokeRectArr(penRect, '#4ec98ab0');
-  drawHandles('pen', 'pen', penRect);
-  // 三块部署矩形：棋盘本身（普通 4×9、boss 半场 5×9），它们决定「哪里能放干员」
-  const rectColors = { normal: '#4ec98af0', bossLeft: '#ff8f3ff0', bossRight: '#ffcf5af0' };
-  for (const name of ['normal', 'bossLeft', 'bossRight']) {
+  strokeRectArr(rectArr(lay.pen), '#4ec98ab0');
+  drawHandles('pen', 'pen', rectArr(lay.pen));
+  if (lay.penRight) {
+    labelOfRect = PEN_LABEL;
+    strokeRectArr(rectArr(lay.penRight), '#4ec98ab0');
+    drawHandles('pen', 'penRight', rectArr(lay.penRight));
+  }
+  // 部署矩形：棋盘本身（普通整块，或一张左右两半的图上的左右两半；boss 的两个半场 5×9），它们决定「哪里能放干员」
+  const rectColors = { normal: '#4ec98af0', normalLeft: '#4ec98af0', normalRight: '#62c7a0f0', bossLeft: '#ff8f3ff0', bossRight: '#ffcf5af0' };
+  for (const name of deployRectNames(lay)) {
     const rect = lay.deployRects[name];
     labelOfRect = () => `${rectLabel(name)} · ${fieldLabel(name)}`;
     strokeRectArr(rect, rectColors[name], false);
     drawHandles('deploy', name, rect);
   }
   // 镜像轴：boss 右半场就是过它翻过来的那一列，所以它也是一条能拖的线
-  const mx = lay.mirrorCol * CELL + CELL / 2;
+  const mx = (lay.mirrorCol / 2) * CELL + CELL / 2;   // 两个半场相接的那一列（= mirrorCol ÷ 2，也就是窗口正中）
   const on = !!(state.zoneHandle && state.zoneHandle.kind === 'mirror');
   ctx.strokeStyle = on ? '#ffd166' : '#ffcf5af0';
   ctx.lineWidth = lineWorld(on ? 3 : 2);
@@ -790,7 +809,11 @@ function drawZoneEditor() {
 // ---- 「分区」模式的编辑（拖 & 数字输入） ---------------------------------------------------------------------------
 
 /** 一块分区的一部分：部署矩形（行可动、列定死）/ 战斗矩形 / 等待区 / 镜像轴。 */
-const DEPLOY_NAMES = Object.freeze(['normal', 'bossLeft', 'bossRight']);
+/**
+ * 这张图实际声明的部署矩形名：单块普通带 = 普通 / boss 左 / boss 右；一张左右两半的图（业主 2026-10-21）把普通带
+ * 拆成 `normalLeft` / `normalRight` 两块，镜像轴上的那两个半场照旧。
+ */
+const deployRectNames = (lay) => (isDualLayout(lay) ? ['normalLeft', 'normalRight', 'bossLeft', 'bossRight'] : ['normal', 'bossLeft', 'bossRight']);
 const BATTLE_NAMES = Object.freeze(['normal', 'prep', 'unite', 'boss', 'bossPrep']);
 
 /** 一个分区在画布上的矩形 `[r0, r1, c0, c1]`（镜像轴没有矩形，返回 null）。 */
@@ -802,20 +825,24 @@ function rectAt(kind, name) {
 /** 一个分区在布局里的那个矩形**对象**（就地改它，就是改这张图的分区）。 */
 function zoneRect(kind, name) {
   const lay = mapLayout();
-  if (kind === 'deploy' && DEPLOY_NAMES.includes(name)) {
-    const [r0, r1] = lay.deployRects[name];
-    return { r0, r1, c0: FIXED_DEPLOY_COLS[name][0], c1: FIXED_DEPLOY_COLS[name][1] };
+  if (kind === 'deploy' && deployRectNames(lay).includes(name)) {
+    const [r0, r1, c0, c1] = lay.deployRects[name];   // 列是这张图**自己声明**的（默认锚见 shared/layout.js）
+    return { r0, r1, c0, c1 };
   }
   if (kind === 'battle' && lay.battle[name]) return lay.battle[name];
-  if (kind === 'pen') return lay.pen;
+  if (kind === 'pen') return name === 'penRight' ? lay.penRight : lay.pen;
   return null;
 }
 
 /** 往布局里写回一个分区矩形（部署矩形是**数组**形状，其余是对象形状；两边的形状都不能混）。 */
 function setZoneRect(kind, name, r) {
   const lay = mapLayout();
-  if (kind === 'deploy' && DEPLOY_NAMES.includes(name)) lay.deployRects[name] = [r.r0, r.r1, FIXED_DEPLOY_COLS[name][0], FIXED_DEPLOY_COLS[name][1]];
+  if (kind === 'deploy' && deployRectNames(lay).includes(name)) {
+    const [c0, c1] = [lay.deployRects[name][2], lay.deployRects[name][3]];   // 列是这张图自己声明的，只挪行
+    lay.deployRects[name] = [r.r0, r.r1, c0, c1];
+  }
   else if (kind === 'battle' && lay.battle[name]) lay.battle[name] = { ...r };
+  else if (kind === 'pen' && name === 'penRight' && lay.penRight) lay.penRight = { ...r };
   else if (kind === 'pen') lay.pen = { ...r };
   state.spec.layout = lay;
 }
@@ -831,10 +858,13 @@ function cellAtWorld(wx, wy) {
   return { r: ROWS - 1 - Math.floor(wy / CELL), c: Math.floor(wx / CELL) };
 }
 
-/** 部署矩形是**棋盘本身**：上下两条边一拖就是整块棋盘上下挪，4 行 / 5 行的深度一个字都不能变。 */
+/** 部署矩形是**棋盘本身**：上下两条边一拖就是整块棋盘上下挪，深度（这张图自己声明的）一个字都不能变。 */
 function deployRowRange(kind, name) {
   const [R] = mapSize();
-  const depth = kind === 'deploy' && name === 'normal' ? 4 : 5;
+  // 深度读**这张图自己的布局**：普通带可以是 4 行（官方）也可以是 5 行（45×60 大战场样板），boss 半场是 5 行
+  // （含它自己那一行整备区）。写死 4/5 会让作者在这个尺寸里把大战场那张图的 5 行拉成 4 行。
+  const rect = mapLayout().deployRects[name] || [0, BAND_ROWS - 1, 0, 0];
+  const depth = Math.max(1, rect[1] - rect[0] + 1);
   return { depth, min: 0, max: R - depth };
 }
 
@@ -845,8 +875,9 @@ function deployRowRange(kind, name) {
  *   * 上下两条边不能交叉（r0 ≤ r1），左右同理 —— 交叉出来的矩形不是「另一种设计」，是授权层会退回默认的坏数据；
  *   * **部署矩形整块挪**：它 4 行（普通）/ 5 行（boss 半场）的深度就是棋盘的深度，只拖一条边会把它拉成 5 行 /
  *     6 行，而 `normalizeLayout` 遇到形状不对的矩形会**静默退回默认** —— 作者看着自己的改动被吃掉；
- *   * **列只在没被定死的时候才动**：三块部署矩形的列由 `FIXED_DEPLOY_COLS` 定死（棋盘 9 列、两个半场在 col 10
- *     相接、镜像轴 20 三者互相咬着），左右拖它们不会改变任何东西 —— 界面里那四个输入框也是只读的。
+ *   * **列只在没被定死的时候才动**：三块部署矩形的列是**这张图自己声明的那一套**（没声明就用官方锚 2–10 / 2–10 /
+ *     10–18）：棋盘 9 列、两个半场在那条相接列会合、镜像轴 = 那条列 × 2，三者互相咬着 —— 左右拖它们不会改变任何
+ *     东西，界面里那四个输入框也是只读的（列要改就在 `layout` 里声明另一套，见 shared/layout.js）。
  */
 function applyHandle(kind, name, edge, cell) {
   if (kind === 'mirror') return false;
@@ -915,8 +946,8 @@ function afterZoneEdit() {
  * 「分区」模式的数字面板：每块分区四个 `r0 / r1 / c0 / c1`，改数即改分区。
  *
  * 两条界面口径：
- *   * 三块**部署矩形**的列是只读的（棋盘 9 列、两个半场在 col 10 相接、镜像轴 20 三者咬在一起，列一挪
- *     对战镜像就对不上；`FIXED_DEPLOY_COLS`）—— 摆出来是为了让作者看见它们在哪儿，而不是让他去改；
+ *   * 三块**部署矩形**的列是只读的（列是这张图自己声明的那一套：棋盘 9 列、两个半场在那条相接列会合、镜像轴 =
+ *     那条列 × 2 三者咬在一起，列一挪对战镜像就对不上）—— 摆出来是为了让作者看见它们在哪儿，而不是让他去改；
  *   * 「重置为尺寸默认」只把分区还原成这张图尺寸的默认布局，不动 rows。
  */
 function zonePanel() {
@@ -948,7 +979,7 @@ function zonePanel() {
       inp.readOnly = !enabled;
       inp.disabled = !enabled;
       inp.title = !enabled
-        ? t('{0} 由棋盘定死（两个半场在 col 10 相接、镜像轴 20），不能改', key)
+        ? t('{0} 由棋盘定死（两个半场在 col {1} 相接、镜像轴 {2}），不能改', key, mapLayout().mirrorCol / 2, mapLayout().mirrorCol)
         : (isDeploy ? t('{0}（改这一格就是整块棋盘上下挪）', key) : t('{0}（改这一格就是改分区）', key));
       inp.addEventListener('input', () => {
         const v = Math.round(Number(inp.value));
@@ -985,7 +1016,7 @@ function zonePanel() {
     return row;
   };
 
-  for (const name of DEPLOY_NAMES) {
+  for (const name of deployRectNames(mapLayout())) {
     const el = rectInputs('deploy', name, false);
     if (el) box.append(el);
   }
@@ -995,10 +1026,14 @@ function zonePanel() {
   }
   const penRow = rectInputs('pen', 'pen', true);
   if (penRow) box.append(penRow);
+  if (mapLayout().penRight) {
+    const penRow2 = rectInputs('pen', 'penRight', true);
+    if (penRow2) box.append(penRow2);
+  }
 
   const mirror = document.createElement('p');
   mirror.className = 'hint';
-  mirror.textContent = t('镜像轴：boss 右半场就是过第 {0} 列翻过来的（由棋盘定死，只作标注）。', mapLayout().mirrorCol);
+  mirror.textContent = t('镜像轴：两个 boss 半场在第 {0} 列相接、右半场就是过它翻过来的（由这张图声明的分区定死，只作标注）。', mapLayout().mirrorCol / 2);
   box.append(mirror);
 
   const actions = document.createElement('div');
@@ -1043,12 +1078,13 @@ function liveZoneErrors() {
   } catch { return []; }
 }
 
-/** 候选带头：三块部署矩形 + 五个战斗矩形 + 等待区 + 镜像轴。 */
+/** 候选带头：三块部署矩形 + 五个战斗矩形 + 等待区 +（左右两半的图再加一个）+ 镜像轴。 */
 function handleCandidates() {
   const out = [];
-  for (const name of DEPLOY_NAMES) out.push({ kind: 'deploy', name });
+  for (const name of deployRectNames(mapLayout())) out.push({ kind: 'deploy', name });
   for (const name of BATTLE_NAMES) out.push({ kind: 'battle', name });
   out.push({ kind: 'pen', name: 'pen' });
+  if (mapLayout().penRight) out.push({ kind: 'pen', name: 'penRight' });
   out.push({ kind: 'mirror', name: 'mirror' });
   return out;
 }
@@ -1075,7 +1111,7 @@ function hitHandle(ev) {
     if (h.kind === 'mirror') {
       const [R] = mapSize();
       const lay = mapLayout();
-      consider({ kind: 'mirror', name: 'mirror', edge: 'axis' }, lay.mirrorCol * CELL + CELL / 2, py(Math.round((R - 1) / 2)) + CELL / 2);
+      consider({ kind: 'mirror', name: 'mirror', edge: 'axis' }, (lay.mirrorCol / 2) * CELL + CELL / 2, py(Math.round((R - 1) / 2)) + CELL / 2);
       continue;
     }
     const r = rectAt(h.kind, h.name);
@@ -1300,7 +1336,7 @@ async function preview() {
  * `{ id, rows, devices }` —— 新建一张图、还没保存、第一次推导也还没回来时，3D 就是靠它画出第一帧的。
  * 业主问的「为什么要先填上 id 才能看 3D」，根因就是这里以前只认 record，拿不到就 return。
  *
- * `size` 一起带上：3D 渲染器按 `rows` 的**实际长度**量棋盘（大图那 23×27 / 27×33 就是这么画的），
+ * `size` 一起带上：3D 渲染器按 `rows` 的**实际长度**量棋盘（大图那 23×27 / 27×33 / 33×39 / 45×60 就是这么画的），
  * 取景也是照它自己那台相机量出来的 bounds 走 —— 所以大图在 3D 里同样整幅在框里，而不是被裁到 19×21。
  */
 function stageFor3d() {
@@ -1330,6 +1366,78 @@ function requestRefresh3d() {
 }
 
 /**
+ * `#board3d` 这块 canvas 的 WebGL 上下文是否已经被销毁过。
+ *
+ * `BoardScene.destroy()` 会调 `renderer.forceContextLoss()`（public/js/render/board3d/scene.js）—— 而
+ * **一个 canvas 上的 WebGL 上下文一旦丢失就再也拿不回来**：之后在同一个 canvas 上建渲染器，three 的
+ * `getShaderPrecisionFormat()` 会返回 null 并读到它的 `.precision`，直接抛
+ * `Cannot read properties of null (reading 'precision')`，3D 预览就永久起不来了（业主实测：
+ * 「3D 预览场景无法加载」）。所以销毁过 3D 视图之后，下一次挂载必须换一块全新的 canvas（refreshBoard3dCanvas）。
+ */
+let board3dCanvasLost = false;
+
+/** 换一块全新的 3D canvas：id 不变（样式仍由 `.stage-view canvas` 承担），把上下文已丢失那块丢掉。 */
+function refreshBoard3dCanvas() {
+  const old = $('#board3d');
+  if (!old) return null;
+  const next = document.createElement('canvas');
+  next.id = 'board3d';
+  next.hidden = true;
+  old.replaceWith(next);
+  return next;
+}
+
+/**
+ * Build and mount the 3D view with the author's current theme. `state.theme3d` is null until the author picks one (the
+ * view then reports its own theme back), so the first mount and a later map switch both land on the default (标准).
+ */
+async function mount3d() {
+  // 上一块 canvas 的上下文已被 forceContextLoss 丢掉 → 必须换新的，否则 three 建渲染器时就会抛错
+  if (board3dCanvasLost) { refreshBoard3dCanvas(); board3dCanvasLost = false; }
+  const board3d = $('#board3d');
+  if (!board3d) { state.reason3d = t('3D 预览不可用：{0}', t('（页面上没有 3D 画布）')); state.mode3d = false; syncTools(); renderSide(); return; }
+  state.reason3d = t('正在准备 3D 预览…');
+  renderSide();
+  const view = await createStageView3d({
+    canvas: board3d,
+    // 优先服务端推导回来的 record，没有就用本地 spec 现拼一个：新建地图第一帧不能是空的
+    getStage: () => stageFor3d(),
+    theme: state.theme3d,
+    onError: (e) => console.warn('[stage3d]', e),
+  });
+  if (!view.ok) {
+    // 失败就退回 2D 并写明原因：换主题时 2D 画布是藏着的，所以这里要把它放回来，否则两样都看不见
+    state.reason3d = view.reason;
+    state.mode3d = false;
+    if (canvas) canvas.hidden = false;
+    board3d.hidden = true;
+    syncTools();
+    renderSide();
+    return;
+  }
+  state.view3d = view;
+  state.theme3d = view.theme?.() ?? state.theme3d;
+  state.reason3d = null;
+  // a small dev handle: `__spEditor3d.stats()` / `.snapshot()` from the devtools console
+  globalThis.__spEditor3d = view;
+  show3d();
+}
+
+/** Show the 3D canvas (hide the 2D one), refit and repaint. */
+function show3d() {
+  state.mode3d = true;
+  if (canvas) canvas.hidden = true;
+  const box3d = $('#board3d');
+  if (box3d) box3d.hidden = false;
+  state.view3d.resize();
+  state.view3d.update();
+  // 第一帧时棋盘往往还没建完（bounds 为空 → 只能给个默认框），补几次刷新让它自己收敛到全图
+  requestRefresh3d();
+  syncTools();
+  renderSide();
+}
+
+/**
  * Turn the 3D preview on or off. The first switch lazily probes availability; ANY failure keeps the 2D canvas and
  * states the reason rather than breaking the placer.
  *
@@ -1346,39 +1454,25 @@ async function toggle3d() {
     syncTools();
     return;
   }
-  if (!state.view3d) {
-    state.reason3d = t('正在准备 3D 预览…');
-    renderSide();
-    const board3d = $('#board3d');
-    if (!board3d) { state.reason3d = t('3D 预览不可用：{0}', t('（页面上没有 3D 画布）')); syncTools(); renderSide(); return; }
-    const view = await createStageView3d({
-      canvas: board3d,
-      // 优先服务端推导回来的 record，没有就用本地 spec 现拼一个：新建地图第一帧不能是空的
-      getStage: () => stageFor3d(),
-      onError: (e) => console.warn('[stage3d]', e),
-    });
-    if (!view.ok) {
-      state.reason3d = view.reason;
-      state.mode3d = false;
-      syncTools();
-      renderSide();
-      return;
-    }
-    state.view3d = view;
-    state.reason3d = null;
-    // a small dev handle: `__spEditor3d.stats()` / `.snapshot()` from the devtools console
-    globalThis.__spEditor3d = view;
-  }
-  state.mode3d = true;
-  if (canvas) canvas.hidden = true;
-  const box3d = $('#board3d');
-  if (box3d) box3d.hidden = false;
-  state.view3d.resize();
-  state.view3d.update();
-  // 第一帧时棋盘往往还没建完（bounds 为空 → 只能给个默认框），补几次刷新让它自己收敛到全图
-  requestRefresh3d();
-  syncTools();
-  renderSide();
+  if (!state.view3d) { await mount3d(); return; }
+  show3d();
+}
+
+/**
+ * 换棋盘主题：主题决定天幕与色调，是**建场景时**定下来的（stage3d.js 没有 setTheme，见它的注释），所以整块重建。
+ *
+ * 不复用 toggle3d() 的 2D 分支 —— 那条路会顺手把 `auto3d` 关掉，而「换个主题」不该等于「以后别再自动开 3D」。
+ */
+async function reload3dTheme() {
+  if (!state.view3d) return;
+  clearTimeout(refresh3dTimer);
+  try { state.view3d.dispose(); } catch (e) { console.warn('[stage3d]', e); }
+  state.view3d = null;
+  globalThis.__spEditor3d = null;
+  state.mode3d = false;
+  // dispose 里 BoardScene.destroy() 已经把这块 canvas 的上下文 forceContextLoss 掉了 → 下次挂载得换新 canvas
+  board3dCanvasLost = true;
+  await mount3d();
 }
 
 // ---- panels ------------------------------------------------------------------------------------------------------
@@ -1698,7 +1792,7 @@ function renderSide() {
   );
   box.append(identity);
 
-  // ---- 地图尺寸（大图支持）：三档 `SIZE_PRESETS`，现在的尺寸写在旁边 -------------------------------
+  // ---- 地图尺寸（大图支持）：五档 `SIZE_PRESETS`，现在的尺寸写在旁边 -------------------------------
   //
   // 这一栏是「大图」这件事在界面上的入口：选定档位之后 rows 会被重新铺一遍（旧字符按左下角对齐保留、
   // 多出来的行列填空气），布局重置成这个尺寸的默认，画布 / 预览 / 分区视图一起跟上。
@@ -1714,7 +1808,7 @@ function renderSide() {
   }
   const presetNow = sizePresetOf(nowSize);
   if (!presetNow) {
-    // 自定尺寸（声明过的 size 不在三档里）：多摆一项，免得下拉显示成别的一档
+    // 自定尺寸（声明过的 size 不在五档里）：多摆一项，免得下拉显示成别的一档
     const o = document.createElement('option');
     o.value = 'custom';
     o.textContent = t('自定（{0}）', sizeText(nowSize));
@@ -2054,7 +2148,13 @@ function renderSide() {
       // 而 routes 非空时那份派生表其实是服务端算得出来的，所以也照实显示条数 —— 但绝不在空图上摆一个数字。
       const ps = pathsState({ routes: spec.routes?.length ?? 0, groundPaths: Object.keys(rec.groundPaths ?? {}).length });
       const pathPart = ps.known ? t('寻路 {0} 条（含装置 {1} 条）', ps.count, Object.keys(rec.groundPathsWithDevices ?? {}).length) : t('寻路：未生成');
-      info.textContent = `${pathPart} · ${t('部署 {0} 近战 / {1} 远程', rec.deployTiles.normal.melee.length, rec.deployTiles.normal.rangedOnly.length)}`;
+      // 部署格数：单块普通带看 `normal`，一张左右两半的图把两半加起来（迁移成 `normalLeft`/`normalRight` 的旧图也不会
+      // 因为 `normal` 不存在而在这一行炸掉）
+      const dt = rec.deployTiles ?? {};
+      const sides = [dt.normal ?? dt.normalLeft ?? {}, dt.normalRight ?? {}];
+      const meleeN = sides.reduce((n, x) => n + (x.melee?.length ?? 0), 0);
+      const rangedN = sides.reduce((n, x) => n + (x.rangedOnly?.length ?? 0), 0);
+      info.textContent = `${pathPart} · ${t('部署 {0} 近战 / {1} 远程', meleeN, rangedN)}`;
       pv.append(info);
       // 业主的困惑就是这一条：同一行里画了路、却放不了干员。道路在部署矩形外时敌人照样走，
       // 但那里永远部署不了东西 —— 与其让作者猜，不如把这条提示摆在推导结果里，并给一个跳到第一格的按钮。
@@ -2327,6 +2427,26 @@ function syncTools() {
     const view = state.mode3d ? state.view3d : null;
     row.hidden = !view;
     row.replaceChildren();
+    if (view) {
+      // 棋盘主题（board3d/themes.js）：只换天幕与色调，地块图集仍是官方卫戍协议那张。主题在建场景时就定死了，
+      // 所以换主题走 reload3dTheme() 整块重建。只有一个可选主题时不摆控件。
+      const themes = view.themes();
+      if (themes.length > 1) {
+        const sel = document.createElement('select');
+        sel.id = 'theme3d';
+        sel.title = t('棋盘主题：只换天幕与色调（地块仍用官方卫戍协议的图集）');
+        const current = state.theme3d ?? view.theme();
+        for (const th of themes) {
+          const o = document.createElement('option');
+          o.value = th.id;
+          o.textContent = t(th.label);
+          if (th.id === current) o.selected = true;
+          sel.append(o);
+        }
+        sel.addEventListener('change', () => { state.theme3d = sel.value; reload3dTheme(); });
+        row.append(sel);
+      }
+    }
     for (const p of view ? view.presets() : []) {
       const b = document.createElement('button');
       b.className = 'ghost';

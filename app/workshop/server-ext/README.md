@@ -7,7 +7,7 @@
 **不新增任何引擎协议类型**。
 **没有 `content`、不携带任何素材与数据表**（这一版只多了一个服务端模块与五块界面）。
 
-- `gameVersion` 0.3.0。文件：`pack.json` + `ui/chat.js` + `ui/chat.css` + `ui/roomInvite.js` + `ui/battleChat.js` + `ui/battleChat.css` + `ui/panel.js`（含账号客户端）+ `ui/acct.css` + `ui/roster.js` + `ui/roster.css` + `server/accounts.mjs` + `server/wsMini.mjs`。
+- `gameVersion` 0.3.1。文件：`pack.json` + `ui/chat.js` + `ui/chat.css` + `ui/roomInvite.js` + `ui/battleChat.js` + `ui/battleChat.css` + `ui/panel.js`（含账号客户端）+ `ui/acct.css` + `ui/roster.js` + `ui/roster.css` + `server/accounts.mjs` + `server/wsMini.mjs`。
 
 ---
 

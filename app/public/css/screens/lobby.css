@@ -393,6 +393,17 @@
 
 /* ---- create ------------------------------------------------------------------------------------------ */
 .create-box { margin-top: .3rem; display: flex; flex-direction: column; gap: .12rem; }
+.create-box__test {
+  display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: .04rem .1rem;
+  color: #e8b84a; font-size: calc(.16 * var(--t));
+}
+.create-box__test input { width: .2rem; height: .2rem; margin: 0; flex: none; accent-color: #e8b84a; }
+.create-box__test em { flex-basis: 100%; font-style: normal; }
+@media (max-width: 720px) {
+  .create-box__test { font-size: 16px; }
+  .create-box__test input { width: 32px; height: 32px; }
+  .create-box__test em { font-size: 14px; }
+}
 .create-box .btn--xl { height: .92rem; font-size: calc(.32 * var(--t)); letter-spacing: .3em; }
 .create-box__hint { display: flex; align-items: center; justify-content: center; min-height: .3rem; font-size: calc(.14 * var(--t)); color: var(--text-lo); }
 
@@ -988,6 +999,11 @@
 .hub-entry:hover:not(:disabled) { transform: translateY(-.04rem); border-color: var(--mint-400); box-shadow: 0 .08rem .3rem rgba(0, 0, 0, .55), 0 0 .2rem var(--mint-a20); }
 .hub-entry:disabled { opacity: .5; cursor: default; }
 .hub-entry__icon { position: absolute; right: .14rem; top: .12rem; font-size: calc(.42 * var(--t)); color: var(--mint-a35); }
+/* An entry whose mark is an image (`HubEntry` iconSrc): the PNG is painted as a mask over `currentColor`, so it takes
+   the SAME tone the sprite glyphs of the other entries take (`--mint-a35` / `--gold` / `--ice` …), and a file that is
+   not there leaves an empty span instead of a broken-image box. */
+.hub-entry__img { display: block; width: 1em; height: 1em; background: currentColor;
+  -webkit-mask: var(--hub-icon) center / contain no-repeat; mask: var(--hub-icon) center / contain no-repeat; }
 .hub-entry__en { font: 700 .11rem/1 ui-monospace, Consolas, monospace; letter-spacing: .22em; color: var(--mint-400); }
 .hub-entry__name { display: flex; align-items: center; gap: .08rem; margin-top: .04rem; font-size: calc(.3 * var(--t)); font-weight: 900; letter-spacing: .06em; white-space: nowrap; }
 .hub-entry__name .mode-beta { font-size: calc(.12 * var(--t)); }
@@ -1007,6 +1023,11 @@
 .hub-entry--green .hub-entry__en { color: rgba(4, 20, 15, .75); }
 .hub-entry--green .hub-entry__icon { color: rgba(4, 20, 15, .25); }
 .hub-entry--green .hub-entry__corner { background: linear-gradient(135deg, transparent 50%, #e8fff7 50%); }
+/* 「重构模拟」（模式扩展 mode-recon，dev 入口）：冰蓝点缀档（同 gold 模子，仅换色），与全量模拟的填充绿拉开层次。 */
+.hub-entry--ice .hub-entry__en { color: var(--ice); }
+.hub-entry--ice .hub-entry__icon { color: rgba(159, 212, 255, .3); }
+.hub-entry--ice .hub-entry__corner { background: linear-gradient(135deg, transparent 50%, var(--ice) 50%); }
+.hub-entry--ice:hover:not(:disabled) { border-color: var(--ice); box-shadow: 0 .08rem .3rem rgba(0, 0, 0, .55), 0 0 .2rem var(--ice-a20); }
 
 .hub-dialog-open .community-chat { visibility: hidden; }
 .hub-dialog__box { width: min(6.4rem, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }

@@ -3,15 +3,17 @@
 //   const h = makeMatch({ mode: 'coop', difficulty: 'NORMAL', humans: 1, bots: 1, seed: 7, fake: true });
 //   h.start(); h.runToPhase('PREP'); const ps = h.ps('p_0'); …; h.invariants();
 //
-// Options: mode, difficulty, humans (count) | seats (explicit), seatCap (the room's capacity when it differs from the
+// Options: mode, difficulty, modeId (explicit — a room mode whose modeId is not `mode_<type>_<diff>`, e.g. 重构模拟's
+// 'mode_recon_normal'), humans (count) | seats (explicit), seatCap (the room's capacity when it differs from the
 // seat list — a 20-seat room with 4 players in it), bots, spectators (spectator seat ids, opts.spectators),
 // seed, matchNo (the room's match number: part of the battleId prefix), data (default: real data/*.json),
 // fake (true → test/match/fakeBattle.js as BattleClass), script (FakeBattle.script), registry, instant (virtual
 // scheduler runs battles synchronously; default true), timerScale, battleContent, botRehearsal (default 0),
 // botSliceMs (bot rehearsal slice budget; default: unbounded in virtual time), aiPicksLast (the room option
-// AI 队友最后选择: the drafts order every human seat before every AI seat), hostId / botRehearsalDelegate /
+// AI 队友最后选择: the drafts order every human seat before every AI seat), test (DESIGN §36.8; hostId then
+// defaults to the first human), hostId / botRehearsalDelegate /
 // botRehearsalDelegateMs (the delegated bot rehearsal, DESIGN §14: test/match/rehearsal-delegate.test.js),
-// cs / vs / requireCs (a gameplay-plugin room: host rehearsal stays off).
+// cs / vs / requireCs (a gameplay-plugin room: host rehearsal stays off), rules (DESIGN §36.15; omitted unless set).
 // Combat mode: clientCombat (default false here: the legacy server-run mode most suites were written for; production
 // defaults to client-side combat, DESIGN §14). With clientCombat: true every human gets a scripted browser
 // (test/match/simClient.js SimClient: h.clients) unless clients: false; pace 'instant' | 'paced', perPlayer
@@ -30,6 +32,7 @@ import { GEO, MAX_SEATS } from '../../shared/constants.js';
 import { collectViolations } from '../../server/match/invariants.js';
 import { attachSimClients } from './simClient.js';
 import { applyPublic } from '../../public/js/matchDelta.js';
+import { morphSlotPolicy, ruleOption } from '../../shared/plugins/rules.js';
 
 export const DATA = getData({ log: { warn() {}, error() {}, info() {} } });
 
@@ -46,7 +49,7 @@ export function makeMatch(o = {}) {
   }
   const sched = new VirtualScheduler({ instantCombat: o.instant !== false });
   const logs = { error: [], warn: [] };
-  const log = { info() {}, debug() {}, warn: (...a) => logs.warn.push(a.map(String).join(' ')), error: (...a) => logs.error.push(a.map(String).join(' ')) };
+  const log = { info: (...a) => o.log?.info?.(...a), debug() {}, warn: (...a) => logs.warn.push(a.map(String).join(' ')), error: (...a) => logs.error.push(a.map(String).join(' ')) };
   const h = { sent: [], bc: [], ended: null, endedCount: 0, logs, sched, frames: 0, badFrames: [], onSend: [], onBroadcast: [], clients: null };
   const captureFrames = o.captureFrames !== false;
   const checkFrame = (msg) => {
@@ -61,6 +64,9 @@ export function makeMatch(o = {}) {
   }
   h.m = new Match({
     roomCode: 'TEST', mode, difficulty, seats, spectators: o.spectators, seed: o.seed ?? 1, matchNo: o.matchNo, data: o.data ?? DATA, log,
+    // 显式 modeId（缺省 ⇒ 不出现这个键，与从前逐字节相同）：重构模拟这类「房间 mode 与 modeId 不同名」的对局
+    // (room mode 'recon' ⇒ mode_recon_<diff>) 要靠它 —— Match 只从 `mode`（solo/coop）推 modeId。
+    ...(o.modeId ? { modeId: o.modeId } : {}),
     // 开发者模式（「全量模拟」）：把 `dev` 透传给 Match（缺省 ⇒ 不出现这个键，与从前逐字节相同）
     ...(o.dev ? { dev: true } : {}),
     // The room's CAPACITY, when the caller wants it to differ from the seat list (a 20-seat room with 4 players in it:
@@ -78,6 +84,7 @@ export function makeMatch(o = {}) {
     onEnd: (s) => { h.ended = s; h.endedCount++; },
     scheduler: sched,
     registry: o.registry,
+    offers: o.offers,
     BattleClass: o.fake ? FakeBattle : undefined,
     battleContent: o.battleContent,
     timerScale: o.timerScale,
@@ -85,6 +92,20 @@ export function makeMatch(o = {}) {
     // simulation work of full-match suites; test/match/bot.test.js covers it
     botRehearsal: o.botRehearsal ?? 0,
     botSliceMs: o.botSliceMs,
+    // ⚠️ The delegated bot rehearsal (DESIGN §14) reaches Match through these five — the header above promises them,
+    // and `Match.delegateRehearsal` reads every one of them:
+    //   hostId                  → the executor a task is offered to (Match.js `this.hostId`; absent ⇒ null ⇒ no host
+    //                             ⇒ delegation is silently off, which is what made all of
+    //                             test/match/rehearsal-delegate.test.js assert on an empty `host.tasks`)
+    //   botRehearsalDelegate / Ms → the flag itself and the host's answer budget
+    //   cs / requireCs          → the gameplay-plugin gate (`delegateRehearsal` refuses a requireCs room; the setup
+    //                             takes priority over the first four entries above, so pass them through the same way
+    //                             the lobby hands them to a real Match)
+    // `requireCs` is derived by Match (`opts.requireCs === true && !!this.cs`), so `cs` must travel with it.
+    ...(o.botRehearsalDelegate != null ? { botRehearsalDelegate: o.botRehearsalDelegate } : {}),
+    ...(o.botRehearsalDelegateMs != null ? { botRehearsalDelegateMs: o.botRehearsalDelegateMs } : {}),
+    ...(o.cs != null ? { cs: o.cs } : {}),
+    ...(o.requireCs != null ? { requireCs: o.requireCs } : {}),
     // 工坊行为层 (test/workshopKits.test.js): a pack's kit map / module list, passed through to the battles. Both kit
     // key spaces travel the same way: `workshopKits` (operators) and `workshopTokenKits` (summons, §4.7).
     workshopKits: o.workshopKits,
@@ -106,6 +127,20 @@ export function makeMatch(o = {}) {
     // The room's mod set (DESIGN §28.2 / §28.39): `{ digest, packs }`, the same object the lobby hands a real Match.
     // Absent ⇒ no key at all, byte-for-byte the old construction (the 口径 layer's default path).
     ...(o.mods ? { mods: o.mods } : {}),
+    // a bot prep's layout rehearsal delegated to the room's host (DESIGN §14; test/match/rehearsal-delegate.test.js):
+    // `hostId` is the executor a task is sent to, `botRehearsalDelegateMs` its answer window
+    hostId: o.hostId !== undefined ? o.hostId : (o.test === true ? (seats.find((s) => s && !s.isBot)?.playerId ?? null) : undefined),
+    test: o.test === true,
+    botRehearsalDelegate: o.botRehearsalDelegate,
+    botRehearsalDelegateMs: o.botRehearsalDelegateMs,
+    // a gameplay-plugin room (DESIGN §34.6): host rehearsal stays off there (match/rehearsal.js requireCs)
+    cs: o.cs,
+    vs: o.vs,
+    requireCs: o.requireCs,
+    // a modded room's 自选 list (Match.diyKitted). Omitted unless the test passes one, so a vanilla harness match
+    // still has no kitted key.
+    ...(o.kitted !== undefined ? { kitted: o.kitted } : {}),
+    ...(o.rules !== undefined ? { rules: o.rules } : {}),
   });
   const m = h.m;
   if (m.clientCombat && o.clients !== false) {
@@ -270,7 +305,8 @@ function legacyInvariants(m) {
       if (p.kind === 'chess') {
         const rec = m.gd.chess(p.id);
         assert.ok(rec, `unknown chess ${p.id}`);
-        assert.ok(Array.isArray(p.items) && p.items.length <= m.gd.equipPerChess, `${p.id} carries ${p.items && p.items.length} items`);
+        const slots = morphSlotPolicy(ruleOption(m.rules, 'morphPairing'), (it) => !!ps.gd.item(it?.id)?.canGiveBond);
+        assert.ok(Array.isArray(p.items) && slots.slotsUsed(p.items) <= slots.slotCap(m.gd.equipPerChess), `${p.id} carries ${p.items && p.items.length} items`);
         for (const it of p.items) { note(it); assert.equal(it.kind, 'item'); assert.ok(m.gd.item(it.id), `unknown item ${it.id}`); }
         assert.ok(Number.isInteger(p.poolCopies) && p.poolCopies >= 0);
         const base = m.gd.baseIdOf(p.id);

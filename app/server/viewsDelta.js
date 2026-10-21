@@ -57,6 +57,8 @@ const SCALAR_KEYS = [
   'rerollVote', 'factions', 'disabledBonds', 'drawnDisabledBonds', 'bannedChess', 'removedBonds',
   'bossId', 'hiddenBossId', 'bossRound', 'hiddenRound', 'spRound', 'combatMode', 'paused',
   'teamLp', 'overtimeAt', 'bossHp', 'draft', 'sp', 'unite', 'uniteResult',
+  // 预重构（模式扩展-重构模拟，PHASE.PRE_RECON）：views.js publicView 只在那一阶段带 `recon`
+  'recon',
 ];
 
 /**

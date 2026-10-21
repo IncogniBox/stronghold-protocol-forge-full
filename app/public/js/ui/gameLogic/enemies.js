@@ -54,7 +54,7 @@ export const PEN = Object.freeze({ r0: 14, r1: 18, c0: 7, c1: 13, emptyRow: 16, 
 export function penZoneTiles(gate, opts = {}) {
   const stage = isObj(opts) ? opts.stage : null;
   if (stage) {
-    const z = penZones(stage);
+    const z = penZones(stage, opts.side === 'R' ? 'R' : 'L');
     return (gate === 'upper' ? z.upper : z.lower).tiles;
   }
   const rect = { ...PEN };
@@ -81,7 +81,7 @@ export function penZoneTiles(gate, opts = {}) {
  */
 export function penPlacement(entries, opts = {}) {
   const max = Number.isInteger(opts.cap) && opts.cap > 0 ? opts.cap : PEN.cap;
-  const { figures } = layoutPen(Array.isArray(entries) ? entries : [], { stage: opts.stage || null, max });
+  const { figures } = layoutPen(Array.isArray(entries) ? entries : [], { stage: opts.stage || null, max, side: opts.side === 'R' ? 'R' : 'L' });
   const perTile = new Map();
   return figures.map((f, k) => {
     const key = `${f.row},${f.col}`;

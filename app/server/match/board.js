@@ -39,26 +39,47 @@
 
 import { GEO } from '../../shared/constants.js';
 import { meleeOnHighGround } from '../../shared/highGround.js';
-import { OFFICIAL_LAYOUT, layoutOf, fieldTileOf as layoutFieldTile, boardTileOf as layoutBoardTile } from '../../shared/layout.js';
+import {
+  OFFICIAL_LAYOUT, layoutOf, boardRectOf, handRowOf, tempRowOf, fieldTileOf as layoutFieldTile, boardTileOf as layoutBoardTile,
+} from '../../shared/layout.js';
 import { DEFAULT_DIR, isDir, rotateOffset } from '../sim/dir.js';
 import { BOSS_ROW_OFFSET } from '../sim/constants.js';
 
-export const FIELD = GEO.FIELD; // { r0: 9, r1: 12, c0: 2, c1: 10 } — BOARD space, never a stage rect
+/**
+ * The OFFICIAL board — `{ r0: 9, r1: 12, c0: 2, c1: 10 }`, BOARD space, never a stage rect. It is the board of every map
+ * that declares nothing; a map that declares a bigger `normal` band (shared/layout.js `boardRectOf`) has a bigger one,
+ * so **every loop / bounds check over the board must read `boardOf(layout, field)`**, not this constant.
+ */
+export const FIELD = GEO.FIELD;
+/** A map's board in board coordinates (the official one for every official map). */
+export const boardOf = (layout, field = 'normal') => boardRectOf(layout, field);
+/** The 整备行 of a map's field (the row the hand's 10 slots stand on) — board coordinates. */
+export const handRow = (layout, field = 'normal') => handRowOf(layout, field);
+/** The 临时整备区 row of a map's field. */
+export const tempRow = (layout, field = 'normal') => tempRowOf(layout, field);
 export const tileKey = (r, c) => `${r},${c}`;
 export const parseKey = (k) => { const [r, c] = String(k).split(',').map(Number); return [r, c]; };
 /** A board piece's direction (default RIGHT). */
 export const pieceDir = (piece) => (piece && isDir(piece.dir) ? piece.dir : DEFAULT_DIR);
 /** An intent's optional direction: undefined / null ⇒ RIGHT, a direction name ⇒ itself, anything else ⇒ null (invalid). */
 export const parseDir = (d) => (d === undefined || d === null ? DEFAULT_DIR : isDir(d) ? d : null);
-export const inField = (r, c) => Number.isInteger(r) && Number.isInteger(c) && r >= FIELD.r0 && r <= FIELD.r1 && c >= FIELD.c0 && c <= FIELD.c1;
+export const inField = (r, c, layout = OFFICIAL_LAYOUT, field = 'normal') => {
+  if (!Number.isInteger(r) || !Number.isInteger(c)) return false;
+  const B = boardRectOf(layout, field);
+  return r >= B.r0 && r <= B.r1 && c >= B.c0 && c <= B.c1;
+};
 
 const OBSTACLE_ROLES = new Set(['crate', 'mound']);
 const PLATFORM_ROLES = new Set(['platform']);
 /** 特制水上平台 (act1 m05, weight 0 this season): its tile takes any unit. */
 const WATER_PLATFORM_ROLES = new Set(['waterPlatform']);
 
-/** Deploy fields: the own normal board, or the player's half of the boss field (left / mirrored right). */
-export const DEPLOY_FIELDS = Object.freeze(['normal', 'bossL', 'bossR']);
+/**
+ * Deploy fields: the own ordinary board — one rect per map, or its left / mirrored-right half on a map whose ordinary
+ * band is a mirrored pair (shared/layout.js `isDualLayout`, field names 'normalL' / 'normalR') — or the player's half of
+ * the boss field (left / mirrored right).
+ */
+export const DEPLOY_FIELDS = Object.freeze(['normal', 'normalL', 'normalR', 'bossL', 'bossR']);
 /**
  * How many rows a board row lies below its boss-field row: board row = boss-field row + 7 (official
  * player_map_ud_offset 7; = −sim BOSS_ROW_OFFSET). Note the sign: render/prepfield.js BOSS_ROW_SHIFT is −7 (board →
@@ -86,16 +107,17 @@ export function boardTileOf(field, r, c, layout = OFFICIAL_LAYOUT) {
 /**
  * @param {object|null} stage data/stages.json entry
  * @param {{ deviceOverrides?: Record<string, boolean>, tileOverrides?: Record<string, string>, field?: 'normal'|'bossL'|'bossR' }} [opts]
- * @returns {Map<string, 'melee'|'ranged'>} keyed by BOARD tile 'r,c' (rows 9–12, cols 2–10)
+ * @returns {Map<string, 'melee'|'ranged'>} keyed by BOARD tile (the map's own board — rows 9–12 × cols 2–10 officially)
  */
 export function buildDeployMap(stage, { deviceOverrides = {}, tileOverrides = {}, field = 'normal' } = {}) {
   /** @type {Map<string, 'melee'|'ranged'>} */
   const map = new Map();
   const layout = layoutOf(stage);
+  const B = boardOf(layout, field);
   const rows = stage && Array.isArray(stage.rows) ? stage.rows : null;
   const legend = stage && stage.tiles && typeof stage.tiles === 'object' ? stage.tiles : {};
-  for (let r = FIELD.r0; r <= FIELD.r1; r++) {
-    for (let c = FIELD.c0; c <= FIELD.c1; c++) {
+  for (let r = B.r0; r <= B.r1; r++) {
+    for (let c = B.c0; c <= B.c1; c++) {
       const [sr, sc] = fieldTile(field, r, c, layout);
       const line = rows && typeof rows[sr] === 'string' ? rows[sr] : null;
       let cls = null;
@@ -109,7 +131,7 @@ export function buildDeployMap(stage, { deviceOverrides = {}, tileOverrides = {}
         }
       } else if (!stage) {
         // no stage data at all: an open board (tests / degraded data) — everything melee-deployable except col 9
-        cls = c === 9 ? null : 'melee';
+        cls = c === B.c1 - 1 ? null : 'melee';
       }
       if (cls) map.set(tileKey(r, c), cls);
     }
@@ -118,7 +140,7 @@ export function buildDeployMap(stage, { deviceOverrides = {}, tileOverrides = {}
   for (const d of devices) {
     if (!d || !Array.isArray(d.pos)) continue;
     const [r, c] = boardTileOf(field, d.pos[0], d.pos[1], layout);
-    if (!inField(r, c)) continue;
+    if (!inField(r, c, layout, field)) continue;
     let active;
     if (d.alias != null && deviceOverrides && Object.hasOwn(deviceOverrides, d.alias)) active = !!deviceOverrides[d.alias];
     else if (typeof d.active === 'boolean') active = d.active;
@@ -131,7 +153,7 @@ export function buildDeployMap(stage, { deviceOverrides = {}, tileOverrides = {}
   }
   for (const [k, v] of Object.entries(tileOverrides || {})) {
     const [r, c] = parseKey(k);
-    if (!inField(r, c)) continue;
+    if (!inField(r, c, layout, field)) continue;
     if (v === 'melee' || v === 'ranged') map.set(tileKey(r, c), v);
     else if (v === 'none') map.delete(tileKey(r, c));
   }
@@ -183,9 +205,9 @@ export function basePositionClass(rec) {
   return 'all';
 }
 
-/** Whether a unit of placement class `pos` may stand on (r, c). */
-export function canPlace(map, pos, r, c) {
-  if (!inField(r, c)) return false;
+/** Whether a unit of placement class `pos` may stand on (r, c) — the map's own board bounds. */
+export function canPlace(map, pos, r, c, layout = OFFICIAL_LAYOUT, field = 'normal') {
+  if (!inField(r, c, layout, field)) return false;
   const cls = map.get(tileKey(r, c));
   if (!cls) return false;
   if (pos === 'melee') return cls === 'melee';
@@ -210,11 +232,12 @@ export function ownerRangeKeys(grid, r, c, dir) {
   return out;
 }
 
-/** Legal tiles for a placement class, in reading order (top→bottom, left→right). */
-export function legalTiles(map, pos) {
+/** Legal tiles for a placement class, in reading order (top→bottom, left→right) — the map's own board. */
+export function legalTiles(map, pos, layout = OFFICIAL_LAYOUT, field = 'normal') {
+  const B = boardOf(layout, field);
   const out = [];
-  for (let r = FIELD.r1; r >= FIELD.r0; r--) {
-    for (let c = FIELD.c0; c <= FIELD.c1; c++) if (canPlace(map, pos, r, c)) out.push([r, c]);
+  for (let r = B.r1; r >= B.r0; r--) {
+    for (let c = B.c0; c <= B.c1; c++) if (canPlace(map, pos, r, c, layout, field)) out.push([r, c]);
   }
   return out;
 }
@@ -241,9 +264,9 @@ export function boardOrder(board) {
  * @param {(r: number, c: number) => boolean} [legal]
  * @returns {{ key: string, dir?: string, r: number, c: number } | null}
  */
-export function mergeTile(tiles, legal = () => true) {
+export function mergeTile(tiles, legal = () => true, layout = OFFICIAL_LAYOUT, field = 'normal') {
   const sorted = (tiles || []).map((t) => { const [r, c] = parseKey(t.key); return { ...t, r, c }; }).sort((a, b) => a.c - b.c || b.r - a.r);
-  return sorted.find((t) => inField(t.r, t.c) && legal(t.r, t.c)) || null;
+  return sorted.find((t) => inField(t.r, t.c, layout, field) && legal(t.r, t.c)) || null;
 }
 
 /** Index of the free slot to fill (right→left, config.economy.handFillOrder), or -1. */

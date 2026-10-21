@@ -145,7 +145,7 @@ import { PlayerRules } from './player/rules.js';
 export class PlayerState {
   /**
    * @param {import('./Match.js').Match} m owning match
-   * @param {{ seat: number, playerId: string, name: string, isBot: boolean, connected: boolean, loadout?: any, notOwned?: any, diy?: any, conflict?: any }} seat
+   * @param {{ seat: number, playerId: string, name: string, isBot: boolean, connected: boolean, loadout?: any, notOwned?: any, diy?: any, conflict?: any, skins?: any }} seat
    */
   constructor(m, seat) {
     this.m = m;
@@ -201,7 +201,10 @@ export class PlayerState {
     this._ownPool = null;
     /** slotted slots without stock: every bond of the operator is switched off this match */
     this.diyBanned = Object.freeze([]);
-    if (!this.isBot && seat.diy) this.setDiy(seat.diy);
+    // A modded room's content list (Match.diyKitted) is what the lobby already accepted. Without it setDiy
+    // keeps the vanilla kit list and drops a plugin operator with no error (checkDiyPicks is lenient).
+    // Bots never slot 自选; they read the human's composed records once this succeeds (bot.js chessRec).
+    if (!this.isBot && seat.diy) this.setDiy(seat.diy, this.m.diyKitted ? { kitted: this.m.diyKitted } : undefined);
     /**
      * 干员冲突兼容 (0.2.0 follow-up, 2026-10-16): `{ [chessId]: packId }` — 这一个玩家从 `data.workshopConflicts`
      * 里挑的那几份记录（同一个 id 被两个包各贡献一份时的选择）。座位开局那一刻的那一份，再核一遍；冻结；{} = 全用
@@ -211,6 +214,10 @@ export class PlayerState {
     /** @type {Map<string, object>} conflicted chess id → the picked candidate record (setConflict) */
     this._conflictRecords = new Map();
     if (!this.isBot && seat.conflict) this.setConflict(seat.conflict);
+    /** 皮肤 (docs/SKINS.md): frozen `{ [charId]: skinId }`, {} = every operator on its default model. Unlike the
+     * loadout these are PUBLIC (a teammate sees your skin), so they travel in Match.publicView().players[]. */
+    this.skins = Object.freeze({});
+    if (!this.isBot && seat.skins) this.setSkins(seat.skins);
     this.shop = { level: 1, upgradePrice: this.gd.upgradeBase(1) ?? 0, slots: [], frozen: false, freeRefreshes: 0 };
     /** reward offers queue (merge rewards, special refreshes): { tier, source, label, slots: [{ kind, id, price, sold }] } */
     this.offers = [];
@@ -252,7 +259,7 @@ export class PlayerState {
      * @type {null | { id: string, round: number, sourceItemId: string, cards: any[] }}
      */
     this.personalChoice = null;
-    /** free-form counters for content (ctx.counter / setCounter) */
+    /** free-form match-long content counters (ctx.counter / setCounter), including band:cathy:cellTaken (#677) */
     this.counters = {};
     /**
      * 上一场战斗交给本次休整期的**通用标记**（`{ [key]: 标量 }`，战斗侧用 `@battle/setBattleMark` 写、休整期用

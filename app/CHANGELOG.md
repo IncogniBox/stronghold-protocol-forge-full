@@ -9,6 +9,67 @@
 
 ---
 
+**大厅与房间的 ♫ 音乐弹窗新增「Fever 音乐」：颂乐人偶盟约触发 Fever 时可以自己调音量、从本服务器可播放的音乐里选曲，并裁出一段时间替换默认的 KillKiss 两首。**
+上游游戏本体仍是 **0.3.1**；`APP_VERSION`（`0.19.1`）**未动**（本节因此也还没有版本号与 tag —— 发版时在最上面加一行
+`## <版本> — <日期>` 即可，本段第一句就是那一条公告的摘要）。`PROTOCOL_VERSION`（`2`）与 `MOD_API_VERSION`（`1`）
+一个都没抬：`room.state` 只是多了一个**可缺省**的 `feverMusic`（老页面不认这个键、照旧忽略），既有帧的形状一个字节没改；
+新增的 C2S `room.feverMusic` 也只由这一版的客户端发。**不需要 `golden:update`**（没有改游戏规则、没有动 `server/sim/`）。
+
+### Fever 音乐：音量、选曲与片段
+
+- 大厅与房间顶栏的 ♫ 弹窗新增「Fever 音乐」段：音量**只作用于本浏览器**（`sp.pref.feverMusic`），改完立即生效并保留。
+- 曲目来自本服务器的音乐库：官方 `public/assets/audio/bgm` 与已装工坊包的 `assets/bgm`（按包分组），默认仍是包内 KillKiss 伴奏 / 人声。
+- 片段用「开始（秒）/ 结束（秒）」裁（0.5–600 秒），面板显示曲目总时长并可**试听 / 停止试听**；形状不合法时明确提示且不保存。
+- 房间内由**房主、开局前**设置并同步全房（`room.state.feverMusic`），开局后不可改；不在房间时改的是本浏览器自己的默认。
+- 触发 Fever 时优先播放房间选的曲目与片段；素材未就绪 / 曲目找不到时**回落包内两首**，续播点与 1 秒淡入淡出照旧。
+
+### 服务器：`GET /api/music`
+
+- 新端点只读、无需会话：扫描官方 BGM 与各工坊包 `assets/bgm`，返回 `{ id, kind, pack?, name, url, bytes }`。
+- id 折成协议允许的字符并截断到 64；只列**两条路由都认**的扩展名（`.mp3` / `.ogg` / `.wav` / `.m4a`），结果缓存 15 秒。
+- 工坊素材路由不宣告 `Accept-Ranges`，工坊曲目在客户端**整段抓成 Blob URL** 再交给 `<audio>`；官方曲目走原 URL（支持 Range）。
+
+### 协议与大厅
+
+- 新增 C2S `room.feverMusic { track?, start?, end? }`：`track` 是音乐库 id（`null` = 默认两首），片段 0.5–600 秒。
+- 有 `$check` 时协议层不逐字段跑，所以整条形状（id 字符集 + 秒数范围）写在同一个判据里。
+- 服务端只认**房主 + 开局前**，其余返回既有 `NOT_HOST` / `ROOM_STARTED`；不认识的 id 由客户端回落默认，服务端不替客户端取 URL。
+
+### 客户端
+
+- 新模块 `public/js/ui/feverMusic.js`：本地偏好、房间优先的解析、音乐库拉取、工坊曲目的可 seek URL。
+- `workshop/ave-mujica/ui/fever.js` 的 `driveMusic` 改为读「当前生效的 Fever 音乐」（房间曲目/片段 + 本机音量），音量乘进淡入淡出与续播。
+
+### 新工坊包：IncogniBox 的音乐扩展包
+
+- 新包 `incognibox-music`（`workshop/incognibox-music`，名称「IncogniBox的音乐扩展包」）：34 首 mp3 放在 `assets/bgm/`，随包分发、随服务器启动装载。
+- 它们经 `GET /api/music` 以「工坊包 · IncogniBox的音乐扩展包」分组进入 Fever 音乐曲目列表，同样可选曲、裁剪片段与试听。
+- id 由「包前缀 + 文件名」折成协议合法字符；折过字符或截过长的文件名再挂 6 位摘要，保证同一首歌的 id 不随别的曲目增删而变。
+- 包自带一条公告（`notice/announcement.json`）与 `assets/LICENSE.txt`；`workshop:validate` 0 error，34 首均实测 `HEAD 200`。
+
+### 大厅音乐：服务器曲目与轮播
+
+- 大厅音乐弹窗新增「服务器音乐」（只列工坊包 bgm，官方 BGM 不进这张表）：选曲即加入**轮播列表**并立即播放。
+- 轮播列表可点行切歌、✕ 移出，模式切「列表循环 / 随机播放」；列表、模式与当前曲目随浏览器保存，刷新后恢复。
+- 修复服务器曲目「状态显示在播、实际无声」：`replace` 只认 `next.url`（URL 实际在 `next.track.url`）⇒ 元素没有 src；换源 / 解锁 / 开播也改在同一用户手势内完成。
+- CSP 显式放行 `media-src 'self' blob:`：上传的大厅音乐与「工坊曲目整段 Blob」不再被 `default-src 'self'` 拦截。
+- Fever 音乐：房间没设过时用本浏览器在大厅选的那一份；房主进房后自动把它推成房间设置。Fever 曲目下拉改黑底。
+
+### 多索雷斯：水地形、假日威龙陈与战斗音乐
+
+- 特殊水地形覆盖改为常驻底色（新 `overlay` 原型）：同一 `key` 原地刷新 ⇒ **不闪、不叠加**，颜色由电光蓝 `0x8fe0ff` 暗到 `0x3f7f9f`（alpha 0.1）。
+- 水地形并集改用 `baseRangeKeys`：不再把假日威龙陈的 `extraRange`（水地形本身）并回去，旧的格子不会永远留在原地（远离所有人的水块）。
+- 假日威龙陈 S2/S3 的攻击特效固定在**她自己脚下的地块**（以她为圆心、半径 2；上一版按攻击范围格子铺会落到敌人那边）。
+- 技能特效挂载：prefab 声明了 `FollowMountPoint`、但当前 skin 上**没有那个点**时，改用 prefab 自己的 `ParticleEffect` 出生点（不再落到「脚上方」的兜底）——假日威龙陈 S3 的水花因此回到炮口（`chen2_skill_03_buff_02`：SPECIAL_3 不存在，MP_SPECIAL_2 存在）。
+- 多索雷斯包新增 `assets/bgm/dossoles_holiday.mp3` 与对局音乐面板 `ui/music.js`：**场上 4 名【多索雷斯】成员**时把对局 BGM 换成「多索雷斯假日」，人数掉下去还原。
+
+### 测试
+
+- 新增 `test/feverMusic.test.js`：偏好清洗、房间优先、音乐库扫描、`/api/music`、房主 / 非房主 / 坏片段的真服务器断言。
+- `public/i18n/{en,ja,ko,zh-TW}.json` 各补 20 条词条；`test/i18n.test.js` 全绿。
+
+---
+
 **对局屏多了一块可折叠的半透明房内聊天框（工坊包 `server-ext`），为此引擎把 `room.chat` 加进面板能主动发的闭枚举。**
 上游游戏本体仍是 **0.3.0**；`APP_VERSION`（`0.19.1`）**未动**（本节因此也还没有版本号与 tag —— 发版时在最上面加一行
 `## <版本> — <日期>` 即可，本段第一句就是那一条公告的摘要）。这里**全是加法**：`PROTOCOL_VERSION`（`2`）与
@@ -144,7 +205,7 @@
 
 | 卷 | 版本（新 → 旧） | 日期 | 文件 |
 |---|---|---|---|
-| **顶层** | 0.19.1 · 0.19.0 · 0.18.7 · 0.18.6 · 0.18.5 · 0.18.4 · 0.18.3-0.2.6 · 0.18.3-0.2.5 · 0.18.2-0.2.5 · 0.18.1-0.2.5 · 0.18.0-0.2.5 · 0.17.0-0.2.4 · 0.16.0-0.2.4 | 2026-10-12 – 2026-10-17 | 本文 |
+| **顶层** | 0.19.1-0.3.1 · 0.19.1 · 0.19.0 · 0.18.7 · 0.18.6 · 0.18.5 · 0.18.4 · 0.18.3-0.2.6 · 0.18.3-0.2.5 · 0.18.2-0.2.5 · 0.18.1-0.2.5 · 0.18.0-0.2.5 · 0.17.0-0.2.4 · 0.16.0-0.2.4 | 2026-10-12 – 2026-10-17 | 本文 |
 | 0.15 | 0.15.3-0.2.4 · 0.15.2-0.2.4 · 0.15.1-0.2.4 · 0.15.0-0.2.4 | 2026-10-11 – 2026-10-12 | [docs/changelog/0.15.md](docs/changelog/0.15.md) |
 | 0.14 | 0.14.0-0.2.4 · 0.14.0 | 2026-10-10 – 2026-10-11 | [docs/changelog/0.14.md](docs/changelog/0.14.md) |
 | 0.13 | 0.13.1 · 0.13.0 | 2026-10-10 | [docs/changelog/0.13.md](docs/changelog/0.13.md) |
@@ -166,6 +227,85 @@
 > 要看就回源码仓库。
 
 ---
+
+## 0.19.1-0.3.1 — 2026-10-19
+
+**整包跟到上游 0.3.1。** `UPSTREAM_VERSION` 由 `'0.3.0'` 抬到 `'0.3.1'`；`APP_VERSION` **不动**
+（`0.19.1`）—— 这一版只跟随上游，按 `shared/constants.js` 那条口径：只跟随上游的版本保持 `APP_VERSION`、
+移动 `UPSTREAM_VERSION`。发行 tag 是 `v0.19.1-0.3.1`。`PLUGIN_API` 抬到 `{ current: 2, min: 1 }`
+（旧包仍按 `min` 装得上）；`PROTOCOL_VERSION`（`2`）与 `MOD_API_VERSION`（`1`）**一个都没动** ——
+推送帧的形状没变，`golden` 一个场景都没移动。
+
+上游 0.3.0 → 0.3.1 是 **215 个提交 / 537 个文件**。下面按「玩家能看见什么」分组。
+
+### 皮肤（docs/SKINS.md）
+
+- 渲染层补上整块**皮肤呈现**：`skinOf` / `applyInfo` / `setMe` / `setSkins` / `refreshSkins`，以及
+  boss 搭档的只读准备视图（`syncReadOnlyPrepUnits`）—— 皮肤是视图模型的一部分，换了就丢掉重建，
+  正在跑的战斗不重启播放
+- 设置里多了一行**「显示其他玩家的皮肤」**：关掉时**别的座位**的棋子画成干员自己的模型；
+  没有主人的单位（装置、敌人）本来也没皮肤可丢。刻意的不对称：你画什么是你的选择，别人画什么是他们的
+- 四个同步引擎里的第四个：`room.skins { skins }`（`ui/loadoutSync.js` 的 `installSkinsSync`）。
+  与另外三个不同，它**任何相位都收** —— 外观是纯客户端的事
+
+### 音效与素材
+
+- 攻击 / 受击音效改成**按池引用**（上游 #680）：单位条目只记 `pools: { attack: … }`，
+  音高 / 延迟 / 音量**只存一份**在 `audio.sfx.pools`（941 个池、484 个单位）
+- 官方表的**大小上限与形状校验**接上（`tools/assets/cache.mjs` 的 `maxBytes` / `validate`）：
+  坏表不再被当成「已经下过」永远复用；原子写换成唯一临时名 + `finally` 清理
+- `data/local-assets.json` 与 `public/assets/local` 换成**上游 0.3.1 完整包**那一批（1697 条）
+
+### 测试房间
+
+- `welcome` 带 `testMode`；聊天、席位上限、host 迁移、观战、限流、审计在测试房间里都有独立口径
+- 观战座的 `g.test` 先交给 `applyTestCommand` 再拒 —— 它要写审计并占限流格子，
+  在入口直接拒会让它既不进日志也不占格子
+
+### 战斗与装备
+
+- **流形战斗**：attack 循环换成 combat clip，技能循环也换成它（我先前把这段当成死代码删过，已恢复）
+- 装备拆卸（`unequip: "allow"`）：两条开关来源（房间规则优先，其次模块层 `behaviour`），
+  「不是已装备」与「找不到」分开报；临时整备区仍是 **5 格窗口**（两处都满就 `HAND_FULL`）
+- 装备位策略统一到**一个对局入口**（`matchSlotPolicy`）：`plus` 档下变形同构体不占格、
+  每名干员最多一件、顶替只挑真占格的那一件
+- 详情面板的 `EQUIP n/2` 与盟约链按这一页的形态档位算；「卸下」按钮只看调用方给没给 `onUnquip`
+
+### 插件
+
+- `PLUGIN_API` 到 **2**；工作室多两条控制台路由（`/studio/api/console/options` 与 `/console/build`），
+  表面表与 `docs/PLUGIN-API.md` 跟着重生成
+- `runner.js` 转出 `loadBrowserSim`（工作室控制台自己拿浏览器侧的战斗模拟器）
+- 工坊：一个目录如果自己声明了 `plugin.json`，它是**插件示例**、不是坏包（静默跳过）
+- 补回 `items.js` 的 `unequipAllowed`（`shared/modSurface.js` 里那一条是**工坊包声明依赖的公开面**）
+
+### 其它
+
+- `tools/assets/plan.mjs` 取上游 0.3.1，**并把我们 fork 的 `voiceLang` / `voiceLangs` 合回去** ——
+  上游把它换成了 `VOICE_OPTIONAL_TREES`（`voiceEn` / `voiceKr` / `voiceNative`），两套并存：
+  我们这套按「干员各选一套」用，上游那套按「整棵树换一套」用。默认配音仍是 `jp`（0.9.0 业主决定）
+- 头像解析链的**精确键提前到后缀之前**（跟上游 `chessPortraitUrl` / `chessAvatarUrl`）
+- 调配同步：休整期提交**带显式默认值**（「把某一格改回默认」必须把默认值发出去，
+  只从 `entries` 里删掉那一格服务端会保留原来那份）
+- 派生模组 trait 时补 `modeOnly` / `rangeExpand`（GitHub #700 的中文读数）
+- `Match` 里那次多余的、无参数的 `GameData` 构造删掉（它把带 mod 层选项的那一次整个覆盖了）
+
+### 验证
+
+```
+node --test（串行）  11178 项 · 0 失败（18 项按环境跳过：真实浏览器 / 真实网络）
+npm run ci           setup / test / smoke / lint / imports / typecheck 全部 ok
+npm run golden       全部场景 match（0 移动）
+i18n                 2416 msgids × 4 语言 · 100 %
+```
+
+### 已知限制
+
+- 联网的 `fetch-assets` 需要 `node --use-env-proxy` + `HTTPS_PROXY`（Node 的 `fetch` 不读系统代理）
+- 本地素材提取（`tools/local-extract`）需要 Python + `UnityPy` 与本机客户端；没有客户端时
+  从完整包复制 `public/assets/local` 与 `data/local-assets.json` 即可
+- 8 个 `test/mod*.test.mjs` 改用 `.test.js`：仓库已声明 `type: module`，而 `npm test` 的 glob 只收 `.test.js`
+  —— 它们此前**从未被执行过**
 
 ## 0.19.1 — 2026-10-17
 

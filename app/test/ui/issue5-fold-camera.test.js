@@ -212,8 +212,12 @@ describe('wiring', () => {
     // entering prep and the boss-prep re-frame take the fold state; a fold / unfold re-frames through foldCamera
     // (大图: the map's own window rides along as the last argument — shared/layout.js `stageLayout`)
     assert.equal((game.match(/const pc = prepCameraFor\(pub, myId, shopFolded, stageLayout\);/g) || []).length, 2);
-    // a hand-made fold still goes through foldCamera, still deferred while busy (the deploy fold's own branch is
-    // asserted in issue602-deploy-fold.test.js)
-    assert.match(game, /const next = foldCamera\(\{\n\s+pub, myId, folded: shopFolded, ownPrep: !!view && viewModeRef\.current === 'prep' && showPrep,\n\s+pen, busy: !!drag \|\| !!facing, current: camRef\.current, layout: stageLayout,\n\s+\}\);\n\s+if \(next\) setCam\(next\.kind, \{ \.\.\.next\.opts, ms: FOLD_CAMERA_MS \}\);/);
+    // foldCamera 收到的是 fold 态本身，且它进了 `useEffect` 的依赖数组（少了它，折叠变化不会重算镜头）。
+    // 只钉这两点，不钉整段排版（缩进与其它 props 的文字随时会变，钉死会让这条断言一改就红）。
+    assert.match(game, /\}, \[[^\]]*\bshopFolded\b[^\]]*\]\);/);
+    // entering prep and the boss-prep re-frame take the fold state; a fold / unfold re-frames through prepDeployCamera
+    // (which calls foldCamera, still deferred while busy unless a deploy zoom is being given back — issue #602)
+    assert.equal((game.match(/const pc = prepCameraFor\(pub, myId, shopFolded, stageLayout\);/g) || []).length, 2);
+    assert.match(game, /const next = prepDeployCamera\(\{\n\s+pub, myId, deployFold, releaseDeploy: step\.release, folded: shopFolded,\n\s+ownPrep: !!view && viewModeRef\.current === 'prep' && showPrep,\n\s+pen, busy: !!drag \|\| !!facing, current: camRef\.current, layout: stageLayout,\n\s+\}\);\n\s+\/\/ a null release because the pen is open stays owed; a null only because the camera already\n\s+\/\/ matches the player's fold spends it\. \[ASSUMED\]\n\s+deployZoomedRef\.current = deployZoomRemember\(step, \{ next, pen \}\);\n\s+\/\/ the fold zoom and the restore fly with the short FOLD_CAMERA_MS, not a generic camera flight\n\s+if \(next\) setCam\(next\.kind, \{ \.\.\.next\.opts, ms: FOLD_CAMERA_MS \}\);/);
   });
 });

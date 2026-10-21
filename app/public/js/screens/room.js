@@ -31,7 +31,7 @@ import { enabled as federationEnabled, currentNode } from '../federation.js';
 // Texts go through t() (docs/I18N.md).
 
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MIN_SEATS, MAX_SPECTATORS, ERR_TEXT } from '../../../shared/constants.js';
+import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MIN_SEATS, MAX_SPECTATORS, ERR_TEXT, RECON } from '../../../shared/constants.js';
 // seat counts through the namespace: the live constants (before the 10-seat package) have MAX_SEATS 4 and no DEFAULT_SEATS
 import * as SEAT_CONST from '../../../shared/constants.js';
 import { RANDOM_MODE, RANDOM_MODE_NAME } from '../../../shared/randomMode.js';
@@ -41,6 +41,7 @@ import {
 import { toast, toastError } from '../ui/toasts.js';
 import { copyText } from '../ui/clipboard.js';
 import { GuideButton } from '../ui/guide.js';
+import { LobbyMusicButton } from '../ui/lobbyMusic.js';
 import { openStats } from './stats.js';
 import { openFriends } from '../ui/friends.js';
 import { NameCardLayer } from '../ui/namecards.js';
@@ -316,11 +317,12 @@ function SeatCard({ seat, index, room, facts, myId, busy, onKick, onInvite, sear
   const src = seat.isBot ? null : seatPortrait(seat, portraits);
   const owner = isOwnerName(seat.name);
   const canPick = isMe && !seat.isBot && !!onPickCard;
+  const team = room.mode === 'recon' ? (Number.isInteger(seat.team) ? seat.team : 1) : null;
   return html`<article class=${`rseat${ready ? ' is-ready' : ''}${flash ? ' is-flash' : ''}${isMe ? ' is-me' : ''}${isHostSeat ? ' is-host' : ''}${offline ? ' is-offline' : ''}${seat.isBot ? ' is-bot' : ''}`}
-      style=${`--i:${index}`}>
+      data-team=${team} style=${`--i:${index}${team ? `;--team-color:${teamColor(team)}` : ''}`}>
     <span class="rseat__clip" aria-hidden="true"></span>
     ${consent ? html`<span data-testid="script-consented">${t('已同意')}</span>` : null}
-    <header class="rseat__strip"><i></i><span class="num">P${index + 1}</span></header>
+    <header class="rseat__strip"><i></i><span class="num">P${index + 1}</span>${room.mode === 'recon' ? html`<span class="rseat__team">${t('{n} 队', { n: Number.isInteger(seat.team) ? seat.team : 1 })}</span>` : null}</header>
     <div class=${`rseat__art${canPick ? ' is-pickable' : ''}`} onClick=${canPick ? onPickCard : undefined} title=${canPick ? t('点击更换名片干员') : undefined}>
       ${src && bad !== src ? html`<img src=${src} alt="" draggable=${false} loading="lazy" onError=${() => setBad(src)} />`
         : html`<span class="rseat__glyph">${seat.isBot ? html`<${Icon} name="robot" />` : [...(seat.name || '?')][0]}</span>`}
@@ -349,6 +351,46 @@ function SeatCard({ seat, index, room, facts, myId, busy, onKick, onInvite, sear
       </span>` : null}
     </div>
   </article>`;
+}
+
+/** 重构模拟的队伍颜色（红、黄、蓝、绿、紫）：座位卡边框、队伍条与队标都读这一份。 */
+const TEAM_COLORS = Object.freeze(['#ff6b6b', '#ffd23f', '#4aa8ff', '#5be36f', '#b57bff']);
+const teamColor = (n) => TEAM_COLORS[(Number.isInteger(n) ? n : 1) - 1] || TEAM_COLORS[0];
+
+/**
+ * 重构模拟（模式扩展-重构模拟，mode 'recon'）的自由选队条：房间层元数据（第一轮骨架——对战仍按全队合作跑，
+ * 队伍竞争留后续轮）。`room.teamCount` 支队伍（建房时房主钉下），每队 ≤ RECON.TEAM_SIZE；赛前点选即换队
+ * （`room.setTeam`，服务端判满员与对局锁），开局后只读。只在 recon 房间渲染，其它模式一个字节不多画。
+ * @param {{ room: any, facts: any, busy: any, onPick: (n: number) => void }} props
+ */
+function TeamBar({ room, facts, busy, onPick }) {
+  const count = Number.isInteger(room?.teamCount) ? room.teamCount : 0;
+  if (room?.mode !== 'recon' || count < RECON.MIN_TEAMS) return null;
+  const mine = Number.isInteger(facts.mine?.team) ? facts.mine.team : 1;
+  const occ = new Array(count + 1).fill(0);
+  for (const s of facts.occupied) {
+    const tm = Number.isInteger(s.team) ? s.team : 1;
+    if (tm >= 1 && tm <= count) occ[tm]++;
+  }
+  const locked = !!room.inMatch;
+  return html`<section class="team-bar" aria-label=${t('选择队伍')}>
+    <${MicroLabel} tone="ice">TEAMS<//>
+    <span class="team-bar__name">${t('选择队伍')}</span>
+    <div class="team-bar__list" role="radiogroup" aria-label=${t('队伍')}>
+      ${Array.from({ length: count }, (_, i) => i + 1).map((n) => {
+        const full = occ[n] >= RECON.TEAM_SIZE;
+        const on = mine === n;
+        return html`<button key=${n} type="button" role="radio" aria-checked=${on ? 'true' : 'false'}
+          class=${`team-bar__team${on ? ' is-on' : ''}`} data-team=${n} style=${`--team-color:${teamColor(n)}`}
+          disabled=${locked || !!busy || (!on && full)}
+          title=${!on && full ? t('该队伍已满员') : t('加入 {n} 队', { n })}
+          onClick=${() => { if (!on) onPick(n); }}>
+          <b>${t('{n} 队', { n })}</b><span class="num">${occ[n]}/${RECON.TEAM_SIZE}</span>
+        </button>`;
+      })}
+    </div>
+    ${locked ? html`<span class="team-bar__lock t-dim">${t('模拟进行中，队伍已锁定')}</span>` : null}
+  </section>`;
 }
 
 /** 观战席: the room's spectators (host: ✕ frees a seat), and 入座 for a spectator while a player seat is free. */
@@ -502,7 +544,7 @@ export function hostStartAlignBlocked({ solo, align }) {
  * client cannot name is called out by name instead of silently staying 「未就绪」.
  * @param {{ room: any, onAlignment?: (state: { ok: boolean, needed: boolean, missing: number }|null) => void }} props
  */
-function RoomModsPanel({ room, myId = null, onAlignment = null }) {
+function RoomModsPanel({ room, myId = null, onAlignment = null, hidden = false }) {
   const mods = roomModsOf(room);
   // 服务端声明过哪些包（`welcome.mods.packs`，main.js 写进 store.roomMods）：房主在房间里能挑的就是这一份的子集。
   const available = roomMods.availableMods();
@@ -597,6 +639,7 @@ function RoomModsPanel({ room, myId = null, onAlignment = null }) {
     }
   };
 
+  if (hidden) return null; // 「房间声明模组」的界面已按业主要求移除；对齐检查（onAlignment）仍照旧运行
   return html`<div class="room-mods brackets">
     <${MicroLabel} tone="mint">ROOM MODS<//>
     ${mods ? html`<span class="room-mods__title">${t('本房间使用模组（{n} 个）', { n: mods.packs.length })}</span>
@@ -755,7 +798,7 @@ export function RoomScreen() {
   const soloAlignBlocked = hostStartAlignBlocked({ solo: !coop, align });
   const info = difficultyInfo(room.mode, room.difficulty, { random: firepower, variant });
   const variantName = variant === 'endurance' ? t('持久鏖战') : variant === 'marathon' ? t('最长时赛') : t('快速突袭');
-  const modeName = firepower ? `${RANDOM_MODE_NAME} · ${variantName}` : coop ? t('同盟模拟') : t('独立模拟');
+  const modeName = firepower ? `${RANDOM_MODE_NAME} · ${variantName}` : room.mode === 'recon' ? t('重构模拟') : coop ? t('同盟模拟') : t('独立模拟');
   const searchElapsed = facts.isHost && searchSince ? (Date.now() - searchSince) / 1000
     : room.matching?.startedAt ? (serverNow() - room.matching.startedAt) / 1000 : 0;
 
@@ -773,6 +816,8 @@ export function RoomScreen() {
   };
 
   const toggleReady = () => run('ready', () => net.request('room.ready', { ready: !myReady }));
+  // 重构模拟（mode 'recon'）的自由选队：换队不重置就绪（服务端同一口径），满员 / 对局锁由服务端点名拒绝。
+  const pickTeam = (team) => run('team', () => net.request('room.setTeam', { team }));
   const start = () => run('start', () => net.request('room.start', {}));
   const queueMatch = () => run('match', async () => {
     await net.request('match.queue', { mode: room.mode, difficulty: room.difficulty, random: firepower, ...(firepower ? { variant } : {}), fillBots: false });
@@ -862,7 +907,7 @@ export function RoomScreen() {
         ? html`<span class="t-mint">${t('已就绪 · 等待创建者开始模拟')}</span>`
         : html`<span class="t-lo">${t('准备就绪后，创建者即可开始模拟')}</span>`;
 
-  return html`<div class=${`screen room-screen rs${coop ? '' : ' rs--solo'}${facts.seats.length > DEFAULT_SEATS ? ' rs--big' : ''}${exiting ? ' is-leaving' : ''}`} style=${`--d-color:${DIFFICULTY_COLORS[room.difficulty]}; --n:${facts.seats.length}`}>
+  return html`<div class=${`screen room-screen rs${room.mode === 'recon' ? ' rs--recon' : ''}${coop ? '' : ' rs--solo'}${facts.seats.length > DEFAULT_SEATS ? ' rs--big' : ''}${exiting ? ' is-leaving' : ''}`} style=${`--d-color:${DIFFICULTY_COLORS[room.difficulty]}; --n:${facts.seats.length}; --cols:${Math.ceil(facts.seats.length / 2)}`}>
     <div class="rs__bg" aria-hidden="true"></div>
     <header class="rs-top">
       <div class="rs-top__left">
@@ -878,6 +923,7 @@ export function RoomScreen() {
           ${coop && !openFriends.unavailable ? html`<${Button} variant="secondary" size="sm" square=${true} icon="users" class="rs-friends" onClick=${() => openFriends()} title=${t('好友 · 邀请好友加入')} aria-label=${t('好友')} />` : null}
           <${SettingsButton} class="room-settings" variant="secondary" square=${true} />
           <${GuideButton} class="room-guide" variant="secondary" square=${true} />
+          <${LobbyMusicButton} />
           <${RoomModManager} mods=${managerMods} declared=${managerDeclared} />
         </div>
         <${PluginTag} room=${room} myId=${me.playerId} />
@@ -895,6 +941,7 @@ export function RoomScreen() {
       </div>
     </header>
 
+    ${room.mode === 'recon' ? html`<${TeamBar} room=${room} facts=${facts} busy=${busy} onPick=${pickTeam} />` : null}
     <main class="rs-seats">
       ${facts.seats.map((s, i) => html`<${SeatCard} key=${s ? `p${s.playerId}` : `e${i}`} seat=${s} index=${i} room=${room} facts=${facts}
         myId=${me.playerId} busy=${busy} onKick=${kick} onInvite=${() => copy('code')} searching=${searching} portraits=${portraits}
@@ -918,7 +965,7 @@ export function RoomScreen() {
       的事（与 `game.js` 的 `screen.game.hud` / `screen.game.overlay` 同一种写法）。
     */ null}
     <div class="mod-host" data-mod-slot="screen.room.aside"></div>
-    <${RoomModsPanel} room=${room} myId=${me.playerId} onAlignment=${setAlign} />
+    <${RoomModsPanel} room=${room} myId=${me.playerId} onAlignment=${setAlign} hidden=${true} />
     <${ChatPanel} />
     <${SpectatorBar} facts=${facts} myId=${me.playerId} busy=${busy} onRemove=${removeSpectator} onSit=${sit} />
 

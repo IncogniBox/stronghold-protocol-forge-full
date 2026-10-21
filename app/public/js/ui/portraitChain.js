@@ -114,6 +114,16 @@ export function portraitEntry(m, chess, opts = {}) {
       const eliteUrl = eliteRec ? strOf(eliteRec[f.elite]) : null;
       if (eliteUrl) return eliteUrl;
     }
+    // 步骤 2（上游 0.3.1 起**提到后缀之前**）：精确命中 `chars[id]` —— `chessPortraitUrl` 自己也认它了，
+    // 精锐棋子在该条目有 E2 字段时用 E2。
+    const exact = chars[id];
+    if (exact) {
+      const eliteUrl = strOf(exact[f.elite]);
+      if (eliteUrl && chess && chess.isGolden) return eliteUrl;
+      const plainUrl = strOf(exact[f.plain]);
+      if (plainUrl) return plainUrl;
+    }
+    // 步骤 3：`_1` / `_2` 后缀（旧行为的另一支；只在精确键没命中时走）
     if (id.endsWith('_2')) {
       const base = chars[id.slice(0, -2)];
       if (base) return strOf(base[f.elite]) || strOf(base[f.plain]);
@@ -122,9 +132,6 @@ export function portraitEntry(m, chess, opts = {}) {
       const base = chars[id.slice(0, -2)];
       if (base) return strOf(base[f.plain]);
     }
-    // 步骤 3：精确命中（`portraitUrl` 的行为并进来）
-    const exact = chars[id];
-    if (exact) return strOf(exact[f.plain]);
     // 步骤 4：唯一的 hook 点 —— 有外观提供者时它回答这一套；没有时跳过（今天就是没有）
     if (typeof opts.lookup === 'function' && charId) {
       let hit = null;
@@ -136,14 +143,13 @@ export function portraitEntry(m, chess, opts = {}) {
 
   // 步骤 5：回落这个干员自己的记录。
   //
-  // **立绘与头像在这一点上不同，而且必须保持不同**：
-  //   * 立绘：`isGolden` ⇒ 优先 `portraitE2`（`chessPortraitUrl` 今天的语义 —— 详情页画的是精锐那一张）；
-  //   * 头像：**不看 `isGolden`**。调用方自己传精锐变体（`screens/diy.js` 的
-  //     `elite ? unit.assets.avatarGolden : unit.assets.avatar`），所以这里再叠一次 `isGolden` 会把
-  //     「调用方明确要普通头像」的请求偷偷改成精锐头像 —— 那是**改行为**，不是统一链。
+  // **立绘与头像在这一点的规则由 `chessPortraitUrl` / `chessAvatarUrl` 定义，链照抄它们**：
+  // 上游 0.3.1 起两者**都**看 `isGolden` —— 精锐棋子在该角色条目有 E2 那一张时用 E2
+  // （`avatarE2` / `portraitE2`）。0.3.0 之前只有立绘这样，头像靠调用方自己传精锐变体；
+  // 那条旧约定已经被上游改掉，链跟着改，否则「链 == 今天」这条验收点就假了。
   const byChar = charId ? chars[charId] : null;
   if (!byChar) return null;
-  if (kind === 'portrait' && chess && chess.isGolden) {
+  if (chess && chess.isGolden) {
     const elite = strOf(byChar[f.elite]);
     if (elite) return elite;
   }

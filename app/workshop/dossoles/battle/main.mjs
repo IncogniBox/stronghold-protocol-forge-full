@@ -40,11 +40,11 @@ const KEY_WATER = `bond:${BOND}:water`;
 const KEY_SUNDER = `bond:${BOND}:sunder`;
 /** 引擎给元素爆发上的冷却锁 buff 键（`<el>Burst`，`sim/damage.js` 的 `resolveBurst`）。 */
 const BURST_KEY = `${EL}Burst`;
-/** 「特殊水地形」地块覆盖的重发间隔（战场时间 s）：`tileFlash` 是一段淡出的闪光，不重发就消失了。 */
+/** 「特殊水地形」地块覆盖的重发间隔（战场时间 s）：`overlay` 是常驻底色，重发只是**原地刷新格子**（不叠加、不闪）。 */
 const PAINT_SEC = 0.6;
 /** 一次 fx 最多带多少格（`fx/zones.js tileFlash` 取前 60 格），所以超过就分包发。 */
 const PAINT_CHUNK = 60;
-/** 地块覆盖的存活时长（战场时间 s）：略长于重发间隔，两块之间不留空档。 */
+/** 地块覆盖的存活时长（战场时间 s）：略长于重发间隔，sim 停止重发后由最后 25% 时长淡出。 */
 const PAINT_DUR = 1.2;
 /** 干员的「攻击范围＝特殊水地形」跟随并集的间隔（战场时间 s，与 `water_refresh` 同量级）。 */
 const FOLLOW_SEC = 0.25;
@@ -74,11 +74,19 @@ function waterTiles(battle, pid) {
 const WATER = new WeakMap();
 
 /**
- * 把「特殊水地形」画在战场上：浅蓝色的波纹覆盖每一格（fx 种类 `dosWater`，`public/js/render/fx/kinds.js`）。
+ * 客户端音乐面板（`ui/music.js`）读的实时状态：本场是否至少有一名玩家在场 4 名【多索雷斯】成员
+ * （盟约第 2 档「四人数」）。面板 import 的是**同一个模块实例**（与战斗运行器同一条 URL），
+ * 所以这里只是一份纯数据，不碰任何引擎接口。
+ */
+export const DOS_LIVE = { on: false, members: 0, players: Object.create(null) };
+
+/**
+ * 把「特殊水地形」画在战场上：暗一档的蓝色常驻底色覆盖每一格（fx 种类 `dosWater`，`public/js/render/fx/kinds.js`）。
  *
- * 一格一 zone 会让事件量随格子数爆炸，所以走 `telegraph` 那条**显式地块表**通道（引擎自己的「火墙」「预警框」
- * 同一条）：一次 fx 带一串 `tiles`，`fx` 每 `PAINT_SEC` 秒重发一次，超过 `PAINT_CHUNK` 格就分包。
- * `x` / `y` 只喂给锚点（显式 `tiles` 与它无关），`r` 必须小于 12 —— `telegraph` 在 `r ≥ 12` 时改画全屏闪光。
+ * 一格一 zone 会让事件量随格子数爆炸，所以走**显式地块表**通道（引擎自己的「火墙」「预警框」同一条）：
+ * 一次 fx 带一串 `tiles`，`fx` 每 `PAINT_SEC` 秒重发一次（`overlay` 按同一个 key 原地替换 ⇒ 不叠加、不闪），
+ * 超过 `PAINT_CHUNK` 格就分包。
+ * `x` / `y` 只喂给锚点（显式 `tiles` 与它无关），`r` 保持 1（`r ≥ 12` 会被当成全屏效果）。
  * @param {any} battle @param {Set<number>} tiles
  */
 function paintWater(battle, tiles) {
@@ -128,12 +136,22 @@ function installDossoles(battle, pid, bb, members) {
   //    这一份集合**按引用共享**（`waterTiles`）：假日威龙陈的攻击范围直接读它。
   const water = waterTiles(battle, pid);
   const refreshWater = () => {
+    const up = alive();
+    // 音乐面板的状态（`DOS_LIVE`）：**场上 4 名**就切「多索雷斯假日」。每名玩家各记一份，
+    // 任何一名达到 4 人即 `on`（本机无法从战斗模块里知道「我是谁」，这条判据对谁都成立）。
+    DOS_LIVE.players[pid] = up.length;
+    DOS_LIVE.members = Math.max(0, ...Object.values(DOS_LIVE.players));
+    DOS_LIVE.on = Object.values(DOS_LIVE.players).some((n) => n >= 4);
     water.clear();
     if (!atLeast(bb.power_bond_char_cnt)) return;
-    for (const u of alive()) {
-      // 范围键是「绝对格子」，干员换位后必须重建（引擎会自己维护，这里只在缺失时兜底）
-      if (!u.rangeKeySet && typeof battle.refreshRange === 'function') battle.refreshRange(u);
-      const keys = u.rangeKeySet || u.rangeKeys;
+    for (const u of up) {
+      // 范围键是「绝对格子」，干员换位后必须重建（引擎会自己维护，这里只在缺失时兜底）。
+      // ⚠️ 必须用 `baseRangeKeys`（本体网格 + 永久 rangeExtend），**不能用 `rangeKeySet`** —— 后者还含
+      // `extraRangeKeys`，而假日威龙陈的 extraRange 正是这片水地形本身（`DOS_CHEN2_WATER_RANGE` 的 `widen`）：
+      // 把她自己的 extra 并回并集，水地形就永远只增不减（她带着旧格子一路走，旧地块留在原地）——
+      // 业主 2026-10-21 报的「水上出现远离所有人的格子 / 攻击特效跑到那边去」就是这条自反馈。
+      if (!u.baseRangeKeys && typeof battle.refreshRange === 'function') battle.refreshRange(u);
+      const keys = u.baseRangeKeys || u.rangeKeySet || u.rangeKeys;
       if (keys) for (const k of keys) water.add(k);
     }
   };
@@ -402,4 +420,9 @@ registerGarrisonInstaller('DOS_CROW_KILL', (battle, list) => {
  * 保留导出是为了与 `pack.json.server.battle` 的模块契约一致（引擎要求这个模块有 `install(battle)`）。
  * @param {any} _battle
  */
-export function install(_battle) {}
+export function install(_battle) {
+  // 新的一场：上一场的 4 人状态作废（音乐面板每次开战都会重新读）。
+  DOS_LIVE.on = false;
+  DOS_LIVE.members = 0;
+  DOS_LIVE.players = Object.create(null);
+}

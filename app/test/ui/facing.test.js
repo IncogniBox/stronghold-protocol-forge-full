@@ -69,8 +69,11 @@ describe('rotation (DESIGN §3: RIGHT (dr,dc) · UP (dc,−dr) · LEFT (−dr,�
     assert.ok(left.every(([, c]) => c <= 5), 'LEFT mirrors it');
     assert.ok(up.every(([r]) => r >= 10), 'UP reaches the rows above (higher row index)');
     assert.ok(down.every(([r]) => r <= 10), 'DOWN reaches the rows below');
-    const clipped = rangeTiles([[0, 0], [0, 1], [0, 30]], 10, 18, 'RIGHT');
+    // 缺省的界是**画布**（45×60：大图上的攻击范围可以伸到官方 19×21 之外），要按「这张图的窗口」夹就显式传进来。
+    const clipped = rangeTiles([[0, 0], [0, 1], [0, 30]], 10, 18, 'RIGHT', { rows: GEO.ROWS, cols: GEO.COLS });
     assert.deepEqual(clipped, [[10, 18], [10, 19]], 'off-stage tiles dropped');
+    const onCanvas = rangeTiles([[0, 0], [0, 1], [0, 30]], 10, 18, 'RIGHT');
+    assert.deepEqual(onCanvas, [[10, 18], [10, 19], [10, 48]], '缺省不在画布之外就留着');
     assert.deepEqual(rangeTiles([[0, 1], [0, 1]], 10, 5, 'RIGHT'), [[10, 6]]);
     assert.deepEqual(rangeTiles(null, 10, 5, 'RIGHT'), []);
     assert.deepEqual(rangeTiles([[0, 0], [0, 1]], 10, 5, 'UP', { extend: 1 }), [[10, 5], [11, 5], [12, 5]], 'rangeExtend grows along +dCol before rotating');

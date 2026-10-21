@@ -19,6 +19,7 @@ import { UnitThumb, RichText, GIcon } from './gameComponents.js';
 import { itemDescText } from './richText.js';
 import { localAsset } from '../data.js';
 import { t, tParts } from '../../../shared/i18n.js';
+import { morphSlotPolicy } from '../../../shared/plugins/rules.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 const isObj = (v) => !!v && typeof v === 'object';
@@ -36,8 +37,15 @@ export function replaceRequest(ctx, intent, getChess = () => null, getItem = () 
   const item = ctx?.pieces?.get(intent.fields.itemUid)?.piece;
   if (!isObj(target) || target.kind !== 'chess' || !isObj(item) || item.kind !== 'item') return null;
   const equipped = (Array.isArray(target.items) ? target.items : []).filter((it) => isObj(it) && Number.isInteger(it.uid));
-  if (equipped.length < 2) return null;
   const rec = (id) => getItem(id) || null;
+  let options = equipped;
+  if (ctx?.morphMode === 'plus') {
+    const policy = morphSlotPolicy('plus', (it) => !!rec(typeof it === 'string' ? it : it?.id)?.canGiveBond);
+    if (!policy.occupies(rec(item.id))) return null;
+    if (policy.slotsUsed(equipped) < policy.slotCap(2)) return null;
+    options = equipped.filter((it) => policy.occupies(rec(it.id)));
+    if (!options.length) return null;
+  } else if (equipped.length < 2) return null;
   const shown = getChess(target.id) || null;
   return {
     targetUid: target.uid,
@@ -47,7 +55,7 @@ export function replaceRequest(ctx, intent, getChess = () => null, getItem = () 
     targetRec: shown && (shown.standInFor || shown.diyFor) ? shown : null,
     golden: !!target.golden,
     item: { uid: item.uid, id: item.id, name: rec(item.id)?.name || t('装备') },
-    options: equipped.map((it) => ({ uid: it.uid, id: it.id, name: rec(it.id)?.name || it.id })),
+    options: options.map((it) => ({ uid: it.uid, id: it.id, name: rec(it.id)?.name || it.id })),
   };
 }
 

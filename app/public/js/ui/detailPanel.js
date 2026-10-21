@@ -42,6 +42,7 @@ import { attackInterval, rangeGridBox, fmtNum, tileKey, chessLoadout, nextThresh
 import { updateSettings, settingsStore, useSettings } from './settings.js';
 import { dubsInstalled } from '../voiceDubs.js';
 import { VOICE_LANG_NAMES } from '../../../shared/constants.js';
+import { morphSlotPolicy } from '../../../shared/plugins/rules.js';
 import { chessPortraitUrl, skillIconUrl, skillRecordIconUrl, profIconUrl, subProfIconUrl, itemIconUrl, enemyIconUrl, tokenAvatarUrl, factionIconUrl, uiUrl, moduleTypeIconUrl } from './assetUrls.js';
 // 立绘走**统一解析链**（`portraitChain.js`）：同一个干员在详情页 / 手牌 / 商店卡 / 自选池里是同一个函数，
 // 所以不会再出现「卡面是那套外观、详情页是原版」。没有外观提供者时它与 `chessPortraitUrl` 逐字相同。
@@ -298,6 +299,8 @@ function InheritedItems({ inherited = null }) {
 function ItemRow({ itemId, uid = null, carried = null, off = null, itemData = null, bonds = null, onUnequip = null }) {
   const it = data.lookup('items', itemId);
   const inherited = inheritedItems(it, itemData);
+  // 装备拆卸（行为开关 `unequip: "allow"`，DESIGN §28.43.1）：`onUnequip` 只在**可编辑的自己人**身上传进来，
+  // 而 `unequipAllowed()` 是这一页从 `welcome.mods` 派生的有效档位 ⇒ **缺省档一个按钮都不画**。
   const canDetach = typeof onUnequip === 'function' && Number.isInteger(uid) && unequipAllowed();
   const slotless = slotPolicy().isSlotless(it);
   // 变形同构体的配对列表：被**已继承**进来的装备也算「与它一同携带」（它们已被吸收销毁，不在 `carried` 里），
@@ -309,7 +312,7 @@ function ItemRow({ itemId, uid = null, carried = null, off = null, itemData = nu
     <div class="ditem__text"><b>${it?.name || itemId}</b>${slotless ? html`<span class="dtag dtag-slotless">${t('不占装备格')}</span>` : null}<${RichText} text=${itemDescText(it, ratioLayers(it, bonds))} class="ditem__desc" />
       <${InheritedItems} inherited=${inherited} />
       ${it?.canGiveBond ? html`<${MorphPairings} off=${off} carried=${pairingCarried} />` : it?.giveBondId ? html`<${MorphGrantLine} item=${it} off=${off} carried=${pairingCarried} />` : null}</div>
-    ${canDetach ? html`<${Button} variant="ghost" size="sm" class="ditem__detach" title=${t('卸下')} aria-label=${t('卸下')} onClick=${() => onUnequip(uid)}>${t('卸下')}<//>` : null}
+    ${canDetach ? html`<${Button} variant="ghost" size="sm" class="ditem__detach" data-testid="unequip" title=${t('卸下')} aria-label=${t('卸下')} onClick=${() => onUnequip(uid)}>${t('卸下')}<//>` : null}
   </div>`;
 }
 
@@ -477,7 +480,7 @@ function skillTextNote(sk) {
 
 // `owner` = 这张卡画的是**谁的**棋子（换装 / 时装）：`undefined` = 自己；一个 playerId = 那位队友（看他的卡时用他
 // 选的时装）；`null` = 归属未知 → 不套用任何选择。多数调用点（含全部测试）不传 = 自己，输出与从前逐字相同。
-export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bonds, offBonds = null, removedBonds = null, loadout, onBond, live = null, hint = null, unitItems = null, standIn = null, diy = null, voiceSettings = null, cultOpts = null, owner = undefined, onUnequip = null }) {
+export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bonds, offBonds = null, removedBonds = null, loadout, onBond, live = null, hint = null, unitItems = null, standIn = null, diy = null, voiceSettings = null, cultOpts = null, owner = undefined, morphMode = 'official', onUnequip = null }) {
   const m = data.get('assets');
   const hp = hpOf(live, snapHp);
   // 0.2.0 自选编队: `chess` is then the composed 自选 record (the operator, the slot's tier / price); its skill and module are
@@ -500,7 +503,11 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
   // a chosen skill the manifest has no icon for (only the default skills' icons are fetched): its slot letter
   const skIcon = sk && lo && !lo.defaultSkill ? skillRecordIconUrl(m, sk, { empty: false }) : skillIconUrl(m, body);
   const skSlot = sk && Number.isInteger(sk.index) ? `S${sk.index + 1}` : null;
-  const garrison = Array.isArray(c.garrisonIds) && c.garrisonIds[0] ? data.lookup('garrisons', c.garrisonIds[0]) : null;
+  // 特质那一格画**几条**（上游 0.3.1 §36.16 的自定义特质）：官方那条（不带 `operatorTrait`）在前，
+  // 这个干员这一精英段位上声明过的自定义特质跟在后面 —— 全是官方数据的干员就只有一条，逐字等于从前。
+  const nativeTrait = (c.garrisonIds ?? []).map(id => data.lookup('garrisons', id)).find(g => g && !g.operatorTrait);
+  const customTraits = Object.values(data.get('garrisons') ?? {}).filter(g => g.operatorTrait?.charId === body.charId && g.operatorTrait.elite === golden);
+  const garrisons = [...(nativeTrait ? [nativeTrait] : []), ...customTraits];
   const items = Array.isArray(piece?.items) ? piece.items : [];
   // the bonds the unit counts for: its own + a 变形同构体 pairing's (its piece's items; without one: `unitItems` — a
   // teammate's unit's UnitInfo items, a bond popup 同构 row's wearer's)
@@ -508,8 +515,9 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
   const getItem = (id) => data.lookup('items', id);
   // `hasBond`：数据里不存在的盟约 id 一个都不画（与 prep / 战斗同一条约定，`shared/morph.js` 的
   // `grantedBondsByTrait` 的 `hasBond`）—— 一张卡片上出现一条不存在的盟约，与计数对不上是同一类谎话。
-  // 本局被摘除的盟约不算作这名干员的盟约（gameLogic pieceBondIds 的 `removedBonds`，第 5 个参数）—— 芯片里直接不出现。
-  const bondIds = pieceBondIds(c, carried, getItem, (id) => !!data.lookup('bonds', id), removedBonds);
+  // 本局被摘除的盟约不算作这名干员的盟约（gameLogic pieceBondIds 的 `removedBonds`）—— 芯片里直接不出现。
+  // 第 4 参 `morphMode` = 这一页的形态档位（上游 0.3.1）；`removedBonds` 仍是本仓的摘除名单。
+  const bondIds = pieceBondIds(c, carried, getItem, morphMode, removedBonds);
   const grantedIds = bondIds.filter((b) => !(Array.isArray(c.bonds) && c.bonds.includes(b)));
   const sell = c.sellPrice ?? 1;
   const blocks = {};
@@ -540,7 +548,9 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
         <${BondChips} bondIds=${bondIds} bonds=${bonds} off=${offBonds} onBond=${onBond} granted=${grantedIds} />
       </div>
     </div>`;
-  blocks.garrison = garrison ? html`<${GarrisonBlock} key="garrison" garrison=${garrison} m=${m} />` : null;
+  blocks.garrison = garrisons.length > 1
+    ? garrisons.map(garrison => html`<${GarrisonBlock} key=${garrison.garrisonId} garrison=${garrison} m=${m} />`)
+    : garrisons[0] ? html`<${GarrisonBlock} key="garrison" garrison=${garrisons[0]} m=${m} />` : null;
   blocks.trait = body.trait?.desc ? html`<p key="trait" class="dtrait"><${Icon} name="info" /><${RichText} text=${traitText(body, golden, lo)} /></p>` : null;
   // (`fr` is the body the unit fights with — a stand-in's record for a 补位 chess; `chess` is only the range's fallback)
   blocks.stats = chessStatsBlock({ rec: fr, chess: c, live });
@@ -568,7 +578,8 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
   // 装备格上限 = 官方 2 + 携带装备的 params.slot_cap（源石辅助仪 +2/+4，shared/equipSlots.js 两端同源）；
   // 「占了几格」走这一页的装备位策略（`shared/morph.js` 的 `slotPolicy()`：`plus` 档下变形同构体不占格，
   // 缺省档就是 `items.length`）。两者相合，缺省档下与官方那条算术逐字相同。
-  const slot = slotPolicy();
+  // 上游 0.3.1 把档位作为 `morphMode` 交给这张卡：显式给 `plus` 时以它为准（测试 / 插件预览直接传这一档）。
+  const slot = morphMode === 'plus' ? morphSlotPolicy('plus') : slotPolicy();
   const equipCap = equipCapacity(DEFAULT_EQUIP_PER_CHESS, carried, getItem);
   const equipUsed = slot.slotsUsed(items, getItem);
   const carriedUsed = slot.slotsUsed(carried, getItem);
@@ -576,7 +587,7 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
   // 靠它列出「已继承的装备」；没有装备声明 `inherited_key` 时这里是 null，装备行看不到任何东西。
   const itemData = piece && piece.itemData ? piece.itemData : null;
   blocks.equip = piece?.kind === 'chess' ? html`<${Section} key="equip" title=${t('装备')} micro=${`EQUIP ${equipUsed}/${equipCap}`} class="dsec--equip">
-      ${items.length ? items.map((it) => html`<${ItemRow} key=${it.uid} itemId=${it.id} uid=${it.uid} carried=${items} off=${offBonds} itemData=${itemData} bonds=${bonds} onUnequip=${editable ? onUnequip : null} />`) : html`<p class="t-dim dempty">${t('拖拽装备至该干员以配发（最多 2 件）')}</p>`}
+      ${items.length ? items.map((it) => html`<${ItemRow} key=${it.uid} itemId=${it.id} uid=${it.uid} carried=${items} off=${offBonds} itemData=${itemData} bonds=${bonds} onUnequip=${onUnequip} />`) : html`<p class="t-dim dempty">${t('拖拽装备至该干员以配发（最多 2 件）')}</p>`}
     <//>`
     // no own piece (a teammate's unit, a bond popup's 变形同构体 row): what it carries, read-only
     : !piece && carried.length ? html`<${Section} key="equip" title=${t('装备')} micro=${`EQUIP ${carriedUsed}/${equipCap}`} class="dsec--equip">
@@ -983,7 +994,7 @@ export const DetailPanel = modComponent('loadout.detail', function DetailPanel({
   const selectKey = voice && detail?.type === 'chess' ? selectVoiceKey(detail) : null;
   // 0.2.0 补位: a chess fielded as its stand-in is spoken for by the stand-in (the operator on the field, whose model, name
   // and battle lines the card and audio.js show), never by the operator it replaces; a 自选 record is already the pick's
-  const selectChar = voice && detail?.type === 'chess' ? detail.standIn?.charId || detail.chess?.charId || null : null;
+  const selectChar = voice && detail?.type === 'chess' ? detail.standIn?.assets?.voice || detail.standIn?.charId || detail.chess?.assets?.voice || detail.chess?.charId || null : null;
   useEffect(() => {
     if (selectKey && selectChar) audio.voice(selectChar, 'select');
   }, [selectKey, selectChar]);

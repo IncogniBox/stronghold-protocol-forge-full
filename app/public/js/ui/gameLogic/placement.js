@@ -1,6 +1,7 @@
 // ui/gameLogic/placement.js — deploy maps and the canPlace mirror of the server rules. Re-exported from ../gameLogic.js.
 
 import { GEO } from '../../../../shared/constants.js';
+import { morphSlotPolicy } from '../../../../shared/morph.js';
 import { attackRangeGrid } from '../../../../shared/loadoutRecord.js';
 import { meleeOnHighGround } from '../../../../shared/highGround.js';
 import { equipCapacity, DEFAULT_EQUIP_PER_CHESS } from '../../../../shared/equipSlots.js';
@@ -8,7 +9,7 @@ import { summonPlacementGrid } from '../../../../shared/summonPlacement.js';
 import { pieceDir, rangeTiles } from '../facing.js';
 import { isObj, tileKey } from './shared.js';
 import { boardTileOf, fieldTile } from './camera.js';
-import { layoutOf } from '../../render/layout.js';
+import { layoutOf, boardRectOf } from '../../render/layout.js';
 import { deployedRecord, fieldsStandIn, standInOf } from './standIn.js';
 import { t } from '../../../../shared/i18n.js';
 // 装备位语义（第 7 段）：`equipReplaces` 的「两格满了」那半读这一页的策略（`ui/gameLogic/bonds.js` 的 `slotPolicy`，
@@ -22,6 +23,11 @@ import { slotPolicy } from './bonds.js';
  * Deployable tiles of the own board for a stage record, in board coordinates: the normal field (default), or — `field`
  * 'bossL' / 'bossR' — the player's half of the boss field (always derived from the legend + active devices, like the
  * server's deploy map on that field).
+ *
+ * `stage.deployTiles.normal` is stored in **map** coordinates (that is what `deriveDeployTiles` walks and what the
+ * editor paints), so every tile it names is mapped back through this map's own layout (`boardTile('normal', …)`); the
+ * official layout makes that the identity, which is why the numbers used to line up. `effectiveStage` emits the same
+ * (map) shape, so both producers agree.
  * @param {any} stage stages.json record
  * @param {'normal'|'bossL'|'bossR'} [field]
  * @param {{ deviceOverrides?: Record<string, boolean>, tileOverrides?: Record<string, string> }} [overrides] boss field
@@ -31,24 +37,28 @@ import { slotPolicy } from './bonds.js';
 export function deploySets(stage, field = 'normal', overrides = {}) {
   const melee = new Set();
   const ranged = new Set();
-  if (field === 'bossL' || field === 'bossR') {
-    for (const [k, cls] of deployMap(stage, { ...(isObj(overrides) ? overrides : {}), field })) { ranged.add(k); if (cls === 'melee') melee.add(k); }
+  const L = layoutOf(stage);
+  // 半场（boss 的左右半，或一张左右两半的图的普通带半场 'normalL'/'normalR'）一律从图例 + 生效装置现推，与
+  // server/match/board.js buildDeployMap 在同一条场上读出来的一模一样
+  if (field !== 'normal') {
+    for (const [k, cls] of deployMap(stage, { ...(isObj(overrides) ? overrides : {}), field, layout: L })) { ranged.add(k); if (cls === 'melee') melee.add(k); }
     return { melee, ranged };
   }
-  const inField = (r, c) => r >= GEO.FIELD.r0 && r <= GEO.FIELD.r1 && c >= GEO.FIELD.c0 && c <= GEO.FIELD.c1;
+  const B = boardRectOf(L, field);
+  const inField = (r, c) => r >= B.r0 && r <= B.r1 && c >= B.c0 && c <= B.c1;
+  const at = (t) => boardTileOf(field, t[0], t[1], L);   // map tile → board tile (identity officially)
   const dt = stage?.deployTiles?.normal;
   if (isObj(dt) && Array.isArray(dt.melee)) {
-    for (const t of dt.melee) if (Array.isArray(t) && inField(t[0], t[1])) { melee.add(tileKey(t[0], t[1])); ranged.add(tileKey(t[0], t[1])); }
-    for (const t of Array.isArray(dt.rangedOnly) ? dt.rangedOnly : []) if (Array.isArray(t) && inField(t[0], t[1])) ranged.add(tileKey(t[0], t[1]));
+    for (const t of dt.melee) if (Array.isArray(t)) { const [r, c] = at(t); if (inField(r, c)) { melee.add(tileKey(r, c)); ranged.add(tileKey(r, c)); } }
+    for (const t of Array.isArray(dt.rangedOnly) ? dt.rangedOnly : []) if (Array.isArray(t)) { const [r, c] = at(t); if (inField(r, c)) ranged.add(tileKey(r, c)); }
     return { melee, ranged };
   }
   // derive from the tile legend — through the map's own field mapping (`layoutOf(stage)`; official → identity)
-  const L = layoutOf(stage);
   const rows = Array.isArray(stage?.rows) ? stage.rows : [];
   const tiles = isObj(stage?.tiles) ? stage.tiles : {};
-  for (let r = GEO.FIELD.r0; r <= GEO.FIELD.r1; r++) {
-    for (let c = GEO.FIELD.c0; c <= GEO.FIELD.c1; c++) {
-      const [sr, sc] = fieldTile('normal', r, c, L);
+  for (let r = B.r0; r <= B.r1; r++) {
+    for (let c = B.c0; c <= B.c1; c++) {
+      const [sr, sc] = fieldTile(field, r, c, L);
       const line = typeof rows[sr] === 'string' ? rows[sr] : '';
       const t = tiles[line[sc]];
       if (!isObj(t)) continue;
@@ -109,13 +119,13 @@ export function stageOverrides(priv, getEffect = () => null) {
  */
 export function deployMap(stage, { deviceOverrides = {}, tileOverrides = {}, field = 'normal', layout = null } = {}) {
   const L = layout || layoutOf(stage);
-  const F = GEO.FIELD;
-  const inField = (r, c) => Number.isInteger(r) && Number.isInteger(c) && r >= F.r0 && r <= F.r1 && c >= F.c0 && c <= F.c1;
+  const B = boardRectOf(L, field);
+  const inField = (r, c) => Number.isInteger(r) && Number.isInteger(c) && r >= B.r0 && r <= B.r1 && c >= B.c0 && c <= B.c1;
   const map = new Map();
   const rows = Array.isArray(stage?.rows) ? stage.rows : null;
   const legend = isObj(stage?.tiles) ? stage.tiles : {};
-  for (let r = F.r0; r <= F.r1; r++) {
-    for (let c = F.c0; c <= F.c1; c++) {
+  for (let r = B.r0; r <= B.r1; r++) {
+    for (let c = B.c0; c <= B.c1; c++) {
       const [sr, sc] = fieldTile(field, r, c, L);
       const line = rows && typeof rows[sr] === 'string' ? rows[sr] : null;
       let cls = null;
@@ -127,7 +137,7 @@ export function deployMap(stage, { deviceOverrides = {}, tileOverrides = {}, fie
           if (t.height === 'LOW' && (b === 'ALL' || b === 'MELEE')) cls = 'melee';
           else if ((t.height === 'HIGH' && (b === 'ALL' || b === 'RANGED')) || (t.height === 'LOW' && b === 'RANGED')) cls = 'ranged';
         }
-      } else if (!stage) cls = c === 9 ? null : 'melee';
+      } else if (!stage) cls = c === B.c1 - 1 ? null : 'melee';
       if (cls) map.set(tileKey(r, c), cls);
     }
   }
@@ -166,12 +176,14 @@ export function effectiveStage(stage, overrides = {}, layout = null) {
   if (!isObj(stage) || (!hasKeys(dev) && !hasKeys(tiles))) return stage;
   const devices = (Array.isArray(stage.devices) ? stage.devices : []).map((d) => (
     isObj(d) && d.alias != null && Object.hasOwn(dev, d.alias) ? { ...d, active: !!dev[d.alias] } : d));
-  const map = deployMap(stage, { deviceOverrides: dev, tileOverrides: tiles, layout: layout || layoutOf(stage) });
+  const L = layout || layoutOf(stage);
+  const map = deployMap(stage, { deviceOverrides: dev, tileOverrides: tiles, layout: L });
   const melee = [];
   const rangedOnly = [];
   for (const [k, cls] of map) {
     const [r, c] = k.split(',').map(Number);
-    (cls === 'melee' ? melee : rangedOnly).push([r, c]);
+    // 记录里的 deployTiles 是**地图坐标**（deploySets 会把它映射回棋盘坐标），所以这里也写上地图坐标那一套
+    (cls === 'melee' ? melee : rangedOnly).push(fieldTile('normal', r, c, L));
   }
   const deployTiles = { ...(isObj(stage.deployTiles) ? stage.deployTiles : {}), normal: { melee, rangedOnly } };
   return { ...stage, devices, deployTiles };
@@ -361,7 +373,8 @@ export function canPlace(ctx, uid, target) {
   if (target.area === 'board') {
     const { row, col } = target;
     if (!Number.isInteger(row) || !Number.isInteger(col)) return no('BAD_TILE', t('无法部署在该位置'));
-    const inField = row >= GEO.FIELD.r0 && row <= GEO.FIELD.r1 && col >= GEO.FIELD.c0 && col <= GEO.FIELD.c1;
+    const B = boardRectOf(ctx.layout, ctx.field);
+    const inField = row >= B.r0 && row <= B.r1 && col >= B.c0 && col <= B.c1;
     if (!inField) return no('BAD_TILE', t('无法部署在该位置'));
     const occ = ctx.boardAt.get(tileKey(row, col));
     if (piece.kind === 'item') {
@@ -433,7 +446,11 @@ export function equipReplaces(ctx, uid, targetPiece) {
   if (!Array.isArray(targetPiece?.items)) return false;
   const items = targetPiece.items;
   const rec = ctx.getItem(ctx.pieces.get(uid)?.piece?.id);
-  const slot = slotPolicy();
+  // 形态档位：调用方（`placementContext`）给了 `morphMode` 就按它，否则用这一页的策略（`roomMods.js` 写入）
+  const mode = ctx?.morphMode;
+  const slot = mode && mode !== 'official'
+    ? morphSlotPolicy(mode, (it) => !!ctx.getItem?.(typeof it === 'string' ? it : it?.id)?.canGiveBond)
+    : slotPolicy();
   // 不占格的那一件永远不是被顶掉的那一件（它自己从不打开替换对话框）
   if (slot.isSlotless(rec)) return false;
   // 「还装得下吗」：占了几格（策略；`plus` 档下变形同构体不计数）< 容量（官方 2 + 携带者的 slot_cap，含正落下的这件）
@@ -478,8 +495,9 @@ export function boardTargets(ctx, uid) {
   const legal = [];
   const illegal = [];
   if (!ctx?.pieces?.get(uid)) return { legal, illegal };
-  for (let r = GEO.FIELD.r0; r <= GEO.FIELD.r1; r++) {
-    for (let c = GEO.FIELD.c0; c <= GEO.FIELD.c1; c++) {
+  const B = boardRectOf(ctx.layout, ctx.field);
+  for (let r = B.r0; r <= B.r1; r++) {
+    for (let c = B.c0; c <= B.c1; c++) {
       const k = tileKey(r, c);
       if (!ctx.deploy.ranged.has(k) && !ctx.boardAt.has(k)) continue; // never-deployable scenery
       (canPlace(ctx, uid, { area: 'board', row: r, col: c }).ok ? legal : illegal).push([r, c]);
@@ -523,7 +541,7 @@ export function dropFailureReason(ctx, uid, tile) {
   if (tile.area === 'board') target = { area: 'board', row: tile.row, col: tile.col };
   else if (tile.area === 'hand') target = { area: 'hand', idx: Number.isInteger(tile.idx) ? tile.idx : tile.col };
   else if (tile.area === 'temp') return ctx.pieces.get(uid).area === 'temp' ? null : t('临时整备区无法放入单位');
-  else if (Number.isInteger(tile.row) && tile.row >= GEO.FIELD.r0 && tile.row <= GEO.FIELD.r1) return t('无法部署在该位置');
+  else if (Number.isInteger(tile.row) && tile.row >= boardRectOf(ctx.layout, ctx.field).r0 && tile.row <= boardRectOf(ctx.layout, ctx.field).r1) return t('无法部署在该位置');
   else return null;
   const res = canPlace(ctx, uid, target);
   if (res.ok || res.code === 'ALREADY') return null;

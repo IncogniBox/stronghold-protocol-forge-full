@@ -4,7 +4,7 @@
 
 import { COLS } from '../constants.js';
 import { GEO } from '../../../shared/constants.js';
-import { stageRowOfBoard } from '../../../shared/layout.js';
+import { stageRowOfBoard, deployRectOf, boardRectOf, handRowOf, isDualLayout } from '../../../shared/layout.js';
 import { Unit } from '../units.js';
 import { normDir, mirrorDir } from '../dir.js';
 import { SkillRuntime } from '../skills.js';
@@ -15,16 +15,31 @@ import { setupUnitKit, kitPackOf } from '../content/index.js';
 import { installTraitAttackSpeed } from '../content/traitMods.js';
 import { clone } from './util.js';
 
+/**
+ * The deploy field a battle of `kind` fights on for the player whose input carries `side`: the boss half in a boss /
+ * hidden battle, otherwise — on a map whose ordinary band is a mirrored pair — that player's own half of it ('normalL'
+ * for 'L', 'normalR' for the mirrored 'R'), else the own ordinary board. Only a normal-kind battle ever splits: 联防
+ * ('unite') keeps the single ordinary board plus its `colOffset` columns.
+ */
+const boardField = (kind, side, layout) => {
+  if (kind === 'boss' || kind === 'hidden') return side === 'R' ? 'bossR' : 'bossL';
+  if (kind !== 'normal' || !isDualLayout(layout)) return 'normal';
+  return side === 'R' ? 'normalR' : 'normalL';
+};
+
 export class BattlePlayers {
   _addPlayer(p) {
-    const bossLike = this.kind === 'boss' || this.kind === 'hidden';
     const side = p.side === 'R' ? 'R' : 'L';
-    const mirror = bossLike && side === 'R';
+    // 镜像的不是「boss 那个 kind」，而是**这一场这一位棋手站的那个半场**：boss 的右半场，或一张左右两半的图的普通带
+    // 右半场（业主 2026-10-21「左右各一位玩家同场」）。`colOffset` 侧（联防的右帮手）不镜像。
+    const field = boardField(this.kind, side, this.layout);
+    const mirror = field === 'normalR' || field === 'bossR';
     const ps = {
       playerId: p.playerId,
       seat: p.seat ?? this.players.length,
       side,
       colOffset: Number(p.colOffset) || 0,
+      deployField: field,
       rowOffset: p.rowOffset,
       coords: p.coords ?? 'board',
       mirror,
@@ -40,6 +55,7 @@ export class BattlePlayers {
       units: [],
       input: p,
     };
+    if (this.opts.morphPairing === 'plus') ps.morphPairing = 'plus';
     this.players.push(ps);
     this._perPlayer[ps.playerId] = {
       // `killed` / `total` / `leaked` / `perfect` keep the official `counted` reading (DESIGN §5.1); `killedInTotal` /
@@ -94,8 +110,9 @@ export class BattlePlayers {
     let keys = ps._boardKeys;
     if (!keys) {
       keys = ps._boardKeys = new Set();
-      for (let br = GEO.FIELD.r0; br <= GEO.FIELD.r1; br++) {
-        for (let bc = GEO.FIELD.c0; bc <= GEO.FIELD.c1; bc++) { const [fr, fc] = this._boardTile(ps, br, bc); keys.add(fr * COLS + fc); }
+      const B = boardRectOf(this.layout, ps.deployField || boardField(this.kind, ps.side, this.layout));
+      for (let br = B.r0; br <= B.r1; br++) {
+        for (let bc = B.c0; bc <= B.c1; bc++) { const [fr, fc] = this._boardTile(ps, br, bc); keys.add(fr * COLS + fc); }
       }
     }
     return keys.has(r * COLS + c);
@@ -122,15 +139,24 @@ export class BattlePlayers {
 
   _boardTile(ps, row, col) {
     const L = this.layout;
-    const bossLike = this.kind === 'boss' || this.kind === 'hidden';
+    const field = ps.deployField || boardField(this.kind, ps.side, L);
     let r = row;
-    // a board row ≥ the hand row lands on the band this battle fights in: the boss band on a boss field, the normal
+    // a board row ≥ the 整备行 lands on the band this battle fights in: the boss band on a boss field, the normal
     // band (which the 联防 field widens) otherwise. Officially both are the identity map (normal [9,12], boss +7), but
-    // on a big map the bands sit higher — board row 9 is the map row the map's own `normal` deploy rect starts at.
+    // on a big map the bands sit higher — board row 9 is the map row the map's own `normal` deploy rect starts at —
+    // and a map that declares a bigger board (shared/layout.js `boardRectOf`) also moves its 整备行 up two rows.
     if (ps.rowOffset != null) r = row + ps.rowOffset;
-    else if (row >= GEO.HAND_ROW) r = stageRowOfBoard(L, bossLike ? 'bossL' : 'normal', row);
-    // the mirrored right side: about the map's own axis (always 20, FIXED_DEPLOY_COLS)
-    const c = ps.mirror ? (col <= L.mirrorCol / 2 ? L.mirrorCol - col : col) : col + ps.colOffset;
+    else if (row >= handRowOf(L, field)) r = stageRowOfBoard(L, field, row);
+    // the mirrored right side reflects the PLACEMENT through the map's own axis (reflecting the column number itself
+    // would only coincide when the window's middle column is 10); the plain side lands the board's left edge on THIS
+    // map's own rect (officially FIELD.c0 = 2, i.e. no shift). `colOffset` is the extra hand / 整备区 shift the caller
+    // passes (0 for the left side, 8 for the boss field's right half / a 联防 right-hand helper).
+    const mirrored = field === 'normalR' || field === 'bossR';
+    // 镜像前先落回**它那一侧左半场那块矩形**（bossR → bossLeft、normalR → normalLeft）：官方两块左界都是 2，
+    // 一张把普通带放得更宽的图上两者才会分开。
+    const baseName = field === 'normalR' ? 'normalLeft' : field === 'bossR' ? 'bossLeft' : field;
+    const placed = deployRectOf(L, baseName)[2] + (col - GEO.FIELD.c0);
+    const c = mirrored && col <= L.mirrorCol / 2 ? L.mirrorCol - placed : placed + ps.colOffset;
     return [r, c];
   }
 
@@ -161,7 +187,8 @@ export class BattlePlayers {
     // choice for the same chess id in a multi-player field (the per-battle data view maps id-only lookups); `standIn:
     // true` fields the chess as its 补位 stand-in (simdata getStandIn: the stand-in's body, the chess's identity); `diy`
     // fills a 自选 slot with its pick (simdata getDiy: the slot's identity, the operator's body, skill and module);
-    // `potential` (潜能 1–6, 0.2.2) composes the def at it (never a stand-in's)
+    // `potential` (潜能 1–6, 0.2.2) composes the def at it (never a stand-in's); `skin` (docs/SKINS.md) is the
+    // appearance the owning player chose and rides through to the unit, so every client draws that model (never a rule)
     const lo = { skillIndex: inp.skillIndex ?? null, moduleId: inp.moduleId ?? null };
     if (inp.standIn === true) lo.standIn = true;
     if (inp.diy && typeof inp.diy === 'object') lo.diy = inp.diy;
@@ -170,7 +197,7 @@ export class BattlePlayers {
     if (!def) { this.log(`unknown chess ${inp.chessId}${lo.diy ? ' (illegal 自选 pick)' : ''}`); return null; }
     // a DIY slot has no body of its own (甄选干员): it fights only as a 自选 piece (its `diy` pick)
     if (def.raw?.isDiy && !def.diyFor) { this.log(`自选 slot ${inp.chessId} without a pick`); return null; }
-    const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir, pieceData: inp.pieceData });
+    const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir, pieceData: inp.pieceData, skin: inp.skin });
     u.items = [...(inp.items ?? [])];
     u.carry = inp.carryState ?? null;
     // 练度 (自持有, 0.2.2): the owned operator's ×ATK / ×DEF / ×max HP (units.js Πmul) — never a 补位 stand-in's nor a
@@ -198,7 +225,7 @@ export class BattlePlayers {
     const st = def.stats;
     const u = new Unit({
       id: ++this._idSeq, side: 'ally', kind, def, defId: def.id, name: def.name, ownerId: ps ? ps.playerId : null,
-      uid: extra.uid ?? null, ownerUnit: extra.ownerUnit ?? null, x: c, y: r, tileR: r, tileC: c,
+      uid: extra.uid ?? null, ownerUnit: extra.ownerUnit ?? null, skin: extra.skin ?? null, x: c, y: r, tileR: r, tileC: c,
       dir: extra.dir != null ? normDir(extra.dir) : extra.facing != null ? normDir(extra.facing) : ps ? ps.dir : 'RIGHT',
       base: {
         maxHp: st.maxHp, atk: st.atk, def: st.def, res: st.res, aspd: st.aspd, bat: st.bat, blockCnt: st.blockCnt,

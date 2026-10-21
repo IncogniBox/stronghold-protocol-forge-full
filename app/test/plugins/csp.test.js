@@ -35,7 +35,7 @@ test('page import maps hash exact bytes; no inline executable script/events; pag
   const csp = siteCsp(publicDir);
   assert.ok(!csp.includes('unsafe-eval')); assert.match(csp, /worker-src 'self' blob:/);
   assert.match(csp,/connect-src 'self';/);assert.ok(!/script-src[^;]*(?:data:|blob:)/.test(csp));
-  for (const file of ['index.html', 'studio/index.html', 'dev/game-mock.html', 'dev/render-demo.html', 'dev/battle-perf.html', 'dev/uikit.html']) {
+  for (const file of ['index.html', 'studio/index.html', 'studio/console.html', 'dev/game-mock.html', 'dev/render-demo.html', 'dev/battle-perf.html', 'dev/uikit.html']) {
     const html = fs.readFileSync(path.join(publicDir, file), 'utf8');
     assert.ok(!/<[^>]+\son(?:load|error|click)=/i.test(html), file);
     for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
@@ -49,17 +49,18 @@ test('the asset CDN origin (SP_CDN_BASE) enters the passive types only — never
   const cdn = 'https://speedcdn.jiangjiangze.icu';
   const plain = siteCsp(publicDir, '');            // '' ⇒ unset, today's policy
   const withCdn = siteCsp(publicDir, cdn);
-  // ① a legal base: the origin appears in img-src and connect-src, and in no other directive
+  // ① a legal base: the origin appears in img-src / media-src / connect-src, and in no other directive
   const dirs = Object.fromEntries(withCdn.split('; ').map((s) => { const sp = s.indexOf(' '); return [s.slice(0, sp), s.slice(sp + 1)]; }));
   const carrying = Object.entries(dirs).filter(([, v]) => v.includes(cdn)).map(([k]) => k).sort();
-  assert.deepEqual(carrying, ['connect-src', 'img-src'], 'the CDN origin only in the passive-ish types');
+  assert.deepEqual(carrying, ['connect-src', 'img-src', 'media-src'], 'the CDN origin only in the passive-ish types');
   assert.equal(dirs['img-src'], `'self' data: blob: ${cdn}`);
+  assert.equal(dirs['media-src'], `'self' blob: ${cdn}`);
   assert.equal(dirs['connect-src'], `'self' ${cdn}`);
   for (const d of ['script-src', 'style-src', 'frame-src', 'object-src']) assert.ok(!dirs[d].includes('speedcdn'), `${d} must never carry the CDN origin`);
   assert.match(withCdn, /script-src 'self' 'sha256-/, 'script-src stays self + the importmap hashes');
   // ② unset / blank / a typo / a non-http(s) scheme ⇒ byte-for-byte today's policy
   assert.equal(plain, siteCsp(publicDir, null));
-  assert.match(plain, /img-src 'self' data: blob:;/); assert.match(plain, /connect-src 'self';/);
+  assert.match(plain, /img-src 'self' data: blob:;/); assert.match(plain, /media-src 'self' blob:;/); assert.match(plain, /connect-src 'self';/);
   for (const bad of ['', '   ', null, 'not a url', 'ftp://cdn.example.com', 'javascript:alert(1)']) {
     assert.equal(siteCsp(publicDir, bad), plain, `fallback for ${JSON.stringify(bad)}`);
     assert.ok(!siteCsp(publicDir, bad).includes('speedcdn'), `${JSON.stringify(bad)}: no CDN origin`);

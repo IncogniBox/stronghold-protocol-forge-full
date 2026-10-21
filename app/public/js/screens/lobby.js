@@ -23,7 +23,7 @@ import { useHubBackdrop, HubBackdrop, HubRadar, BackdropSettings, BackdropGlyph,
 
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, modeIdFor, clampSeats, ERR, ERR_TEXT } from '../../../shared/constants.js';
+import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, modeIdFor, clampSeats, ERR, ERR_TEXT, RECON } from '../../../shared/constants.js';
 import { RANDOM_MODE } from '../../../shared/randomMode.js';
 import { html, Button, Icon, MicroLabel, Panel, TextField, PingPill, AvatarFrame, Tooltip, Spinner, DifficultyIcon, doctorNo, confirmDialog } from '../ui/components.js';
 import { toast, toastError } from '../ui/toasts.js';
@@ -117,6 +117,12 @@ export function stageNote(stages) {
   return Number.isInteger(stages) && stages > 1 ? t('战场随机（共{stages}张）', { stages }) : '';
 }
 
+/**
+ * 重构模拟的模式图标（引擎自带的 `public/icons/recon.png`，与工坊包 mode-recon 的盟约【重构】用的是同一张图）。
+ * 放在引擎里而不是包里：大厅入口是引擎 UI，包缺席（本模式与包是两回事 —— 见 shared/reconModes.js）时也要能画出来。
+ */
+const RECON_ICON = '/icons/recon.png';
+
 const MODE_CARDS = [
   {
     id: 'solo', name: N_('独立模拟'), en: 'SOLO SIMULATION', icon: 'user',
@@ -138,6 +144,13 @@ const MODE_CARDS = [
     id: 'full', name: N_('全量模拟'), en: 'FULL SIMULATION', icon: 'rook',
     desc: N_('不需要难度选择：直接进入开发者试验场，跳过「确认本局信息」与「选择策略」两个界面。'),
     points: [N_('测试各种数据与环境'), N_('1 名博士 · 直接进入自定义场景')],
+  },
+  {
+    // 「重构模拟」（模式扩展-重构模拟）：本地实验模式 —— 20 回合制、策略选择之后插入「预重构」、房间可分
+    // 1–4 支队伍（自由选队，每队 ≤5）。入口与「全量模拟」同一条 devAllowed 门控（仅本地端可见）。
+    id: 'recon', name: N_('重构模拟'), en: 'RECON SIMULATION', iconSrc: RECON_ICON,
+    desc: N_('策略选择之后进入「预重构」：定下盟约倾向与整局的重构走向，然后在 20 回合的模拟里迎接新的首领。'),
+    points: [N_('1–20 名博士 · 可分 1–4 支队伍'), N_('20 回合制 · 重构协议（机制开发中）')],
   },
 ];
 
@@ -358,7 +371,7 @@ export function seatCapRange(serverMax) {
  * (`shared/protocol.js`: outside `[MIN_SEATS, SEAT_CAP]` ⇒ `BAD_MSG`).
  */
 export function seatCapPayload(mode, pick, serverMax) {
-  if (mode !== 'coop') return {};
+  if (mode !== 'coop' && mode !== 'recon') return {};
   const { max } = seatCapRange(serverMax);
   const cap = clampSeats(pick, max);
   return cap === max ? {} : { seatCap: cap };
@@ -482,12 +495,22 @@ function SweepPlate({ onClick }) {
   </button>`;
 }
 
-/** One of the four big entries at the bottom right. */
-function HubEntry({ group, name, en, icon, badge, tone = 'mint', count = null, onClick, disabled = false }) {
+/**
+ * One of the four big entries at the bottom right.
+ *
+ * `iconSrc` — the entry's mark as an **image** instead of a sprite glyph (`icon`): 重构模拟 brings its own
+ * artwork (the mode's emblem, the same PNG the 【重构】 disc uses), and a pack-provided image cannot be an
+ * `ICONS` entry (the sprite is engine code). The image is drawn as a CSS mask over `currentColor`, so it
+ * inherits the entry's tone exactly like the glyphs do (css/screens/lobby.css `.hub-entry__img`); a missing
+ * file therefore degrades to an invisible mark instead of a broken-image box.
+ */
+function HubEntry({ group, name, en, icon, iconSrc, badge, tone = 'mint', count = null, onClick, disabled = false }) {
   return html`<div class="hub-entry-wrap">
     ${group ? html`<span class="hub-entry__group"><${Icon} name=${group.icon} />${group.label}</span>` : html`<span class="hub-entry__group hub-entry__group--blank"></span>`}
     <button type="button" class=${`hub-entry hub-entry--${tone}`} onClick=${onClick} disabled=${disabled}>
-      <span class="hub-entry__icon"><${Icon} name=${icon} /></span>
+      <span class="hub-entry__icon">
+        ${iconSrc ? html`<span class="hub-entry__img" style=${`--hub-icon:url(${iconSrc})`} aria-hidden="true"></span>` : html`<${Icon} name=${icon} />`}
+      </span>
       <span class="hub-entry__en">${en}</span>
       <span class="hub-entry__name">${name}${badge ? html`<span class="mode-beta">${badge}</span>` : null}</span>
       ${count != null ? html`<span class="hub-entry__count"><${MatchmakingCount} count=${count} /></span>` : null}
@@ -591,6 +614,29 @@ function SeatCapPicker({ value, min, max, onChange }) {
   </div>`;
 }
 
+/**
+ * 重构模拟（模式扩展-重构模拟，mode 'recon'）的队数选择：房主建房时定 1..RECON.MAX_TEAMS 支队伍（每队
+ * ≤ RECON.TEAM_SIZE 人），队内分配进房后自由选（room.setTeam）。只在 recon 的创建屏渲染；与 SeatCapPicker
+ * 同一个滑条语言。缺省 1 队（全队合作）—— 与服务器 `Room` 的缺省一致。
+ * @param {{ value: number, onChange: (n: number) => void }} props
+ */
+function TeamCountPicker({ value, onChange }) {
+  const min = RECON.MIN_TEAMS, max = RECON.MAX_TEAMS;
+  const pct = Math.round(((value - min) / (max - min)) * 100);
+  return html`<div class="seat-cap seat-cap--teams">
+    <div class="seat-cap__head">
+      <${MicroLabel} tone="mint">TEAMS<//>
+      <span class="seat-cap__name">${t('队伍数量')}</span>
+      <span class="seat-cap__value num">${value}<span class="t-dim"> / ${max}</span></span>
+    </div>
+    <input class="seat-cap__slider" type="range" min=${min} max=${max} step="1" value=${value}
+      style=${`--pct:${pct}%`} aria-label=${t('队伍数量')}
+      aria-valuemin=${min} aria-valuemax=${max} aria-valuenow=${value}
+      onInput=${(e) => onChange(Number(e.currentTarget.value))} />
+    <div class="seat-cap__note">${t('本房间分成 {value} 支队伍（每队至多 {size} 人），进房后可自由换队', { value, size: RECON.TEAM_SIZE })}</div>
+  </div>`;
+}
+
 
 /**
  * 本房间使用 mod (W-A, DESIGN §28.9): the host ticks the packs THIS server declared, and the pick travels as
@@ -641,7 +687,7 @@ const ModManagerSlot = modComponent('lobby.modManager', () => null);
  * @param {string} roomMode 'solo' | 'coop'
  * @returns {boolean}
  */
-export const ROOM_MOD_PICKER_MODES = Object.freeze(['solo', 'coop']);
+export const ROOM_MOD_PICKER_MODES = Object.freeze(['solo', 'coop', 'recon']);
 export function hasRoomModPicker(roomMode) { return ROOM_MOD_PICKER_MODES.includes(roomMode); }
 
 
@@ -701,7 +747,7 @@ export function ProtoCard({ roomMode, difficulty, selected, onSelect, matchmakin
  */
 function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficulty, onClose, matchmaking, brief, privateRoom, onPrivate,
   online, maint, busy, isSearching, onCreate, onQueue, purpose = 'create', onSearch, onCancel, mm, onBrowse, chained = false,
-  seatValue, seatRange, onSeatPick, selectedMods, onToggleMod, queue, onQuickMatch, onCancelQuickMatch }) {
+  seatValue, seatRange, onSeatPick, selectedMods, onToggleMod, queue, onQuickMatch, onCancelQuickMatch, teamCount, onTeamPick }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -793,9 +839,10 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
               onClick=${onQuickMatch}>${t('快速匹配')}<//>` : null}
           </div>` : null}
           ${hasRoomModPicker(roomMode) ? html`<${ModPicker} selected=${selectedMods} onToggle=${onToggleMod} />` : null}
-          ${roomMode === 'coop'
+          ${roomMode === 'coop' || roomMode === 'recon'
             ? html`<${SeatCapPicker} value=${seatValue} min=${seatRange.min} max=${seatRange.max} onChange=${onSeatPick} />`
             : null}
+          ${roomMode === 'recon' ? html`<${TeamCountPicker} value=${teamCount} onChange=${onTeamPick} />` : null}
           ${queue ? html`<${QuickMatchPanel} queue=${queue} busy=${busy} onCancel=${onCancelQuickMatch} />` : null}
           <p class="proto-hint">${hint}</p>
           <button type="button" class="proto-start" disabled=${!online || maint?.active || busy === 'create' || busy === 'queue'} onClick=${search ? onSearch : onCreate}>
@@ -1019,7 +1066,7 @@ export function LobbyScreen() {
   const [simulation, setSimulation] = useState(lobbySimulationPreference);
   const [difficulty, setDifficulty] = useState(() => preferredDifficulty(lobbySimulationPreference()));
   const [fpVariant, setFpVariant] = useState(firepowerVariantPreference);
-  const roomMode = simulation === 'solo' || simulation === 'full' ? 'solo' : 'coop';
+  const roomMode = simulation === 'solo' || simulation === 'full' ? 'solo' : simulation === 'recon' ? 'recon' : 'coop';
   const randomMode = simulation === 'firepower';
   const variant = randomMode ? fpVariant : 'blitz';
   const [code, setCode] = useState('');
@@ -1034,6 +1081,9 @@ export function LobbyScreen() {
   const [seatPick, setSeatPick] = useState(null);
   const seatRange = seatCapRange(seatMax);
   const seatValue = seatPick == null ? seatRange.max : clampSeats(seatPick, seatRange.max);
+  // 重构模拟（mode 'recon'）的队数：房主在创建屏钉下（缺省 1 队，与服务器 `Room` 的缺省一致），
+  // 只随 recon 的 `room.create` 上车（`teamCount`），其它模式的负载一个字节不多。
+  const [teamPick, setTeamPick] = useState(RECON.MIN_TEAMS);
   // 野排匹配: the last `room.queued` frame WHILE we are still waiting (null = not in the queue). 'placed' / 'timeout' /
   // 'cancelled' clear it: the first is followed by the room.state that routes into the room, the other two mean the
   // server already took us out of the queue.
@@ -1145,6 +1195,8 @@ export function LobbyScreen() {
     // 非本地端（公网服务器）不认「全量模拟」：入口根本不画，这条是给 localStorage 里留下的陈旧偏好兜底 ——
     // 在同一台机器上先连过本地端、又换到公网服务器时，`lobby.simulation` 可能还指着 'full'。
     if (m === 'full' && !devAllowed) return;
+    // 「重构模拟」与「全量模拟」同一条 devAllowed 门控（本地实验模式；公网服务器上一个字都不画）。
+    if (m === 'recon' && !devAllowed) return;
     // Normal modes share their difficulty; firepower remembers its own explicitly chosen difficulty.
     if ((m === 'firepower') !== randomMode) setDifficulty(preferredDifficulty(m));
     setSimulation(m);
@@ -1177,6 +1229,7 @@ export function LobbyScreen() {
   const create = () => run('create', () => net.request('room.create', {
     ...roomMods.buildCreatePayload(roomMode, difficulty),
     ...seatCapPayload(roomMode, seatValue, seatMax),
+    ...(roomMode === 'recon' ? { teamCount: teamPick } : {}),
     random: randomMode, private: roomMode !== 'solo' && privateRoom, ...(randomMode ? { variant } : {}),
   }));
   /**
@@ -1343,6 +1396,7 @@ export function LobbyScreen() {
         ${maint?.active ? html`<div class="hub-maint">${t('服务器即将维护，暂停开启新的模拟')}</div>` : null}
         <div class="hub-entries__row">
           ${devAllowed ? html`<${HubEntry} name=${t('全量模拟')} en="FULL SIMULATION" icon="rook" tone="green" onClick=${() => openMode('full')} />` : null}
+          ${devAllowed ? html`<${HubEntry} name=${t('重构模拟')} en="RECON SIMULATION" iconSrc=${RECON_ICON} tone="ice" onClick=${() => openMode('recon')} />` : null}
           <${HubEntry} group=${{ icon: 'user', label: t('独立模拟') }} name=${t('独立模拟')} en="SOLO" icon="user" onClick=${() => openMode('solo')} />
           <${HubEntry} group=${{ icon: 'users', label: t('同盟模拟') }} name=${t('同盟模拟')} en="ALLIANCE" icon="users" count=${matchmakingCounts?.total} onClick=${() => openMode('coop')} />
           ${CAN_FIREPOWER ? html`<${HubEntry} name=${t('无限火力')} en="FIREPOWER" icon="dice" badge="1.1" tone="gold" onClick=${() => openMode('firepower')} />` : null}
@@ -1358,6 +1412,7 @@ export function LobbyScreen() {
       onCreate=${simulation === 'full' ? createFullSim : create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained}
       seatValue=${seatValue} seatRange=${seatRange} onSeatPick=${setSeatPick}
+      teamCount=${teamPick} onTeamPick=${setTeamPick}
       selectedMods=${selectedMods} onToggleMod=${toggleMod}
       queue=${queue} onQuickMatch=${quickMatch} onCancelQuickMatch=${cancelQueue} />` : null}
 
