@@ -17,6 +17,12 @@ export const RECON_HIDDEN_ROUND = 21;
 export const RECON_TRIAL_ROUNDS = Object.freeze([4, 8, 12, 16, 20]);
 export const RECON_TRAINING_ROUNDS = Object.freeze([4, 8, 12, 16, 20]);
 /**
+ * 特训学员从教官那里继承的**三围比例**（业主 2026-10-27）：攻 / 防 / 生命上限 = **学员自己的 + 教官的 ×0.5**，
+ * 固定不叠加。其余一切（部署费用 / 阻挡数 / 攻击间隔 / 再部署时间 / 攻击范围 / 技能时长 / 弹药数 / 技能触发规则）
+ * 全是学员自己的。战斗侧只此一处读（server/sim/simdata.js getTrainee 的缺省也是它，但显式传）。
+ */
+export const RECON_TRAINEE_STAT_RATIO = 0.5;
+/**
  * 本模式**专属**的附加盟约（特训的学员身上那一条，记录由工坊包 mode-recon 提供）。
  * 它不是玩家能「倾向」的东西 —— 预重构的候选池按 id 把它排除（screens/preRecon.js），所以这个 id 在这里只许写一处。
  */
@@ -37,7 +43,8 @@ export const RECON_BOND_ID = 'bond_recon';
  * `_sanitizeSpawns` 处被丢掉，一个字节都不多出（与「包提供的盟约缺席」同一条纪律）。
  *
  * 这张表**取代**了引擎侧「首领表第二轮才进工坊包」的那个占位：预重构的 R04 / R08 格按它变成真选择器，
- * 第 4 / 8 / 12 / 16 回合按它出怪（reconTrials.js / phases.startRound）；**第 20 回合**（首领回合）用它替换抽到的那只首领 —— 见 `reconBossWaveFor`。五个回合都有候选。
+ * 第 4 / 8 / 12 / 16 回合按它出怪（reconTrials.js / phases.startRound）；**第 20 回合**（首领回合）用它替换抽到的那只首领 —— 见 `reconBossWaveFor`。
+ * 目前只有 4 / 8 / 12 三个回合有候选；16 / 20 回合没有（其余十六只·重构首领已移除、等重新制作），引擎按自己的种子流随机抽。
  * @type {Readonly<Record<number, readonly { id: string, keys: readonly string[] }[]>>}
  */
 export const RECON_TRIAL_BOSSES = Object.freeze({
@@ -51,32 +58,13 @@ export const RECON_TRIAL_BOSSES = Object.freeze({
   8: Object.freeze([
     Object.freeze({ id: 'enemy_ws_recon_bigadam', keys: Object.freeze(['enemy_ws_recon_bigadam']) }), // 大亚当·重构
     Object.freeze({ id: 'enemy_ws_recon_xi', keys: Object.freeze(['enemy_ws_recon_xi']) }),           // 自在·重构
-    // 第 3 项：**一次选择两只**（梅菲斯特·重构 + 浮士德·重构，业主确认算一次选择）
-    Object.freeze({ id: 'enemy_ws_recon_mephi_faust', keys: Object.freeze(['enemy_ws_recon_mephi', 'enemy_ws_recon_faust']) }),
     Object.freeze({ id: 'enemy_ws_recon_jakill', keys: Object.freeze(['enemy_ws_recon_jakill']) }),   // 杰斯顿·威廉姆斯·重构
     Object.freeze({ id: 'enemy_ws_recon_blkswb', keys: Object.freeze(['enemy_ws_recon_blkswb']) }),   // 锏·重构
   ]),
   12: Object.freeze([
-    Object.freeze({ id: 'enemy_ws_recon_talula', keys: Object.freeze(['enemy_ws_recon_talula']) }),   // 塔露拉·重构
-    Object.freeze({ id: 'enemy_ws_recon_frstar2', keys: Object.freeze(['enemy_ws_recon_frstar2']) }), // 霜星，“冬痕”·重构
-    Object.freeze({ id: 'enemy_ws_recon_patrt', keys: Object.freeze(['enemy_ws_recon_patrt']) }),     // 爱国者·重构
     Object.freeze({ id: 'enemy_ws_recon_reid', keys: Object.freeze(['enemy_ws_recon_reid']) }),       // “复仇者”·重构
-    Object.freeze({ id: 'enemy_ws_recon_mirbst', keys: Object.freeze(['enemy_ws_recon_mirbst']) }),   // 狂躁异质裂兽·重构
   ]),
-  16: Object.freeze([
-    Object.freeze({ id: 'enemy_ws_recon_mandra', keys: Object.freeze(['enemy_ws_recon_mandra']) }),   // 蔓德拉·重构
-    Object.freeze({ id: 'enemy_ws_recon_bldkgt', keys: Object.freeze(['enemy_ws_recon_bldkgt']) }),   // 血骑士狄开俄波利斯·重构
-    Object.freeze({ id: 'enemy_ws_recon_morphis', keys: Object.freeze(['enemy_ws_recon_morphis']) }), // 莫菲丝·重构
-    Object.freeze({ id: 'enemy_ws_recon_dirctr', keys: Object.freeze(['enemy_ws_recon_dirctr']) }),   // “酒神”·重构
-    Object.freeze({ id: 'enemy_ws_recon_dywqgs', keys: Object.freeze(['enemy_ws_recon_dywqgs']) }),   // “望”·重构
-  ]),
-  20: Object.freeze([
-    Object.freeze({ id: 'enemy_ws_recon_bsnake', keys: Object.freeze(['enemy_ws_recon_bsnake']) }),   // “不死的黑蛇”·重构
-    Object.freeze({ id: 'enemy_ws_recon_skzjkl', keys: Object.freeze(['enemy_ws_recon_skzjkl']) }),   // 奎隆，摩诃萨埵权化·重构
-    Object.freeze({ id: 'enemy_ws_recon_syskad', keys: Object.freeze(['enemy_ws_recon_syskad']) }),   // 伊莎玛拉，腐化之心·重构
-    Object.freeze({ id: 'enemy_ws_recon_shchmr', keys: Object.freeze(['enemy_ws_recon_shchmr']) }),   // 玻利瓦尔，症结之核·重构
-    Object.freeze({ id: 'enemy_ws_recon_dycyue', keys: Object.freeze(['enemy_ws_recon_dycyue']) }),   // 朔壳·重构
-  ]),
+  // 16 / 20 回合暂无可用的·重构首领（其余十六只已整体移除、等重新制作）⇒ 不出现该键，引擎按自己的种子流随机抽。
 });
 
 const DIFFS = ['funny', 'normal', 'hard', 'abyss'];

@@ -204,7 +204,18 @@ exists) gets no section rather than an empty grid.
 - **Bots always wear the default model** (`PlayerState.setSkins` refuses a bot, as `setLoadout` does).
 - **The studio does not list skins.** It finds an operator, an enemy or an interface picture by its official name
   (`server/studio/targets.js`), so a skin key is copied from the installation's manifest or written in the stem form.
-- **No skin effects and no operator voices** (a separate piece of work; docs/ASSETS.md).
+- **No operator voices** (a separate piece of work; docs/ASSETS.md).
+- **Skin battle effects and sounds are data, not an engine feature.** A cosmetic pack that wants them ships them
+  itself: its own `sfx` on a `skins[]` entry (`assets.skins[charId][].sfx`; `assets.js unitSfxUrl` asks it first and
+  falls back to the operator's own sound field by field) and its own official-fx files through `fx.manifest`
+  (`index.json skins[<model stem>] = { points, fx }`, which `render/vfx/wiring.js` reads to pick `<key>_<fx>` and the
+  outfit's mount points). The variant is resolved by the **effect's owner** (`playOn` `fxOwner`: the caster / attacker),
+  not by the unit the effect is placed on — a hit effect plays on the victim but belongs to the attacker's outfit.
+  A skin's model entry should also carry the measured `animations` / `events` / `hits` / `bounds` (the same fields an
+  official `assets.json` entry has; `shared/workshop.js` passes them through): without `hits` the attack strike frame is
+  a generic guess, so actions and the effects timed to them drift.
+  `workshop/skin-supplement` 1.4.1 is the worked example. An install without such a pack, or
+  an outfit without those entries, plays exactly what it played before.
 - **A 自选 slot's own record has `charId: null`**, so it wears its **pick's** operator's skin — the slot has no body of
   its own. The picker offers the appearance while picking that operator, and the choice is kept per operator, so
   changing the slot's operator changes the appearance with it.

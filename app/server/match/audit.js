@@ -550,7 +550,8 @@ function hasSpendEffects(m, ps) {
   for (const e of ps.effects) if (e && typeof e.key === 'string' && any(reg.get(e.key))) return true;
   for (const p of ps.allChess()) {
     const rec = m.gd.chess(p.id);
-    for (const gid of (rec && rec.garrisonIds) || []) { const g = m.gd.garrison(gid); if (g && reg.get(`garrison:${g.effectKey}`)) return true; }
+    const ids = typeof ps.pieceGarrisonIds === 'function' ? ps.pieceGarrisonIds(p) : (rec && rec.garrisonIds);
+    for (const gid of ids || []) { const g = m.gd.garrison(gid); if (g && reg.get(`garrison:${g.effectKey}`)) return true; }
     for (const it of p.items || []) if (any(reg.get(`item:${String(it.id).replace(/_[ab]$/, '')}`))) return true;
   }
   return false;

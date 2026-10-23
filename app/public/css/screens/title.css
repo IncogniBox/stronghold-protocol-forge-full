@@ -43,6 +43,9 @@
    面板里那条汇总行与分组列表之间的一小块：一行标题 + 每个组一行（名称 · 大小 · sha256 前 8 位）+ 下载并导入。
    没配（文件不在 / groups 为空 / 没有 repo+tag）时只有 `.res-pack__hint` 一行提示，不多任何元素。 */
 .res-pack { display: flex; flex-direction: column; gap: .04rem; margin-bottom: .06rem; }
+/* 资源面板里的「本地资源包导入」区块（AssetImportButton 原是登录框下方那一格，复用 .title-assets__item）。 */
+.res-import { display: flex; flex-direction: column; gap: .06rem; margin-bottom: .1rem; padding-bottom: .1rem; border-bottom: 1px solid var(--line-2); }
+.res-import .title-assets__item > .btn { width: auto; align-self: flex-start; }
 .res-pack__head { display: flex; align-items: center; gap: .08rem; }
 .res-pack__act { margin-left: auto; }
 .res-pack__row {

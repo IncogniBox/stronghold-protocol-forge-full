@@ -621,7 +621,11 @@ function layerAllowanceOf(p, gd) {
     for (const b of bonds) out.set(b, (out.get(b) || 0) + cap * times);
   };
   for (const u of units) {
-    for (const gid of gd.chess(u.chessId)?.garrisonIds || []) {
+    // 特训学员：战斗侧的 def.raw.garrisonIds 是「自己的 ∪ 教官的」（simdata.getTrainee），结果校验要按同一份
+    const ids = [...(gd.chess(u.chessId)?.garrisonIds || [])];
+    const mrec = u.reconTrainee && typeof u.reconTrainee.chessId === 'string' ? gd.chess(u.reconTrainee.chessId) : null;
+    for (const gid of mrec?.garrisonIds || []) if (!ids.includes(gid)) ids.push(gid);
+    for (const gid of ids) {
       const g = gd.garrison(gid);
       if (!g || g.eventType !== 'IN_BATTLE') continue;
       if (g.effectKey !== 'ADD_BOND') { credit(g, 1); continue; }

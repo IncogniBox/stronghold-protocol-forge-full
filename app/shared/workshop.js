@@ -1943,8 +1943,12 @@ function parseStringList(value, where) {
 /**
  * 时装（`pack.json.skins`）允许的字段。**一个不多一个不少** —— 与 art 表同一个纪律：写错的名字点名拒绝，
  * 而不是静默丢掉（静默丢掉的那一半正是 `variants` / `skins` 在 0.10.0 时代的遭遇）。
+ *
+ * `sfx` 是这套时装自己的**战斗音效**（2026-10-23）：形状与 `art` 的 `sfxUnits` 表**逐字相同**
+ * （`attack` / `hit` / `skill` / `die` / `born` / `skills` / `attacks` / `hits`），所以复用同一个解析器与
+ * 同一条 URL 转换；客户端 `assets.js unitSfxUrl` 在单位穿着这套时装时先问它，缺哪一格落回干员本体那一格。
  */
-export const SKIN_FIELDS = Object.freeze(['id', 'charId', 'name', 'series', 'desc', 'art', 'voices']);
+export const SKIN_FIELDS = Object.freeze(['id', 'charId', 'name', 'series', 'desc', 'art', 'voices', 'sfx']);
 
 /** 一套时装的 id：包内唯一、短、出现在 `settings.skinByChar` 的 `<包id>:<皮肤id>` 指针里。 */
 export const SKIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
@@ -2504,12 +2508,24 @@ export function normalizePackManifest(raw, dirName = '', opts = {}) {
         voices[slot] = [...list];
       }
     }
+    // 这套时装自己的战斗音效（`sfx`）：与 `art` 的 `sfxUnits` 同一个解析器 —— 同一套字段判据、同一套路径判据
+    let sfx = null;
+    if (entry.sfx !== undefined) {
+      if (!isPlainObj(entry.sfx)) return fail('SKIN_BAD_SHAPE', `${where}.sfx must be an object shaped like art.units' sfx entry`);
+      const parsed = parseArtEntry(entry.sfx, `${where}.sfx`, ART_TABLES.sfxUnits);
+      if (parsed.error) return fail(parsed.error, parsed.detail);
+      if (!Object.keys(parsed.entry).length) {
+        return fail('SKIN_BAD_SHAPE', `${where}.sfx is empty — an outfit that declares sounds must bring at least one`);
+      }
+      sfx = parsed.entry;
+    }
     skinEntries.push({
       id: entry.id, charId: entry.charId, name: entry.name,
       ...(entry.series !== undefined ? { series: entry.series } : {}),
       ...(entry.desc !== undefined ? { desc: entry.desc } : {}),
       ...(entry.art !== undefined ? { art: parseArtEntry(entry.art, `${where}.art`, ART_TABLES.chars).entry } : {}),
       ...(voices ? { voices } : {}),
+      ...(sfx ? { sfx } : {}),
     });
   }
   // 助战卡池贡献 (docs/WORKSHOP.md §2): the operators of THIS pack that should be selectable as 助战. The tier is NOT
@@ -4577,12 +4593,15 @@ function mergeWorkshopSkins(data, packs, report) {
       const voices = isPlainObj(skin.voices)
         ? Object.fromEntries(Object.entries(skin.voices).map(([slot, paths]) => [slot, paths.map((p) => toUrl(pack.id, p))]))
         : null;
+      // 这套时装自己的战斗音效：与 `art` 的 sfxUnits 同一条 URL 转换（`skills` / `attacks` / `hits` 逐项换 URL）
+      const sfx = isPlainObj(skin.sfx) ? artEntryUrls(skin.sfx, ART_TABLES.sfxUnits, (p) => toUrl(pack.id, p)) : null;
       (byChar[skin.charId] ||= []).push({
         pack: pack.id, id: skin.id, name: skin.name,
         ...(skin.series !== undefined ? { series: skin.series } : {}),
         ...(skin.desc !== undefined ? { desc: skin.desc } : {}),
         ...(art && Object.keys(art).length ? { art } : {}),
         ...(voices ? { voices } : {}),
+        ...(sfx && Object.keys(sfx).length ? { sfx } : {}),
       });
     }
   }

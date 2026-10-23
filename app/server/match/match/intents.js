@@ -27,6 +27,8 @@ export class MatchIntents {
       case 'g.bandFocus': return this.bandFocus(ps, msg.bandId ?? null);
       // 预重构提交（模式扩展-重构模拟，PHASE.PRE_RECON）：盟约倾向 / 首领占位 / 协助与负载占位
       case 'g.reconChoice': return this.reconChoice(ps, msg);
+      case 'g.reconTrain': return ps.reconTrain(msg);
+      case 'g.reconTrainCancel': return ps.reconTrainCancel(msg);
       case 'g.buy': return ps.buy(msg.slot);
       case 'g.refresh': return ps.refresh();
       case 'g.freeze': return ps.freeze();

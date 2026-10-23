@@ -110,6 +110,17 @@ const lc = (k) => (typeof k === 'string' && k ? k.toLowerCase() : null);
 const RELEASE_GUARD_S = 0.35;
 /** A fx on the unit: its (x, y) within this many tiles (render/fx/simfx.js ANCHOR_SNAP). */
 const ON_UNIT = 0.75;
+/**
+ * fx kinds that are **技能结束后才释放的攻击**的命中（蕾缪安 S3：锁定期结束时每一发礼炮的 'bombard' 落点）——
+ * 特训的教官命中特效要按每一发补播（`_mentorRelease`）。技能期间的普通攻击不走这里（它们在 wiring.attack）。
+ */
+const RELEASE_HIT_KINDS = new Set(['bombard']);
+/**
+ * **技能结束后仍有攻击归属该技能**的特例（业主 2026-10-27）：蕾缪安 S3 的礼炮在技能结束后的 10 s 内一发发落下
+ * （server/sim/content/kits/ops/chess_char_6_01-lemuen.js 的 LEMUEN_SHELL_WINDOW）——这段时间里的攻击也算「技能
+ * 期间」，教官的攻击效果照叠。键是 index 侧的技能 id，值是结束后的窗口秒数。
+ */
+const POST_SKILL_MENTOR_S = Object.freeze({ skchr_lemuen_3: 10 });
 /** Procedural archetypes (render/fx/kinds.js) that are a cast flash: an official skill start / loop stands for them. */
 export const FLASH = Object.freeze(new Set(['blast', 'buff', 'wave', 'pillar', 'strike', 'element', 'shield', 'heal', 'healAoe', 'sp', 'generic']));
 /** Archetypes that show a unit's state or a game fact (never replaced by a skill's pulse). */
@@ -146,6 +157,32 @@ const idOf = (v) => v?.info?.id ?? v?.id;
 const isLoop = (e) => e.hold === 'skill' && e.loop !== false;
 /** The plan's attacks a normal attack can use: not the skill's own casts at its start / end (`when`, skills.js tagCasts). */
 const perAttack = (plan) => (plan.attacks.some((a) => a.when) ? { ...plan, attacks: plan.attacks.filter((a) => !a.when) } : plan);
+/** 一枚特效 key 在指定时装后缀（`index.json` 的 `skins[stem].fx`）下的变体：装的数据里有才是它，否则原 key。 */
+function withFxKey(key, fx, has) {
+  if (!key || !fx) return key;
+  const k = `${String(key).toLowerCase()}_${fx.toLowerCase()}`;
+  return has(k) ? k : key;
+}
+/**
+ * 特训：把一份**教官**的 plan / mode 数据里的特效 key 换成交官**当前时装**的变体（递归克隆，不改索引里那份
+ * 共享数据）：只动 `key` / `slots` / `effects` 三处——plan 的条目用前两者，mode 的 emitter 行用 `effects`。
+ * 没有时装后缀（教官没穿时装 / 这套没登记 `fx`）时原样返回，不克隆。
+ */
+function withFx(value, fx, has) {
+  if (!fx) return value;
+  if (Array.isArray(value)) return value.map((x) => withFx(x, fx, has));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, x] of Object.entries(value)) {
+      if ((k === 'key' || k === 'effects') && typeof x === 'string') out[k] = withFxKey(x, fx, has);
+      else if ((k === 'key' || k === 'effects') && Array.isArray(x)) out[k] = x.map((s) => (typeof s === 'string' ? withFxKey(s, fx, has) : s));
+      else if (k === 'slots' && Array.isArray(x)) out[k] = x.map((s) => (typeof s === 'string' ? withFxKey(s, fx, has) : s));
+      else out[k] = withFx(x, fx, has);
+    }
+    return out;
+  }
+  return value;
+}
 /**
  * The entries of a list with a key of their own (the first of each): the extractor may reach one effect by two paths
  * (a buff's `_buffs` and `_extraBuffs`, two nodes of one skill) — played once, as the one buff it is [ASSUMED].
@@ -236,7 +273,58 @@ export class SkillFx {
         const unitKey = this.w.unitKeyOf(v);
         const rec = this._recordOf(info);
         const r = unitKey ? planFor(this.w.idx, { info, rec, unitKey }) : null;
-        if (r && (r.plan || r.charge || r.enemy.length)) U = this._record(id, r, rec);
+        // 特训（叠加式）：教官技能的官方特效随学员的施放一起播（业主 2026-10-22「学员的技能会加上教官的特效和
+        // 音效」）——教官那份 plan 的 start / range / loop 叠在学员自己的 start 里、end 叠在 end 里（attack 行不叠：
+        // 学员技能期间的攻击覆盖本来就是影子技能的那一份，render/vfx/skills.js 的 plan attack 机器不重入）。
+        // **学员自己的技能没有官方 plan 也照常成立**（U.plan 为 null，只叠教官的行）——不能让「学员技能没有 plan」
+        // 把教官的特效一起吞掉。
+        const rm = info.reconMentor;
+        let mentorPlan = null;
+        let mentorMode = null;
+        let mentorFx = null;
+        if (rm && typeof rm.spine === 'string' && this.w.idx) {
+          try {
+            const hasLib = (k) => !!k && this.w.ofx.lib.has(k);
+            // 教官**当前时装**的模型 stem / 特效后缀：与学员的换装同一条链，只是把 charId 换成教官的——本包只负责
+            // 把那份 `fx` 用在教官来源的特效 key 上（`wisdel_skill_03_hit_02_game#9` 这类），学员自己的那套不参与。
+            try {
+              const mstem = typeof this.w.opts.skin === 'function'
+                ? this.w.opts.skin({ ownerId: info.ownerId, side: 'ally', kind: 'op', spine: rm.spine, defId: rm.defId })
+                : null;
+              const ms = mstem ? this.w.idx.skins?.[mstem] : null;
+              mentorFx = typeof ms?.fx === 'string' && ms.fx ? ms.fx : null;
+            } catch { /* 时装是可选的 */ }
+            // 教官是甄选干员（自选槽位件）时，data.chess(槽位id) 是**空槽位记录**（无 skills / charId）——按记录解析
+            // 不出 plan 就回退到官方命名约定（resolveSkill 的 `via: 'name'`：char_<code> + 技能槽 → skchr_<code>_<n>），
+            // 只用 spine（干员 charId）与技能槽位，不依赖记录。
+            const minfo = { spine: rm.spine, skillIndex: rm.skillIndex };
+            const mrec = this._recordOf({ defId: rm.defId, spine: rm.spine });
+            let mr = mrec ? planFor(this.w.idx, { info: minfo, rec: mrec, unitKey: rm.spine }) : null;
+            if (!mr?.plan) mr = planFor(this.w.idx, { info: minfo, rec: null, unitKey: rm.spine });
+            const hasRow = (e) => !!e && hasLib(withFxKey(e.key, mentorFx, hasLib)) || (e.slots || []).some((s) => hasLib(withFxKey(s, mentorFx, hasLib)));
+            const has = (e) => !!e && (hasLib(e.key) || (e.slots || []).some(hasLib) || hasRow(e));
+            if (mr?.plan && [...mr.plan.start, ...mr.plan.range, ...mr.plan.loop, ...mr.plan.end].some(has)) {
+              mentorPlan = withFx(mr.plan, mentorFx, hasLib);
+            }
+            // 教官技能**攻击模式**的官方行（新约能天使 S3 这类「技能本体只是 buff，攻击换到 mode S3」的技能：
+            // 施放 / 范围 / 命中全在 mode 里，不在 skill 的 attack 行）——学员攻击时由 wiring 的 _mentorAttackSet 叠上。
+            const mu = this.w.idx.units?.[rm.spine];
+            if (mu && mentorPlan) {
+              const want = mentorPlan.modeName || (Number.isInteger(rm.skillIndex) ? `S${rm.skillIndex + 1}` : null);
+              const modes = Array.isArray(mu.modes) ? mu.modes : [];
+              const mode = (want && (modes.find((m) => m.name === want) || modes.find((m) => m.name.startsWith(want)))) || null;
+              mentorMode = mode ? withFx(mode, mentorFx, hasLib) : null;
+            }
+            // 诊断（每学员一条）：教官 plan 到底解析成没成、用的是哪条路径
+            console.debug(`[特训fx] 学员 ${info.spine || info.defId} 教官 ${rm.spine}#${rm.skillIndex}${mentorFx ? `（时装 ${mentorFx}）` : ''} →`, mentorPlan ? `plan ${mr.skillId}` : '未解析（无 plan 或无已装 prefab）');
+          } catch (e) { /* 特效是可选的：解析不了就只播学员自己的 */ console.debug('[特训fx] 教官 plan 解析抛错', e); }
+        }
+        if ((r && (r.plan || r.charge || r.enemy.length)) || mentorPlan) {
+          U = this._record(id, r || { unitKey: rm?.spine ?? unitKey, skillId: null, srec: null, plan: null, charge: null, enemy: [] }, rec);
+          U.mentorPlan = mentorPlan;
+          U.mentorMode = mentorMode ? { unitKey: rm.spine, mode: mentorMode } : null;
+          U.mentorFx = mentorFx;
+        }
       }
       this.units.set(id, U);
     }
@@ -269,6 +357,10 @@ export class SkillFx {
       energy: 0, slotLoops: [], guardUntil: -Infinity, quiet: false, trigFrame: -1, seen: 0,
       // an enemy's skills by slot (index v2), how many its data record has, its skill window, plans of other modes
       enemy: r.enemy || [], enemySlots: Array.isArray(rec?.skills) ? rec.skills.length : 0, ewin: null, prevAnim: 0, modePlans: new Map(),
+      // 特训（叠加式）：教官技能的官方 plan（skillfx.of 按 UnitInfo.reconMentor 解析）——随学员的施放叠加播放；
+      // mentorMode 是教官技能换了攻击模式的那些技能（能天使 S3 的 mode S3）的攻击行来源；mentorFx 是教官当前时装的
+      // 特效后缀（那些行已按它换成变体 key）
+      mentorPlan: null, mentorMode: null, mentorFx: null,
     };
   }
 
@@ -287,6 +379,21 @@ export class SkillFx {
 
   /** A passive the sim keeps on while deployed (it never set UF.SKILL; a kit may run a PASSIVE skill as a timed one). */
   _passive0(U) { return U.plan?.kind === 'passive' && !U.timed; }
+
+  /**
+   * 特训：学员自己的技能此刻是否生效（教官的技能效果只在此时叠，普通攻击不带）。`skillOn` = 起手时的前瞻
+   * （castStart 的 look-ahead）；瞬时技能在激活帧的「施放后立刻攻击」也算生效（attackFx 的同一条规则）。
+   */
+  mentorOn(v, skillOn) {
+    const st = this.state(v, skillOn);
+    if (st.on) return true;
+    const U = st.U;
+    if (!U) return false;
+    if (!U.ewin && U.plan?.kind === 'instant' && U.startFrame === this.frame) return true;
+    // 技能结束后仍归属于该技能的攻击窗口（蕾缪安 S3 的礼炮 10 s）：这段时间里的攻击也叠教官效果
+    const win = POST_SKILL_MENTOR_S[U.skillId];
+    return !!win && Number.isFinite(U.offAt) && this.w.ofx.time <= U.offAt + win;
+  }
 
   _on(U) { return !!U && (U.ewin ? true : this._passive0(U) ? U.v?.alive !== false : U.on !== null ? U.on : !!((U.v?.flags | 0) & UF.SKILL)); }
 
@@ -309,7 +416,7 @@ export class SkillFx {
     if (!k) return null;
     const held = e.hold === 'skill' || e.hold === 'ready' || e.hold === 'cast';
     const loop = (e.hold === 'skill' || e.hold === 'ready') && e.loop !== false;
-    return this.w.playOn(k, v, { follow: held, loop, important: held || !!o.important, toward: o.toward, flipFrom: o.flipFrom, skip: o.skip, strike: !!o.strike });
+    return this.w.playOn(k, v, { follow: held, loop, important: held || !!o.important, toward: o.toward, flipFrom: o.flipFrom, skip: o.skip, strike: !!o.strike, fxOwner: o.fxOwner });
   }
 
   /** Keep a started entry by its hold: the skill's loops, the ready loops, or stopped at the cast's end. */
@@ -379,11 +486,12 @@ export class SkillFx {
   /** b.ev ['skill', id, on] (module header). Returns true when the official layer shows this skill. */
   skill(v, on) {
     const U = this.of(v);
-    if (!U || !U.plan) return false;
+    // 特训：学员自己的技能可以没有官方 plan（U.plan 为 null）——只要有教官的 mentorPlan 就照常走这一层
+    if (!U || (!U.plan && !U.mentorPlan)) return false;
     const live = this.active();
-    if (U.plan.kind === 'passive') {
+    if (U.plan?.kind === 'passive') {
       // a passive: its loops follow the deployment (the sim's 1 / 0 frame its 0.5 s clip) — unless the kit runs it as a
-      // timed skill (UF.SKILL seen: `timed`), whose 0 ends it
+      // timed skill (UF.SKILL seen: `timed`), whose 0 ends it。被动技能不叠教官的行（影子只随学员的施放激活）
       U.on = !!on;
       // a passive with nothing official to draw at that 1 (普罗旺斯 S1, 琳琅诗怀雅 S1: no cast rows) shows no procedural
       // burst either, as an active skill's cast does (R10, _noBurst) — the sim's 0.5 s window of a passive without a
@@ -405,17 +513,33 @@ export class SkillFx {
       this._stopReady(U);
       this._stopLoops(U);          // a cast while on (onEnd re-cast) starts afresh
       let drew = false;
-      for (const e of uniq([...U.plan.start, ...U.plan.range, ...U.plan.loop])) {
-        if (e.birth) continue;     // the deploy's (birthOf: FxWiring.deploy plays it)
-        const h = this._play(e, v);
-        if (h) { drew = true; this._keep(U, e, h); }
+      if (U.plan) {
+        for (const e of uniq([...U.plan.start, ...U.plan.range, ...U.plan.loop])) {
+          if (e.birth) continue;     // the deploy's (birthOf: FxWiring.deploy plays it)
+          const h = this._play(e, v);
+          if (h) { drew = true; this._keep(U, e, h); }
+        }
+      }
+      // 特训（叠加式）：教官技能的 start / range / loop 随学员的施放一起播——loops 进同一份 U.loops
+      // （技能结束 / 死亡 / 撤退一起停；hold 'skill' 的跟挂点）
+      if (U.mentorPlan) {
+        let mDraw = 0;
+        for (const e of uniq([...U.mentorPlan.start, ...U.mentorPlan.range, ...U.mentorPlan.loop])) {
+          if (e.birth) continue;
+          const h = this._play(e, v);
+          if (h) { mDraw++; drew = true; this._keep(U, e, h); }
+        }
+        // 诊断（每次施放一条）：教官叠加行实际播出的数量
+        console.debug(`[特训fx] 学员 ${U.v?.info?.spine || ''} 施放：教官行播出 ${mDraw} 条`);
       }
       // the skill's own cast at its start (tagCasts 'start'): its rows now, its hits on the damage that follows
-      if (this._castOnce(U, v, 'start')) drew = true;
+      if (U.plan && this._castOnce(U, v, 'start')) drew = true;
       // an instant skill: what its kit hits in this frame without an attack are its attack's hits (kit hits)
-      if (U.plan.kind === 'instant' && perAttack(U.plan).attacks.length) this._open(U, null, true);
+      if (U.plan?.kind === 'instant' && perAttack(U.plan).attacks.length) this._open(U, null, true);
       U.loopsOn = true;
-      return drew || U.drawsStart || this._noBurst(U);
+      // 特训：学员自己的技能没有官方 plan 时**不压制过程特效**（false）——教官的叠加行是额外的，
+      // 学员自己的施放该有的那一份照常画；「官方层顶掉过程特效」只对学员自己的 plan 成立。
+      return drew || U.drawsStart || (U.plan ? this._noBurst(U) : false);
     }
     const was = U.on === true;
     U.on = false;
@@ -424,15 +548,17 @@ export class SkillFx {
     // an instant skill whose kit made no attack between 1 and 0: its own attack's cast plays once (skills.js: one cast)
     // and its hits on what the kit hit in between (kit hits); a ReplacementSkill's replaced attack may still follow the
     // 0 in this frame — the fallback waits for the frame's end (instPending)
-    if (was && !U.attacked && U.startFrame === this.frame && perAttack(U.plan).attacks.length) {
+    if (was && U.plan && !U.attacked && U.startFrame === this.frame && perAttack(U.plan).attacks.length) {
       if (/^ReplacementSkill/.test(U.plan.rootClass || '')) U.instPending = this.frame;
       else { this._instCast(U, v); this.windows = this.windows.filter((w) => !(w.inst && w.U === U)); }
     }
     // the skill's final attack (tagCasts 'end'): its rows, its hits on this frame's damage (the kit deals it before the 0)
-    if (was) this._endCast(U, v);
+    if (was && U.plan) this._endCast(U, v);
     this._stopLoops(U);
-    for (const e of uniq(U.plan.end)) this._keep(U, e, this._play(e, v));
-    return U.drawsStart;
+    if (U.plan) for (const e of uniq(U.plan.end)) this._keep(U, e, this._play(e, v));
+    // 特训（叠加式）：教官技能的 end 行随学员技能的结束一起播（loops 已在上面随 _stopLoops 一起停）
+    if (U.mentorPlan) for (const e of uniq(U.mentorPlan.end)) this._keep(U, e, this._play(e, v));
+    return U.drawsStart || !!U.mentorPlan;
   }
 
   // ---- the skill's own casts and the kit's hits (history §34.14.43) ------------------------------------------------
@@ -741,12 +867,36 @@ export class SkillFx {
     // MeleeAttack, 夕 S1's 'bolt' her MultiMeleeAttack: their cast, aim and hits) — a heal stays a heal
     const fits = !!fx.ability && fitsAttack(fx.ability, { heal, ranged });
     const forced = !fits && inst && !!fx.ability && /Heal/.test(fx.ability) === heal;
-    const replace = fits || forced;
+    // 敌人的技能命中行（uses.role 'hit'，如塔露拉 DanceFire 的 skill_02_hit）：sim 在命中帧发的 atk 是**这一发技能**，
+    // 不是普通攻击 —— 即使技能能力是 MeleeAttack 而 sim 把 kind 标成 arts（fits=false），也必须用技能自己的 hit 行，
+    // 不能回落到 mode 的 combat（被阻挡 ⇒ Attack_2 的 start/hit 特效叠在技能上）。
+    const ownHit = fx.hit.length > 0;
+    const enemyHit = !!src.isEnemy && ownHit;
+    const replace = fits || forced || enemyHit;
     if (fx.ability && !replace) { fx.cast = fx.cast.filter((e) => e.ability !== fx.ability); fx.range = []; fx.aim = []; fx.hit = st.plan.each.hit[0].length ? [st.plan.each.hit[0]] : []; }
+    // 特训（叠加式，业主 2026-10-22）：学员技能期间每一次攻击都带教官技能的攻击特效——教官 plan 的 attack 行
+    // （cast / range / aim）并进这一次攻击；hit 组按「第 i 发」对齐（一次命中同时播学员自己的组与教官的组，
+    // 各自取 min(i, last)）；教官 plan 的逐命中 buff 行（targetsOf hit）也跟着上。不限弹药 × 弹药（业主实测
+    // 蕾缪安 × 新约能天使的组合也要叠）。
+    const mAtk = U.mentorPlan ? planAttack(perAttack(U.mentorPlan), { heal, ranged }) : null;
+    if (mAtk) {
+      fx.cast = [...fx.cast, ...mAtk.cast];
+      fx.range = [...fx.range, ...mAtk.range];
+      fx.aim = [...fx.aim, ...mAtk.aim];
+      if (!fx.hit.length) fx.hit = mAtk.hit;
+      else {
+        const ownG = fx.hit, menG = mAtk.hit;
+        const n = Math.max(ownG.length, menG.length);
+        const merged = [];
+        for (let i = 0; i < n; i++) merged.push([...(ownG[Math.min(i, ownG.length - 1)] || []), ...(menG[Math.min(i, menG.length - 1)] || [])]);
+        fx.hit = merged;
+      }
+    }
     // the projectile its ability fires (index v3: abilities[].projectileKey, a use's projectileKey), else the naming guess
     const projectile = fits && ranged ? fx.projectile || skillProjectile(this.w.idx, st.plan) : null;
     if (!replace && !fx.cast.length && !fx.hit.length && !st.U.tHit.length) return null;
-    return { U: st.U, fx, replace, projectile, shot: replace ? fx.shot : null, buffs: st.U.tHit, late: forced };
+    const buffs = mAtk ? [...st.U.tHit, ...targetsOf(this.w.idx, U.mentorPlan).hit] : st.U.tHit;
+    return { U: st.U, fx, replace, projectile, shot: replace ? fx.shot : null, buffs, late: forced };
   }
 
   /**
@@ -764,7 +914,7 @@ export class SkillFx {
         if ((phase === 'start' && !first) || (phase === 'strike' && first) || (onTarget && !tgt)) continue;
         if ((e.firstOnly && nth > 0) || (e.afterFirst && nth === 0)) continue;
         const skip = phase === 'start' ? info.skip : 0;
-        const h = onTarget ? this._play(e, tgt, { toward: beyond(src, tgt), flipFrom: src, skip }) : this._play(e, src, { toward: tgt, skip, strike: phase !== 'start' });
+        const h = onTarget ? this._play(e, tgt, { toward: beyond(src, tgt), flipFrom: src, skip, fxOwner: sk.U.v }) : this._play(e, src, { toward: tgt, skip, strike: phase !== 'start' });
         if (h && (e.hold === 'cast' || e.loop)) later(this.w.ofx, phase === 'start' && info.left > 0 ? Math.min(3, info.left) : SKILL_CAST_S, () => h.stop());
       }
     }
@@ -781,7 +931,7 @@ export class SkillFx {
    */
   landed(m, v, k) {
     let drew = false;
-    for (const e of uniq(pickGroup(m.groups, k, m.hitOpts, m.seed))) if (this._play(e, v, { flipFrom: m.src })) drew = true;
+    for (const e of uniq(pickGroup(m.groups, k, m.hitOpts, m.seed))) if (this._play(e, v, { flipFrom: m.src, fxOwner: m.U?.v })) drew = true;
     if (k === 0) for (const e of uniq(m.buffs)) if (this._targetLoop(m.U, e, v)) drew = true;
     return drew;
   }
@@ -805,7 +955,7 @@ export class SkillFx {
     const until = dur > 0 ? this.w.ofx.time + dur : Infinity;
     const t = this.tloops.get(slot);
     if (t && t.h.alive) { t.until = Math.max(t.until, until); t.U = U; return t.h; }
-    const h = this.w.playOn(key, v, { follow: true, loop: true, important: true, flipFrom: U.v || undefined });
+    const h = this.w.playOn(key, v, { follow: true, loop: true, important: true, flipFrom: U.v || undefined, fxOwner: U.v || undefined });
     if (h) this.tloops.set(slot, { h, until, U, tgt: v, bySkill: !(dur > 0) });
     return h;
   }
@@ -917,11 +1067,13 @@ export class SkillFx {
         else if (U.ewin && anim !== ANIM.SKILL && now > U.ewin.until) this._enemyEnd(U, v);
         // a skill whose effects are its attack's rows with no 'atk' of the enemy in its first frame (the kit flies its
         // own projectile or blast): that attack's cast and range rows play now [ASSUMED: the skill is that attack]
+        // （2026-10-22：去掉 atkN === 0 —— 包自实现技能的 atk 事件与 cast 同帧到达，会把这条自动播跳过，
+        // 攻击系技能（DanceFire 这类 MeleeAttack root）的斩击行两头落空；shown 已防重播）
         const win = U.ewin;
         if (win && !win.shown && this.frame > win.startFrame) {
           win.shown = true;
           const a = win.plan.attacks[0];
-          if (a && U.atkN === 0 && !win.draws) for (const e of uniq([...a.cast, ...a.range])) { const h = this._play(e, v); if (h) this._keep(U, e, h); }
+          if (a && !win.draws) for (const e of uniq([...a.cast, ...a.range])) { const h = this._play(e, v); if (h) this._keep(U, e, h); }
         }
         U.prevAnim = anim;
       }
@@ -991,6 +1143,9 @@ export class SkillFx {
   /** b.ev ['fx', kind, x, y, extra]: true when the official layer stands for it (module header: bindings 1–4). */
   simFx(kind, x, y, extra) {
     if (!this.active() || !extra || typeof extra !== 'object' || typeof kind !== 'string') return false;
+    // 特训：技能结束后才释放的攻击（蕾缪安 S3 礼炮 'bombard'）——每一发都叠教官的攻击命中特效。官方 binding 的
+    // `during` 只在技能结束后的 1 s 内算数，这一层不受它限制（业主 2026-10-27）。
+    this._mentorRelease(kind, x, y, extra);
     const now = this.w.ofx.time;
     // a skill start cast with every charge stored (the kit's `charged`: 卡涅利安) — the `[eff_cond]` state (_cond)
     if (extra.charged === true && extra.id != null) { const C = this.units.get(extra.id); if (C) C.charged = true; }
@@ -1038,6 +1193,24 @@ export class SkillFx {
     return extra.skill != null && on && (U.loops.some((h) => h.alive) || !!U.ewin?.loops.some((h) => h.alive));
   }
 
+  /**
+   * 特训：**技能结束后才释放的攻击**（蕾缪安 S3 礼炮：锁定期结束时排出的每一发 'bombard'）——每一发都在落点再叠
+   * 一次教官的攻击命中特效（教官弹道的 onHit / onStop 等）。只补播，不决定官方层是否代播（返回 false 照旧）。
+   */
+  _mentorRelease(kind, x, y, extra) {
+    if (!RELEASE_HIT_KINDS.has(kind) || extra.id == null) return;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const U = this.units.get(extra.id);
+    if (!U || !U.v || !U.mentorMode) return;
+    const set = this.w._mentorAttackSet(U.v, null, 'none', 0, { force: true });
+    if (!set || !set.hit.length) return;
+    for (const e of set.hit) {
+      for (const k of this.w._rowKeys(e, U.v, 0)) {
+        if (this.w.ofx.lib.has(k)) this.w.ofx.spawn(k, { pos: [x, y, 0], groundZ: 0 }, {});
+      }
+    }
+  }
+
   /** An FX_BINDINGS `attack` entry: that plan attack's rows on the owner now, its hits on the damage that follows. */
   _boundAttack(U, bind) {
     const a = U.plan?.attacks.find((x) => x.node === bind.attack);
@@ -1063,20 +1236,21 @@ export class SkillFx {
    * says; a binding's own `keys` at 'target' once on the unit the fx names.
    */
   _bound(U, bind, x, y, extra) {
-    const keys = bindingEffects(this.w.idx, bind).filter((k) => this.w.ofx.lib.has(k));
+    // 变体按技能主人的时装解析（`fxKey`：这套时装装了 `<key>_<fx>` 就用它）—— 绑定投影到地面 / 目标身上时也一样
+    const keys = bindingEffects(this.w.idx, bind).map((k) => this.w.fxKey(k, U.v)).filter(Boolean);
     if (!keys.length) return false;
     if (bind.at === 'target') {
       // once on the unit the fx names (泡泡's attacker, 归溟幽灵鲨 S1's ally), else where it happens; turned by the owner's side
       const tv = this.w.view(extra[bind.target || 'target']) || { id: 'fx:point', x, y, z: 0 };
       let drew = false;
-      for (const k of keys) if (this.w.playOn(k, tv, { flipFrom: U.v || undefined })) drew = true;
+      for (const k of keys) if (this.w.playOn(k, tv, { flipFrom: U.v || undefined, fxOwner: U.v })) drew = true;
       return drew;
     }
     const tv = this.w.view(extra.id);
     const at = bind.at === 'point' || !tv ? this._ground(x, y, tv) : tv;
     if (bind.oneshot) {
       let drew = false;
-      for (const k of keys) if (this.w.playOn(k, at, { important: true })) drew = true;
+      for (const k of keys) if (this.w.playOn(k, at, { important: true, fxOwner: U.v })) drew = true;
       return drew;
     }
     const bb = U.srec?.bb || {};
@@ -1085,7 +1259,7 @@ export class SkillFx {
       : Number(bb[bind.hold]) > 0 ? Number(bb[bind.hold]) : bind.holdS || SKILL_CAST_S;
     let drew = false;
     for (const k of keys) {
-      const h = this.w.playOn(k, at, { loop: true, important: true });
+      const h = this.w.playOn(k, at, { loop: true, important: true, fxOwner: U.v });
       if (!h) continue;
       drew = true;
       later(this.w.ofx, holdS, () => h.stop());
@@ -1314,6 +1488,28 @@ export class SkillFx {
         for (const k of planKeys(U.plan)) out.add(k);
         for (const pk of U.plan.projectiles) proj(pk);
         for (const k of bindingKeys(idx, U.skillId)) out.add(k);
+      }
+      // 特训（叠加式）：教官技能 plan 的特效键也预载（否则学员第一次施放时教官的 prefab 还没装上）
+      if (U.mentorPlan) {
+        for (const k of planKeys(U.mentorPlan)) out.add(k);
+        for (const pk of U.mentorPlan.projectiles) proj(pk);
+      }
+      // …以及教官技能换了攻击模式时那份 mode 的施放 / 命中行（_mentorAttackSet 用的同一份）
+      if (U.mentorMode?.mode) {
+        for (const a of [U.mentorMode.mode.attack, U.mentorMode.mode.combat]) {
+          if (!a) continue;
+          for (const f of ['cast', 'castTarget', 'inputTarget', 'hit']) for (const r of a[f] || []) for (const k of r.effects || []) out.add(k);
+          const has = (x) => this.w.ofx.lib.has(x);
+          const subs = [a, ...(Array.isArray(a.abilities) ? a.abilities : [])];
+          for (const ab of subs) for (const pk of [ab.projectileKey, ...(ab.extraProjectileKeys || [])]) {
+            proj(pk);
+            // 这枚弹道的命中 / 停止特效（`_mentorAttackSet` 会作为命中行补播）——也按教官时装的变体预载
+            const p = pk && idx.projectiles?.[String(pk).toLowerCase()];
+            for (const k of [...(p?.onHit || []), ...(p?.onStop || [])]) {
+              if (typeof k === 'string' && k) out.add(String(withFxKey(k, U.mentorFx, has)).toLowerCase());
+            }
+          }
+        }
       }
       for (const en of U.enemy) {
         for (const k of planKeys(en.plan)) out.add(k);

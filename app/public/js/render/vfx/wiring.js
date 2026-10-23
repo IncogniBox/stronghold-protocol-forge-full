@@ -6,8 +6,9 @@
 // its projectile's own flying effect from the muzzle along the sim's flight (the sim's speed: the visual lands with the
 // sim's damage; flight.js: the projectile class's own `_mainEffect`, a harpoon's rope stretched from the shooter to the
 // head, the client's Paracurve arc and AmiyaS2 wobble), plays what the projectile puts on its target and the target's
-// tile as it starts (`toTargetOnStart` / `toTileOnStart`: 溯光星源 S3's lightning) and the projectile's `onHit` at the
-// target's HitPoint on arrival (`onReached` where it lands; a timer projectile's at the end of its life) with the
+// tile as it starts (`toTargetOnStart` / `toTileOnStart`: 溯光星源 S3's lightning), the projectile's `onHit` at the
+// target's HitPoint on arrival (`onReached` where it lands, `onStop` where the shot stops — 维什戴尔's bomb explosions;
+// a timer projectile's at the end of its life) with the
 // attack's own hit rows (round 46 R12), the damage or heal the sim lands for it before the flight ends covered meanwhile
 // (R3 / R9: `_expect`); a chain's bounces draw its lightning line between the targets (`chain`, R14); a melee
 // attack's `hit` effects play when its damage lands; status loops (generic.status by the sim's status names) follow the
@@ -45,7 +46,7 @@ import { GROUND_SPAWNS } from './effect.js';
 import { SkillFx, fitsAttack, pickGroup, formMode } from './skillfx.js';
 import { TalentFx } from './talentfx.js';
 import { FunnelFx } from './funnelfx.js';
-import { YuWall, YU_WALL_SOURCE } from './yuwall.js';
+import { YuWall, isYuWallSource } from './yuwall.js';
 import { formModes } from './talents.js';
 import { shotOf } from './skills.js';
 import { UF } from '../../../../shared/constants.js';
@@ -79,6 +80,12 @@ const HP_TYPES = new Set(['phys', 'arts', 'true']);
 const ID_ROT = Object.freeze([0, 0, 0, 1]);
 
 const lc = (k) => (typeof k === 'string' && k ? k.toLowerCase() : null);
+/** 一枚 key 在某个时装后缀下的变体（装的数据里有才是它，否则原 key）——监听者用于特训教官那一层。 */
+const withSkin = (k, fx, has) => {
+  if (typeof k !== 'string' || !k || typeof fx !== 'string' || !fx) return k;
+  const v = `${k.toLowerCase()}_${fx.toLowerCase()}`;
+  return has(v) ? v : k;
+};
 /** Torappu.SharedConsts.Direction order (a directional emitter row's `slots`). */
 const DIRS = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
 /** Cast rows starting at these ability events start with the cast (0 ON_ATTACHED, 2 ON_CAST_START); 4 ON_SPELL_ON … at the strike. */
@@ -562,11 +569,16 @@ export class FxWiring {
    */
   playOn(key, v, o = {}) {
     // 时装先说话（`fxKey`：装了这套时装自己的一枚 `<key>_<fx>` 就用它，没有就用 key 本身 —— 皮肤缺这一枚的变体
-    // 时播**默认的那一枚**，不是什么都不播；另两处起特效的地方（弹道、链式连线、浮游单位）共用它）
-    let k = this.fxKey(key, v);
+    // 时播**默认的那一枚**，不是什么都不播）。变体按**特效的主人**（施放者 / 攻击者）解析：命中类特效挂在被击中的
+    // 敌人身上播，但它的 prefab 属于攻击者的时装 —— 用 `o.fxOwner` 点名，缺省才是 `v` 自己。
+    let k = this.fxKey(key, o.fxOwner || v);
     if (!k) return null;
-    if (k === YU_WALL_SOURCE) {
-      const wall = new YuWall(this, v);
+    // 余 S3 的火墙是控制器 prefab（`yu_skill3_range_01_source`）：**按原始 key 认它**，再交给 YuWall 按这套时装的
+    // 变体搭每一段 —— 否则穿时装时 fxKey 已把 key 换成 `_<fx>`，这里认不出来，火墙整面退化成不搭 / 播错。
+    // 特训（叠加式）的教官行是**预改写**过的（skillfx.withFx 先把 key 换成教官时装的变体），所以带 `_<fx>` 后缀的
+    // 变体也要认（`isYuWallSource`）；`k` 仍是变体 key，YuWall 用它搭出那套时装的 root / 横竖 / 端头。
+    if (isYuWallSource(key)) {
+      const wall = new YuWall(this, v, k);
       this.walls.add(wall);
       return wall;
     }
@@ -786,7 +798,7 @@ export class FxWiring {
         for (const k of this._rowKeys(e, src, nth)) {
           // the rows of the strike sit where its attack clip poses the unit's points at the strike frame
           const h = onTarget
-            ? this.playOn(k, tgt, { toward: beyond(src, tgt), flipFrom: src, skip })
+            ? this.playOn(k, tgt, { toward: beyond(src, tgt), flipFrom: src, skip, fxOwner: src })
             : this.playOn(k, src, { toward: tgt, fourFace: !!e.useFourDirectionalFace, skip, strike: phase !== 'start' });
           // a looping row stops at its end event (the cast's end); so does a looping prefab on a one-shot row, which
           // would otherwise never end (known once loaded: decided when the time comes)
@@ -813,7 +825,10 @@ export class FxWiring {
   _attackSet(u, m, src, tgt, kind, nth) {
     if (!m) return null;
     let a = m.attack || null;
-    if (m.combat && (!a || (kind === 'none' && ((src.flags | 0) & UF.BLOCKED)))) a = m.combat;
+    // 被阻挡的单位用 combat（Attack_2 这类专属动作）；敌人被阻挡时它的普攻同样是近战 blow，哪怕 sim 把这次
+    // atk 标成 arts/phys（塔露拉被阻挡后 Attack_2 却播 Attack_1 箭矢特效的根因）
+    const blockedBlow = !!((src.flags | 0) & UF.BLOCKED) && (kind === 'none' || src.isEnemy);
+    if (m.combat && (!a || blockedBlow)) a = m.combat;
     if (!a) return null;
     const heal = !!tgt && !tgt.isEnemy && !src.isEnemy;
     const id = src.id ?? src.info?.id;
@@ -843,6 +858,58 @@ export class FxWiring {
       if (!set.projectileKey && lc(x.projectileKey)) { set.projectileKey = lc(x.projectileKey); set.shot = shotOf(x, this.idx.projectiles); set.shotClass = x.class || null; }
     }
     return set;
+  }
+
+  /**
+   * 特训学员：教官技能**换了攻击模式**的那一份行（`SkillFx.of` 解析出的 `U.mentorMode`，如新约能天使 S3 的 mode S3 —
+   * 施放 / 范围 / 命中全在 mode 的 `attack` 里，skill 本体只有 buff 行）。按学员的这次攻击（同一个 src / 目标 / kind）
+   * 走一遍 `_attackSet`，得到与学员自己那份同形的行；解析不到教官模式时 null。
+   */
+  _mentorAttackSet(src, tgt, kind, nth, o = {}) {
+    const U = this.skills.of(src);
+    const mm = U && U.mentorMode;
+    if (!mm || !mm.mode) return null;
+    // 教官的技能效果只在**学员自己的技能生效期间**叠（业主 2026-10-27：普通攻击不带教官技能特效）；
+    // `force` 给技能结束后才释放的攻击用（蕾缪安 S3 的礼炮，见 skillfx._mentorRelease）。
+    if (!o.force && !this.skills.mentorOn(src, o.skillOn)) return null;
+    const mu = this.idx.units?.[mm.unitKey];
+    if (!mu) return null;
+    const set = this._attackSet(mu, mm.mode, src, tgt, kind, nth);
+    // 教官技能自己那枚弹道的**命中 / 停止 / 落点**特效（维什戴尔 S3：`onHit` 小爆 + `onStop` 大爆炸；蕾缪安 S3：
+    // `onReached` 的炮击命中）：学员每一发命中都要带它——原先只并了 mode 的 cast/hit 行，而这两枚挂在弹道上，于是
+    // 弹药命中没有爆炸。`onReached` 一并带上，「命中敌人时的特效反馈」才算完整。
+    const pk = set.projectileKey;
+    const proj = pk ? this.idx.projectiles[pk] : null;
+    if (proj) {
+      const fx = U.mentorFx;
+      const key = (k) => withSkin(k, fx, (x) => this.ofx.lib.has(x));
+      const rows = [];
+      for (const k of [...(proj.onHit || []), ...(proj.onStop || []), ...(proj.onReached || [])]) {
+        if (typeof k === 'string' && k) rows.push({ effects: [key(k)], directionType: 0, oneshot: 1 });
+      }
+      if (rows.length) set.hit.push(...rows);
+    }
+    return set;
+  }
+
+  /**
+   * 把教官模式的那一份并进这次攻击（叠加，不替换学员自己的）：cast / range / aim / hit 逐行追加，MultiHit 的组按
+   * 组号并进同一发命中。**弹道本身不借**：学员的枪打的是学员自己的那枚（弹道的挂载点 / 拖尾 / 飞行都是学员的），
+   * 教官弹道的命中 / 停止特效已由 `_mentorAttackSet` 作为命中行并进来（维什戴尔 S3 的爆炸就靠这一条）。
+   */
+  _mergeMentorSet(a, mset) {
+    if (!mset) return a;
+    if (!a) return mset;
+    a.cast.push(...mset.cast);
+    a.castTarget.push(...mset.castTarget);
+    a.inputTarget.push(...mset.inputTarget);
+    a.hit.push(...mset.hit);
+    if (mset.groups) {
+      a.groups ||= [];
+      for (let i = 0; i < mset.groups.length; i++) a.groups[i] = [...(a.groups[i] || []), ...mset.groups[i]];
+      a.hitOpts ||= mset.hitOpts;
+    }
+    return a;
   }
 
   /**
@@ -879,7 +946,9 @@ export class FxWiring {
     const sk = this.skills.attackFx(src, tgt, kind, info.skillOn);
     const u = this.unitOf(src);
     const nth = this.attackN.get(src.id ?? src.info?.id) || 0;
-    const set = sk?.replace ? null : this._attackSet(u, this.mode(u, src, info.skillOn), src, tgt, kind, nth);
+    // 特训学员：教官技能换了攻击模式时，那份 mode 的施放行也叠在学员的起手上
+    const mset = this._mentorAttackSet(src, tgt, kind, nth, { skillOn: info.skillOn });
+    const set = this._mergeMentorSet(sk?.replace ? null : this._attackSet(u, this.mode(u, src, info.skillOn), src, tgt, kind, nth), mset);
     // a funnel shot's casts on its floating unit (耶拉's token) start with the owner's wind-up
     const fun = this.funnels.castStart(src, tgt, kind, info);
     if (!set && !sk) return fun;
@@ -912,7 +981,10 @@ export class FxWiring {
     const again = this.castFrame.get(id) === this.skills.frame;
     const nth = Math.max(0, (this.attackN.get(id) || 0) - (again ? 1 : 0));
     const set = this._attackSet(u, this.mode(u, src), src, tgt, kind, nth);
-    const a = sk?.replace ? null : set;
+    // 特训学员：教官技能换了攻击模式时，把那份 mode 的攻击行（施放 / 范围 / 命中 / 弹道）叠在学员这次攻击上——
+    // 技能本体只是 buff 的教官（新约能天使 S3 → mode S3）此前只剩 buff 行，命中爆炸自然整段缺失。
+    const mset = this._mentorAttackSet(src, tgt, kind, nth);
+    const a = this._mergeMentorSet(sk?.replace ? null : set, mset);
     if (tgt) this.lastTargets.set(id, tgt);
     // the 驭械术士's floating units (render/vfx/funnelfx.js): they leave home and hit with the attack, or fly the funnel
     // shot from their point; the body shot of another target of the same attack is not flown (`skipBody`)
@@ -927,8 +999,14 @@ export class FxWiring {
     // along the blow
     const keysOf = (rows) => rows.flatMap((e) => this._rowKeys(e, src, nth).map((k) => ({ k, along: !!e.useOwnerToTargetDirection })));
     const hits = keysOf(a?.hit || []);
-    // the projectile: a ranged skill attack's own, else the mode's (a sub-ability's)
-    const pk = sk?.projectile || set?.projectileKey || null;
+    // 特训：教官那枚弹道的命中 / 停止行（`_mentorAttackSet` 已把它们并进 a.hit）。学员自己的技能带命中组 / 目标 buff
+    // 时（新约能天使 S3），`hits` 整份被 `rec.groups` 接管、飞行的弹道到达时拿到的行是空的 —— 教官的爆炸行必须另留
+    // 一份给弹道到达时播，否则「每发弹药命中爆炸」只存在于合成数据的用例里。
+    const mentorHits = keysOf(mset?.hit || []);
+    // the projectile: a ranged skill attack's own, else the mode's (a sub-ability's); with the trainee's skill
+    // replacing the mode, the mentor's mode is the one that draws
+    const modeSet = sk?.replace ? a : set;
+    const pk = sk?.projectile || modeSet?.projectileKey || null;
     const proj = pk ? this.idx.projectiles[pk] : null;
     const isShot = kind && kind !== 'none';
     const tid = tgt ? tgt.id ?? tgt.info?.id : null;
@@ -940,16 +1018,16 @@ export class FxWiring {
     const grouped = !!(rec.groups || rec.modeGroups);
     // a sim-melee attack whose official ability is a ranged one with a projectile (蒂比): the projectile flies for show
     const heal = !!tgt && !tgt.isEnemy && !src.isEnemy;
-    const display = !isShot && !!proj && !!tgt && !src.isEnemy && !sk?.projectile && fitsAttack(set?.shotClass, { heal, ranged: true });
+    const display = !isShot && !!proj && !!tgt && !src.isEnemy && !sk?.projectile && fitsAttack(modeSet?.shotClass, { heal, ranged: true });
     const flies = !!proj && !!tgt && (isShot || display);
     if (flies && fun?.skipBody) return true;
     if (flies) {
       // index v3: where the shot leaves (mount, a mount group's points) and its follow-up shots (skills.js shotOf); the
       // attack's hit rows play with its projectile's hit (none of the index's projectiles has an onHit and rows both:
       // 能天使 S2/S3, 录武官, 烛煌 S3 have only rows), its hit groups on the damage
-      const shot = sk?.projectile ? sk.shot : set?.shot;
+      const shot = sk?.projectile ? sk.shot : modeSet?.shot;
       const mount = this._shotMount(shot, id, nth);
-      const fo = { hits: grouped ? [] : hits };
+      const fo = { hits: grouped ? mentorHits : hits, mentor: mentorHits };
       if (mount != null) fo.mount = mount;
       if (display) fo.dur = this._displayTime(proj, src, tgt);
       const hitAt = this._fly(proj, src, tgt, kind, time, fo);
@@ -1073,7 +1151,8 @@ export class FxWiring {
    * meanwhile covered (no procedural spark) [ASSUMED: the sim keeps its own flight time for the damage]. The hit plays the
    * projectile's onHit and `o.hits`, the attack's own hit rows (R12); the damage or heal the sim lands for the shot before
    * the drawn hit is the shot's (`_expect`, R3 / R9; not for a drawn follow-up shot, `o.followUp`). `o.dur`: a flight
-   * time of its own (a shot flown for show, R16). Returns the battle seconds until the hit.
+   * time of its own (a shot flown for show, R16). `o.mentor`: the trainee's mentor rows — handed to `_arrive`, which also
+   * plays them where the shot stopped when the target already died of it. Returns the battle seconds until the hit.
    */
   _fly(proj, src, tgt, kind, time, o = {}) {
     const su = this.unitOf(src), tu = this.unitOf(tgt);
@@ -1111,7 +1190,7 @@ export class FxWiring {
     const t0 = this.ofx.time;
     const rows = Array.isArray(o.hits) && o.hits.length ? o.hits : null;
     if (tgt && !o.followUp) this._expect(tgt, hitAt);
-    if (!mainKey && !ropeKey) { this._arrive(proj, tgt, to0, t0 + hitAt, rows, src); return hitAt; }
+    if (!mainKey && !ropeKey) { this._arrive(proj, tgt, to0, t0 + hitAt, rows, src, o.mentor); return hitAt; }
     const flight = { t: -1, dur, from, to: to0.slice(), pos: from.slice(), next: from.slice(), done: false, rope: null };
     // the flight at t battle s: the head and a point a little further on (its direction), homing on the target's point
     const step = (t) => {
@@ -1127,7 +1206,7 @@ export class FxWiring {
     const finish = (fx) => {
       if (back && !flight.back) {
         // the end of its way out: its hit, then (a flying effect, the thrower still there) the way back
-        this._arrive(proj, tgt, flight.to, hitAt > dur ? t0 + hitAt : null, rows, src);
+        this._arrive(proj, tgt, flight.to, hitAt > dur ? t0 + hitAt : null, rows, src, o.mentor);
         if (flight.rope !== fx && this._turnBack(flight, fx, back, src, sSkin, mv, seed)) return;
       }
       flight.done = true;
@@ -1137,7 +1216,7 @@ export class FxWiring {
       else fx.stop(back ? {} : { hit: true });
       if (flight.rope && flight.rope !== fx) flight.rope.stop();
       this.flights.delete(flight);
-      if (!back) this._arrive(proj, tgt, flight.to, hitAt > dur ? t0 + hitAt : null, rows, src);
+      if (!back) this._arrive(proj, tgt, flight.to, hitAt > dur ? t0 + hitAt : null, rows, src, o.mentor);
     };
     const def = mainKey ? this.ofx.lib.def(mainKey) : null;
     const flipIfLeft = def ? def.flipIfLeft : false;
@@ -1172,7 +1251,7 @@ export class FxWiring {
       });
     }
     if (handle || flight.rope) this.flights.add(flight);
-    else this._arrive(proj, tgt, to0, t0 + hitAt, rows, src);
+    else this._arrive(proj, tgt, to0, t0 + hitAt, rows, src, o.mentor);
     return hitAt;
   }
 
@@ -1302,10 +1381,10 @@ export class FxWiring {
     if (!tgt || (!proj.toTargetOnStart?.length && !proj.toTileOnStart?.length)) return false;
     let n = 0;
     const toward = src ? beyond(src, tgt) : undefined;
-    for (const k of proj.toTargetOnStart || []) if (this.playOn(k, tgt, { toward, flipFrom: src, stick: true })) n++;
+    for (const k of proj.toTargetOnStart || []) if (this.playOn(k, tgt, { toward, flipFrom: src, fxOwner: src, stick: true })) n++;
     if (proj.toTileOnStart?.length) {
       const tile = { x: Math.round(tgt.x), y: Math.round(tgt.y), z: tgt.z || 0, visFacing: tgt.visFacing ?? 1 };
-      for (const k of proj.toTileOnStart) if (this.playOn(k, tile, { toward, flipFrom: src })) n++;
+      for (const k of proj.toTileOnStart) if (this.playOn(k, tile, { toward, flipFrom: src, fxOwner: src })) n++;
     }
     return n > 0;
   }
@@ -1313,20 +1392,40 @@ export class FxWiring {
   /**
    * A projectile reached its target (at `laterAt` on the effects' clock, else now): onHit at the target's HitPoint with
    * the attack's own hit rows (`rows` { k, along }: turned along the shot from `src` when the row says; a key the onHit
-   * plays already is not played twice), onReached where it landed.
+   * plays already is not played twice), onReached where it landed. `mentor` (a trainee's mentor rows) also plays where the
+   * shot stopped when the target is gone — a killing shot still owes its 弹药命中 explosion.
    */
-  _arrive(proj, tgt, at, laterAt, rows = null, src = null) {
+  _arrive(proj, tgt, at, laterAt, rows = null, src = null, mentor = null) {
     const go = () => {
       const now = this.ofx.time;
+      // 一次命中不重复播：弹道自己的 onHit / onStop（后者是维什戴尔炸弹的大爆炸）以及 onReached 都算「已经播过」
+      const own = new Set([...(proj.onHit || []), ...(proj.onStop || []), ...(proj.onReached || [])].map(lc));
       if (tgt && !tgt.destroyed) {
-        for (const k of proj.onHit || []) this.playOn(k, tgt, {});
+        for (const k of proj.onHit || []) this.playOn(k, tgt, { fxOwner: src || undefined });
         if (rows) {
-          const own = new Set((proj.onHit || []).map(lc));
-          for (const h of rows) if (!own.has(lc(h.k))) this.playOn(h.k, tgt, { flipFrom: src || undefined, toward: h.along && src ? beyond(src, tgt) : undefined });
+          for (const h of rows) if (!own.has(lc(h.k))) this.playOn(h.k, tgt, { fxOwner: src || undefined, flipFrom: src || undefined, toward: h.along && src ? beyond(src, tgt) : undefined });
         }
         const id = tgt.id ?? tgt.info?.id;
         this.arrived.set(id, now);
         if ((proj.onHit || []).some((k) => /heal/.test(k))) this.healed.set(id, now);
+      }
+      // 特训：这一发**把目标打死了**（弹道到达前已倒下）—— 目标身上的一切行官方都不再播（上面那一段整段跳过），
+      // 但教官的「弹药命中」视觉（维什戴尔 S3 的爆炸）是学员每一发的承诺，按弹道停止点补播。否则高伤害的学员
+      // 一发秒掉敌人时，爆炸恰好整段消失（学员继承时才会遇到：她自己没有这枚弹道的 onStop）。
+      if (mentor && mentor.length && (!tgt || tgt.destroyed)) {
+        for (const h of mentor) {
+          if (!h || own.has(lc(h.k))) continue;
+          if (this.ofx.lib.has(h.k)) this.ofx.spawn(h.k, { pos: at.slice(), groundZ: at[2] }, {});
+        }
+      }
+      // 弹道**停止**时的特效（index `onStop`，Unity 的 `Projectile._effectsWhenStop`）：维什戴尔每一发炸弹的
+      // 那枚大爆炸就在这里（`wisdel_skill_03_hit_02` 等），官方把它放在弹道停下处而不是挂在目标身上 —— 所以
+      // 从前这一层只播 onHit / onReached，她的命中爆炸一直缺。回环弹道去程不停（`movement.comeBack`），跳过。
+      if (!(proj.movement && proj.movement.comeBack)) {
+        for (const k of proj.onStop || []) {
+          const kk = this.fxKey(k, src || tgt);
+          if (kk) this.ofx.spawn(kk, { pos: at.slice(), groundZ: at[2] }, {});
+        }
       }
       // a skill binding places these where the kit's area fx says, for the area's time (SkillFx.bindsReached: 锡人's
       // flask, 波登可's spores …) — not a second copy at the flight's end (0.3.1)
@@ -1432,7 +1531,7 @@ export class FxWiring {
     m.hitT = time;
     m.n = k + 1;
     let drawn = false;
-    const play = (list) => { for (const h of list) if (this.playOn(h.k, v, { flipFrom: m.src, toward: h.along && m.src ? beyond(m.src, v) : undefined })) drawn = true; };
+    const play = (list) => { for (const h of list) if (this.playOn(h.k, v, { fxOwner: m.src || undefined, flipFrom: m.src, toward: h.along && m.src ? beyond(m.src, v) : undefined })) drawn = true; };
     play(m.hits);
     if (m.modeGroups) play(pickGroup(m.modeGroups, k, m.modeOpts, m.seed));
     if (m.groups && this.skills.landed(m, v, k)) drawn = true;
@@ -1492,8 +1591,8 @@ export class FxWiring {
     if (!next || next.destroyed) return;
     const ps = this.skinFor(prev), ns = this.skinFor(next);
     const a = unitPoint(ps, 'hit', this.pose(prev)), b = unitPoint(ns, 'hit', this.pose(next));
-    // 链式连线的线也按同一条时装分辨率（发这一跳的那个人）
-    const lineKey = c.line ? this.fxKey(c.line, prev) : null;
+    // 链式连线的线也按同一条时装分辨率（发这一跳的那个人 = 最初那一发的射手 `c.src`，不是上一跳的目标）
+    const lineKey = c.line ? this.fxKey(c.line, c.src || prev) : null;
     if (lineKey) {
       const h = this.ofx.spawn(lineKey, { pos: a.slice(), groundZ: -(prev.z || 0) }, {
         important: true,
@@ -1506,7 +1605,7 @@ export class FxWiring {
       });
       if (h) setTimeout0(this.ofx, h, CHAIN_LINE_S);
     }
-    this._arrive(c.proj, next, b, null, c.rows, prev);
+    this._arrive(c.proj, next, b, null, c.rows, c.src || prev);
   }
 
   /**

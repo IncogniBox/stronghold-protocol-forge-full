@@ -329,12 +329,37 @@ export function bgmEntry(m, kind) {
 export const sfxUrl = (m, group, key) => str(get(get(get(get(m, 'audio'), 'sfx'), str(group) || ''), str(key) || ''));
 
 /**
+ * 一套时装自己带来的战斗音效（`assets.skins[charId]` 里那一条的 `sfx`），没有这套时装 / 它没带音效时 null。
+ * 形状与 `audio.sfx.units[charId]` 逐字相同（`attack` / `hit` / `skill` / `skills` / `attacks` / `hits` …），
+ * 所以取用规则可以共用一份（`unitSfxUrl`）。
+ * @param {any} m 资源清单 @param {string} id 模型 id（charId 或它的 token） @param {string} skinId 时装 id
+ */
+export function skinSfxOf(m, id, skinId) {
+  const sid = str(skinId);
+  if (!sid) return null;
+  const charId = baseCharId(id) || str(id);
+  const list = get(get(m, 'skins'), charId || '');
+  if (!Array.isArray(list)) return null;
+  const s = list.find((x) => x && str(x.id) === sid);
+  return s && isObj(s.sfx) ? s.sfx : null;
+}
+
+/**
  * Per-unit SFX: kind 'attack' | 'hit' | 'skill' | 'die' | 'born'; `skillIndex` picks `skills[i]` and — for an attack or
  * an impact — `attacks[i]` / `hits[i]` (the running skill's own files, tools/assets/audio.mjs pickModeAttacks /
- * pickModeHits) when the manifest has them.
+ * pickModeHits) when the manifest has them. `skinId` (the outfit the unit wears) makes that outfit's own `sfx`
+ * answer first, field by field, with the unit's normal entry as the fallback.
  */
-export function unitSfxUrl(m, id, kind, skillIndex) {
+export function unitSfxUrl(m, id, kind, skillIndex, skinId) {
   const u = get(get(get(get(m, 'audio'), 'sfx'), 'units'), str(id) || '') || get(get(get(get(m, 'audio'), 'sfx'), 'units'), baseCharId(id) || '');
+  const skin = skinSfxOf(m, id, skinId);
+  if (!isObj(u) && !isObj(skin)) return null;
+  if (isObj(skin)) {
+    if (kind === 'skill' && Number.isInteger(skillIndex) && isObj(skin.skills) && str(skin.skills[skillIndex])) return str(skin.skills[skillIndex]);
+    const per = kind === 'attack' ? skin.attacks : kind === 'hit' ? skin.hits : null;
+    if (Number.isInteger(skillIndex) && isObj(per) && str(per[skillIndex])) return str(per[skillIndex]);
+    if (str(skin[kind])) return str(skin[kind]);
+  }
   if (!isObj(u)) return null;
   if (kind === 'skill' && Number.isInteger(skillIndex) && isObj(u.skills)) {
     const s = str(u.skills[skillIndex]);
@@ -1081,7 +1106,7 @@ export function createAssets(options) {
     audio: {
       bgm: (kind) => bgmEntry(m(), kind),
       sfx: (group, key) => sfxUrl(m(), group, key),
-      unit: (id, kind, idx) => unitSfxUrl(m(), id, kind, idx),
+      unit: (id, kind, idx, skinId) => unitSfxUrl(m(), id, kind, idx, skinId),
     },
     /** Cached image element promise (null on failure). */
     image,

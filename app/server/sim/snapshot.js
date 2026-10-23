@@ -74,6 +74,11 @@ export function unitInfo(u) {
     // full potential, no 练度 — a stand-in, a prototype 自选 pick)
     potential: u.side === 'ally' && u.kind === 'op' && d.loadout?.potentialIsDefault === false ? d.loadout.potential : undefined,
     cultivate: u.side === 'ally' && u.kind === 'op' && Number.isInteger(u.cultivate) ? u.cultivate : undefined,
+    // 特训（叠加式）：教官的身份（spine = sfx.units 的键）、它选定的技能槽与当前时装（skin，教官时装的特效变体 /
+    // 音效也随这条下去；业主 2026-10-22「学员的技能会加上教官的特效和音效」）。客户端把教官技能的官方特效 / 音效
+    // 叠在学员的施放上：render/vfx/skillfx.js 的 mentorPlan / mentorMode、audio.js 的 cast / 挥击 / 命中叠音。
+    // 只此一处供给，spawn 时就带上。
+    reconMentor: u.side === 'ally' && u.kind === 'op' && u.reconMentorInfo ? { ...u.reconMentorInfo } : undefined,
   };
 }
 

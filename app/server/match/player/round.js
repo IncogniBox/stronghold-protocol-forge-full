@@ -8,6 +8,7 @@
 
 import { boardOrder, pieceDir } from '../board.js';
 import { computeBonds, bondSnapshot, activatedLayers, bondsWithGains } from '../bondsMeta.js';
+import { RECON_TRAINEE_STAT_RATIO } from '../../../shared/reconModes.js';
 
 export class PlayerRound {
   startRound(r) {
@@ -147,6 +148,13 @@ export class PlayerRound {
     this.deployMap();
     if (this._legalityStale) this.recompute();
     const units = [];
+    // 重构协议·特训（shared/reconModes.js）：本局累积的每一条 { round, mentor, trainee }——uid 命中即成学员。
+    // 教官查无（已售 / 已合并 / 本回合前被撤）⇒ 静默不生效，学员按自己上场。
+    let trained = null;
+    if (this.reconTraining && this.reconTraining.length) {
+      trained = new Map();
+      for (const t of this.reconTraining) if (t && Number.isInteger(t.trainee) && Number.isInteger(t.mentor)) trained.set(t.trainee, t.mentor);
+    }
     for (const { r, c, piece } of boardOrder(this.board)) {
       if (piece.kind === 'chess') {
         const u = { uid: piece.uid, kind: 'chess', chessId: piece.id, row: r, col: c, dir: pieceDir(piece), items: (piece.items || []).map((i) => i.id) };
@@ -177,6 +185,33 @@ export class PlayerRound {
         // appearance is the PICK's operator), so the pick's operator decides the key first.
         const skinId = this.skinFor(this.gd.chess(piece.id), pick ? pick.charId : null);
         if (skinId) u.skin = skinId;
+        // 特训学员（shared/reconModes.js）：**叠加式**——条目照常带学员自己的 skillIndex / moduleId（自己的技能
+        // 与模组照常生效），另带 `reconTrainee = { chessId, loadout, mul }`：loadout 是教官选定的技能 / 模组。
+        // sim 侧 getTrainee 只把教官的盟约与影子技能指针并进学员的 def，content 层 applyTraineeMentor 合并教官
+        // 的技能效果 / 特质 / 天赋。同一学员重复特训按后一条覆盖（Map 的后者胜）。
+        if (trained) {
+          const mentorUid = trained.get(piece.uid);
+          const mp = mentorUid != null ? this.trainPieceOf(mentorUid) : null;
+          if (mp && mp.id && !u.standIn && !u.diy) {
+            // 教官是**甄选干员**（自选槽位件，业主实测 2026-10-22）时带它的 pick——sim 的 battle DataSource 没有
+            // 玩家视图的 DIY 叠加，不带 diy 的话 getChess(槽位 id) 查到的是空槽位记录（影子技能 / 特效 / 音效全空）。
+            const mpick = this.diyPickOf(mp.id);
+            // 教官**当前时装**（同一个主人的选择，按教官的干员 charId 记）：随特训条目下去，客户端把教官来源的
+            // 特效 key 换成那套时装的变体、音效也先问那套时装的 `sfx`（docs/SKINS.md / mode-recon README 特训）
+            const mSkin = this.skinFor(this.gd.chess(mp.id), mpick ? mpick.charId : null) || undefined;
+            if (mpick) {
+              u.reconTrainee = { chessId: mp.id, diy: { charId: mpick.charId, skillIndex: mpick.skillIndex, uniEquipId: mpick.uniEquipId }, ratio: RECON_TRAINEE_STAT_RATIO, ...(mSkin ? { skin: mSkin } : null) };
+            } else if (this.fieldsStandIn(mp.id)) {
+              // 教官是**补位**（这名玩家不持有、按替补干员上场）时，教官的 def 是补位干员那份（身体 / 技能 / 模组 /
+              // 特效 / 音效全是替补的）：必须带 `standIn` 下去——loadoutFor 的 skillIndex/moduleId 是补位选择的读数，
+              // 单带它们 sim 会解析成原棋子（业主 2026-10-23「补位教官」）。
+              u.reconTrainee = { chessId: mp.id, loadout: { standIn: true }, ratio: RECON_TRAINEE_STAT_RATIO, ...(mSkin ? { skin: mSkin } : null) };
+            } else {
+              const mLo = this.loadoutFor(this.gd.chess(mp.id));
+              u.reconTrainee = { chessId: mp.id, loadout: { skillIndex: mLo.skillIndex, moduleId: mLo.moduleId }, ratio: RECON_TRAINEE_STAT_RATIO, ...(mSkin ? { skin: mSkin } : null) };
+            }
+          }
+        }
         if (carry && carry.has(piece.uid)) u.carryState = carry.get(piece.uid);
         units.push(u);
       } else if (piece.kind === 'token') {

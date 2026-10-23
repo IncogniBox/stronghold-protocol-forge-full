@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   avatarUrl, portraitUrl, enemyIconUrl, tokenAvatarUrl, bondIconUrl, bandIconUrl, itemIconUrl, skillIconUrl, uiUrl,
-  profIconUrl, subProfIconUrl, spineEntry, hasBackSpine, unitPictureUrl, bgmEntry, sfxUrl, unitSfxUrl, baseCharId,
+  profIconUrl, subProfIconUrl, spineEntry, hasBackSpine, unitPictureUrl, bgmEntry, sfxUrl, unitSfxUrl, skinSfxOf, baseCharId,
   validSpine, RefLru, createAssets, unloadSpineData, spinePages, spineDataWeight, SPINE_WEIGHT_MIN, SPINE_IDLE_BYTES,
   SPINE_IDLE_GRACE_MS, SPINE_EVICT_DELAY_MS, SPINE_QUIET_DELAY_MS,
 } from '../../public/js/assets.js';
@@ -141,6 +141,14 @@ describe('URL helpers (synthetic manifest)', () => {
     assert.equal(unitSfxUrl(M, 'char_010_chen', 'hit', 1), '/sfx/c_hit.mp3', 'no hits[1] ⇒ the normal impact');
     assert.equal(unitSfxUrl(M, 'char_010_chen', 'die', 2), null, 'only an attack / an impact has a per-skill file');
     assert.equal(unitSfxUrl(M, 'nobody', 'attack'), null);
+    // 一套时装自己的战斗音效（assets.skins[charId][].sfx）：那套时装先答，缺的那一格落回干员本体
+    const MS = { ...M, skins: { char_010_chen: [{ id: 'sale-chen', sfx: { attack: '/skins/atk.wav', skills: { 2: '/skins/s3.wav' } } }] } };
+    assert.deepEqual(skinSfxOf(MS, 'char_010_chen_2', 'sale-chen'), { attack: '/skins/atk.wav', skills: { 2: '/skins/s3.wav' } });
+    assert.equal(skinSfxOf(MS, 'char_010_chen', 'nope'), null);
+    assert.equal(unitSfxUrl(MS, 'char_010_chen', 'attack', undefined, 'sale-chen'), '/skins/atk.wav');
+    assert.equal(unitSfxUrl(MS, 'char_010_chen', 'skill', 2, 'sale-chen'), '/skins/s3.wav');
+    assert.equal(unitSfxUrl(MS, 'char_010_chen', 'skill', 0, 'sale-chen'), '/sfx/c_s.mp3', '缺的那一格 ⇒ 本体的');
+    assert.equal(unitSfxUrl(MS, 'char_010_chen', 'attack', undefined, 'nope'), '/sfx/c_atk.mp3', '没穿这套 / 没有这一套 ⇒ 本体');
   });
 });
 

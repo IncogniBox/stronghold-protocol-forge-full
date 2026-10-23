@@ -451,6 +451,11 @@ export class SpineActor {
      * 看上去就是「只有第一次是完整的」（业主 2026-10-17）。
      */
     this.clipPerAttackWhole = false;
+    /**
+     * windUp 的整遍播里「压缩前摇赶不上打击帧」的那一档：clip 已按整条从第 0 帧原速起播、attackUntil 也按整条
+     * 计好 —— attack() 的 wasAttacking 分支据此不重设站台窗口（否则 clip 在 (loopDur − hit) 处被截断）。
+     */
+    this.wholeLate = false;
     this.wound = false;           // wound up for the coming attack (windUp → attack)
     this._applied = false;        // an update has posed the skeleton since its clip last changed (poseHeld)
     this._posed = false;          // the skeleton was ever posed (a model frozen before that shows its clip's first frame)
@@ -674,6 +679,14 @@ export class SpineActor {
     if (this.dead || this.mode === 'stun' || this.mode === 'die' || this.mode === 'change' || !(lead >= 0)) return false;
     const clip = this._attackClip();
     if (!clip) return false;
+    // 技能姿态正在循环时，普攻的 look-ahead 不打断技能动作（与 attack() 的保护同一条规则）——
+    // windUp 会把 skill clip 从中途位置重播（业主 2026-10-22：Skill_2/Attack_2 播到一半被重置）。
+    // 但技能 clip 自带 OnAttack 打击帧的除外（送葬人 S2 的持姿循环、Blemishine S3 的单发 clip）：
+    // 那本就是「每次攻击重拉这条 clip 的节奏」的官方口径（skill-loop-hold / skill-attack-mode）。
+    // 敌人（clipPerAttack）的技能动作由 cast 的窗口整条播完；命中帧那一次 atk 只叠特效，不重拉 clip ——
+    // 否则 Skill_2 会在 2.567 s 处被从第 0 帧重播（业主 2026-10-23「被 Attack_2 打断」的观感）。
+    if (!once && this.skillOn && this.current === clip.loop
+      && (this.clipPerAttack || !(Array.isArray(this.entry?.hits?.[clip.loop]) && this.entry.hits[clip.loop].length))) return false;
     const loopDur = this.dur(clip.loop);
     // a one-off cast plays at the clip's own speed (one loop per clip length), whatever the attack rhythm
     const iv = once ? loopDur : clampN(Number.isFinite(interval) && interval > 0 ? interval : this.interval, 0.08, 8);
@@ -684,7 +697,23 @@ export class SpineActor {
     // 若麦「除了第一次都不完整」），所以这类单位一律 start = 0，并且不走 fast（不让一次片段循环复用）
     const whole = per && (this.clipPerAttackWhole || iv >= loopDur);
     let plan = windUpPlan(loopDur, hit, per ? Math.min(iv, loopDur) : iv, lead);
-    if (whole) plan = { start: 0, ts: clampN(loopDur / Math.min(iv, loopDur), 1, 4), tsWind: plan.tsWind };
+    // 整遍播的两种口吻（2026-10-22 塔露拉时间线）：
+    //   * 压缩前摇赶得上打击帧（lead × tsWind ≈ hit，骨刺 / 隐形弩手）：照旧 —— 前摇压进 lead 窗口、attack()
+    //     回原速播收尾，站台窗口仍是 lead + (loopDur − hit) / ts；
+    //   * 压不进（塔露拉 Attack_2：自然前摇 1.333s vs 前瞻 0.08s，压缩只能走到片段 15%）——照旧会把 clip 在
+    //     (loopDur − hit) 处掐断（时间线：每次只活 1.08s = lead + loopDur − hit，「没放完就重置」）。退回 #246
+    //     的口径：整条片段原速从第 0 帧播，打击帧晚一点，站台窗口 = lead + loopDur / ts（wholeLate，attack()
+    //     的 wasAttacking 分支据此不重设窗口）。
+    this.wholeLate = false;
+    if (whole) {
+      const tsWhole = clampN(loopDur / Math.min(iv, loopDur), 1, 4);
+      if ((hit - lead * plan.tsWind) / plan.ts > 0.1) {
+        this.wholeLate = true;
+        plan = { start: 0, ts: tsWhole, tsWind: tsWhole };
+      } else {
+        plan = { start: 0, ts: tsWhole, tsWind: plan.tsWind };
+      }
+    }
     // Fast rhythm: no room to rest between attacks — the clip loops at the rhythm's speed (proposal §2). It already
     // lands one strike per attack, so a later wind-up only keeps its tail alive (no restart, no crossfade); the
     // look-ahead timing below is not re-applied, the running loop is already in phase.
@@ -699,7 +728,10 @@ export class SpineActor {
     if (this.mode === 'attack' && this.current === clip.loop && (once || this.wound)) return false;
     if (!once) this.interval = iv;
     this.mode = 'attack';
-    this.attackUntil = this.clock + lead + Math.max(0, loopDur - hit) / plan.ts;
+    // 整遍播（start 0）且压缩前摇赶不上打击帧时（wholeLate），站台窗口是**整条**片段：按「打击帧起播」的
+    // (loopDur − hit) 算会把窗口截短到后半段，clip 播到一半就被打回 base（业主 2026-10-22 时间线：塔露拉
+    // Attack_2 每次只活 1.08s = lead + loopDur − hit）。
+    this.attackUntil = this.clock + lead + (this.wholeLate ? loopDur : Math.max(0, loopDur - hit)) / plan.ts;
     this._play(clip.loop, fast, { timeScale: fast ? plan.ts : plan.tsWind, start: plan.start, mix: 0.06 });
     this.windTs = plan.ts;
     this.windUntil = this.clock + lead;
@@ -708,7 +740,7 @@ export class SpineActor {
     // quicker than the clip, as the client plays it (this actor may stretch the clip over a slower rhythm)
     const tsOff = clampN(loopDur / iv, 1, 4);
     this.windSkip = plan.start / tsOff;
-    this.windCastLeft = lead + Math.max(0, loopDur - hit) / tsOff;
+    this.windCastLeft = lead + (this.wholeLate ? loopDur : Math.max(0, loopDur - hit)) / tsOff;
     this.wound = true;
     return true;
   }
@@ -728,24 +760,37 @@ export class SpineActor {
     if (!once) this.interval = clampN(Number.isFinite(interval) && interval > 0 ? interval : this.interval, 0.08, 8);
     const clip = this._attackClip();
     if (!clip) return;
+    // 技能姿态正在循环时，窗口内的 atk 不重启动作：官方语义是技能动作持续、攻击行特效独立叠加——
+    // 重启会把 clip 从伤害帧（start: hit）重放，看上去「动作只播到伤害帧就没了」（业主 2026-10-22，
+    // 包自实现技能的 atk 事件路径）。once 的一次性 cast 不在此列；技能 clip 自带 OnAttack 打击帧的
+    // （送葬人 S2 的持姿循环、Blemishine S3 的单发 clip）除外 —— atk 本就是这条 clip 的节奏来源。
+    // 敌人技能窗口内的 atk（命中帧）不重拉技能 clip，只让特效叠加；与 windUp 同一条规则
+    if (!once && this.skillOn && this.current === clip.loop
+      && (this.clipPerAttack || !(Array.isArray(this.entry?.hits?.[clip.loop]) && this.entry.hits[clip.loop].length))) return;
     const loopDur = this.dur(clip.loop);
     const per = this.clipPerAttack && !once;
     // clip per attack: its own speed (ts 1), faster only when the attacks come quicker than the clip
     const ts = once ? 1 : per ? clampN(loopDur / Math.min(this.interval, loopDur), 1, 4) : clampN(loopDur / this.interval, 0.35, 4);
     const hit = this._hitTime(clip.loop, loopDur);
+    // 整遍播的判定提前：站台窗口（attackUntil）与起播帧（start）都依赖它。
+    const whole = per && (this.clipPerAttackWhole || this.interval >= loopDur);
     // (a clip-per-attack actor still playing the previous attack's clip was not wound up for this one)
     const wasAttacking = this.mode === 'attack' && this.current === clip.loop && this.wound;
+    // windUp 已把 clip 从第 0 帧按整条片段整播、窗口也按整条计好（wholeLate，压缩前摇赶不上打击帧的那种）——
+    // 这里不再重设，否则照样在 (loopDur − hit) 处被打回 base（塔露拉 Attack_2 截断的另一半）。
+    const wholeLate = wasAttacking && this.wholeLate === true;
     this.mode = 'attack';
-    this.attackUntil = this.clock + Math.max(0, loopDur - hit) / ts;
+    if (!wholeLate) {
+      this.attackUntil = this.clock + (whole && !wasAttacking ? loopDur : Math.max(0, loopDur - hit)) / ts;
+    }
     this.windUntil = null;
     this.wound = false;
+    this.wholeLate = false;
     if (!wasAttacking) {
       // not wound up (no look-ahead, e.g. a batch that arrived late): the sim already resolved the hit, so show the
       // strike frame now — unless a clip-per-attack actor's rhythm leaves room for the whole clip (interval ≥ clip):
       // then the clip plays complete from its wind-up at its own speed, the strike a little late (重犯's iron ball
       // lifts before the slam; #246 by @TsangAsuna, accepted by the owner on 2026-10-07)
-      const whole = per && (this.clipPerAttackWhole || this.interval >= loopDur);
-      if (whole) this.attackUntil = this.clock + loopDur / ts;
       this._play(clip.loop, false, { timeScale: ts, start: whole ? 0 : hit, mix: 0.06 });
     } else {
       const e = this.spine.state.tracks[0];
@@ -842,6 +887,10 @@ export class SpineActor {
       // OnAttack is not proof of a cast (the integrator kept unverified operators unchanged, with or without the index).
       return sk;
     }
+    // 被阻挡的近战换用专属攻击 clip（`anims.attackBlocked`，包 art 原样透传的键；塔露拉的 Attack_2）——
+    // 视图经 attackBlockedMode 注入阻挡状态（units.js _acquireSpine），未被阻挡 / 没声明时照旧。
+    const ab = this.attackBlockedMode?.();
+    if (ab && this.has(ab.loop)) return ab;
     const a = this.roles.attack;
     if (a && this.has(a.loop)) return a;
     return null;

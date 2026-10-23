@@ -121,6 +121,9 @@ export class PlayerAcquire {
     // deployed like any operator placed by hand: its manually deployable summons join the hand (after the returned
     // equipment, which would be lost in temp — a summon stack removed there comes back at the next round start)
     if (where === 'board') this.grantTokensFor(elite);
+    // 特训关系的精锐化续接（重构协议·特训）：被消耗的普通件若是学员 / 教官，特训关系与学员的 bondGrants
+    // 跟着精锐件走（prep.js retainReconTraining；升华 promote 原地改 id 不换 uid，不走这里）
+    this.retainReconTraining(consumed.map((l) => l.piece), elite.uid);
     this.stats.merges++;
     this.pushRewardOffer('merge');
     // (named as everyone sees the elite: a chess this player fields as its stand-in by the stand-in's name — 0.2.0 补位,

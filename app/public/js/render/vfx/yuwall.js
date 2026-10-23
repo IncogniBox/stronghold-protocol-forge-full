@@ -4,6 +4,15 @@
 // adds caps on invalid neighbouring tiles. Source/root are controllers, not one-shot casts.
 export const YU_WALL_SOURCE = 'yu_skill3_range_01_source';
 const lc = (key) => typeof key === 'string' ? key.toLowerCase() : null;
+/**
+ * Is `key` the wall controller — the default prefab or a skin's variant (`yu_skill3_range_01_source_<fx>`, e.g.
+ * `_nian_12`)? Skill rows are pre-rewritten to the worn outfit's variant (skillfx.withFx), so the play layer must
+ * recognise both forms; the pieces/root of that variant are built by YuWall from the variant key itself.
+ */
+export const isYuWallSource = (key) => {
+  const k = lc(key);
+  return k === YU_WALL_SOURCE || !!k && k.startsWith(`${YU_WALL_SOURCE}_`);
+};
 const fields = (def, name) => def?.nodes?.flatMap((n) => n.behaviours || []).find((b) => b.class === name && b.enabled !== false)?.fields;
 
 /** Finite battlefield rectangle; [ASSUMED] our active field is the official controller's map. */
@@ -38,8 +47,9 @@ export function yuWallLayout(v, rect, cfg, cameraX = 10) {
 
 /** A skill-held composite handle, including asynchronous prefab loads and owner removal. */
 export class YuWall {
-  constructor(w, owner) {
-    this.w = w; this.owner = owner; this.key = YU_WALL_SOURCE; this.alive = true;
+  /** @param {string} [sourceKey] the controller prefab resolved for the owner's outfit (`w.fxKey`) */
+  constructor(w, owner, sourceKey = YU_WALL_SOURCE) {
+    this.w = w; this.owner = owner; this.key = sourceKey || YU_WALL_SOURCE; this.alive = true;
     this.parts = []; this.started = false; this.at = w.ofx.time; this.next = this.at;
     // Placement is fixed at cast, even if the owner later moves.
     this.origin = { x: owner.x, y: owner.y, dir: owner.dir };
@@ -47,12 +57,32 @@ export class YuWall {
     this.update();
   }
 
+  /** 这一套时装的变体（装的数据里有才换）：火墙的每一段（source / root / 竖横 / 端头）都走同一条换装链。 */
+  _key(key) {
+    const k = lc(key);
+    return (k && this.w.fxKey(k, this.owner)) || k;
+  }
+
+  /** Load a resolved controller / root (its `refs` bring the variant's segments); once per key, retried on ticks. */
+  _preload(key) {
+    if (!key || !this.w.ofx.lib.preload) return;
+    this.pending ||= new Set();
+    if (this.pending.has(key)) return;
+    this.pending.add(key);
+    this.w.ofx.lib.preload([key], { half: this.w.ofx.lite }).catch(() => {}).finally(() => this.pending.delete(key));
+  }
+
   update() {
     if (!this.alive) return;
     if (!this.w.ofx.active || this.owner.destroyed || this.owner.alive === false) { this.stop(); return; }
     const ofx = this.w.ofx;
+    // 时装的**变体 root 不会**被基础 source 的 `refs` 带进来（变体 source 的 refs 仍指基础 root），所以这里显式预载：
+    // 解析出的 controller / root 没装 ⇒ 触发一次 `lib.preload`（它会顺着 refs 把该变体的所有段一起装上），下一帧再搭。
+    if (!ofx.lib.def(this.key)) { this._preload(this.key); return; }
     const source = fields(ofx.lib.def(this.key), 'YuS3EffectBehaviour');
-    const rootKey = lc(source?._effectEachGrid);
+    const rootKey = this._key(source?._effectEachGrid);
+    if (!rootKey) return;
+    if (!ofx.lib.def(rootKey)) { this._preload(rootKey); return; }
     const cfg = fields(ofx.lib.def(rootKey), 'YuS3EffectWithEdgeBehaviour');
     if (!cfg || !this.rect) return; // remain pending while recursive preloading completes
     if (!this.started) {
@@ -63,7 +93,7 @@ export class YuWall {
       // (A world-space clip discarded most of the curtain — some vertex paths pass local positions as v_wpos — and
       // left flat orange slivers; the maintainer's official video shows the whole crimson curtain.)
       this.data = undefined;
-      this.parts = yuWallLayout(this.origin, r, cfg, cameraX).map((p) => ({ ...p, key: p.root ? rootKey : p.key, h: null }));
+      this.parts = yuWallLayout(this.origin, r, cfg, cameraX).map((p) => ({ ...p, key: this._key(p.root ? rootKey : p.key), h: null }));
       this.next = this.at + Math.max(0, Number(cfg._edgeEffectIntervalFirstTick) || 0);
     }
     for (const p of this.parts) {

@@ -639,7 +639,24 @@ function RoomModsPanel({ room, myId = null, onAlignment = null, hidden = false }
     }
   };
 
-  if (hidden) return null; // 「房间声明模组」的界面已按业主要求移除；对齐检查（onAlignment）仍照旧运行
+  if (hidden) {
+    // 「房间声明模组」的界面已按业主要求移除；对齐检查（onAlignment）仍照旧运行 —— 但缺件时的**补齐入口**必须
+    // 留着：solo 的开始硬门（`hostStartAlignBlocked`）与加入者的准备就绪都读这份对齐结论，缺件又没地方补就是
+    // 一扇死门（缺件 → 无处下载 → 开始/准备永远点不动）。这里只补画「核对中 / 缺件 + 补齐」这一小块，不画清单。
+    if (!checked) {
+      return html`<div class="room-mods room-mods--repair brackets" role="status">
+        <span class="t-lo">${t('正在核对本房间的模组文件…')}</span>
+      </div>`;
+    }
+    if (!plan || plan.ok) return null;
+    return html`<div class="room-mods room-mods--repair brackets">
+      <span class="t-orange">${unknown.length ? t('房间点名了本服务器没有的模组：{ids}', { ids: unknown.join(', ') }) : t('本机还缺 {n} 个模组文件', { n: missingFiles })}</span>
+      <div class="room-mods__fill">
+        <${Button} variant="secondary" size="sm" icon="refresh" loading=${busy} disabled=${busy || unknown.length > 0} onClick=${fill}>
+          ${busy && progress && progress.total ? t('正在补齐 {done}/{total}', { done: progress.done, total: progress.total }) : t('补齐模组')}<//>
+      </div>
+    </div>`;
+  }
   return html`<div class="room-mods brackets">
     <${MicroLabel} tone="mint">ROOM MODS<//>
     ${mods ? html`<span class="room-mods__title">${t('本房间使用模组（{n} 个）', { n: mods.packs.length })}</span>

@@ -993,12 +993,12 @@ describe('the running skill\'s own attack / impact sound (sfx.units[id].attacks 
   const LEIZI2 = 'char_1043_leizi2';
   const CHEN3 = 'char_1050_chen3';
   const enemyId = () => Object.keys(manifest.audio.sfx.units).find((k) => k.startsWith('enemy_') && manifest.audio.sfx.units[k].attack);
-  async function rig(units) {
+  async function rig(units, vm = manifest) {
     const fw = fakeWindow();
     const urls = [];
     const origFetch = globalThis.fetch;
     globalThis.fetch = async (u) => { urls.push(u); return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }; };
-    const a = new AudioManager({ win: fw.win, getManifest: () => manifest });
+    const a = new AudioManager({ win: fw.win, getManifest: () => vm });
     a.install();
     fw.fire('pointerdown');
     a.setFieldUnits(units);
@@ -1122,6 +1122,107 @@ describe('the running skill\'s own attack / impact sound (sfx.units[id].attacks 
       await settle();
       assert.equal(askedCount(urls, u.attacks['2']), 1, 'S3 的挥砍');
       assert.equal(askedCount(urls, u.hit), 1, '命中仍是普通的那条');
+    } finally { restore(); }
+  });
+
+  test('特训：学员技能期间，教官技能自己的挥砍 / 命中音也一起响（叠加，不是取代）', async () => {
+    const trainee = manifest.audio.sfx.units[LEIZI2];   // 学员：attacks['2']、没有 hits['2']
+    const mentor = manifest.audio.sfx.units[CHEN3];     // 教官：attacks['2'] 与 hits['2'] 都在
+    assert.ok(trainee.attacks['2'] && mentor.attacks['2'] && mentor.hits['2'], '前提：两份技能音都在清单里');
+    const { a, urls, settle, restore } = await rig([
+      { id: 1, side: 'ally', kind: 'chess', spine: LEIZI2, skillIndex: 2,
+        reconMentor: { spine: CHEN3, skillIndex: 2 } },
+      { id: 2, side: 'enemy', kind: 'enemy', spine: enemyId() },
+    ]);
+    try {
+      fresh(a);
+      a.handleBattleEvents([['skill', 1, 1]]);
+      swingAndHit(a);
+      await settle();
+      assert.equal(askedCount(urls, trainee.attacks['2']), 1, '学员自己的 S3 挥砍照旧');
+      assert.equal(askedCount(urls, mentor.attacks['2']), 1, '教官技能自己的挥砍叠上');
+      assert.equal(askedCount(urls, mentor.hits['2']), 1, '教官技能自己的命中音叠上');
+    } finally { restore(); }
+  });
+
+  test('特训：技能结束后 10 s 礼炮窗口内每一发 bombard 都叠教官命中音（窗口外不叠）', async () => {
+    const mentor = manifest.audio.sfx.units[CHEN3];
+    assert.ok(mentor.hits['2'], '前提：教官技能有自己的命中音');
+    const { a, urls, settle, restore } = await rig([
+      { id: 1, side: 'ally', kind: 'chess', spine: LEIZI2, skillIndex: 2, reconMentor: { spine: CHEN3, skillIndex: 2 } },
+      { id: 2, side: 'enemy', kind: 'enemy', spine: enemyId() },
+    ]);
+    try {
+      fresh(a);
+      // 技能没开（也没有窗口）：礼炮落点不叠教官命中
+      a.handleBattleEvents([['fx', 'bombard', 3, 4, { id: 1, r: 1.5 }]]);
+      await settle();
+      assert.equal(askedCount(urls, mentor.hits['2']), 0, '没有技能窗口时不叠');
+      fresh(a);
+      // S3 开启 → 结束：礼炮在结束后的 10 s 内一发发落下
+      a.handleBattleEvents([['skill', 1, 1]]);
+      a.handleBattleEvents([['skill', 1, 0]]);
+      a.handleBattleEvents([['fx', 'bombard', 3, 4, { id: 1, r: 1.5 }]]);
+      await settle();
+      assert.equal(askedCount(urls, mentor.hits['2']), 1, '第一发礼炮叠教官命中音');
+      // 第二发（缓冲清掉：断言的是每次落点都重新请求，而不是被缓存吞掉）
+      fresh(a);
+      a.handleBattleEvents([['fx', 'bombard', 3, 5, { id: 1, r: 1.5 }]]);
+      await settle();
+      assert.equal(askedCount(urls, mentor.hits['2']), 2, '第二发礼炮照样叠');
+      // 窗口过去（把起点挪到 10 s 前——等价于真实时间流逝）后回到静音
+      const u = a.units.get(1);
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      u.mentorUntil = now - 1;
+      fresh(a);
+      a.handleBattleEvents([['fx', 'bombard', 3, 6, { id: 1, r: 1.5 }]]);
+      await settle();
+      assert.equal(askedCount(urls, mentor.hits['2']), 2, '窗口外不再叠（请求数不增）');
+      a.handleBattleEvents([['skill', 1, 1]]);
+      assert.equal(u.mentorUntil, -Infinity, '施放时清掉旧窗口');
+    } finally { restore(); }
+  });
+
+  test('特训：弹药类技能每打一发都叠教官那一层挥击 / 命中音', async () => {
+    const mentor = manifest.audio.sfx.units[CHEN3];
+    const { a, urls, settle, restore } = await rig([
+      { id: 1, side: 'ally', kind: 'chess', spine: LEIZI2, skillIndex: 2, reconMentor: { spine: CHEN3, skillIndex: 2 } },
+      { id: 2, side: 'enemy', kind: 'enemy', spine: enemyId() },
+    ]);
+    try {
+      fresh(a);
+      a.handleBattleEvents([['skill', 1, 1]]);
+      // 第一发
+      swingAndHit(a);
+      await settle();
+      assert.equal(askedCount(urls, mentor.attacks['2']), 1, '第一发叠教官挥击音');
+      assert.equal(askedCount(urls, mentor.hits['2']), 1, '第一发叠教官命中音');
+      // 第二发（节流窗口之外的一发：清掉冷却与缓冲，断言的是每次攻击都重新请求）
+      fresh(a);
+      swingAndHit(a);
+      await settle();
+      assert.equal(askedCount(urls, mentor.attacks['2']), 2, '第二发照样叠教官挥击音');
+      assert.equal(askedCount(urls, mentor.hits['2']), 2, '第二发照样叠教官命中音');
+    } finally { restore(); }
+  });
+
+  test('教官穿了带专属音效的时装时，教官那一层先问那套时装的 sfx', async () => {
+    const vm = { ...manifest, skins: { [CHEN3]: [{ id: 'mentor-outfit', sfx: {
+      attacks: { 2: '/skins/m_mentor_atk.wav' }, hits: { 2: '/skins/m_mentor_hit.wav' },
+    } }] } };
+    const { a, urls, settle, restore } = await rig([
+      { id: 1, side: 'ally', kind: 'chess', spine: LEIZI2, skillIndex: 2,
+        reconMentor: { spine: CHEN3, skillIndex: 2, skin: 'mentor-outfit' } },
+      { id: 2, side: 'enemy', kind: 'enemy', spine: enemyId() },
+    ], vm);
+    try {
+      fresh(a);
+      a.handleBattleEvents([['skill', 1, 1]]);
+      swingAndHit(a);
+      await settle();
+      assert.equal(askedCount(urls, '/skins/m_mentor_atk.wav'), 1, '教官时装的挥击音');
+      assert.equal(askedCount(urls, '/skins/m_mentor_hit.wav'), 1, '教官时装的命中音');
+      assert.equal(askedCount(urls, manifest.audio.sfx.units[CHEN3].attacks['2']), 0, '不再用教官本体的技能音');
     } finally { restore(); }
   });
 });

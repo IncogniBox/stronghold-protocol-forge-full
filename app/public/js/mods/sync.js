@@ -121,16 +121,28 @@ function filesOfPack(pack, packId) {
 export async function missing(catalog, packIds, store) {
   const wanted = packIds == null ? null : new Set(packIds);
   /** @type {Array<{ packId: string, path: string, bytes?: number, sha256: string, canonical?: string }>} */
-  const out = [];
+  const files = [];
   for (const pack of Array.isArray(catalog?.packs) ? catalog.packs : []) {
     if (!pack || typeof pack.id !== 'string') continue;
     if (wanted && !wanted.has(pack.id)) continue;
     for (const file of filesOfPack(pack, pack.id)) {
       if (typeof file.sha256 !== 'string') continue; // nothing to verify against: not a file this layer can cache
-      if (!(await store.has(modKey(pack.id, file.path)))) out.push(file);
+      files.push(file);
     }
   }
-  return out;
+  // 并行问存在性（一个包可能上千个文件；逐个 await 会把对齐检查拖到分钟级）。槽位写入保住目录顺序。
+  const out = new Array(files.length);
+  let at = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = at++;
+      if (i >= files.length) return;
+      const file = files[i];
+      if (!(await store.has(modKey(file.packId, file.path)))) out[i] = file;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(16, files.length)) }, worker));
+  return out.filter(Boolean);
 }
 
 /**
@@ -264,15 +276,27 @@ export async function sync({
 export async function localPackHash(packId, store, catalog = null, { verifyBytes = false } = {}) {
   const pack = (Array.isArray(catalog?.packs) ? catalog.packs : []).find((p) => p && p.id === packId);
   if (!pack) return null;
-  /** @type {Array<{ path: string, hash: string }>} */
-  const pairs = [];
-  for (const file of filesOfPack(pack, packId)) {
-    if (typeof file.canonical !== 'string') return null; // cannot rebuild the pack hash without the contribution
-    const stored = await store.read(modKey(packId, file.path));
-    if (stored == null) return null; // a missing file means an incomplete pack, not a different one
-    if (verifyBytes && (typeof file.sha256 !== 'string' || await hashBytes(stored) !== file.sha256)) return null;
-    pairs.push({ path: file.path, hash: file.canonical });
-  }
+  const files = filesOfPack(pack, packId);
+  /** @type {Array<{ path: string, hash: string }|undefined>} */
+  const pairs = new Array(files.length);
+  let broken = false; // any missing / corrupt / contribution-less file voids the whole pack
+  let at = 0;
+  // 并行读 + 哈希（对齐门带着 verifyBytes 走这里：一个包上千个文件时，逐个 await 就是分钟级的「一直核对」）。
+  const worker = async () => {
+    for (;;) {
+      if (broken) return;
+      const i = at++;
+      if (i >= files.length) return;
+      const file = files[i];
+      if (typeof file.canonical !== 'string') { broken = true; return; } // cannot rebuild the pack hash without the contribution
+      const stored = await store.read(modKey(packId, file.path));
+      if (stored == null) { broken = true; return; } // a missing file means an incomplete pack, not a different one
+      if (verifyBytes && (typeof file.sha256 !== 'string' || await hashBytes(stored) !== file.sha256)) { broken = true; return; }
+      pairs[i] = { path: file.path, hash: file.canonical };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(12, files.length)) }, worker));
+  if (broken || pairs.some((p) => !p)) return null;
   return modManifestDigest(pairs);
 }
 

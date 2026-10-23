@@ -3033,6 +3033,24 @@ def game_data(root):
         except (OSError, ValueError):
             return {}
     chess, backups, enemies, tokens = load('chess.json'), load('backups.json'), load('enemies.json'), load('tokens.json')
+    # Workshop enemies (docs/WORKSHOP.md): every installed pack's enemies.json overlay joins the used set, keyed by the
+    # unit the client's battle prefab is named after — a pack record's own `spine` (a mode overlay's `enemy_ws_*` records
+    # are variants of an official base). The repo's data/enemies.json keeps priority for ids both sides have.
+    pack_enemies = {}
+    try:
+        pack_dirs = sorted(p for p in (Path(root) / 'workshop').iterdir() if p.is_dir() and not p.name.startswith(('.', '_')))
+    except OSError:
+        pack_dirs = []
+    for pd in pack_dirs:
+        try:
+            recs = json.loads((pd / 'enemies.json').read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if isinstance(recs, dict):
+            for k, rec in recs.items():
+                if isinstance(rec, dict):
+                    pack_enemies.setdefault(str(rec.get('spine') or k), rec)
+    enemies = {**pack_enemies, **enemies}
     chars, skills = [], {}
     for v in chess.values():
         cid = v.get('charId')

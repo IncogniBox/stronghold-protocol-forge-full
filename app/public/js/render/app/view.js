@@ -1,7 +1,7 @@
 // public/js/render/app/view.js — which field a camera shows, and the board box that follows it.
 
 import { AREAS, areaFor, unionAreas } from '../board3d/layout.js';
-import { layoutOf, mapSize } from '../layout.js';
+import { OFFICIAL_LAYOUT, layoutOf, mapSize } from '../layout.js';
 import { normRect } from '../projection.js';
 
 const VIEW_KINDS = new Set(['prep', 'normal', 'unite', 'boss', 'bossPrep', 'pen']);
@@ -33,7 +33,7 @@ export function viewKind(kind, opts, layout = null) {
   let k = kind === 'hidden' ? 'boss' : kind;
   if (!VIEW_KINDS.has(k)) k = 'normal';
   const [R, C] = mapSize(layout || null);
-  if (k === 'prep' && opts && opts.rect && normRect(opts.rect, R, C).r1 <= 6) k = 'bossPrep';
+  if (k === 'prep' && opts && opts.rect && normRect(opts.rect, R, C).r1 <= (layout || OFFICIAL_LAYOUT).battle.boss.r1) k = 'bossPrep';
   return k;
 }
 

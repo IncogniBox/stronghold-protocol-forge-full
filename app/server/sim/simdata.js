@@ -43,6 +43,7 @@ import { resolveRecordLoadout, composeStats, composeTalents, loadoutRecord } fro
 import { atPotential, isPotential, POTENTIAL_DEFAULT, cultivateMul } from '../../shared/potential.js';
 import { standInRecord } from '../../shared/standIn.js';
 import { diyRecordOf, diyTokenOwner } from '../../shared/diy.js';
+import { RECON_TRAINEE_STAT_RATIO } from '../../shared/reconModes.js';
 import { normHitArea } from './body.js';
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -642,6 +643,7 @@ export class DataSource {
       const sd = this.getStandIn(id);
       if (sd) return sd;
     }
+    if (loadout && loadout.traineeOf && typeof loadout.traineeOf === 'object') return this.getTrainee(id, loadout);
     if (loadout == null && this._chess.has(id)) return this._chess.get(id);
     const r = this.rawChess(id);
     const lo = r ? resolveLoadout(r, loadout) : null;
@@ -706,6 +708,71 @@ export class DataSource {
       };
       d.tokenOwner = diyTokenOwner(rec.charId, rec.status);
       freezeDef(d);
+    }
+    this._chess.set(key, d);
+    return d;
+  }
+  /**
+   * 「特训学员」def（重构模拟，shared/reconModes.js）—— **叠加式**（业主 2026-10-27 口径）：学员自己的 def 为基
+   * （自己的选定技能 / 模组 / 特质 / 天赋 / kit 派发键 charId / raw，全部照旧），教官只提供这几样：
+   *   1. 攻 / 防 / 生命上限 = **学员自己的 + 教官的 ×ratio**（RECON_TRAINEE_STAT_RATIO = 0.5）——其余数值（费用 /
+   *      阻挡 / 攻击间隔 / 再部署 / 射程）全是学员自己的；
+   *   2. `bonds` = 学员自己的 ∪ 教官的 ∪ 教官特质授予的（`raw.trait.grantsBonds`）—— unitBonds 读 def.bonds，
+   *      学员因此承受教官盟约的效果（教官还在场上、激活计数不重复）；
+   *   2b. `raw.garrisonIds` = 学员自己的 ∪ 教官的 —— 战斗中类特质（若叶睦「受伤增加盟约层数」等 IN_BATTLE
+   *      garrison，garrisons/battle.js）按这个列表派发，并集即「额外新增教官的特质」；
+   *   3. `traineeMentor = { chessId, loadout }` —— content 层（content/index.js setupUnitKit 的 applyTraineeMentor）
+   *      按它解析教官的 def 与 kit，把教官选定技能的 SkillSpec 作为「影子技能」并进学员自己的 spec、教官的
+   *      天赋 installer / 特质行为追加到学员的 kit。simdata 层只挂指针，不解析 kit。
+   * `loadout.traineeOf` 由 PlayerBattleInput 的 `reconTrainee` 通道进来（server/sim/battle/players.js），其中的
+   * skillIndex / moduleId 是**学员自己的**选择（players.js 不再摘掉）；教官的选定技能在 traineeOf.loadout 里。
+   * `content/index.js syncUnitLoadout` 见到 traineeOf 就不再按 loadout 重解析（那条 def 由输入条目决定）。
+   * 查无教官 / 学员记录 ⇒ 退回学员自己的普通 def（特训不生效，棋子照常下场）。缓存键带全五件。
+   * @param {string} id 学员自己的 chess id
+   * @param {{ traineeOf: { chessId: string, loadout?: { skillIndex?: number|null, moduleId?: string|null }, ratio?: number }, potential?: number|null, skillIndex?: number|null, moduleId?: string|null }} loadout
+   */
+  getTrainee(id, loadout) {
+    const to = loadout.traineeOf;
+    const mStandIn = !!(to.loadout && to.loadout.standIn === true);
+    const mLo = !mStandIn && to.loadout && typeof to.loadout === 'object' ? { skillIndex: to.loadout.skillIndex ?? null, moduleId: to.loadout.moduleId ?? null } : null;
+    // 教官是**甄选干员**（自选槽位件）时按它的 pick 解析（getChess 的 diy 通道）——battle DataSource 没有玩家视图
+    // 的 DIY 叠加，不带 diy 的话查到的是空槽位记录（没有身体与技能，影子 / 特效 / 音效全空）。教官是**补位**时按
+    // 补位 def 解析（替补干员的身体 / 技能 / 模组 / 特效 / 音效，业主 2026-10-23）。
+    const mQuery = to.diy && typeof to.diy === 'object' ? { diy: to.diy } : mStandIn ? { standIn: true } : mLo;
+    const ratio = Number.isFinite(to.ratio) && to.ratio > 0 ? to.ratio : RECON_TRAINEE_STAT_RATIO;
+    const key = `${id}|trainee|${to.chessId}|${mStandIn ? 'standIn|' : ''}${mLo ? `s${mLo.skillIndex}|m${mLo.moduleId ?? ''}` : ''}${to.diy ? `|d${to.diy.charId}|${to.diy.skillIndex}|${to.diy.uniEquipId ?? ''}` : ''}|${loadout.skillIndex ?? ''}|${loadout.moduleId ?? ''}|p${loadout.potential ?? ''}|r${ratio}`;
+    if (this._chess.has(key)) return this._chess.get(key);
+    const ownLo = { skillIndex: loadout.skillIndex ?? null, moduleId: loadout.moduleId ?? null, potential: loadout.potential ?? null };
+    const own = this.getChess(id, ownLo);
+    // mQuery 为 null（无 diy、loadout 缺省）＝教官自己的默认 def——与 getChess(id, null) 的既有语义一致
+    const mentor = this.getChess(to.chessId, mQuery ?? null);
+    let d = own;
+    if (own && mentor) {
+      const mg = Array.isArray(mentor.raw?.trait?.grantsBonds) ? mentor.raw.trait.grantsBonds : [];
+      const bonds = [];
+      for (const b of [...(own.bonds ?? []), ...(mentor.bonds ?? []), ...mg]) {
+        if (typeof b === 'string' && !bonds.includes(b)) bonds.push(b);
+      }
+      // 特质（业主 2026-10-27 第 6 条）：学员自己的 + 教官的。战斗中类特质（`garrisonIds` → garrisons/battle.js
+      // 的 IN_BATTLE 记录，如 若叶睦「受伤增加盟约层数」）靠 def.raw.garrisonIds 派发 ⇒ 并集里追加教官的；
+      // 学员自己的排在前面（顺序即安装顺序）。
+      const og = Array.isArray(own.raw?.garrisonIds) ? own.raw.garrisonIds : [];
+      const mGar = Array.isArray(mentor.raw?.garrisonIds) ? mentor.raw.garrisonIds : [];
+      const garrisonIds = [...og];
+      for (const g of mGar) if (typeof g === 'string' && !garrisonIds.includes(g)) garrisonIds.push(g);
+      d = freezeDef({
+        ...own,
+        stats: {
+          ...own.stats,
+          atk: Math.round(own.stats.atk + mentor.stats.atk * ratio),
+          def: Math.round(own.stats.def + mentor.stats.def * ratio),
+          maxHp: Math.round(own.stats.maxHp + mentor.stats.maxHp * ratio),
+        },
+        raw: garrisonIds.length ? { ...own.raw, garrisonIds } : own.raw,
+        bonds,
+        loadout: { ...(own.loadout ?? {}), isDefault: true, traineeOf: { chessId: to.chessId, loadout: mStandIn ? { standIn: true } : mLo, diy: to.diy ?? null } },
+        traineeMentor: { chessId: to.chessId, loadout: mStandIn ? { standIn: true } : mLo, diy: to.diy ?? null },
+      });
     }
     this._chess.set(key, d);
     return d;

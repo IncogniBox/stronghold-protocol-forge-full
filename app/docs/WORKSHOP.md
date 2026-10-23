@@ -1805,7 +1805,11 @@ export function install(battle) {
         "portrait": "outfits/summer/p.png", "avatar": "outfits/summer/a.png",
         "spine": { "front": { "skel": "outfits/summer/m.skel", "atlas": "outfits/summer/m.atlas" } }
       },
-      "voices": { "start": ["outfits/summer/start.mp3"] }
+      "voices": { "start": ["outfits/summer/start.mp3"] },
+      "sfx": {                           // 这套时装自己的战斗音效（与 art.units 的 sfx 条目同形；2026-10-23）
+        "attack": "outfits/summer/atk.wav",
+        "hit": "outfits/summer/hit.wav"
+      }
     }
   ]
 }
@@ -1813,14 +1817,19 @@ export function install(battle) {
 
 | 判据 | 说明 |
 |---|---|
-| 字段闭集 | `SKIN_FIELDS` = `id` / `charId` / `name` / `series` / `desc` / `art` / `voices`，一个不多一个不少；写别的名字**点名拒绝**（`SKIN_UNKNOWN_FIELD`） |
+| 字段闭集 | `SKIN_FIELDS` = `id` / `charId` / `name` / `series` / `desc` / `art` / `voices` / `sfx`，一个不多一个不少；写别的名字**点名拒绝**（`SKIN_UNKNOWN_FIELD`） |
 | `id` 与 `charId` | `SKIN_ID_RE`（≤32 字符、不许下划线开头）；同一个包里两个同名 `id` ⇒ `SKIN_DUPLICATE_ID` |
 | `art` | 路径必须是包内相对路径（`ART_PATH_UNSAFE`）；spine 要齐 `skel` + `atlas`（`ART_SPINE_INCOMPLETE`）。有 `assets/` 就要声明 `license`（与 art 同一条） |
+| `sfx` | 与 `art` 的单位音效表（`ART_TABLES.sfxUnits`）**同一个解析器**：`attack` / `hit` / `skill` / `die` / `born` 与 `skills` / `attacks` / `hits` 三张「技能 index → 路径」表；缺哪一格就落回干员本体那一格 |
 | 贡献项 | **只带时装、`content: []` 的包合法** —— 一套时装就是这个包带来的东西（空数组仍 `EMPTY_PACK`） |
 
-落点是**清单**：`assets.skins[<charId>] = [{ pack, id, name, series?, desc?, art?, voices? }, …]`（按干员分组的
-一列；同一干员可以有几套）。两个包给同一干员的**同一套 id** 时按包 id 升序第一个赢，输的一方点名
+落点是**清单**：`assets.skins[<charId>] = [{ pack, id, name, series?, desc?, art?, voices?, sfx? }, …]`
+（按干员分组的一列；同一干员可以有几套）。两个包给同一干员的**同一套 id** 时按包 id 升序第一个赢，输的一方点名
 `SKIN_COLLISION`。路径与其它素材通道逐字相同：变成 `/workshop-assets/<包>/<路径>`，只服务登记过的 URL。
+
+**技能 / 攻击特效**（视觉）不在这张表里：它随 `fx.manifest` 分发（§1.19.2），由 `index.json` 的
+`skins[<时装模型 stem>] = { points, fx }` 声明「这套时装用 `<特效 key>_<fx>`」。`workshop/skin-supplement` 1.4.1
+就是这么做的：196 套官方时装各带自己的挂载点与特效后缀，外加 3 套带专属战斗音效。
 
 **引擎不认识「皮肤」。** 它做两件事，第三件由包自己做：
 

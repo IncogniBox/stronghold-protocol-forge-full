@@ -57,7 +57,18 @@ export function renderInfo(u) {
       : undefined,
     // 干员皮肤 (docs/SKINS.md): the owning player's chosen skinId, sent with the snapshot (UnitInfo.skin) — the view asks
     // assets.js for that appearance's Spine / avatar and falls back to the operator's own model when the manifest has no
-    // such skin. render/app.js clears it for another player's unit while 设置「显示其他玩家的皮肤」 is off.
+    // such skin. render/app.js clears it for another player's unit while 设置「显示其他玩家的皮肤」is off.
     skin: typeof u.skin === 'string' && u.skin ? u.skin : null,
+    // 特训（重构协议·特训）：学员的教官身份 / 选定技能槽 / 当前时装（UnitInfo.reconMentor，server/sim/snapshot.js）。
+    // **这一层必须转写**：render/vfx/skillfx.js 只从 view.info 读它（音频那一侧直接读 sim 的 UnitInfo，所以音效正常、
+    // 特效整段没有 —— 教官的 plan / mode / 弹道爆炸全部解析不出来）。缺省 ⇒ 按普通单位画。
+    reconMentor: u.reconMentor && typeof u.reconMentor.spine === 'string'
+      ? {
+          defId: typeof u.reconMentor.defId === 'string' ? u.reconMentor.defId : null,
+          spine: u.reconMentor.spine,
+          skillIndex: Number.isInteger(u.reconMentor.skillIndex) ? u.reconMentor.skillIndex : null,
+          ...(typeof u.reconMentor.skin === 'string' && u.reconMentor.skin ? { skin: u.reconMentor.skin } : {}),
+        }
+      : undefined,
   };
 }

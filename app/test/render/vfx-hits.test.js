@@ -13,7 +13,8 @@ import { FxWiring, CHAIN_LINE_S } from '../../public/js/render/vfx/wiring.js';
 const BLOCKED = 1;
 const row = (k, o = {}) => ({ effects: [k], directionType: 0, oneshot: 1, startEvent: 4, endEvent: 3, ...o });
 const KEYS = ['shot_trail', 'shot_hit', 'rows_trail', 'rows_hit', 'timer_hit', 'dir_cast', 'dir_hit', 'heal_trail', 'healer_hit', 'chain_trail',
-  'chain_line', 'chain_hit', 'lord_trail', 'lord_hit', 'lord_cast', 'lord_combat_cast', 'lord_combat_hit', 'sky_cast', 'sky_trail', 'sky_hit', 'g_hit', 'g_enemy', 'g_heal'];
+  'chain_line', 'chain_hit', 'lord_trail', 'lord_hit', 'lord_cast', 'lord_combat_cast', 'lord_combat_hit', 'sky_cast', 'sky_trail', 'sky_hit',
+  'boom_trail', 'boom_hit', 'boom_stop', 'g_hit', 'g_enemy', 'g_heal'];
 
 function makeIndex() {
   const prefabs = Object.fromEntries(KEYS.map((k) => [k, { file: `prefabs/${k}.json`, looping: k === 'chain_line' }]));
@@ -36,6 +37,8 @@ function makeIndex() {
       char_706_lord: unit([{ name: 'Default', attack: ranged('proj_lord', [], [row('lord_cast')]), combat: { class: 'MeleeAttack', cast: [row('lord_combat_cast')], hit: [row('lord_combat_hit')] } }]),
       // 蒂比: a RangedAttack the sim makes melee
       char_707_sky: unit([{ name: 'Default', attack: ranged('proj_sky', [], [row('sky_cast')]) }]),
+      // 维什戴尔: the explosion is the projectile's stop effect (`onStop`), beside its onHit
+      char_710_boom: unit([{ name: 'Default', attack: ranged('proj_boom') }]),
       enemy_800_foe: { kind: 'enemy', modes: [{ name: 'Default', attack: ranged('proj_sky'), combat: null }], skills: {}, startEffect: null, deadEffect: null },
     },
     skills: {},
@@ -50,6 +53,7 @@ function makeIndex() {
       ] },
       proj_lord: { main: 'lord_trail', onHit: ['lord_hit'], effects: ['lord_trail', 'lord_hit'] },
       proj_sky: { main: 'sky_trail', onHit: ['sky_hit'], effects: ['sky_trail', 'sky_hit'], movement: { class: 'AdvancedMovement', speed: 10 } },
+      proj_boom: { main: 'boom_trail', onHit: ['boom_hit'], onStop: ['boom_stop'], effects: ['boom_trail', 'boom_hit', 'boom_stop'], movement: { class: 'AdvancedMovement', speed: 10 } },
     },
     skins: {},
     generic: { hit: { phys: 'g_hit', arts: 'g_hit', enemy: 'g_enemy', heal: 'g_heal' }, die: {}, birth: {}, status: {} },
@@ -220,5 +224,16 @@ describe('official hits after the effects audit (round 46)', () => {
     frame();
     w.attack(en, op, 'none', 2);
     assert.equal(count(spawned, 'sky_trail'), 1);
+  });
+
+  test('R17: a projectile\'s stop effect plays where it stopped (维什戴尔\'s explosion is `onStop`, not `onHit`)', async () => {
+    const { w, spawned, view, frame, land } = await setup();
+    const a = view(1, 'char_710_boom', 5), t = view(2, 'enemy_800_foe', 8);
+    frame();
+    assert.equal(w.attack(a, t, 'arrow', 1), true);
+    assert.ok(spawned.includes('boom_trail') && !spawned.includes('boom_stop'), 'not before the shot lands');
+    land('boom_trail');
+    assert.equal(count(spawned, 'boom_hit'), 1, 'the onHit keeps playing');
+    assert.equal(count(spawned, 'boom_stop'), 1, 'and the stop effect (the explosion) plays once, at the arrival');
   });
 });

@@ -141,6 +141,9 @@ export class PlayerViews {
       // switched off)
       diy: this.diy,
       diyBanned: this.diyBanned,
+      // 重构协议·特训（shared/reconModes.js）：本局已交的每一条 { round, mentor, trainee }（uid）——客户端据此
+      // 画特训按钮的已用状态与学员标记；只有本人能看到自己的这一份（收件人私有）。
+      reconTraining: (this.reconTraining || []).map((t) => ({ round: t.round, mentor: t.mentor, trainee: t.trainee })),
       // 最终攻势 / 隐秘核心 prep (community report of 2026-10-06, item 51): `{ playerId, side, units }` — the pair partner's
       // board pieces as UnitInfo on its half of the boss field (mirrored on the right half, as the battle places them);
       // the own prep view draws them beside the own half, read-only. Absent otherwise.

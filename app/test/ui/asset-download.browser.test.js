@@ -46,6 +46,9 @@ test('homepage download, visible failure/retry, pause, cache reuse, and the two 
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewport({ width: 1280, height: 900 });
   await page.goto(srv.url);
+  // the two asset buttons live in the 资源 panel (2026-10-22): open it, then measure
+  await page.waitForSelector('.title-resources');
+  await page.click('.title-resources');
   await page.waitForSelector('[data-testid="asset-download"]');
   assert.equal(counts.size, 0, 'opening the homepage does not download the asset pack');
   if (process.env.SP_ASSET_SCREENSHOTS) {
@@ -71,38 +74,38 @@ test('homepage download, visible failure/retry, pause, cache reuse, and the two 
     await page.screenshot({ path: path.join(process.env.SP_ASSET_SCREENSHOTS, 'complete.png') });
   }
   await page.keyboard.press('Escape');
-  // 下载完整素材 and 导入素材包 side by side (ui/assetDownload.js, ui/assetImport.js): both inside the viewport, uncovered, on one
-  // row, not overlapping, their hint lines clear of the footer — on a desktop and on a landscape phone
+  // 资源包导入 and 下载完整素材 live in the 资源 panel (ui/largeAssets.js res-import): both inside the modal,
+  // stacked (import first), not overlapping, each with its hint line — on a desktop and on a landscape phone
   for (const viewport of [{ width: 1280, height: 900 }, { width: 844, height: 390 }]) {
     await page.setViewport(viewport);
     const box = (sel) => page.$eval(sel, (el) => {
+      el.scrollIntoView({ block: 'center' });
       const b = el.getBoundingClientRect();
       return { left: b.left, top: b.top, right: b.right, bottom: b.bottom,
         visible: el.contains(document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2)) };
     });
-    const download = await box('[data-testid="asset-download"]');
     const importer = await box('[data-testid="asset-import"]');
+    const download = await box('[data-testid="asset-download"]');
     for (const [name, bounds] of [['download', download], ['import', importer]]) {
       assert.ok(bounds.left >= 0 && bounds.right <= viewport.width && bounds.top >= 0 && bounds.bottom <= viewport.height, `${name} ${JSON.stringify(bounds)}`);
       assert.ok(bounds.visible, `the ${name} button is not covered`);
     }
-    assert.ok(Math.abs(download.top - importer.top) < 1 && download.right <= importer.left, `side by side ${JSON.stringify({ download, importer })}`);
-    const hints = await page.$$eval('.title-assets__item > small', (els) => els.map((el) => el.getBoundingClientRect().bottom));
-    const foot = await page.$eval('.title-foot', (el) => [...el.children].map((c) => c.getBoundingClientRect())
-      .filter((b) => b.width > 0).map((b) => ({ top: b.top, left: b.left, right: b.right })));
-    const block = await page.$eval('.title-assets', (el) => el.getBoundingClientRect().toJSON());
+    assert.ok(download.top >= importer.bottom - 1, `stacked below the import button ${JSON.stringify({ download, importer })}`);
+    const hints = await page.$$eval('.title-assets__item > small', (els) => els.map((el) => {
+      el.scrollIntoView({ block: 'center' });
+      return el.getBoundingClientRect().bottom;
+    }));
     assert.equal(hints.length, 2, 'a hint line under each button');
-    for (const f of foot) {
-      const across = f.left < block.right && f.right > block.left;
-      assert.ok(!across || Math.max(...hints) <= f.top, `the hints stay above the footer ${JSON.stringify({ hints, f })}`);
-    }
-    if (process.env.SP_ASSET_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.SP_ASSET_SCREENSHOTS, `title-${viewport.width}.png`) });
+    if (process.env.SP_ASSET_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.SP_ASSET_SCREENSHOTS, `panel-${viewport.width}.png`) });
   }
   // A new browser context has an empty HTTP cache. Closing the dialog must stop a hanging request.
   const context = await browser.createBrowserContext();
   const other = await context.newPage();
   hanging = true;
   await other.goto(srv.url);
+  await other.waitForSelector('.title-resources');
+  await other.click('.title-resources');
+  await other.waitForSelector('[data-testid="asset-download"]');
   await other.click('[data-testid="asset-download"]');
   await other.waitForFunction(async () => (await import('/js/assetDownload.js')).assetDownload.get().phase === 'downloading');
   await other.keyboard.press('Escape');

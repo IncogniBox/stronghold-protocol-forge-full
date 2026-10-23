@@ -165,8 +165,14 @@ export class MatchViews {
       };
     }
     // 预重构（模式扩展-重构模拟，PHASE.PRE_RECON）：各座位已交的选择（没交的座位不在表里 ⇒ 客户端画「待提交」）。
-    if (this.phase === PHASE.PRE_RECON && this.reconChoices) {
-      v.recon = { choices: Object.fromEntries(Object.entries(this.reconChoices).map(([pid, c]) => [pid, { ...c }])) };
+    // 重构模拟的**整局标记**：其余阶段也带 `recon`（choices 为 null）——特训按钮（screens/game.js）等客户端读点
+    // 靠它判「这是重构对局」。官方对局连这个键都不写，公开视图字节不变。
+    if (this.gd.isRecon) {
+      v.recon = {
+        choices: this.phase === PHASE.PRE_RECON && this.reconChoices
+          ? Object.fromEntries(Object.entries(this.reconChoices).map(([pid, c]) => [pid, { ...c }]))
+          : null,
+      };
     }
     if (this.phase === PHASE.SP_DRAFT && this.sp) {
       const s = this.sp;

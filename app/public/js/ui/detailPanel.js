@@ -53,6 +53,7 @@ import { voiceLangOverrideOf, withVoiceLang } from '../voicePrefs.js';
 import { abilityRows } from './abilityLines.js';
 import { data } from '../data.js';
 import { attackRangeGrid } from '../../../shared/loadoutRecord.js';
+import { RECON_BOND_ID, RECON_TRAINEE_STAT_RATIO } from '../../../shared/reconModes.js';
 import { equipCapacity, DEFAULT_EQUIP_PER_CHESS } from '../../../shared/equipSlots.js';
 import { SKILL_SUMMON_START_DEPLOY } from '../../../shared/constants.js';
 import { moduleBadge, fullTraitText } from './loadoutModel.js';
@@ -409,11 +410,12 @@ export function garrisonTypeIconKey(garrison) {
   return EVENT_ICON[garrison?.eventType] || 's_icon_bond';
 }
 
-/** The operator's own effect (特质, garrisons.json): trigger chip + description, compact. */
-export function GarrisonBlock({ garrison, m }) {
-  return html`<section class="dgarrison" aria-label=${t('特质')} data-garrison=${garrison.garrisonId || ''}>
+/** The operator's own effect (特质, garrisons.json): trigger chip + description, compact. `mentor` marks an entry
+ *  inherited from a 特训 mentor (the golden 特质 area of a trainee's card, ui/reconTrain.js). */
+export function GarrisonBlock({ garrison, m, mentor = false }) {
+  return html`<section class=${cx('dgarrison', mentor && 'is-mentor')} aria-label=${t('特质')} data-garrison=${garrison.garrisonId || ''} data-mentor-trait=${mentor ? '' : undefined}>
     <div class="dgarrison__head">
-      <span class="dgarrison__k">${t('特质')}</span>
+      <span class="dgarrison__k">${t('特质')}${mentor ? html` <i class="dtag-loadout dtag-mentor" title=${t('由教官继承')}>${t('教官')}</i>` : null}</span>
       <span class="dgarrison__type">
         <${Img} src=${uiUrl(m, `garrisonTypeIcon/${garrisonTypeIconKey(garrison)}`)} class="dgarrison__icon" />
         ${garrison.eventTypeDesc || ''}
@@ -480,7 +482,7 @@ function skillTextNote(sk) {
 
 // `owner` = 这张卡画的是**谁的**棋子（换装 / 时装）：`undefined` = 自己；一个 playerId = 那位队友（看他的卡时用他
 // 选的时装）；`null` = 归属未知 → 不套用任何选择。多数调用点（含全部测试）不传 = 自己，输出与从前逐字相同。
-export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bonds, offBonds = null, removedBonds = null, loadout, onBond, live = null, hint = null, unitItems = null, standIn = null, diy = null, voiceSettings = null, cultOpts = null, owner = undefined, morphMode = 'official', onUnequip = null }) {
+export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bonds, offBonds = null, removedBonds = null, loadout, onBond, live = null, hint = null, unitItems = null, standIn = null, diy = null, voiceSettings = null, cultOpts = null, owner = undefined, morphMode = 'official', onUnequip = null, trainee = null }) {
   const m = data.get('assets');
   const hp = hpOf(live, snapHp);
   // 0.2.0 自选编队: `chess` is then the composed 自选 record (the operator, the slot's tier / price); its skill and module are
@@ -532,6 +534,7 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
           ${golden ? html`<span class="dtag-elite">${t('精锐')}</span>` : null}
           ${piece?.kind === 'token' ? html`<span class="dtag-token">${t('召唤物')}</span>` : null}
           ${si ? html`<span class="dtag-standin" data-standin=${si.charId} title=${standInTip(si, c.name)}>${standInLabel(si)}</span>` : null}
+          ${trainee ? html`<span class="dtag-train" title=${t('重构协议·特训：叠加教官的技能效果、特质与天赋；攻击 / 防御 / 生命 = 学员基础值 + 教官的 50%')}>${t('特训学员')}</span>` : null}
           ${diy ? html`<span class="dtag-diy" data-diy=${c.charId || ''} title=${t('自选编队：所选技能与模组，没有特质，盟约按所属阵营分配')}>${t('自选')}</span>` : null}
         </div>
         <h3 class="dhead__name">${si ? si.name : c.name}</h3>
@@ -548,14 +551,45 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
         <${BondChips} bondIds=${bondIds} bonds=${bonds} off=${offBonds} onBond=${onBond} granted=${grantedIds} />
       </div>
     </div>`;
-  blocks.garrison = garrisons.length > 1
-    ? garrisons.map(garrison => html`<${GarrisonBlock} key=${garrison.garrisonId} garrison=${garrison} m=${m} />`)
-    : garrisons[0] ? html`<${GarrisonBlock} key="garrison" garrison=${garrisons[0]} m=${m} />` : null;
+  // 特训学员（重构协议·特训，叠加式）：教官的特质 / 技能 / 天赋**并进学员自己那几行**（同一区块，条目上带「教官」
+  // 标签区分来源）—— 不再单开一类「教官教学」。业主 2026-10-23 的口径：继承的说明就是这名干员自己的说明。
+  const mRec = trainee?.mentorRec || null;
+  const mTag = html`<i class="dtag-loadout dtag-mentor" title=${t('由教官继承')}>${t('教官')}</i>`;
+  // 教官的**特质**（金色那一块，garrisons.json 的整备 / 作战能力）—— 不是下面那行职业分支描述（`trait`）。
+  const mGarrisons = mRec ? (mRec.garrisonIds ?? []).map((id) => data.lookup('garrisons', id)).filter((g) => g && !g.operatorTrait) : [];
+  // 教官天赋：隐藏的模组天赋（index −1，名字与描述皆空）不画 —— 它们在数据里只有数值，没有可读的说明
+  const mTalents = (Array.isArray(mRec?.talents) ? mRec.talents : []).filter((mt) => mt && (mt.name || mt.desc || mt.descRaw));
+  const ownGarrisons = garrisons.map((garrison) => html`<${GarrisonBlock} key=${garrisons.length > 1 ? garrison.garrisonId : 'garrison'} garrison=${garrison} m=${m} />`);
+  const mentorGarrisons = mGarrisons.map((garrison) => html`<${GarrisonBlock} key=${`m:${garrison.garrisonId}`} garrison=${garrison} m=${m} mentor=${true} />`);
+  // 一条都没有时保持 null；只有自己一条时也保持单个节点（其它调用方按 CHESS_SECTIONS 的“一格”读它）
+  blocks.garrison = mentorGarrisons.length
+    ? [...ownGarrisons, ...mentorGarrisons]
+    : (ownGarrisons.length > 1 ? ownGarrisons : (ownGarrisons[0] ?? null));
   blocks.trait = body.trait?.desc ? html`<p key="trait" class="dtrait"><${Icon} name="info" /><${RichText} text=${traitText(body, golden, lo)} /></p>` : null;
   // (`fr` is the body the unit fights with — a stand-in's record for a 补位 chess; `chess` is only the range's fallback)
-  blocks.stats = chessStatsBlock({ rec: fr, chess: c, live });
-  blocks.skill = sk ? html`<${Section} key="skill" title=${t('技能')} micro="SKILL" class="dsec--skill">
-      <div class="dskill" data-skill=${sk.skillId || ''}>
+  blocks.stats = (() => {
+    const base = chessStatsBlock({ rec: fr, chess: c, live });
+    // 三围的完整算式（学员基础 + 教官 ×ratio）：属性格只给结果，这一行说明它从哪来
+    const bs = trainee && trainee.base && trainee.base.stats ? trainee.base.stats : null;
+    const ms = mRec && mRec.stats && typeof mRec.stats === 'object' ? mRec.stats : null;
+    if (!bs || !ms) return base;
+    const r = Number.isFinite(trainee?.ratio) ? trainee.ratio : RECON_TRAINEE_STAT_RATIO;
+    const pct = Math.round(r * 100);
+    const line = (k, label) => {
+      const a = Math.round(bs[k] || 0);
+      const b = Math.round(ms[k] || 0);
+      return t('{label} {a}+{b}×{p}%={c}', { label, a, b, p: pct, c: Math.round(a + b * r) });
+    };
+    return html`<div key="stats" class="dstats-unit">
+      ${base}
+      <p class="dhint dhint--mentor" data-mentor-stats><${Icon} name="info" />${t('三围')}：${[
+        line('atk', t('攻击')), line('def', t('防御')), line('maxHp', t('生命')),
+      ].join(' · ')}</p>
+    </div>`;
+  })();
+  const mSkill = mRec && mRec.skill ? mRec.skill : null;
+  blocks.skill = (sk || mSkill) ? html`<${Section} key="skill" title=${t('技能')} micro="SKILL" class="dsec--skill">
+      ${sk ? html`<div class="dskill" data-skill=${sk.skillId || ''}>
         <${Img} src=${skIcon} class="dskill__icon" fallback=${html`<span class="dskill__icon dskill__icon--empty">${skSlot ? html`<b class="num">${skSlot}</b>` : null}</span>`} />
         <div class="dskill__meta">
           <b class="dskill__name">${skSlot && (lo?.choices || 0) > 1 ? html`<span class="dskill__slot num" title=${t('技能 {skSlot}', { skSlot })}>${skSlot}</span>` : null}${sk.name}${lo && !lo.defaultSkill && !si ? html`<span class="dtag-loadout" title=${t('干员调配中选择的技能')}>${t('已调配')}</span>` : null}</b>
@@ -563,7 +597,14 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
         </div>
       </div>
       <${RichText} as="p" text=${sk.descRaw || sk.desc} class="dtext" />
-      ${skillTextNote(sk)}
+      ${skillTextNote(sk)}` : null}
+      ${mSkill ? html`<div class="dskill is-mentor" data-mentor-skill=${mSkill.skillId || ''}>
+        <div class="dskill__meta">
+          <b class="dskill__name">${mTag}${mSkill.name}</b>
+          <div class="dskill__tags">${skillTags(mSkill)}</div>
+        </div>
+      </div>
+      <${RichText} as="p" text=${mSkill.descRaw || mSkill.desc} class="dtext" />` : null}
     <//>` : null;
   blocks.module = golden && lo?.module ? html`<${Section} key="module" title=${t('模组')} micro="MODULE" class="dsec--module">
       <div class=${cx('dmodule', lo.module.none && 'is-none')} data-module=${lo.module.id}>
@@ -594,8 +635,9 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
       ${carried.map((id, i) => html`<${ItemRow} key=${`${i}:${id}`} itemId=${id} carried=${carried} off=${offBonds} itemData=${itemData} bonds=${bonds} />`)}
     <//>` : null;
   const talents = chessTalents(fr);
-  blocks.talents = talents.length ? html`<${Section} key="talents" title=${t('天赋')} micro="TALENT" class="dsec--talent">
-      ${talents.map((t, i) => html`<div key=${i} class="dtalent"><b>${t.name}</b><${RichText} text=${t.descRaw || t.desc} class="dtext" /></div>`)}
+  blocks.talents = (talents.length || mTalents.length) ? html`<${Section} key="talents" title=${t('天赋')} micro="TALENT" class="dsec--talent">
+      ${talents.map((tt, i) => html`<div key=${i} class="dtalent"><b>${tt.name}</b><${RichText} text=${tt.descRaw || tt.desc} class="dtext" /></div>`)}
+      ${mTalents.map((mt, i) => html`<div key=${`m${i}`} class="dtalent is-mentor" data-mentor-talent><b>${mTag}${mt.name || ''}</b><${RichText} text=${mt.descRaw || mt.desc} class="dtext" /></div>`)}
     <//>` : null;
   blocks.actions = piece && editable && piece.kind !== 'item' ? html`<div key="actions" class="dactions">
       <${Button} variant="amber" icon="close" class="dpanel__sell" onClick=${() => onSell(piece, si || c)}>${t('出售')}<span class="dsell num">+${sell}</span><//>
@@ -865,6 +907,69 @@ function DeviceDetail({ device, snapHp = null, live = null }) {
 }
 
 /**
+ * 重构协议·特训（shared/reconModes.js）：棋子 `p` 是不是学员 —— 是就返回**教官按它自己选定技能 / 模组解析的那份
+ * chess 记录**（详情卡与战斗同一份组成口径；`m.private.loadout` 的键是 baseId），否则 null。数据来自
+ * `priv.reconTraining`（uid 表）+ `priv.board` / `priv.temp` / `priv.hand` 的棋子视图。
+ */
+function reconTraineeMentorRec(p, priv) {
+  if (!p || !Number.isInteger(p.uid)) return null;
+  const t = (priv?.reconTraining || []).find((x) => x && x.trainee === p.uid);
+  if (!t) return null;
+  const find = (uid) => [...(priv?.board || []), ...(priv?.temp || []), ...(priv?.hand || [])].find((v) => v && v.kind === 'chess' && v.uid === uid) || null;
+  const mp = find(t.mentor);
+  if (!mp) return null;
+  const rec = data.lookup('chess', mp.id);
+  if (!rec) return null;
+  // 甄选干员（自选槽位）教官：按槽位的 pick 组合成所选干员的那份记录（影子技能是 pick 选定的那一发）
+  const dd = { chess: data.get('chess'), backups: data.get('backups') };
+  const base = rec.isDiy ? (ownDiyRecord(rec, priv, dd) || rec) : rec;
+  // 教官按它自己选定的技能 / 模组解析（影子技能是教官实际带着的那一发）
+  const baseId = base.baseId || base.chessId;
+  const lo = priv?.loadout && typeof priv.loadout === 'object' ? priv.loadout : null;
+  const keyed = lo && baseId && lo[baseId] ? { [baseId]: lo[baseId] } : lo;
+  try { return chessLoadout(base, keyed, (id) => data.lookup('chess', id))?.record || base; } catch { return base; }
+}
+
+/**
+ * 特训学员的**展示记录**（客户端镜像 `server/sim/simdata.js getTrainee` 的同一份组成，**叠加式**）：学员自己的
+ * 记录为基（自己的技能 / 特质 / 天赋 / charId 照旧），攻 / 防 / 生命 = 学员自己的 + 教官的 ×0.5；`bonds` = 学员
+ * 自己的 ∪ 教官的 ∪ 授予的 `bond_recon`（与服务端 bondsMeta.pieceBonds 的 meta.data.bondGrants 授予同一条——
+ * 详情卡的盟约芯片因此和服务端计数一致）；`traineeMentor` = 教官那份记录（ChessDetail 的「教官教学」区块：
+ * 影子技能 / 特质 / 天赋说明）。
+ */
+function traineeChess(own, mentor, ratio = RECON_TRAINEE_STAT_RATIO) {
+  if (!own || !mentor) return own ?? mentor ?? null;
+  // 盟约 = 学员自己的 ∪ 教官的（含教官特质授予的）∪ 授予的 bond_recon —— 与服务端 prep.reconTrain 写进
+  // meta.data.bondGrants 的那一份同集合（bondsMeta.pieceBonds / unitBonds / 客户端芯片三处同源）。
+  const bonds = [];
+  for (const b of [
+    ...(Array.isArray(own.bonds) ? own.bonds : []),
+    ...(Array.isArray(mentor.bonds) ? mentor.bonds : []),
+    ...(mentor.trait && Array.isArray(mentor.trait.grantsBonds) ? mentor.trait.grantsBonds : []),
+    RECON_BOND_ID,
+  ]) {
+    if (!bonds.includes(b)) bonds.push(b);
+  }
+  return {
+    ...own,
+    stats: {
+      ...own.stats,
+      atk: Math.round(own.stats.atk + mentor.stats.atk * ratio),
+      def: Math.round(own.stats.def + mentor.stats.def * ratio),
+      maxHp: Math.round(own.stats.maxHp + mentor.stats.maxHp * ratio),
+    },
+    bonds,
+    loadout: { ...(own.loadout ?? {}), isDefault: true },
+    traineeMentor: {
+      name: mentor.name,
+      skill: mentor.skill ?? null,
+      trait: mentor.trait ?? null,
+      talents: Array.isArray(mentor.talents) ? mentor.talents : [],
+    },
+  };
+}
+
+/**
  * Resolve what a detail target shows.
  * @param {{ kind:'piece'|'chess'|'item'|'enemy'|'unit'|'token'|'terrain'|'device', id?:string, uid?:number, unit?:any, count?:number }} target
  * @param {Map<number, any>} pieces indexPieces(priv)
@@ -901,6 +1006,10 @@ export function resolveDetail(target, pieces, { priv = null, backups = data.get(
     const c = data.lookup('chess', p.id);
     const d = ownDiy(c);
     if (d) return { type: 'chess', chess: d.chess, piece: p, standIn: null, diy: d.diy };
+    // 重构协议·特训（shared/reconModes.js）：学员的详情卡 = 组成记录（客户端镜像 sim getTrainee——叠加式：学员
+    // 自己的技能 / 特质 / 天赋，+ 教官的 50% 三围、双方盟约 + 授予的 bond_recon + 「教官教学」区块），带「特训学员」徽标。
+    const tr = reconTraineeMentorRec(p, priv);
+    if (tr) return { type: 'chess', chess: traineeChess(c, tr), piece: p, standIn: ownSi(c), trainee: { mentor: tr.name, mentorRec: tr, base: c, ratio: RECON_TRAINEE_STAT_RATIO } };
     return c ? { type: 'chess', chess: c, piece: p, standIn: ownSi(c) } : null;
   }
   if (target.kind === 'chess') {
@@ -938,6 +1047,8 @@ export function resolveDetail(target, pieces, { priv = null, backups = data.get(
     let si = null;
     if (c && typeof u.standInFor === 'string' && u.standInFor) si = standInOf(c, backups);
     else if (c && own?.piece) si = ownSi(c);
+    // 重构协议·特训：战斗里的学员单位点开详情 = 同一份组成记录（与 own piece 分支一致）
+    const tr = own?.piece ? reconTraineeMentorRec(own.piece, priv) : null;
     // 0.2.0 自选编队: a unit says itself which operator fills its DIY slot (UnitInfo diy); an own piece's unit follows
     // m.private.diy like the piece
     const pick = c && u.diy && typeof u.diy === 'object' ? unitPick(u) : own?.piece ? ownDiyPick(priv, c) : null;
@@ -946,6 +1057,7 @@ export function resolveDetail(target, pieces, { priv = null, backups = data.get(
     // m.private.ops (the panel's `cultOpts`)
     const cv = own?.piece ? null : { cultOpts: { cultivation: unitCultivation(u) } };
     if (dr) return { type: 'chess', chess: dr, piece: own?.piece || null, unitId: u.id, unitItems: Array.isArray(u.items) ? u.items : null, standIn: null, diy: pick, ...cv };
+    if (c && tr) return { type: 'chess', chess: traineeChess(c, tr), piece: own?.piece || null, unitId: u.id, unitItems: Array.isArray(u.items) ? u.items : null, standIn: si, trainee: { mentor: tr.name, mentorRec: tr, base: c, ratio: RECON_TRAINEE_STAT_RATIO }, ...cv };
     if (c) return { type: 'chess', chess: c, piece: own?.piece || null, unitId: u.id, unitItems: Array.isArray(u.items) ? u.items : null, standIn: si, ...cv };
     const t = data.lookup('tokens', u.defId) || diyToken(u.defId);
     if (t) return { type: 'token', token: t, unitId: u.id, ownerId: tokenOwnerId(own?.piece, pieces) };
@@ -1021,7 +1133,7 @@ export const DetailPanel = modComponent('loadout.detail', function DetailPanel({
     <div class="dpanel__scroll">
       ${detail.type === 'chess' ? html`<${ChessDetail} chess=${detail.chess} piece=${detail.piece} snapHp=${snapHp} editable=${editable} onSell=${sellIt}
         bonds=${bonds} offBonds=${offBonds} removedBonds=${removedBonds} loadout=${loadout} onBond=${onBond} live=${liveNow} hint=${detail.hint || null} unitItems=${detail.unitItems || null}
-        standIn=${detail.standIn || null} diy=${detail.diy || null} voiceSettings=${voiceSettings} cultOpts=${detail.cultOpts || { ops }} owner=${owner} onUnequip=${onUnequip} />` : null}
+        standIn=${detail.standIn || null} diy=${detail.diy || null} voiceSettings=${voiceSettings} cultOpts=${detail.cultOpts || { ops }} owner=${owner} onUnequip=${onUnequip} trainee=${detail.trainee || null} />` : null}
       ${detail.type === 'item' ? html`<${ItemDetail} item=${detail.item} piece=${detail.piece} editable=${editable} onDestroy=${destroyIt} offBonds=${offBonds} itemData=${detail.piece?.itemData ?? null} bonds=${bonds} />` : null}
       ${detail.type === 'enemy' ? html`<${EnemyDetail} enemy=${detail.enemy} snapHp=${snapHp} count=${detail.count} live=${liveNow} />` : null}
       ${detail.type === 'token' ? html`<${TokenDetail} token=${detail.token} piece=${detail.piece} ownerId=${detail.ownerId ?? null} snapHp=${snapHp} live=${liveNow} />` : null}

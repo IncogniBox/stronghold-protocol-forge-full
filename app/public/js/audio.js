@@ -77,6 +77,7 @@
 
 import { PHASE } from '../../shared/constants.js';
 import { mediaUrl } from './media.js';
+import { skinSfxOf } from './assets.js';
 import { unhashedUrl } from '../../shared/assetPaths.js';
 // The manifest tree of each non-Chinese dub (`voiceLine`): the table itself lives in voicePrefs.js / shared/constants.js.
 import { VOICE_TREES, VOICE_PICKS } from './voicePrefs.js';
@@ -114,6 +115,12 @@ const CHAIN_KINDS = new Set(['chain', 'chainHeal']);
 const IMPACT_TYPES = new Set(['phys', 'arts', 'true']);
 /** A 'dmg' later than this (real ms) after the attack aimed at the target is not that attack's impact. */
 const IMPACT_WINDOW_MS = 2500;
+/**
+ * 特训：学员技能结束后仍有攻击归属于该技能的窗口（蕾缪安 S3 的礼炮在技能结束后的 10 s 内一发发落下，
+ * server/sim/content/kits/ops/chess_char_6_01-lemuen.js 的 LEMUEN_SHELL_WINDOW；特效侧同一条窗口见
+ * render/vfx/skillfx.js 的 POST_SKILL_MENTOR_S）。这段时间里的 `bombard` 命中音也叠教官那一份。
+ */
+const MENTOR_RELEASE_MS = 10000;
 /** Casts held for a unit that is not tracked yet (`pendingSkill`): a hold per unit of a field, never more than this. */
 const PENDING_SKILL_MAX = 64;
 /**
@@ -1233,20 +1240,27 @@ export class AudioManager {
    * @param {number|string} unitId battle unit id (cooldown key)
    * @param {number} [skillIndex] the unit's equipped skill slot (0-based)
    * @param {boolean} [skillActive] whether that skill runs right now (`attacks` / `hits` need it, see header)
+   * @param {string} [skinId] the outfit this unit wears (`UnitInfo.skin`) — that outfit's own `sfx` answers first,
+   *   field by field, and its `mix` / `pools` / `attackMix` / `attackPools` still come from the unit's normal entry
    * @returns {boolean} whether a unit-specific sound exists
    */
-  unit(defId, kind, unitId, skillIndex, skillActive = false) {
+  unit(defId, kind, unitId, skillIndex, skillActive = false, skinId = null) {
     try {
       const pick = () => {
         const u = this.getManifest()?.audio?.sfx?.units?.[defId];
+        const s = skinSfxOf(this.getManifest(), defId, skinId);
         // DESIGN §16: the equipped skill's own ON_SKILL_START sound (`skills[index]`) when the manifest has it
-        const own = kind === 'skill' && Number.isInteger(skillIndex) && u?.skills ? u.skills[skillIndex] : null;
+        const own = kind === 'skill' && Number.isInteger(skillIndex) && (s?.skills || u?.skills)
+          ? (s?.skills?.[skillIndex] ?? u?.skills?.[skillIndex]) : null;
         // the running skill's own swing / impact (header); only while it runs — otherwise 能天使 S2's file would ring
         // on every normal attack of hers (exactly what normalAttackSfx keeps out). 赤刃明霄陈 S3: `attacks[2]` = the S3
         // swing, `hits[2]` = the S3 slash's impact.
-        const table = kind === 'attack' ? u?.attacks : kind === 'hit' ? u?.hits : null;
+        const table = kind === 'attack' ? (s?.attacks ?? u?.attacks) : kind === 'hit' ? (s?.hits ?? u?.hits) : null;
         const mode = skillActive && Number.isInteger(skillIndex) && table ? table[skillIndex] : null;
-        return { u, mode, url: typeof own === 'string' ? own : typeof mode === 'string' ? mode : u?.[kind] };
+        return {
+          u: u || s, mode,
+          url: typeof own === 'string' ? own : typeof mode === 'string' ? mode : (typeof s?.[kind] === 'string' ? s[kind] : u?.[kind]),
+        };
       };
       const { u, mode, url } = pick();
       if (typeof url !== 'string') return false;
@@ -1265,7 +1279,23 @@ export class AudioManager {
     } catch { return false; }
   }
 
-  // ---- operator battle voice ----------------------------------------------------------------------------------
+  /**
+   * 特训学员的教官：教官技能自己的挥击 / 命中音（`sfx.units[教官].attacks|hits[教官的技能槽]`）。只有那份**技能音**存在时才补
+   * —— 不存在时不把教官的普通攻击音叠进来（否则学员每一下都会多一声教官的普攻）。
+   * @param {'attack'|'hit'} kind
+   * @param {{ def: string, skillIndex?: number|null }|null} mentor `_track` 存下的教官身份
+   * @param {string} unitKey 独立的节流键（与学员自己的那一声分开）
+   */
+  _mentorModeSfx(kind, mentor, unitKey) {
+    if (!mentor || typeof mentor.def !== 'string' || !Number.isInteger(mentor.skillIndex)) return false;
+    const m = this.getManifest();
+    // 教官穿的那套时装若有自己的战斗音效（`skins[].sfx`），先问它——与 `unitSfxUrl` 同一条优先级
+    const s = typeof mentor.skin === 'string' && mentor.skin ? skinSfxOf(m, mentor.def, mentor.skin) : null;
+    const u = m?.audio?.sfx?.units?.[mentor.def];
+    const table = kind === 'attack' ? (s?.attacks ?? u?.attacks) : kind === 'hit' ? (s?.hits ?? u?.hits) : null;
+    if (!table || typeof table[mentor.skillIndex] !== 'string') return false;
+    try { return this.unit(mentor.def, kind, unitKey, mentor.skillIndex, true, mentor.skin); } catch { return false; }
+  }
 
   /**
    * Play an operator's battle line (`audio.voice[charId][slot]`, or the dub's own table — `audio.voiceLangs[lang]` /
@@ -1436,7 +1466,16 @@ export class AudioManager {
     // UnitInfo.spine is the model id (charId / tokenId / enemyId) — the key of sfx.units; kind/defId pick the
     // official class sounds (operator vs summon vs device). `skillActive` follows the ['skill', id, 1] / 0 events.
     this.units.set(u.id, { def: u.spine || u.defId, voice: u.voice || u.spine || u.defId, defId: u.defId ?? null, kind: u.kind ?? null, side: u.side, boss: !!u.boss,
-      skillIndex: Number.isInteger(u.skillIndex) ? u.skillIndex : null, skillActive: !!u.skillActive });
+      skillIndex: Number.isInteger(u.skillIndex) ? u.skillIndex : null, skillActive: !!u.skillActive,
+      // 时装（`UnitInfo.skin`）：那套时装自己带来的战斗音效（assets.skins[charId][].sfx，见 unit() 的 skinId）
+      skin: typeof u.skin === 'string' && u.skin ? u.skin : null,
+      // 特训（叠加式）：教官的 sfx 键与它选定的技能槽（业主 2026-10-22「学员的技能会加上教官的…音效」——施放时叠加）
+      reconMentor: u.reconMentor && typeof u.reconMentor.spine === 'string'
+        ? { def: u.reconMentor.spine, skillIndex: Number.isInteger(u.reconMentor.skillIndex) ? u.reconMentor.skillIndex : null,
+          skin: typeof u.reconMentor.skin === 'string' && u.reconMentor.skin ? u.reconMentor.skin : null }
+        : null,
+      // 技能结束后仍属于该技能的攻击窗口（蕾缪安 S3 礼炮）的起点：['skill', id, 0] 时设到 now + MENTOR_RELEASE_MS
+      mentorUntil: -Infinity });
     // a cast that arrived before this unit was known (handleBattleEvents): it sounds now, once
     const held = this.pendingSkill.get(u.id);
     if (held) {
@@ -1569,13 +1608,17 @@ export class AudioManager {
           if (!src) continue;
           // only a hostile attack authors the target's next impact (a heal — an ally aiming at an ally — never does)
           const tgt = this.units.get(e[2]);
-          if (tgt && tgt.side !== src.side) this.lastAttacker.set(e[2], { def: src.def, at: now, skillIndex: src.skillIndex ?? null, skillActive: !!src.skillActive });
-          if (!this.unit(src.def, 'attack', e[1], src.skillIndex ?? undefined, src.skillActive) && src.side === 'enemy') this.battle('enemyHit', { unitKey: `${e[1]}:atk`, volume: 0.35 });
+          if (tgt && tgt.side !== src.side) this.lastAttacker.set(e[2], { def: src.def, at: now, skillIndex: src.skillIndex ?? null, skillActive: !!src.skillActive, skin: src.skin ?? null, mentor: src.reconMentor ?? null });
+          if (!this.unit(src.def, 'attack', e[1], src.skillIndex ?? undefined, src.skillActive, src.skin) && src.side === 'enemy') this.battle('enemyHit', { unitKey: `${e[1]}:atk`, volume: 0.35 });
+          // 特训：学员技能期间那一声挥击也带教官技能的（仅当教官那份 `attacks[教官槽]` 存在）
+          if (src.reconMentor && src.skillActive) this._mentorModeSfx('attack', src.reconMentor, `${e[1]}:matk`);
         } else if (kind === 'dmg') {
           const by = this.lastAttacker.get(e[1]);
           if (!by || !IMPACT_TYPES.has(e[3])) continue;
           this.lastAttacker.delete(e[1]); // one impact per attack
-          if (now - by.at <= IMPACT_WINDOW_MS) this.unit(by.def, 'hit', `h${e[1]}`, by.skillIndex ?? undefined, by.skillActive);
+          if (now - by.at <= IMPACT_WINDOW_MS) this.unit(by.def, 'hit', `h${e[1]}`, by.skillIndex ?? undefined, by.skillActive, by.skin ?? null);
+          // 特训：命中音同上（教官技能自己的 `hits[教官槽]`）
+          if (by.mentor && by.skillActive && now - by.at <= IMPACT_WINDOW_MS) this._mentorModeSfx('hit', by.mentor, `h${e[1]}:mhit`);
         } else if (kind === 'heal') {
           this.battle('heal', { unitKey: `heal:${e[1]}`, volume: 0.35 });
         } else if (kind === 'skill' && e[2]) {
@@ -1583,7 +1626,13 @@ export class AudioManager {
           if (u) {
             // the running skill's own swing / impact (`attacks` / `hits`, header) follow this flag
             u.skillActive = true;
-            this.unit(u.def, 'skill', e[1], u.skillIndex ?? undefined);
+            this.unit(u.def, 'skill', e[1], u.skillIndex ?? undefined, false, u.skin);
+            // 特训（叠加式）：学员施放自己的技能时，教官技能的音效一起响（业主 2026-10-22）——只叠 SFX，不叠语音行
+            if (u.reconMentor) {
+              // 新一次施放：上一轮技能遗留的礼炮窗口作废（窗口只从这一次结束起算）
+              u.mentorUntil = -Infinity;
+              this.unit(u.reconMentor.def, 'skill', e[1], u.reconMentor.skillIndex ?? undefined, false, u.reconMentor.skin);
+            }
             // 作战中N: the equipped skill's own slot (0-based; 作战中4 is the fallback of a 4th slot)
             if (unitSoundClass(u) === 'char') {
               const n = Number.isInteger(u.skillIndex) ? Math.min(4, u.skillIndex + 1) : 1;
@@ -1601,7 +1650,12 @@ export class AudioManager {
           // ['skill', id, 0] = the skill ENDED (the sim's skills.js: `b._ev(['skill', u.id, 0])`): back to the unit's own
           // attack / impact. The end carries no sound of its own (the activation sound belongs to the start).
           const u = this.units.get(e[1]);
-          if (u) u.skillActive = false;
+          if (u) {
+            u.skillActive = false;
+            // 特训：技能结束后仍有攻击归属于该技能（蕾缪安 S3 的礼炮 10 s 窗口，见 MENTOR_RELEASE_MS）——
+            // 这段时间里每一发 'bombard' 的命中音也叠教官那一份（下方 fx 分支）
+            if (u.reconMentor) u.mentorUntil = now + MENTOR_RELEASE_MS;
+          }
           this.pendingSkill.delete(e[1]);
         } else if (kind === 'engage') {
           // 行动开始: the first attack a unit makes on an enemy (the sim's ENGAGE, official ENCOUNTER_ENEMY, 3 s apart)
@@ -1648,8 +1702,17 @@ export class AudioManager {
           if (!unitSoundPlays(mix, this.random())) continue;
           this._playUnitUrl(url, own ? `${e[1]}:born` : 'deploy', own ? unitGain(0.8, mix) : 0.5);
         } else if (kind === 'fx') {
-          // a summon used up by its own effect (香槟炸弹 exploding: `consumed`): its impact sound now, no death sound
           const ex = e[4];
+          // 特训：技能结束后才释放的攻击（蕾缪安 S3 礼炮的每一发 'bombard' 落点）——窗口内的命中叠教官命中音。
+          // 这类攻击没有 'atk'（没有 lastAttacker），所以命中音只能由落点事件本身补。
+          if (typeof e[1] === 'string' && e[1] === 'bombard' && ex && typeof ex === 'object' && ex.id != null) {
+            const shooter = this.units.get(ex.id);
+            if (shooter?.reconMentor && now <= (shooter.mentorUntil ?? -Infinity)) {
+              this._mentorReleaseN = (this._mentorReleaseN ?? 0) + 1;
+              this._mentorModeSfx('hit', shooter.reconMentor, `${ex.id}:mrel:${this._mentorReleaseN}`);
+            }
+          }
+          // a summon used up by its own effect (香槟炸弹 exploding: `consumed`): its impact sound now, no death sound
           if (!ex || typeof ex !== 'object' || !ex.consumed || ex.id == null) continue;
           const u = this.units.get(ex.id);
           if (!u || u.side === 'enemy') continue;

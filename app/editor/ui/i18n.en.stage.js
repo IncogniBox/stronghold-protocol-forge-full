@@ -175,6 +175,8 @@ export const EN_STAGE = Object.freeze({
   // ---- 分区编辑（「分区」模式：拖分区、改数字） ----
   '分区': 'Zones',
   '分区编辑': 'Zone editing',
+  // 多块 boss 场地（layout.bossAreas）的叠层标签
+  '部署区': 'Deploy zone',
   '分区编辑：拖白点改这一块的行（部署区的列由棋盘定死），上下左右微调选中的那一条边。': 'Zone editing: drag a white handle to move that side (a deploy field’s columns are fixed by the board); the arrow keys nudge the selected side by one tile.',
   '拖白点改分区：部署区、战斗矩形、怪物等待区都能上下挪（部署区的列由棋盘定死），镜像轴只作标注': 'Drag the white handles to move the zones: deploy fields, battle rects and the enemy pen all move vertically (a deploy field’s columns are fixed by the board), and the mirror axis is a label only',
   '这里能改的是「分区」：部署区、战斗矩形、怪物等待区。左右拖只对没定死的那些矩形有效，上下拖都能挪。': 'What you change here are the zones: deploy fields, battle rects and the enemy pen. Dragging left/right only works on rects that are not fixed; up/down always moves them.',

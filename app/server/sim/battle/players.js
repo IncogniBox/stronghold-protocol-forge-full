@@ -193,11 +193,38 @@ export class BattlePlayers {
     if (inp.standIn === true) lo.standIn = true;
     if (inp.diy && typeof inp.diy === 'object') lo.diy = inp.diy;
     if (inp.standIn !== true && isPotential(inp.potential)) lo.potential = inp.potential;
+    // 特训学员（重构模拟，shared/reconModes.js）：**叠加式**——学员保留自己的技能 / 模组选择（自己的 def、kit 与
+    // 技能照常），`traineeOf` 只带教官的 chessId 与它选定的技能 / 模组：getTrainee 并入教官的盟约并挂
+    // `traineeMentor` 指针，content 层再把教官的技能效果作为「影子技能」并进学员自己的技能、教官的特质 / 天赋
+    // installer 追加到学员的 kit（content/index.js applyTraineeMentor）。
+    if (inp.reconTrainee && typeof inp.reconTrainee === 'object' && inp.reconTrainee.chessId) {
+      lo.traineeOf = { chessId: String(inp.reconTrainee.chessId), loadout: inp.reconTrainee.loadout ?? null, diy: inp.reconTrainee.diy ?? null, ratio: inp.reconTrainee.ratio };
+    }
     const def = this.data.getChess(inp.chessId, lo);
     if (!def) { this.log(`unknown chess ${inp.chessId}${lo.diy ? ' (illegal 自选 pick)' : ''}`); return null; }
     // a DIY slot has no body of its own (甄选干员): it fights only as a 自选 piece (its `diy` pick)
     if (def.raw?.isDiy && !def.diyFor) { this.log(`自选 slot ${inp.chessId} without a pick`); return null; }
     const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir, pieceData: inp.pieceData, skin: inp.skin });
+    // 特训（叠加式）的展示通道：unitInfo 带上教官的身份与它选定的技能槽（客户端据此把教官技能的官方特效 / 音效
+    // 叠在学员的施放上 —— render/vfx/skillfx.js 的 mentorPlan 与 audio.js 的 cast 叠音）。教官是甄选干员时按
+    // traineeMentor.diy 的 pick 解析（getDiy——否则查到的是空槽位记录）；查无教官 def 就不带。
+    if (def.traineeMentor) {
+      const tm = def.traineeMentor;
+      // 教官是补位（loadout.standIn）时按补位 def 解析：它的 spine / defId / 技能槽都是替补干员的
+      const mLo = tm.diy && typeof tm.diy === 'object' ? { diy: tm.diy }
+        : tm.loadout && tm.loadout.standIn === true ? { standIn: true }
+        : tm.loadout && typeof tm.loadout === 'object' ? { skillIndex: tm.loadout.skillIndex ?? null, moduleId: tm.loadout.moduleId ?? null } : null;
+      const mdef = this.data.getChess(tm.chessId, mLo ?? null);
+      if (mdef) {
+        // 教官**当前时装**也随这条供给下去（`battleInput` 按同一个主人的选择放进 `reconTrainee.skin`）：客户端把教官
+        // 时装的特效变体（`skins[stem].fx`）与该时装自己的战斗音效（`skins[].sfx`）用在教官那一层。
+        const mskin = inp.reconTrainee.skin;
+        u.reconMentorInfo = {
+          defId: tm.chessId, spine: mdef.spine ?? mdef.charId, skillIndex: Number.isInteger(mdef.skill?.index) ? mdef.skill.index : null,
+          ...(typeof mskin === 'string' && mskin ? { skin: mskin } : {}),
+        };
+      }
+    }
     u.items = [...(inp.items ?? [])];
     u.carry = inp.carryState ?? null;
     // 练度 (自持有, 0.2.2): the owned operator's ×ATK / ×DEF / ×max HP (units.js Πmul) — never a 补位 stand-in's nor a

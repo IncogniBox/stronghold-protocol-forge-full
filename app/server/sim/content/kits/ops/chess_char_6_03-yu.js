@@ -37,6 +37,11 @@ function yu(bb, chess, def) {
   const t0 = tbb(def, 0), t1 = tbb(def, 1), mod = moduleBb(chess), tb = def?.traitBb || {};
   const isDef = onDefaultSkill(chess), sid = selectedSkill(chess, def);
   const wallProb = isDef ? num(bb.prob) : 0, wallBurn = isDef ? num(bb.ep_damage_ratio) : 0;
+  // 特训学员（重构协议·特训，叠加式）：这套 kit 被并进学员的 kit 里，`unit` 是学员。火墙的口径官方写的是
+  // 「其他友方穿过火墙造成法术伤害时」——**余本人**的伤害不算；学员不是余，火墙又是她自己的技能生成、她本人就站在
+  // 墙上（源与墙同列 / 同行，几何上的「跨过」永远不成立），所以学员自己的法术伤害按「穿过火墙」处理
+  // （业主 2026-10-23 实测口径；余本人照官方排除）。判据在 install 时看**单位自己的 def**：只有学员的 def 带
+  // `traineeMentor`（这里收到的 `def` 是教官自己的 def，不能拿它判）。
   // "将第二天赋效果赋予全场所有干员" belongs to S3 (the default skill) only
   const s3On = (unit) => isDef && !!unit.skill?.active;
   const skills = {
@@ -119,15 +124,18 @@ function yu(bb, chess, def) {
         });
       } },
       { install(battle, unit) { // S3 fire wall
+        const trainee = !!(unit.def && unit.def.traineeMentor);
         const crosses = (a, b) => {
           const w = unit.mem.yuWall;
           if (w == null) return false;
+          // 学员本人就站在这面墙上：她的每一次法术伤害都视为「穿过」（见 yu() 顶部的特训口径）
+          if (trainee && a === unit) return true;
           return w.axis === 'y' ? (a.y - w.v) * (b.y - w.v) < 0 : (a.x - w.v) * (b.x - w.v) < 0;
         };
         battle.on('damaged', (ctx) => {
           const s = ctx.source, t = ctx.target;
           if (!(wallBurn > 0) || unit.mem.yuWall == null || !live(unit) || ctx.type !== 'arts' || !(ctx.amount > 0)) return;
-          if (!s || s === unit || s.side !== 'ally' || !t || t.side !== 'enemy' || !t.alive || !crosses(s, t)) return;
+          if (!s || (!trainee && s === unit) || s.side !== 'ally' || !t || t.side !== 'enemy' || !t.alive || !crosses(s, t)) return;
           elementDmg(battle, unit, t, 'burn', unit.s.atk * wallBurn, ['skill', 'firewall']);
         }, { owner: unit });
         battle.on('hit', (ctx) => {

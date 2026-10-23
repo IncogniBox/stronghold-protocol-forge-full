@@ -156,6 +156,21 @@ test('real Spine timeline: batched wind-up updates retain operator hit-phase cor
   } finally { fake.P.spine.Spine = FakeSpine; }
 });
 
+// 2026-10-22 塔露拉时间线：长 clip（Attack_2 2.333 s，打击帧 1.333）+ 慢节奏（4.5 s）+ 0.08 s 前瞻 ——
+// 压缩前摇（tsWind 上限 2.5×）根本赶不到打击帧，而 attackUntil 按「打击帧起播」的 (loopDur − hit) 计窗口，
+// clip 播到一半（1.08 s = lead + loopDur − hit）就被打回 base。整播的那一档（wholeLate）必须按整条片段计窗口。
+test('a long wind-up that cannot compress into the look-ahead plays the whole clip, not half of it (塔露拉 Attack_2)', () => {
+  const LIFBOS = 'enemy_1121_lifbos';                // 重犯: Attack_grey 2.333 s, strike at 1.0 s
+  const a = actor(LIFBOS, true);
+  assert.ok(a.windUp(4.5, 0.08), 'wound up 0.08 s before the strike');
+  run(a, 0.08);
+  a.attack(4.5);
+  run(a, 1.0);                                       // the old window (lead + loopDur − hit = 1.08 s) ends here
+  assert.equal(a.current, 'Attack_grey', 'still swinging past the old 1.08 s cut');
+  run(a, 1.5);                                       // 2.58 s > lead + loopDur: the whole clip has played
+  assert.equal(a.current, 'Move_grey', 'then the resting clip');
+});
+
 test('UnitView: enemy models retain clipPerAttack speed rules; operators retain rhythm scaling', async () => {
   const entry = entryOf(JSHOOT);
   const store = { picture: () => null, image: async () => null, spineEntry: () => entry, spine: { acquire: async () => dataOf(entry), release() {} } };

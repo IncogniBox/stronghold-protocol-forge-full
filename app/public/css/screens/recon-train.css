@@ -1,0 +1,56 @@
+/* 重构协议·特训（ui/reconTrain.js）：休整期顶栏按钮的完成态与选人弹窗。配色走主题的 teal / gold 两族，
+   与预重构（pre-recon.css）同一套观感；弹窗遮罩与 ChoiceOverlay 同层级的观感，但不挡战斗。 */
+.gm__train.is-done { opacity: .45; }
+
+/* 详情卡上的「特训学员」徽标（detailPanel.js ChessDetail，与 dtag-standin / dtag-diy 同一排） */
+.dtag-train {
+  padding: 2px 8px; font-size: 11px; letter-spacing: .08em; color: #3fd6b4;
+  background: rgba(63, 214, 180, .12); border: 1px solid rgba(63, 214, 180, .5);
+}
+/* 特训继承的条目并进学员自己的技能 / 特质 / 天赋行：来源标签用金色（与弹窗里的教官列同色），
+   条目本身只加一条左侧细线，读起来仍是这名干员自己的说明。 */
+.dtag-mentor {
+  font-style: normal; color: #e8c96a; border-color: rgba(212, 175, 55, .55); background: rgba(212, 175, 55, .12);
+}
+.dskill.is-mentor, .dtalent.is-mentor, .dgarrison.is-mentor { border-left: 2px solid rgba(212, 175, 55, .55); padding-left: 8px; }
+.dhint--mentor { margin: 6px 0 0; font-size: 12px; color: #9dc3ba; display: flex; align-items: center; gap: 6px; }
+
+.rt-overlay {
+  position: fixed; inset: 0; z-index: 58; display: grid; place-items: center; padding: 24px;
+  background: rgba(4, 10, 9, .72); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.rt-modal {
+  width: min(920px, 96vw); max-height: min(86vh, 760px); display: flex; flex-direction: column; gap: 14px;
+  padding: 18px 20px 16px; color: #d8e6e2;
+  background: linear-gradient(180deg, rgba(10, 24, 22, .97), rgba(6, 15, 14, .97));
+  border: 1px solid rgba(63, 214, 180, .35); box-shadow: 0 12px 48px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(63, 214, 180, .08);
+}
+.rt-modal__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rt-modal__title { display: flex; align-items: baseline; gap: 10px; }
+.rt-modal__title h3 { margin: 0; font-size: 18px; letter-spacing: .06em; color: #eaf6f2; }
+.rt-modal__x { background: none; border: 0; color: #7fa9a0; cursor: pointer; padding: 4px; }
+.rt-modal__x:hover { color: #eaf6f2; }
+.rt-modal__hint { margin: 0; font-size: 12.5px; line-height: 1.7; color: #9dc3ba; }
+.rt-modal__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; min-height: 0; overflow: auto; }
+.rt-modal__col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rt-modal__chead { display: flex; align-items: baseline; gap: 8px; min-height: 20px; }
+.rt-modal__chead b { font-size: 13px; color: #eaf6f2; }
+.rt-modal__chead b.is-empty { color: #5c7a74; font-weight: 400; }
+.rt-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; align-content: start; }
+.rt-pick {
+  position: relative; display: grid; justify-items: center; gap: 4px; padding: 8px 4px 6px; cursor: pointer;
+  background: rgba(63, 214, 180, .05); border: 1px solid rgba(63, 214, 180, .18); color: inherit;
+}
+.rt-pick:hover { border-color: rgba(63, 214, 180, .5); }
+.rt-pick__pic { width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; background: rgba(0, 0, 0, .3); }
+.rt-pick__pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.rt-pick__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 500; color: #cfe4df; }
+.rt-pick__tag { position: absolute; top: 2px; right: 4px; font-style: normal; font-size: 10px; letter-spacing: .08em; }
+.rt-pick.is-mentor { border-color: rgba(212, 175, 55, .85); background: rgba(212, 175, 55, .12); }
+.rt-pick.is-mentor .rt-pick__tag { color: #e8c96a; }
+.rt-pick.is-trainee { border-color: rgba(63, 214, 180, .85); background: rgba(63, 214, 180, .12); }
+.rt-pick.is-trainee .rt-pick__tag { color: #3fd6b4; }
+.rt-modal__foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; min-height: 34px; }
+@media (max-width: 720px) {
+  .rt-modal__cols { grid-template-columns: 1fr; }
+}

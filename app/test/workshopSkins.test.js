@@ -31,7 +31,7 @@ describe('pack.json.skins：形状与拒绝路径', () => {
     assert.deepEqual(r.pack.skins, [ONE]);
   });
 
-  test('全部可选字段都收：series / desc / avatar / spine（chars 是**嵌套**的 front/back）/ voices', () => {
+  test('全部可选字段都收：series / desc / avatar / spine（chars 是**嵌套**的 front/back）/ voices / sfx', () => {
     const r = mk([{
       id: 'winter', charId: 'char_1_01', name: '冬日', series: '寒夜', desc: '作者给玩家看的说明',
       art: {
@@ -40,12 +40,29 @@ describe('pack.json.skins：形状与拒绝路径', () => {
         spine: { front: { skel: 'skins/w/m.skel', atlas: 'skins/w/m.atlas', textures: ['skins/w/m.png'] } },
       },
       voices: { start: ['skins/w/v.mp3'], idle: ['skins/w/i1.mp3', 'skins/w/i2.mp3'] },
+      sfx: { attack: 'skins/w/a.wav', skills: { 2: 'skins/w/s3.wav' } },
     }]);
     assert.equal(r.ok, true, r.detail);
     const s = r.pack.skins[0];
     assert.equal(s.series, '寒夜');
     assert.equal(s.art.spine.front.skel, 'skins/w/m.skel');
     assert.deepEqual(s.voices.idle, ['skins/w/i1.mp3', 'skins/w/i2.mp3']);
+    assert.deepEqual(s.sfx, { attack: 'skins/w/a.wav', skills: { 2: 'skins/w/s3.wav' } });
+  });
+
+  test('sfx：一套时装自己的战斗音效，与 art.units 的那一条**同一个解析器**', () => {
+    for (const [bad, code] of [
+      [{ attack: '../x.wav' }, 'ART_PATH_UNSAFE'],
+      [{ nope: 'a.wav' }, 'ART_UNKNOWN_FIELD'],
+      [{ skills: { S1: 'a.wav' } }, 'ART_BAD_SHAPE'],   // 客户端按数字下标取，'S1' 是静默失效 ⇒ 当场拒
+      [{ skills: { 0: '../a.wav' } }, 'ART_PATH_UNSAFE'],
+      [{}, 'SKIN_BAD_SHAPE'],                            // 写了 sfx 就至少要带一格
+      ['a.wav', 'SKIN_BAD_SHAPE'],
+    ]) {
+      const r = mk([{ ...ONE, sfx: bad }]);
+      assert.equal(r.ok, false, `${JSON.stringify(bad)} 应当被拒`);
+      assert.equal(r.error, code, `期望 ${code}，实际 ${r.error} / ${r.detail}`);
+    }
   });
 
   test('拒绝路径逐条（每条都点名，不静默丢）', () => {
@@ -98,7 +115,7 @@ describe('pack.json.skins：形状与拒绝路径', () => {
   });
 
   test('字段表与 id 正则是一份真相，测试直接锚它', () => {
-    assert.deepEqual([...SKIN_FIELDS].sort(), ['art', 'charId', 'desc', 'id', 'name', 'series', 'voices']);
+    assert.deepEqual([...SKIN_FIELDS].sort(), ['art', 'charId', 'desc', 'id', 'name', 'series', 'sfx', 'voices']);
     assert.equal(SKIN_ID_RE.test('summer'), true);
     assert.equal(SKIN_ID_RE.test('summer_2'), true);
     assert.equal(SKIN_ID_RE.test('_x'), false, '不许下划线开头');
@@ -130,6 +147,26 @@ describe('assets.skins：按干员分组的合并', () => {
     assert.equal(one[0].pack, 'skinA');
     assert.equal(one[0].art.portrait, '/workshop-assets/skinA/s/p.png', '客户端零改动：还是那条只服务登记 URL 的路由');
     assert.deepEqual(r.report.skins, { char_1_01: 1 });
+  });
+
+  test('spine 的动作实测数据（animations / events / hits / bounds / pma）并表后原样保留', () => {
+    // 皮肤补充包 1.4.1 的根因：只给 `anims` 时，skin 模型丢了命中帧（hits）/ clip 时长（animations）/
+    // 包围盒（bounds），攻击节奏与命中特效都退回通用近似（业主 2026-10-27「皮肤特效和动作有些问题」）。
+    const spine = {
+      front: {
+        skel: 's/m.skel', atlas: 's/m.atlas', textures: ['s/m.png'], pma: false,
+        anims: { idle: 'Idle' }, animations: { Attack: 1, Idle: 4 },
+        events: ['OnAttack', 'OnStart'], hits: { Attack: [0.3] }, bounds: { x: 0, y: 0, width: 1, height: 1 },
+      },
+    };
+    const r = apply([P('skinA', [{ id: 'summer', charId: 'char_1_01', name: '夏日', art: { spine } }])]);
+    const sp = r.data.assets.skins['char_1_01'][0].art.spine.front;
+    assert.equal(sp.skel, '/workshop-assets/skinA/s/m.skel', '路径仍是包内 → 绝对 URL');
+    assert.deepEqual(sp.animations, { Attack: 1, Idle: 4 });
+    assert.deepEqual(sp.events, ['OnAttack', 'OnStart']);
+    assert.deepEqual(sp.hits, { Attack: [0.3] });
+    assert.deepEqual(sp.bounds, { x: 0, y: 0, width: 1, height: 1 });
+    assert.equal(sp.pma, false);
   });
 
   test('同一干员的多套**并列共存**（这是它与 art 最不同的一点）', () => {

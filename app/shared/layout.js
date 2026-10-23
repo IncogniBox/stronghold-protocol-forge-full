@@ -92,6 +92,8 @@ const PEN_ROWS = 5;
 const PEN_COLS = 7;
 /** boss 半场的高度（5 行：最上面那一行是它的整备区行，棋盘只占下面 4 行）。 */
 export const BOSS_ROWS = 5;
+/** 一张图最多声明几块 boss 场地（一块 = 一支队伍的首领战场）。 */
+export const BOSS_AREAS_MAX = 4;
 /** 最底那一行留作边缘（官方布局的 boss 带是 1–5，行 0 空着）。 */
 const BOSS_BASE_ROW = 1;
 
@@ -327,6 +329,21 @@ export function normalizeLayout(v, size) {
   for (const key of Object.keys(base.battle)) {
     const r = toRectObj(bt[key]);
     out.battle[key] = r && rectIn(r, win) ? r : base.battle[key];
+  }
+  // 多块 boss 场地（`bossAreas`）：一块 = 一支队伍的首领战场，队内两位玩家各有一块部署区（`deploy` 的两条矩形，
+  // 中间可以有交叠）。没声明的图没有这个键 —— 引擎照旧用上面那套单块 boss 场地，行为逐字节不变。
+  if (Array.isArray(v.bossAreas)) {
+    const areas = [];
+    for (const a of v.bossAreas.slice(0, BOSS_AREAS_MAX)) {
+      if (!a || typeof a !== 'object') continue;
+      const b = toRectObj(a.battle), p = toRectObj(a.prep);
+      if (!b || !rectIn(b, win)) continue;
+      const raw = Array.isArray(a.deploy) ? a.deploy : [a.deploy];
+      const deploy = raw.map(toRectObj).filter((r) => r && rectIn(r, win)).map(toRectArr);
+      if (!deploy.length) continue;
+      areas.push({ battle: b, prep: p && rectIn(p, win) ? p : b, deploy });
+    }
+    if (areas.length) out.bossAreas = areas;
   }
   const pen = toRectObj(v.pen);
   out.pen = pen && rectIn(pen, win) ? pen : base.pen;

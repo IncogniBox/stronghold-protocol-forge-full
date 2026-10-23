@@ -112,10 +112,15 @@ test('import has its own dialog that requests nothing on opening; imported art i
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(srv.url);
   await page.waitForFunction(() => navigator.serviceWorker.controller != null, { timeout: 20000 });
-  await page.waitForSelector('[data-testid="asset-import"]');
+  await page.waitForSelector('.title-resources');
   // a first gesture unlocks audio (public/js/audio.js): make it elsewhere, so what follows is the dialog's own traffic
   await page.click('.title-tag');
   await new Promise((resolve) => setTimeout(resolve, 500));
+  // the import entry lives in the 资源 panel (2026-10-22): open it and let its own reads settle
+  // (assets-list / asset-pack) BEFORE the measured window starts
+  await page.click('.title-resources');
+  await page.waitForSelector('[data-testid="asset-import"]');
+  await new Promise((resolve) => setTimeout(resolve, 800));
   const quiet = requests.length;
   await page.click('[data-testid="asset-import"]');
   await page.waitForSelector('.asset-import-dialog [data-testid="asset-import-zip"]');
@@ -183,6 +188,8 @@ test('import has its own dialog that requests nothing on opening; imported art i
     Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false });
   });
   await insecure.goto(srv.url);
+  await insecure.waitForSelector('.title-resources');
+  await insecure.click('.title-resources');
   await insecure.waitForSelector('[data-testid="asset-import"]');
   assert.match(await insecure.$eval('#title-asset-import-hint', (el) => el.textContent), /HTTPS/, 'the hint under the button says why');
   await insecure.click('[data-testid="asset-import"]');

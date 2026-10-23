@@ -992,7 +992,9 @@ start + 2√h·s·k − s²·k² (s = √h + √H) whatever T is. `AmiyaS2Moveme
 after a start phase of `startDuration` towards `startDistance` in a random direction, its body at
 (0, sin φ · `yAnimateOffset`, 0) across the flight, φ advancing 2π · `yAnimateSpeed` per second from a random start. The
 sim keeps its own projectile speeds; the visual flies its flying effect along the sim's flight and plays `onHit` at the
-target's HitPoint (`onReached` where it lands). Graphic / logic pairs (`projectile_amgoat_s3_graphic` / `_logic`) are
+target's HitPoint (`onReached` where it lands, `onStop` where the shot stops — 2026-10-23: a SimpleProjectile's
+`_effectsWhenStop`, where 维什戴尔's every bomb explosion lives, `wisdel_attack_01_hit_02` /
+`wisdel_skill_0N_hit_02`). Graphic / logic pairs (`projectile_amgoat_s3_graphic` / `_logic`) are
 listed as nested projectiles.
 
 **Skin** (mount points): `{ source, graphic, points: { name: { facing: { pos, bone, path, rot, followRot? } } } }`

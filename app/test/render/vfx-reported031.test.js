@@ -5,7 +5,7 @@ import { FxWiring } from '../../public/js/render/vfx/wiring.js';
 import { compileEffect, Effect } from '../../public/js/render/vfx/effect.js';
 import { FrameData, cameraBasis } from '../../public/js/render/vfx/geom.js';
 import { fragmentSource, FAMILIES } from '../../public/js/render/vfx/glsl.js';
-import { yuWallLayout } from '../../public/js/render/vfx/yuwall.js';
+import { yuWallLayout, isYuWallSource } from '../../public/js/render/vfx/yuwall.js';
 import { FxSystem } from '../../public/js/render/fx.js';
 import { UF } from '../../shared/constants.js';
 import { installFakePixi, fakeViewCtx } from './fakepixi.js';
@@ -30,8 +30,20 @@ async function setup(field = rect) {
     })])],
   ]);
   for (const key of ['horizontal', 'vertical_l', 'vertical_r', 'left_end', 'right_end', 'lu_end', 'ld_end', 'ru_end', 'rd_end', 'yu_skill3_annex_01', 'melee_cast', 'ranged_cast', 'combat_hit']) defs.set(key, prefab(key));
-  const index = { version: 3, skins: {}, generic: {}, projectiles: {}, prefabs: Object.fromEntries([...defs.keys()].map((k) => [k, {}])), units: {
+  // 时装变体（愿清晓 `nian#12` 这类）：控制器与每一段都各有一份 `_suf`
+  defs.set(SOURCE + '_suf', prefab(SOURCE + '_suf', [beh('YuS3EffectBehaviour', { _effectEachGrid: ROOT })]));
+  defs.set(ROOT + '_suf', prefab(ROOT + '_suf', [beh('YuS3EffectWithEdgeBehaviour', {
+    _offset: 0.4, _edgeEffectInterval: 2, _edgeEffectIntervalFirstTick: 0.05,
+    _effectWhenHorizontal: 'horizontal', _effectVerticalWhenAtWorldLeft: 'vertical_l', _effectVerticalWhenAtWorldRight: 'vertical_r',
+    _effectEdgeWhenHorizontalLeft: 'left_end', _effectEdgeWhenHorizontalRight: 'right_end',
+    _effectEdgeWhenVerticalWorldLeftUp: 'lu_end', _effectEdgeWhenVerticalWorldLeftDown: 'ld_end',
+    _effectEdgeWhenVerticalWorldRightUp: 'ru_end', _effectEdgeWhenVerticalWorldRightDown: 'rd_end',
+  })]));
+  for (const key of ['horizontal', 'vertical_l', 'vertical_r', 'left_end', 'right_end', 'lu_end', 'ld_end', 'ru_end', 'rd_end']) defs.set(key + '_suf', prefab(key + '_suf'));
+  const index = { version: 3, skins: { yu_skinned: { fx: 'suf', points: {} } }, generic: {}, projectiles: {}, prefabs: Object.fromEntries([...defs.keys()].map((k) => [k, {}])), units: {
     [YU]: { kind: 'char', modes: [{ name: 'Default' }], skills: {} },
+    // 穿时装的余：index 单位键是模型 stem，技能计划仍从同一个 skillId 解析
+    yu_skinned: { kind: 'char', modes: [{ name: 'Default' }], skills: {} },
     [TOKEN]: { kind: 'token', skills: {}, modes: [
       { name: 'Default', attack: { class: 'MeleeAttack', cast: [row('ball')] } },
       { name: 'Melee', attack: { class: 'MeleeAttack', cast: [row('melee_cast')], hit: [row('combat_hit')] } },
@@ -47,7 +59,12 @@ async function setup(field = rect) {
     lib: { defs, index: async () => index, def: (k) => defs.get(k), has: (k) => defs.has(k), preload: async () => 0 },
     spawn(key, place, opts) { const h = { key, place, opts, alive: true, stop() { this.alive = false; }, kill() { this.alive = false; } }; handles.push(h); return h; },
   };
-  const w = new FxWiring(ofx, { view: (id) => views.get(id), record: (info) => info.spine === YU ? { skill: { skillId: 'skchr_yu_3', duration: 45, skillType: 'MANUAL' } } : null });
+  const w = new FxWiring(ofx, {
+    view: (id) => views.get(id),
+    record: (info) => (info.spine === YU || info.spine === 'yu_skinned' ? { skill: { skillId: 'skchr_yu_3', duration: 45, skillType: 'MANUAL' } } : null),
+    // 穿时装的余（模型 stem `yu_skinned` → index.skins 的 `fx: 'suf'`）
+    skin: (info) => (info && info.spine === 'yu_skinned' ? 'yu_skinned' : null),
+  });
   await w.ready();
   const view = (id, spine, dir = 'RIGHT') => {
     const v = { id, x: 4, y: 10, z: 0, dir, visFacing: dir === 'LEFT' ? -1 : 1, flags: 0, alive: true, info: { id, spine, defId: spine, kind: spine === TOKEN ? 'token' : 'op', skillIndex: 2 } };
@@ -81,6 +98,49 @@ test('Yu S3 creates per-tile wall pieces and holds them until skill end', async 
   assert.ok(parts.every((h) => h.alive));
   w.skill(yu, false);
   assert.ok(parts.every((h) => !h.alive));
+});
+
+test('Yu S3 with an outfit: every wall piece uses the skin variant (愿清晓 `nian#12` 这类)', async () => {
+  const { w, handles, view, ofx } = await setup();
+  const yu = view(1, 'yu_skinned');
+  w.skill(yu, true);
+  ofx.time = 1; w.tick();
+  assert.ok(handles.some((h) => h.key === 'vertical_l_suf'), '墙面用时装变体');
+  assert.ok(!handles.some((h) => h.key === 'vertical_l'), '默认那一枚不播');
+});
+
+test('YuWall preloads the outfit variant root itself (a variant source\'s refs still name the BASE root)', async () => {
+  const { YuWall } = await import('../../public/js/render/vfx/yuwall.js');
+  const defs = new Map();
+  const add = (key, behaviours = []) => defs.set(key, prefab(key, behaviours));
+  add(SOURCE + '_suf', [beh('YuS3EffectBehaviour', { _effectEachGrid: ROOT })]);
+  add(ROOT + '_suf', [beh('YuS3EffectWithEdgeBehaviour', {
+    _offset: 0.4, _edgeEffectInterval: 2, _edgeEffectIntervalFirstTick: 0.05,
+    _effectWhenHorizontal: 'horizontal', _effectVerticalWhenAtWorldLeft: 'vertical_l', _effectVerticalWhenAtWorldRight: 'vertical_r',
+    _effectEdgeWhenHorizontalLeft: 'left_end', _effectEdgeWhenHorizontalRight: 'right_end',
+    _effectEdgeWhenVerticalWorldLeftUp: 'lu_end', _effectEdgeWhenVerticalWorldLeftDown: 'ld_end',
+    _effectEdgeWhenVerticalWorldRightUp: 'ru_end', _effectEdgeWhenVerticalWorldRightDown: 'rd_end',
+  })]);
+  for (const k of ['horizontal', 'vertical_l', 'left_end']) add(k + '_suf');
+  const loaded = new Map();   // 只有 preload 之后才「装上」（真实库：descriptor 有、def 要 await load）
+  const preloaded = [];
+  const ofx = {
+    active: true, time: 0, lite: false, ctx: { fieldRect: () => rect, heightAt: () => 0, cam: () => ({ position: () => ({ x: 10 }) }) },
+    spawn: (key) => ({ key, alive: true, stop() { this.alive = false; }, kill() { this.alive = false; } }),
+    lib: {
+      def: (k) => loaded.get(k) || null,
+      has: () => true,
+      preload: async (keys) => { for (const _k of keys) for (const [d, v] of defs) loaded.set(d, v); preloaded.push(...keys); return keys.length; },
+    },
+  };
+  const w = { ofx, fxKey: (k) => (k.endsWith('_suf') ? k : k + '_suf'), walls: new Set(), view: () => null, unitOf: () => null, idx: {} };
+  const wall = new YuWall(w, { x: 4, y: 10, dir: 'RIGHT', alive: true }, SOURCE + '_suf');
+  assert.deepEqual(preloaded, [SOURCE + '_suf'], 'controller 未装 ⇒ 先预载它');
+  assert.equal(wall.started, false);
+  await Promise.resolve();
+  wall.update();   // 预载完成后重试
+  assert.equal(wall.started, true, 'root 装上了就搭墙');
+  assert.ok(wall.parts.some((p) => p.key === 'vertical_l_suf'), '墙面用时装的变体');
 });
 
 test('the shared 2D/3D Manifold view keeps its copied form with official effects off or on, including S3', async () => {
@@ -237,6 +297,15 @@ test('Manifold copy chooses official cast/hit rows, never a base ball projectile
     assert.equal(attacks.at(-1), 'A_Combat');
     assert.ok(!handles.some((h) => h.key === 'ball' || h.key.includes('_c0')));
   } finally { fake.restore(); }
+});
+
+test('余 S3 火墙控制器也认时装变体 key（特训教官行预改写后仍能搭墙）', () => {
+  assert.equal(isYuWallSource('yu_skill3_range_01_source'), true);
+  assert.equal(isYuWallSource('yu_skill3_range_01_source_nian_12'), true, '教官时装的变体');
+  assert.equal(isYuWallSource('YU_SKILL3_RANGE_01_SOURCE_NIAN_12'), true);
+  assert.equal(isYuWallSource('yu_skill3_range_01_root_nian_12'), false, 'root 不是控制器');
+  assert.equal(isYuWallSource('yu_skill3_buff_01'), false);
+  assert.equal(isYuWallSource(null), false);
 });
 
 test('2D/off firewall footprint stays until the skill ends or the owner leaves', () => {

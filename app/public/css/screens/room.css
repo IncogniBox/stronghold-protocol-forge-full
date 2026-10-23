@@ -401,6 +401,16 @@
 .room-mods__id { font-family: var(--font-num); letter-spacing: .02em; }
 .room-mods__meta { font-size: calc(.13 * var(--t)); color: var(--text-lo); }
 .room-mods__fill { display: flex; align-items: center; gap: .12rem; width: 100%; font-size: calc(.14 * var(--t)); }
+/* hidden 模式（ RoomModsPanel hidden=true ）只补画的那一小块：核对中 / 缺件 + 补齐。浮在右下、开始按钮上方，
+   不占房间版面 —— 清单与改集合界面仍按业主要求不出现。 */
+.room-mods--repair {
+  position: fixed; right: .22rem; bottom: 1.1rem; z-index: 40;
+  display: flex; flex-direction: column; align-items: flex-start; gap: .1rem;
+  max-width: min(4.6rem, 86vw); padding: .14rem .16rem;
+  font-size: calc(.14 * var(--t));
+  border: 1px solid var(--line-2); background: rgba(7, 9, 8, .94);
+  box-shadow: 0 .1rem .3rem rgba(0, 0, 0, .5);
+}
 
 /* ---- 房内聊天（引擎特性；public/js/screens/chat.js） ---------------------------------------------------- */
 .chatp .chatp__list {

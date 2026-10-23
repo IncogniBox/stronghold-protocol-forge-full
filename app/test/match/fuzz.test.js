@@ -37,6 +37,9 @@ function randomIntent(rng, m, ps) {
     // 就必须同时教会这里怎么造合法载荷**，否则新意图永远进不了模糊测试的覆盖。
     case 'g.unequip': return { t, itemUid: uid() };
     case 'g.art': return { t, itemUid: uid(), row: rng.int(19), col: rng.int(21) };
+    // 重构协议·特训：两名干员 / 取消本回合那条（表里加了类型就必须在这里造合法载荷，见 g.unequip 的注释）
+    case 'g.reconTrain': return { t, mentor: uid(), trainee: uid() };
+    case 'g.reconTrainCancel': return { t, trainee: uid() };
     case 'g.reward': case 'g.choice': return { t, idx: rng.int(6) };
     case 'g.ready': return { t, ready: rng() < 0.4 };
     case 'g.emote': return { t, id: rng.pick(EMOTES) };

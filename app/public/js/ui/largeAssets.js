@@ -13,6 +13,8 @@ import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.
 import { html, Button, Modal, MicroLabel } from './components.js';
 import { assetImport } from '../assetPack.js';
 import { importSupport } from '../assetCache.js';
+import { AssetImportButton } from './assetImport.js';
+import { AssetDownloadButton } from './assetDownload.js';
 import { t } from '../../../shared/i18n.js';
 
 /** 在跑的时候两秒问一次（服务端每两秒推一次进度），够跟得上又不吵。 */
@@ -299,6 +301,15 @@ export function ResourceModal({ open, onClose, onStarted }) {
     : t('正在下载大型资源…');
 
   return html`<${Modal} open=${open} title=${t('资源查看')} micro="LARGE ASSETS" onClose=${onClose} width="lg" class="res-modal">
+    ${/* 本地资源包导入（业主 2026-10-22：资源入口里的「资源包导入」选项）：从玩家自己的 zip / 文件夹导入
+          地图 / 干员 / 敌人 / UI 美术，按服务器清单逐文件校验哈希，收下的文件下载队列不再向服务器要
+          （assetDownload.js 的 collectAssetUrls 查 listImportedPaths）。与下面的备用源共用同一份 assetImport。
+          它读的是自己的三份清单（assetPack.js），不依赖下面这份 `/assets-list.json` 快照 —— 放在条件分支外。 */ null}
+    <div class="res-import">
+      <${MicroLabel} tone="mint">${t('资源包导入')}<//>
+      <${AssetImportButton} />
+      <${AssetDownloadButton} />
+    </div>
     ${!list ? (loading ? html`<p class="t-dim">${t('正在读取资源清单…')}</p>` : failed ? html`<p class="t-dim">${t('资源清单读取失败，请稍后再看。')}</p>` : null) : html`
       <div class="res-head">
         <${MicroLabel} tone="mint">${t('大型资源（地图与场景）')}<//>

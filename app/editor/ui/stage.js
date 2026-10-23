@@ -778,6 +778,21 @@ function drawZoneEditor() {
     strokeRectArr(rect, rectColors[name], false);
     drawHandles('deploy', name, rect);
   }
+  // 多块 boss 场地（`layout.bossAreas`）：一块 = 一支队伍的首领战场。只读叠层 —— 分区编辑的手柄仍只动上面那套单块场地，
+  // 多块场地按玩家数/队伍分配属于引擎侧（这一版只把它们画出来、让作者看见自己声明的四块）。
+  if (Array.isArray(lay.bossAreas)) {
+    lay.bossAreas.forEach((a, i) => {
+      const title = `BOSS 区域${i + 1}`;
+      labelOfRect = () => `${title} · ${battleLabel('boss')}`;
+      strokeRectArr(rectArr(a.battle), battleColors.boss);
+      labelOfRect = () => `${title} · ${battleLabel('bossPrep')}`;
+      strokeRectArr(rectArr(a.prep), battleColors.bossPrep);
+      (Array.isArray(a.deploy) ? a.deploy : [a.deploy]).forEach((d, k, all) => {
+        labelOfRect = () => `${title} · ${t('部署区')}${all.length > 1 ? ` ${k + 1}` : ''}`;
+        strokeRectArr(d, '#ff7a7af0', false);
+      });
+    });
+  }
   // 镜像轴：boss 右半场就是过它翻过来的那一列，所以它也是一条能拖的线
   const mx = (lay.mirrorCol / 2) * CELL + CELL / 2;   // 两个半场相接的那一列（= mirrorCol ÷ 2，也就是窗口正中）
   const on = !!(state.zoneHandle && state.zoneHandle.kind === 'mirror');

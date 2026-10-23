@@ -363,8 +363,11 @@ export class EffectDispatcher {
     const gd = ps.gd || this.m.gd;
     const run = (piece, where) => {
       const rec = gd.chess(piece.id);
-      if (!rec || !Array.isArray(rec.garrisonIds)) return;
-      for (const gid of rec.garrisonIds) {
+      if (!rec) return;
+      // 特训学员：自己的特质 ∪ 教官的（ps.pieceGarrisonIds）；非重构对局里它逐字等于 rec.garrisonIds
+      const ids = typeof ps.pieceGarrisonIds === 'function' ? ps.pieceGarrisonIds(piece) : rec.garrisonIds;
+      if (!Array.isArray(ids)) return;
+      for (const gid of ids) {
         const g = gd.garrison(gid);
         if (!g) continue;
         const key = `garrison:${g.effectKey}`;
@@ -405,12 +408,13 @@ export class EffectDispatcher {
     const gd = ps.gd || this.m.gd;
     const hook = eventType === 'SERVER_PRICE' ? null : GARRISON_HOOK[eventType];
     const rec = piece && piece.kind === 'chess' ? gd.chess(piece.id) : null;
-    if (!hook || !rec || !Array.isArray(rec.garrisonIds) || this.depth >= MAX_DEPTH) return 0;
+    const ids = rec && typeof ps.pieceGarrisonIds === 'function' ? ps.pieceGarrisonIds(piece) : (rec?.garrisonIds ?? null);
+    if (!hook || !rec || !Array.isArray(ids) || this.depth >= MAX_DEPTH) return 0;
     const self = asPiece || piece;
     let n = 0;
     this.depth++;
     try {
-      for (const gid of rec.garrisonIds) {
+      for (const gid of ids) {
         const g = gd.garrison(gid);
         if (!g || g.eventType !== eventType) continue;
         const key = `garrison:${g.effectKey}`;
@@ -601,8 +605,9 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
     garrisonsOf: (uid) => {
       const l = ps.find(uid);
       const rec = l && l.piece.kind === 'chess' ? gd.chess(l.piece.id) : null;
-      if (!rec || !Array.isArray(rec.garrisonIds)) return [];
-      return rec.garrisonIds.map((gid) => gd.garrison(gid)).filter(Boolean)
+      if (!rec) return [];
+      const ids = typeof ps.pieceGarrisonIds === 'function' ? ps.pieceGarrisonIds(l.piece) : (rec.garrisonIds ?? []);
+      return ids.map((gid) => gd.garrison(gid)).filter(Boolean)
         .map((g) => ({ garrisonId: g.garrisonId, effectKey: g.effectKey, eventType: g.eventType, bb: g.bb || {}, bbStr: g.bbStr || {}, desc: g.desc || '' }));
     },
     stats: () => ({ ...ps.stats }),

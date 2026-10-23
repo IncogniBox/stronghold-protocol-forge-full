@@ -17,13 +17,16 @@ const SKILL = 16; // UF.SKILL
 
 const LOOPING = new Set(['foo_s1_buff', 'foo_s1_ready', 'foo_s2_burn', 'buff_stun', 'buff_burn', 'foo_s3_loop', 'bar_buff', 'foo_s1_range_l',
   'indigo_attack_charge_02', 'indigo_attack_charge_03', 'indigo_attack_charge_04', 'indigo_attack_charge_05', 'clemnt_skill_03_mark_all_01',
-  'once_loop', 'oncep_loop']);
+  'once_loop', 'oncep_loop', 'trainee_buff', 'mentor_buff']);
 const KEYS = ['foo_atk_start', 'foo_atk_hit', 'foo_s2_mode_cast', 'foo_s3_mode_cast', 'foo_trail', 'foo_phit', 'foo_s1_buff', 'foo_s1_begin',
   'foo_s1_range', 'foo_s1_range_l', 'foo_s1_end', 'foo_s1_ready', 'foo_s1_trig', 'foo_s2_cast_start', 'foo_s2_cast_spell', 'foo_s2_aim', 'foo_s2_h1',
   'foo_s2_h2', 'foo_s2_burn', 'foo_s2_trail', 'foo_s2_phit', 'foo_s3_loop', 'foo_s3_tick', 'foo_each_hit', 'bar_buff', 'bar_birth',
   'indigo_attack_charge_01_start', 'indigo_attack_charge_02', 'indigo_attack_charge_03', 'indigo_attack_charge_04', 'indigo_attack_charge_05',
   'indigo_attack_01_trail', 'indigo_attack_01_hit', 'clemnt_skill_03_mark_all_01', 'buff_stun', 'buff_burn', 'g_hit', 'g_heal', 'g_enemy', 'g_die',
-  'qux_s1_cast', 'qux_s1_trail', 'qux_mode_cast', 'once_buff', 'once_loop', 'oncep_buff', 'oncep_loop'];
+  'qux_s1_cast', 'qux_s1_trail', 'qux_mode_cast', 'once_buff', 'once_loop', 'oncep_buff', 'oncep_loop',
+  'trainee_buff', 'mentor_buff', 'mentor_s2_cast', 'mentor_s2_hit',
+  'mentor_buff_test#1', 'mentor_s2_cast_test#1', 'mentor_s2_hit_test#1',
+  'mentor_trail', 'mentor_hit', 'mentor_stop', 'mentor_reached', 'lemuen_buff', 'foo_atk_hit_suf'];
 
 const melee = (k, ev = 2) => ({ effects: [k], oneshot: 1, startEvent: ev, endEvent: 3, directionType: 0 });
 
@@ -77,6 +80,17 @@ function makeIndex() {
       { role: 'loop', keys: ['oncep_buff'], from: 'PassiveBuffAbility._buffs', node: 'sk', on: 'owner' },
       { role: 'loop', keys: ['oncep_loop'], from: 'PassiveBuffAbility._buffs', node: 'sk', on: 'owner' },
     ] },
+    // 特训：学员自己的技能只有 buff（没有 attack 行）；教官的技能把攻击换到 mode S2（行全在 mode 里）
+    skchr_trainee_1: { mode: null, projectiles: [], uses: [
+      { role: 'loop', keys: ['trainee_buff'], from: 'BuffDuringSkill._buffs', node: 'sk', on: 'owner' },
+    ] },
+    skchr_mentor_2: { mode: 1, projectiles: [], uses: [
+      { role: 'loop', keys: ['mentor_buff'], from: 'BuffDuringSkill._buffs', node: 'sk', on: 'owner' },
+    ] },
+    // 蕾缪安 S3：技能结束后 10 s 内仍有归属它的攻击（礼炮）；index 侧的技能 id 决定那个窗口
+    skchr_lemuen_3: { mode: null, projectiles: [], uses: [
+      { role: 'loop', keys: ['lemuen_buff'], from: 'BuffDuringSkill._buffs', node: 'sk', on: 'owner' },
+    ] },
   };
   const unit = (modes, sk, skin = null) => ({ kind: 'char', skin, modes, skills: Object.fromEntries(sk.map((s) => [s, skills[s]])), startEffect: null, deadEffect: null });
   return {
@@ -94,6 +108,13 @@ function makeIndex() {
       char_300_qux: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [melee('qux_mode_cast', 4)], hit: [] } }, { name: 'S2', attack: { class: 'MeleeAttack', cast: [] } }], ['skchr_qux_1']),
       char_500_once: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], ['skchr_once_1']),
       char_510_oncep: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], ['skchr_once_2']),
+      // 特训：学员（自己的技能只有 buff）与教官（技能换了攻击模式 S2）
+      char_600_trainee: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], ['skchr_trainee_1']),
+      char_610_mentor: unit([
+        { name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } },
+        { name: 'S2', attack: { class: 'MeleeAttack', projectileKey: 'proj_mentor', cast: [melee('mentor_s2_cast')], hit: [{ effects: ['mentor_s2_hit'], directionType: 0 }] } },
+      ], ['skchr_mentor_2']),
+      char_4193_lemuen: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], ['skchr_lemuen_3']),
       enemy_1: { kind: 'enemy', modes: [{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], skills: {} },
     },
     skills,
@@ -106,11 +127,17 @@ function makeIndex() {
       projectile_chr_clemnt_s3: { main: null, onReached: ['clemnt_skill_03_mark_all_01'], effects: ['clemnt_skill_03_mark_all_01'] },
       proj_qux_s1: { main: 'qux_s1_trail', onHit: [], effects: ['qux_s1_trail'] },
       proj_qux_s1_2: { main: 'qux_s1_trail', onHit: [], effects: ['qux_s1_trail'] },
+      // 教官技能自己那枚弹道：命中 / 停止特效（维什戴尔 S3 的小爆 + 大爆炸）
+      proj_mentor: { main: 'mentor_trail', onHit: ['mentor_hit'], onStop: ['mentor_stop'], onReached: ['mentor_reached'], effects: ['mentor_trail', 'mentor_hit', 'mentor_stop', 'mentor_reached'], movement: { class: 'AdvancedMovement' } },
     },
     skins: {
       char_100_foo: { points: { HitPoint: { all: { pos: [0, 0.2, -0.25] } }, Muzzle: { all: { pos: [0.3, 0.3, -0.3] } } } },
+      // 时装自己的命中变体（`foo_atk_hit_suf`）：命中挂在敌人身上播，但变体属于**攻击者**的时装
+      char_100_foo_skinned: { fx: 'suf', points: { HitPoint: { all: { pos: [0, 0.2, -0.25] } }, Muzzle: { all: { pos: [0.3, 0.3, -0.3] } } } },
       char_469_indigo: { points: { MuzzlePoint: { all: { pos: [0.3, 0.3, -0.3] } }, SpecialPoint0: { all: { pos: [0, 0.6, -0.5] } },
         SpecialPoint1: { all: { pos: [-0.4, 0.5, -0.4] } }, SpecialPoint2: { all: { pos: [0.4, 0.5, -0.4] } }, SpecialPoint3: { all: { pos: [0, 0.8, -0.7] } } } },
+      // 特训：教官当前时装的 fx 后缀（换装链返回的模型 stem → 这份记录）
+      mentor_outfit: { fx: 'test#1', points: {} },
     },
     generic: { hit: { phys: 'g_hit', arts: 'g_hit', enemy: 'g_enemy', heal: 'g_heal' }, die: { char: 'g_die', enemy: 'g_die' }, birth: {}, status: { stun: 'buff_stun', burn: 'buff_burn' } },
     prefabs,
@@ -130,6 +157,8 @@ const RECS = {
   char_300_qux: { charId: 'char_300_qux', skill: { skillId: 'skchr_qux_1', index: 0, skillType: 'MANUAL', durationType: 'NONE', duration: 10, bb: {} } },
   char_500_once: { charId: 'char_500_once', skill: { skillId: 'skchr_once_1', index: 0, skillType: 'MANUAL', durationType: 'NONE', duration: 20, bb: {} } },
   char_510_oncep: { charId: 'char_510_oncep', skill: { skillId: 'skchr_once_2', index: 0, skillType: 'PASSIVE', durationType: 'NONE', duration: -1, bb: {} } },
+  char_600_trainee: { charId: 'char_600_trainee', skill: { skillId: 'skchr_trainee_1', index: 0, skillType: 'MANUAL', durationType: 'NONE', duration: 20, bb: {} } },
+  char_610_mentor: { charId: 'char_610_mentor', skill: { skillId: 'skchr_mentor_2', index: 1, skillType: 'MANUAL', durationType: 'NONE', duration: 20, bb: {} } },
 };
 
 function fakeOfx(index, { active = true } = {}) {
@@ -155,7 +184,7 @@ async function setup(o = {}) {
   const index = makeIndex();
   const f = fakeOfx(index, o);
   const views = new Map();
-  const w = new FxWiring(f.ofx, { speed: () => 10, record: (info) => RECS[info.defId] || null, view: (id) => views.get(id) || null });
+  const w = new FxWiring(f.ofx, { speed: () => 10, record: (info) => RECS[info.defId] || null, view: (id) => views.get(id) || null, ...(o.wiring || {}) });
   await w.ready();
   const view = (id, key, x, o2 = {}) => {
     const enemy = /^enemy_/.test(key);
@@ -578,4 +607,140 @@ describe('skills.js helpers of Phase 3b', () => {
     assert.equal(FX_BINDINGS.skchr_clemnt_3.lock.owner, 'src');
     assert.ok(FLASH.has('blast') && !FLASH.has('reticle'));
   });
+});
+
+describe('特训：教官的技能特效叠在学员身上', () => {
+  test('教官技能换了攻击模式（行全在 mode 里）时，那份 mode 的施放 / 命中行也播', async () => {
+    const { w, spawned, view, frame } = await setup();
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    // 教官身份由 snapshot 的 UnitInfo.reconMentor 供给（spine = sfx/fx 单位的键，skillIndex = 教官选定的技能槽）
+    a.info.reconMentor = { defId: 'char_610_mentor', spine: 'char_610_mentor', skillIndex: 1 };
+    const t = view(2, 'enemy_1', 5.45);
+    frame();
+    w.skill(a, true);
+    const keys = w.keysFor([a]);
+    assert.ok(keys.includes('mentor_s2_cast') && keys.includes('mentor_s2_hit'), '教官 mode 的键也在预载集合里');
+    assert.equal(w.attack(a, t, 'none', 1), true);
+    assert.equal(spawned.filter((k) => k === 'mentor_s2_cast').length, 1, '教官 mode S2 的施放行');
+    assert.equal(spawned.filter((k) => k === 'mentor_s2_hit').length, 0, '命中行等伤害');
+    w.damage(t, 'phys', null, 1.03);
+    assert.equal(spawned.filter((k) => k === 'mentor_s2_hit').length, 1, '教官 mode S2 的命中行（命中敌人时的特效）');
+  });
+
+  test('教官当前时装的特效变体：教官来源的 key 用那套时装的 `fx`，不用默认 / 学员那套', async () => {
+    // 换装链（render/app.js 的 opts.skin）按 ownerId + 干员 charId 解析；这里让它代表「教官穿了 mentor_outfit」
+    const { w, spawned, view, frame } = await setup({ wiring: { skin: () => 'mentor_outfit' } });
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_610_mentor', spine: 'char_610_mentor', skillIndex: 1 };
+    const t = view(2, 'enemy_1', 5.45);
+    frame();
+    w.skill(a, true);
+    assert.ok(spawned.includes('mentor_buff_test#1'), '教官技能的 buff 行用时装的变体');
+    assert.equal(w.attack(a, t, 'none', 1), true);
+    assert.ok(spawned.includes('mentor_s2_cast_test#1'), '教官 mode 的施放行用时装的变体');
+    assert.ok(!spawned.includes('mentor_s2_cast'), '默认那枚不播');
+    w.damage(t, 'phys', null, 1.03);
+    assert.ok(spawned.includes('mentor_s2_hit_test#1'), '教官 mode 的命中行用时装的变体（命中敌人的特效）');
+    assert.ok(!spawned.includes('mentor_s2_hit'), '默认那枚不播');
+  });
+
+  test('学员每一发弹药都带教官那枚弹道的命中 / 停止特效（维什戴尔 S3 的小爆 + 大爆炸）', async () => {
+    const { w, ofx, spawned, view, frame } = await setup();
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_610_mentor', spine: 'char_610_mentor', skillIndex: 1 };
+    const t = view(2, 'enemy_1', 5.45);
+    frame();
+    w.skill(a, true);
+    for (let n = 0; n < 2; n++) {
+      frame();
+      ofx.time += 0.4;
+      assert.equal(w.attack(a, t, 'arrow', 1 + n), true);
+      ofx.time += 0.05;
+      w.damage(t, 'phys', null, 1.03 + n);
+    }
+    assert.equal(spawned.filter((k) => k === 'mentor_hit').length, 2, '每一发都在命中时播教官弹道的 onHit');
+    assert.equal(spawned.filter((k) => k === 'mentor_stop').length, 2, '每一发都在命中时播教官弹道的 onStop（爆炸）');
+    assert.equal(spawned.filter((k) => k === 'mentor_reached').length, 2, '每一发带上弹道的 onReached 命中反馈（蕾缪安这类）');
+  });
+
+  test('普通攻击（技能不在）不叠教官技能特效；技能期间才叠', async () => {
+    const { w, spawned, view, frame } = await setup();
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_610_mentor', spine: 'char_610_mentor', skillIndex: 1 };
+    const t = view(2, 'enemy_1', 5.45);
+    frame();
+    assert.equal(w.attack(a, t, 'none', 1), true);
+    assert.equal(spawned.filter((k) => k === 'mentor_s2_cast').length, 0, '普通攻击没有教官施放行');
+    w.damage(t, 'phys', null, 1.03);
+    assert.equal(spawned.filter((k) => k === 'mentor_s2_hit').length, 0, '普通攻击没有教官命中行');
+    // 技能开启后同一次攻击就带（换一帧：同一帧的多次 atk 算同一次攻击，施放行不重播）
+    w.skill(a, true);
+    frame();
+    assert.equal(w.attack(a, t, 'none', 2), true);
+    assert.equal(spawned.filter((k) => k === 'mentor_s2_cast').length, 1, '技能期间带上教官施放行');
+  });
+
+  test('技能结束后 10 s 内的攻击仍算该技能（蕾缪安 S3）：教官效果照叠，窗口外不再叠', async () => {
+    const { w, ofx, spawned, view, frame } = await setup();
+    const a = view(1, 'char_4193_lemuen', 5, { skill: 2 });
+    a.info.reconMentor = { defId: 'char_610_mentor', spine: 'char_610_mentor', skillIndex: 1 };
+    const t = view(2, 'enemy_1', 5.45);
+    frame();
+    w.skill(a, true);
+    w.skill(a, false);      // offAt = 此刻
+    ofx.time += 3; frame();
+    assert.equal(w.attack(a, t, 'none', 1), true);
+    assert.equal(spawned.filter((k) => k === 'mentor_s2_cast').length, 1, '结束后 3 s 内的攻击仍带教官效果');
+    ofx.time += 12; frame();  // 距技能结束 15 s，超出 10 s 窗口
+    assert.equal(w.attack(a, t, 'none', 2), true);
+    assert.equal(spawned.filter((k) => k === 'mentor_s2_cast').length, 1, '窗口外的普通攻击不带');
+  });
+
+  test('技能结束后才释放的攻击（蕾缪安 S3 礼炮）：每一发都叠教官的命中特效，不是只一次', async () => {
+    const { w, ofx, spawned, view, frame } = await setup();
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_610_mentor', spine: 'char_610_mentor', skillIndex: 1 };
+    frame();
+    w.skill(a, true);
+    w.skill(a, false);   // 技能结束，礼炮随后一发发落下
+    ofx.time += 1.2;
+    w.simFx('bombard', 6.4, 10.2, { id: 1, r: 1.5 });
+    w.simFx('bombard', 7.1, 10.6, { id: 1, r: 1.5 });
+    assert.equal(spawned.filter((k) => k === 'mentor_stop').length, 2, '两发礼炮 → 两次爆炸（每次攻击都要）');
+    assert.equal(spawned.filter((k) => k === 'mentor_hit').length, 2, '两发礼炮 → 两次小爆');
+  });
+
+  test('学员这一发把目标打死了（弹道到达前已倒下）：教官的命中 / 爆炸仍按落点补播', async () => {
+    const { w, index, spawned, view } = await setup();
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_610_mentor', spine: 'char_610_mentor', skillIndex: 1 };
+    const t = view(2, 'enemy_1', 5.45);
+    t.destroyed = true;   // 伤害先落地、目标已倒下：官方不再往目标身上挂行
+    w._arrive(index.projectiles.proj_foo, t, [5.45, 10, 0], null, null, a, [{ k: 'mentor_hit' }, { k: 'mentor_stop' }]);
+    assert.equal(spawned.filter((k) => k === 'mentor_hit').length, 1, '教官弹道的 onHit 在小爆落点补播');
+    assert.equal(spawned.filter((k) => k === 'mentor_stop').length, 1, '教官弹道的 onStop（爆炸）同样补播');
+  });
+});
+
+// 皮肤的命中类特效挂在**被击中的敌人**身上播，但它的 prefab 属于**攻击者的时装** —— 变体必须按攻击者解析，
+// 否则「命中敌人时的特效」永远用默认那一枚（业主 2026-10-27「皮肤特效…有问题」）。
+test('皮肤的攻击命中变体按攻击者的时装解析（命中挂在敌人身上也一样）', async () => {
+  const { w, spawned, view, frame } = await setup({ wiring: { skin: (info) => (info && info.spine === 'char_100_foo' ? 'char_100_foo_skinned' : null) } });
+  const a = view(1, 'char_100_foo', 5, { skill: 0 });
+  const t = view(2, 'enemy_1', 5.45);
+  frame();
+  assert.equal(w.attack(a, t, 'none', 1), true);
+  w.damage(t, 'phys', null, 1.03);
+  assert.ok(spawned.includes('foo_atk_hit_suf'), '命中变体用时装那一枚');
+  assert.ok(!spawned.includes('foo_atk_hit'), '默认那一枚不播');
+});
+
+// 特训特效的**供给链**：sim 的 UnitInfo.reconMentor 必须经 renderInfo 转写进 view.info —— 漏掉这一格时 skillfx 的
+// mentorPlan / mentorMode 全部解析不出（音频直接读 sim 的 UnitInfo，所以曾经的症状是「音效有、特效没有」）。
+test('renderInfo 把 UnitInfo.reconMentor 原样转写给技能特效层', async () => {
+  const { renderInfo } = await import('../../public/js/render/app.js');
+  const rm = { defId: 'chess_char_6_diy1_a', spine: 'char_1035_wisdel', skillIndex: 2, skin: 'sale#14' };
+  const info = renderInfo({ id: 1, kind: 'op', side: 'ally', defId: 'chess_char_6_13_a', spine: 'char_1041_angel2', skillIndex: 2, reconMentor: rm });
+  assert.deepEqual(info.reconMentor, rm, '教官身份 / 技能槽 / 时装都到得了 view.info');
+  assert.equal(renderInfo({ id: 2, kind: 'op', side: 'ally' }).reconMentor, undefined, '普通单位不带这个键');
 });

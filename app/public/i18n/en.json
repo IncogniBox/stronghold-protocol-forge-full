@@ -2652,6 +2652,7 @@
   "重新下载没有开始：这个功能被关掉了": "Re-download did not start: the feature is off",
   "服务器没有接受这次重新下载": "The server did not accept this re-download",
   "正在下载大型资源…": "Downloading large assets…",
+  "资源包导入": "Local asset pack import",
   "备用完整资源包（GitHub）": "Backup full asset pack (GitHub)",
   "还没配备用源。把 node tools/asset-pack.mjs 产出的 manifest.json 放进 data/asset-pack.json（要有 repo、tag 与 groups）。": "No backup source is configured. Put the manifest.json produced by node tools/asset-pack.mjs into data/asset-pack.json (with repo, tag and groups).",
   "下载并导入": "Download and import",
@@ -2743,5 +2744,17 @@
   "随机播放": "Shuffle",
   "播放这首": "Play this",
   "移出列表": "Remove from playlist",
-  "列表为空：在「服务器音乐」里选一首，它会加入轮播并立即播放。": "The playlist is empty: pick one under \"Server music\" and it will be added and played."
+  "列表为空：在「服务器音乐」里选一首，它会加入轮播并立即播放。": "The playlist is empty: pick one under \"Server music\" and it will be added and played.",
+  "重构协议·特训：叠加教官的技能效果、特质与天赋；攻击 / 防御 / 生命 = 学员基础值 + 教官的 50%": "Recon Protocol · Drill: stacks the instructor’s skill effects, traits and talents; ATK / DEF / HP = the trainee’s base + 50% of the instructor’s",
+  "特训学员": "Drill trainee",
+  "教官教学": "Instructor teaching",
+  "特训：释放自己的技能时，同时触发【{name}】的技能效果；特质与天赋叠加结算。": "Drill: casting your own skill also triggers 【{name}】’s skill effects; traits and talents resolve stacked.",
+  "教官": "Instructor",
+  "学员": "Trainee",
+  "重构协议·特训": "Recon Protocol · Drill",
+  "从场上、待部署区与手牌里各点一名干员：前者成为教官，后者成为学员。学员本局永久叠加教官的技能效果、特质与天赋，攻击 / 防御 / 生命上限 = 学员基础值 + 教官的 50%，并获得盟约【重构】。": "Pick one operator each from the field, the deployable area and the hand: the first becomes the instructor, the second the trainee. The trainee permanently stacks the instructor’s skill effects, traits and talents this match, gets ATK / DEF / HP = its base + 50% of the instructor’s, and gains the bond 【Recon】.",
+  "教官 · 点选一名": "Instructor · pick one",
+  "学员 · 点选一名": "Trainee · pick one",
+  "确认特训": "Confirm drill",
+  "本回合已完成特训": "Already drilled this round"
 }

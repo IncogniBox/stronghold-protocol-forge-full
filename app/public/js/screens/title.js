@@ -10,9 +10,10 @@
 // entry/loading illustration names) it is layered under the CSS art; otherwise the screen is
 // pure CSS/SVG (radar, ridgelines, glow), so it never issues a request that can 404.
 //
-// The full art, under the login box: 下载完整素材 (ui/assetDownload.js — its dialog downloads from this server) and
-// 导入素材包 (ui/assetImport.js — the player's own folder or zip, no server download) side by side, so an import never
-// opens the download (docs/history/0.3.0.md §34.14.39).
+// The full art: the top-right 「资源」 button opens the resource panel (ui/largeAssets.js ResourceModal) — the large-asset
+// manifest with per-group redownload, the LOCAL asset-pack import (ui/assetImport.js — the player's own folder or zip,
+// hash-checked, no server download) and the backup full-pack download (data/asset-pack.json). docs/history/0.3.0.md §34.14.39:
+// an import never opens a download — they share one `assetImport` queue and the download skips what is already imported.
 //
 // Plugins (DESIGN §34 P1a, the design study's §7.4): when the server has unofficial plugins (content.plugins of /healthz or
 // welcome — content.js installedCount), the footer says 「本服务器安装了 N 个插件」 — a button that loads the list
@@ -20,8 +21,6 @@
 // the page never asks for its catalogue — and the title page loads none of the panel's code.
 
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
-import { AssetDownloadButton } from '../ui/assetDownload.js';
-import { AssetImportButton } from '../ui/assetImport.js';
 import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
 import { NAME_MAX_LEN, UPSTREAM_VERSION, DEV_BUILD } from '../../../shared/constants.js';
 import { html, Button, Icon, MicroLabel, TextField, PingPill } from '../ui/components.js';

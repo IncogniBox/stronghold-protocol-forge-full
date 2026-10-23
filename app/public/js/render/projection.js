@@ -452,7 +452,8 @@ export function presetCamera(kind, viewport, options) {
   if (!CAMERA_PRESETS[k]) k = 'normal';
   let rect = opts.rect ? normRect(opts.rect, rows, cols) : null;
   // the Final Assault prep happens on the boss field: a 'prep' camera asked for the boss rows is the boss one
-  if (k === 'prep' && rect && rect.r1 <= 6) k = 'bossPrep';
+  // (the boss band is wherever the map declares it — a big map's is not at rows 0–5)
+  if (k === 'prep' && rect && rect.r1 <= layout.battle.boss.r1) k = 'bossPrep';
   const preset = CAMERA_PRESETS[k];
   const side = opts.side === 'R' ? 'R' : 'L';
   const W = Math.max(1, finite(viewport?.width, 1)), H = Math.max(1, finite(viewport?.height, 1));

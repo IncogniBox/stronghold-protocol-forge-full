@@ -231,6 +231,9 @@ export class PlayerState {
     this._tempDue = new Map();
     /** @type {Map<string, any>} 'r,c' → piece */
     this.board = new Map();
+    /** 重构协议·特训（shared/reconModes.js）：本局已交的每一条 { round, mentor, trainee }（棋子 uid），跨回合累积；
+     * 战斗侧按它把学员的输入条目标成 `reconTrainee`（player/round.js battleInput → sim getChess traineeOf）。 */
+    this.reconTraining = [];
     /** persistent bond layers */
     this.layers = {};
     /** computed bond states */

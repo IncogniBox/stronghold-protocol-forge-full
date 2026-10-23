@@ -79,6 +79,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { PHASE, GEO } from '../../../shared/constants.js';
 import { ruleOption } from '../../../shared/plugins/rules.js';
+import { RECON_TRAINING_ROUNDS } from '../../../shared/reconModes.js';
+import { ReconTrainButton, ReconTrainModal } from '../ui/reconTrain.js';
 import { html, Spinner, PhaseBanner, ResultDialog, Icon, Button, confirmDialog, closeAllDialogs, useTicker } from '../ui/components.js';
 import { useGameData, GIcon } from '../ui/gameComponents.js';
 import { useFieldView } from '../ui/fieldHost.js';
@@ -263,6 +265,7 @@ function MatchScreen() {
   const [readyBusy, setReadyBusy] = useState(false);
   const [spBusy, setSpBusy] = useState(null);
   const [personalBusy, setPersonalBusy] = useState(null); // { choiceId, idx }: an older request cannot clear a newer pick
+  const [trainOpen, setTrainOpen] = useState(false);     // 重构协议·特训的选人弹窗（ui/reconTrain.js）
   const [layer, setLayer] = useState('ALL');             // 联防 / 最终攻势 camera: 'L' | 'ALL' | 'R'
   const [pen, setPen] = useState(false);                 // the camera shows the enemy preview pen (research 09 §2)
   const [camKind, setCamKind] = useState('prep');        // kind of the last camera request (data-camera)
@@ -299,6 +302,13 @@ function MatchScreen() {
   const scoutBandOwner = scoutPid ? (players.find((p) => p.playerId === scoutPid)?.name || null) : null;
   const personalChoice = !spectator && alive ? normalizePersonalChoice(pub, priv, myId) : null;
   const hasPersonalChoice = !!personalChoice;
+  // 重构协议·特训（shared/reconModes.js）：重构对局（pub.recon 的整局标记）且当前休整期是特训回合时，顶栏出现
+  // 特训按钮 —— 本回合已交过（priv.reconTraining 命中）画成已完成并禁点（改主意可重交覆盖，弹窗里预选旧值）。
+  // 「全量模拟」（开发者试验场，pub.dev，业主 2026-10-22）：**每个 PREP 回合都出按钮、不限特训回合表**，方便测试。
+  const isReconRoom = /^mode_recon_/.test(pub?.modeId || '');
+  const isDevRoom = !!pub?.dev;
+  const trainRound = (isReconRoom || isDevRoom) && phase === PHASE.PREP && (!isReconRoom || RECON_TRAINING_ROUNDS.includes(pub?.round)) ? pub.round : null;
+  const trainDone = !!trainRound && (priv?.reconTraining || []).some((t) => t.round === trainRound);
   const roomRules = useStore((s) => s.room?.content?.rules ?? null);
   const morphMode = ruleOption(roomRules, 'morphPairing');
   const unequipAllow = ruleOption(roomRules, 'unequip') === 'allow';
@@ -1778,6 +1788,8 @@ function MatchScreen() {
           }}><${Icon} name="signal" /></button>` : null}
         ${prepLoadoutOpen && phase === PHASE.PREP && priv && !priv.ready && !spectator
           ? html`<${LoadoutButton} from="prep" size="sm" />` : null}
+        ${trainRound && priv && !priv.ready && !spectator
+          ? html`<${ReconTrainButton} done=${trainDone} onClick=${() => setTrainOpen(true)} />` : null}
         <button type="button" class="gm__gear" aria-label=${t('设置')} title=${t('设置')} onClick=${() => setSettingsOpen(true)}><${GIcon} name="gear" /></button>
         <button type="button" class="gm__gear gm__guide" aria-label=${t('玩法说明')} title=${t('玩法说明')} onClick=${() => openGuide(0)}><${Icon} name="book" /></button>
         <${FullscreenButton} class="gm__gear gm__fs" />
@@ -1816,6 +1828,9 @@ function MatchScreen() {
         setPersonalBusy((b) => b?.choiceId === choiceId ? null : b);
       }} />` : null}
     ${!hasOffers && turnPop ? html`<${TurnPopup} key=${turnPop} onDone=${() => setTurnPop(0)} />` : null}
+
+    ${trainOpen && trainRound ? html`<${ReconTrainModal} key=${trainRound} m=${gd.m} pub=${pub} priv=${priv} gd=${gd} round=${trainRound}
+      onClose=${() => setTrainOpen(false)} />` : null}
 
     ${boot && !hasOffers ? html`<${ProtocolBoot} key=${boot.key} players=${players} myId=${myId} leaving=${phase !== PHASE.BATTLE_CHECK} />` : null}
     ${roundPop && !hasOffers ? html`<${RoundPopup} key=${roundPop.key} round=${roundPop.round} gain=${roundGain} left=${roundPop.left} sub=${roundPop.sub}

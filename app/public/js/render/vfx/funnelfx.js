@@ -362,7 +362,7 @@ export class FunnelFx {
       if (!f) continue;
       if (p.body) U.attachN = Math.max(U.attachN, Math.min(m.funnels.length, p.n - 1));
       const g = f.hits[0] || [];
-      for (const key of g) if (this.w.playOn(key, v, { flipFrom: U.v || undefined })) drew = true;
+      for (const key of g) if (this.w.playOn(key, v, { flipFrom: U.v || undefined, fxOwner: U.v || undefined })) drew = true;
       const o = U.out.get(`${p.mode}|${f.i}`);
       if (o) o.until = Math.max(o.until, this.w.ofx.time + LUNGE_S);
       else if (m.idle && k < this._count(U, m)) this._leave(U, p.mode, f, this.w.ofx.time + LUNGE_S);
@@ -419,7 +419,7 @@ export class FunnelFx {
         else if (fx.jit) return;
         fx.anchor[0] += j[0]; fx.anchor[1] += j[1]; fx.anchor[2] += j[2]; fx.jit = true;
       } : null;
-      const h = this.w.playOn(key, tgt, { flipFrom: v, loop: true, important: true, track });
+      const h = this.w.playOn(key, tgt, { flipFrom: v, loop: true, important: true, track, fxOwner: U.v || undefined });
       if (h) { drew = true; o.hit = h; }
     }
     return drew || g.some((k) => this._has(k, tgt));
@@ -450,7 +450,7 @@ export class FunnelFx {
       const k = U.s3.drones.length;
       const unit = d.units[Math.min(k, d.units.length - 1)];
       const dr = { k, unit, x: v.x, y: v.y, hx: Math.cos(a), hy: Math.sin(a), v: S3.spread.v0, age: 0, phase: 'spread', t: null, orbit: null,
-        idleT: 0, h: null, trace: null, latched: null, latchedKey: d.marks.latched, seed: U.s3.n++ };
+        idleT: 0, h: null, trace: null, latched: null, latchedKey: d.marks.latched, seed: U.s3.n++, ownerU: U };
       dr.h = this._flight(U, dr);
       U.s3.drones.push(dr);
     }
@@ -515,7 +515,7 @@ export class FunnelFx {
     best.phase = tgt ? 'chase' : 'seek';
     best.v = S3.chase.v0;
     best.orbit = null;
-    if (tgt && this._has(U.plan.dispersed.marks.trace)) best.trace = this.w.playOn(U.plan.dispersed.marks.trace, tgt, { follow: true, loop: true, important: true });
+    if (tgt && this._has(U.plan.dispersed.marks.trace)) best.trace = this.w.playOn(U.plan.dispersed.marks.trace, tgt, { follow: true, loop: true, important: true, fxOwner: U.v || undefined });
     return true;
   }
 
@@ -523,7 +523,7 @@ export class FunnelFx {
   _marks(dr, latchOn) {
     if (dr.trace && !latchOn) { dr.trace.stop(); dr.trace = null; }
     if (dr.latched) { dr.latched.stop(); dr.latched = null; }
-    if (latchOn && this._has(dr.latchedKey)) dr.latched = this.w.playOn(dr.latchedKey, latchOn, { follow: true, loop: true, important: true });
+    if (latchOn && this._has(dr.latchedKey)) dr.latched = this.w.playOn(dr.latchedKey, latchOn, { follow: true, loop: true, important: true, fxOwner: dr.ownerU?.v || undefined });
   }
 
   /** A unit's target fell or left: it reappears near that spot and waits for its next lock (the sim's draw is its own). */
@@ -594,7 +594,7 @@ export class FunnelFx {
     }
     if (best) {
       if (best.phase === 'chase') { best.phase = 'lock'; this._marks(best, best.t); }
-      for (const key of best.unit?.hits?.[0] || []) this.w.playOn(key, best.t, { flipFrom: U.v || undefined });
+      for (const key of best.unit?.hits?.[0] || []) this.w.playOn(key, best.t, { flipFrom: U.v || undefined, fxOwner: U.v || undefined });
       return U.s3.drawable;
     }
     // a free unit's pulse (the sim's place, once a second): the nearest one drifts halfway there

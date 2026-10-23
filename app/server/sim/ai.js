@@ -922,6 +922,9 @@ function attackTargets(b, e, radius, reach, own) {
 function enemyAttack(b, e, prevCd) {
   const def = e.def;
   if (e.profile && e.profile.noAttack) { e.swing = false; return false; }
+  // 技能占用攻击间隔（内容层写入的通用时间戳 `skillBusyUntil`，例如包自实现技能在 castSkill 里设置）：
+  // 窗口内不进入挥击流程，也不发 `['atk']` —— 否则被阻挡的敌人会在技能中途打出 Attack_2。
+  if (Number.isFinite(e.skillBusyUntil) && e.skillBusyUntil > b.time + 1e-9) { e.swing = false; e.swingTargets = null; return false; }
   const dmgType = (e.profile && e.profile.dmgType) || def.dmgType;
   if (dmgType === 'none' || e.s.atk <= 0) { e.swing = false; return false; }
   // 恐惧 / 缴械 / 战栗 (被阻挡后无法进行普通攻击): no normal attack, and the one swung is interrupted

@@ -1001,6 +1001,14 @@ export const C2S = {
     load: (v) => v === undefined || v === null || isId(v),
     $optional: ['major', 'minor', 'story', 'bosses', 'assist', 'load'],
   },
+  // 重构协议·特训（模式扩展-重构模拟，PHASE.PREP 的特训回合）：从**场上与待部署区**各点一名干员——前者教官、
+  // 后者学员。学员本局永久继承教官的技能 / 特质 / 天赋（sim 的 traineeOf 组成通道，simdata.js getTrainee）并
+  // 攻 / 防 / 生命 = 学员 + 教官 ×0.5（shared/reconModes.js RECON_TRAINEE_STAT_RATIO，固定不叠加）、获授附加盟约 bond_recon。
+  // 归属 / 回合 / 就绪 / 同人两角在处理器（PlayerState.reconTrain）判；非重构对局回 WRONG_PHASE。新增 C2S 类型
+  // ⇒ `PROTOCOL_VERSION` 不动（先例 `g.reconChoice`）。
+  'g.reconTrain': { mentor: isUid, trainee: isUid },
+  // 取消本回合给这名学员的那条特训（prep.js reconTrainCancel）：只回收这条关系实际授予的盟约，其它来源不动。
+  'g.reconTrainCancel': { trainee: isUid },
   'g.buy': { slot: (v) => isInt(v, 0, 15) },
   'g.refresh': {},
   'g.freeze': {},

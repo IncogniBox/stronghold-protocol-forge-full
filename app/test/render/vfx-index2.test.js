@@ -236,6 +236,11 @@ describe('mode attacks of index v2', () => {
     assert.ok(spawned.includes('en_combat_cast'));
     w.damage(o, 'phys', e, 2.1);
     assert.equal(spawned.at(-1), 'en_combat_hit');
+    // 被阻挡的敌人：sim 把这次 atk 标成 arts/phys 也一样走 combat（塔露拉 Attack_2 的箭矢特效就是漏在这里）
+    const shots = spawned.filter((k) => k === 'en_shot').length;
+    frame(); w.attack(e, o, 'arts', 2.5);
+    assert.equal(spawned.filter((k) => k === 'en_shot').length, shots, 'blocked: no shot on an arts-labelled atk');
+    assert.ok(spawned.includes('en_combat_cast'));
     e.form = 'form2';
     assert.equal(formMode(w.idx.units.enemy_600_blk, 'form2'), 'Reborn');
     frame(); w.attack(e, o, 'none', 3);

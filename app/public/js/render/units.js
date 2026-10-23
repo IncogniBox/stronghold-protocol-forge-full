@@ -959,6 +959,9 @@ export class UnitView {
         // （包侧声明：动作长过攻击节奏的那些干员，一次攻击播**完整一遍**那段动作、播完才回待机 —— 而不是被
         // 节奏拉长/打断；见 shared/workshop.js 的 ART_SPINE_PASSTHROUGH：`anims` 是原样透传的对象）
         actor.clipPerAttack = this.isEnemy || (entry && entry.anims && entry.anims.clipPerAttack === true);
+        // 被阻挡的近战换用 `anims.attackBlocked` 的 clip（spine.js _attackClip 读；塔露拉的 Attack_2）——
+        // 阻挡状态是快照旗标（UF.BLOCKED），这里以闭包注入，与 skillAttackMode 同一条注入式
+        actor.attackBlockedMode = () => (this.isEnemy && (this.flags | 0) & UF.BLOCKED ? (entry?.anims?.attackBlocked ?? null) : null);
         // 声明过的单位：一次攻击**整遍**从第 0 帧播（见 spine.js 的 clipPerAttackWhole）
         actor.clipPerAttackWhole = !this.isEnemy && !!(entry && entry.anims && entry.anims.clipPerAttack === true);
       } catch (err) {

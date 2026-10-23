@@ -47,6 +47,12 @@ export const DEFAULT_CDN_BASE = 'https://speedcdn.jiangjiangze.icu';
 /** scope 前缀之外只收这么大的文件（「大型资源」的默认口径）。 */
 export const DEFAULT_MIN_BYTES = 1048576;
 export const DEFAULT_SCOPE = 'assets/local/';
+/**
+ * 排除前缀：`assets/local/fx/**` 是 fx 提取器（tools/local-extract）的**本机自产物**——每台安装机自己跑
+ * `extract.py --only fx` 生成（或由工坊包的 fx.manifest 通道携带），不在素材镜像 / Release 组包里。
+ * 收进清单只会让启动核对去远端拉一批永远 404 的条目（2026-10-22 实测：270 项 half 贴图 404、5.2 MB）。
+ */
+export const SKIP_PREFIXES = Object.freeze(['assets/local/fx/']);
 
 export const MB = (n) => (n / 1048576).toFixed(1);
 export const absOf = (root, rel) => path.join(root, 'public', ...rel.split('/'));
@@ -72,6 +78,7 @@ export function snapshot({ root = ROOT, scope = DEFAULT_SCOPE, minBytes = DEFAUL
       if (!e.isFile()) continue;
       const st = statOf(path.join(dir, e.name));
       if (!st) continue;
+      if (SKIP_PREFIXES.some((p) => key.startsWith(p))) continue;
       if (!(key.startsWith(scope) || st.size >= minBytes)) continue;
       files[key] = { size: st.size, sha256: sha256File(path.join(dir, e.name)) };
     }

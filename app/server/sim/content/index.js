@@ -184,6 +184,125 @@ function fallbackKit(bb, raw, def) {
   return talents.length ? { ...k, talents: [...(k.talents ?? []), ...talents] } : k;
 }
 
+/** 「…Mul」结尾的 buff mods 键（dmgDealtMul / dmgTakenMul / resMul）按乘算合并，其余按加算（units.js 的聚合口径）。 */
+const isMulMod = (k) => /Mul$/.test(k);
+/**
+ * 影子技能**不并**的 mods（业主 2026-10-27 口径「教官技能中的攻击范围、攻击间隔、技能持续时间这些效果不会加上」）：
+ * `batPct` / `aspd` 改的是攻击间隔，`rangeExtend` 改的是攻击范围——这三样永远是学员自己的。
+ */
+const SHADOW_EXCLUDED_MODS = new Set(['batPct', 'aspd', 'rangeExtend']);
+
+/** 把教官 spec 的回调链在学员自己的后面（先学员后教官），缺哪个用哪个。 */
+function chainFns(a, b) {
+  if (typeof a === 'function' && typeof b === 'function') return (ctx) => { a(ctx); b(ctx); };
+  return a ?? b;
+}
+
+/**
+ * 影子技能合并（重构协议·特训，叠加式；业主 2026-10-27 定稿）：学员自己的 SkillSpec 为基，教官选定技能的
+ * **效果**叠上去，四种「学员技能 × 教官技能」组合统一落到同一条语义 —— **学员每一次攻击（弹药类技能 = 每一发
+ * 弹药）额外附带 1 次教官技能的攻击效果**：
+ *   - mods：数值叠加（×Mul 键乘算、其余加算），但 `batPct` / `aspd`（攻击间隔）与 `rangeExtend`（攻击范围）**不并**
+ *     —— 这三样永远是学员自己的（owner 2026-10-27）；`targeting.rangeGrid` / `noRangeExtend` 同样不并（如下）；
+ *   - attack：**连击数 +1**（一次额外应用；不再把教官的多段数整个并进来）、倍率乘算、splash 取大、onHit 链式；
+ *     `noAttack` 不带过来（影子不替学员停手）；dmgType / projectile 学员自己的优先；
+ *   - targeting：**攻击范围永远是学员自己的** —— 影子的 rangeGrid / rangeExtend / noRangeExtend 一律不带，
+ *     只把 maxTargets（纯「效果」维度，不吃范围）取大并入；
+ *   - onStart / onEnd / onTick / onAttack 链式；counter 学员自己的优先，没有才用教官的；
+ *   - kind / duration / ammo / SP / 触发规则 / 攻击间隔 全部是学员自己的 —— 教官的效果随学员这一次施放激活、
+ *     随学员技能结束而结束（一次 cast，一份 duration）。
+ */
+function mergeShadowSpec(own, shadow) {
+  if (!shadow) return own;
+  const out = { ...own };
+  const mods = { ...(own.mods ?? {}) };
+  for (const [k, v] of Object.entries(shadow.mods ?? {})) {
+    if (SHADOW_EXCLUDED_MODS.has(k)) continue;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v === 0) continue;
+    mods[k] = isMulMod(k) ? (mods[k] ?? 1) * v : (mods[k] ?? 0) + v;
+  }
+  if (Object.keys(mods).length) out.mods = mods;
+  const flags = { ...(own.flags ?? {}), ...(shadow.flags ?? {}) };
+  if (Object.keys(flags).length) out.flags = flags;
+  const oa = own.attack, sa = shadow.attack;
+  if (sa && !oa) {
+    const atk = { ...sa, hits: 1 };
+    delete atk.noAttack;
+    if (Object.keys(atk).length) out.attack = atk;
+  } else if (sa && oa) {
+    const atk = { ...oa, hits: (oa.hits ?? 1) + 1 };  // 一次额外应用（业主 2026-10-27：不是把教官的连击数整个加进来）
+    if (typeof sa.atkScale === 'number') atk.atkScale = (oa.atkScale ?? 1) * sa.atkScale;
+    if (typeof sa.healScale === 'number') atk.healScale = (oa.healScale ?? 1) * sa.healScale;
+    if (typeof sa.splashRadius === 'number') atk.splashRadius = Math.max(oa.splashRadius ?? 0, sa.splashRadius);
+    if (typeof sa.splashScale === 'number') atk.splashScale = Math.max(oa.splashScale ?? 1, sa.splashScale);
+    if (typeof sa.dmgMul === 'number') atk.dmgMul = (oa.dmgMul ?? 1) * sa.dmgMul;
+    if (sa.dmgType && !oa.dmgType) atk.dmgType = sa.dmgType;
+    if (typeof sa.onHit === 'function') atk.onHit = chainFns(oa.onHit, sa.onHit);
+    out.attack = atk;
+  }
+  // targeting：攻击范围永远是学员自己的（业主 2026-10-27）——影子的 rangeGrid / rangeExtend / noRangeExtend
+  // 一律不带（否则 changesRange 会在学员技能期间把范围换成教官技能的）；只把 maxTargets 取大并入。
+  if (shadow.targeting) {
+    const tg = { ...(own.targeting ?? {}) };
+    if (shadow.targeting.maxTargets != null) tg.maxTargets = Math.max(tg.maxTargets ?? 0, Math.floor(shadow.targeting.maxTargets));
+    if (Object.keys(tg).length) out.targeting = tg;
+  }
+  for (const name of ['onStart', 'onEnd', 'onTick', 'onAttack']) {
+    const fn = chainFns(own[name], shadow[name]);
+    if (fn) out[name] = fn;
+  }
+  if (!own.counter && shadow.counter) out.counter = shadow.counter;
+  return out;
+}
+
+/**
+ * 特训学员的 kit 后处理（重构协议·特训，叠加式）：学员自己的 kit 为基（自己的技能 / 特质 / 天赋 / install 照常），
+ * 教官那份 kit（`def.traineeMentor` → battle.data.getChess(教官的 chessId, 教官选定 loadout)）的
+ *   - 选定技能 spec —— 作为「影子技能」并进学员自己的 spec（mergeShadowSpec；学员没有 spec 时不造：影子只随
+ *     学员自己的施放激活）；
+ *   - talents installers —— 追加到 kit.talents（教官的天赋独立结算）；
+ *   - install —— 链在学员 kit.install 之后（教官特质的逐单位行为）；
+ *   - trait —— profile 覆盖对象并入（学员自己的键优先）。
+ * 教官 def 查无 / kit 构造抛错 ⇒ 按原样返回（战斗叠加这一层不生效，学员的 def 级组成照旧）。教官的 kit 解析顺序：
+ * `battle.opts.kits`（测试 / 沙盒注入，对教官同样生效）→ 内建注册表 KITS → generic 回退（黑板推导的 spec +
+ * 它能精确应用的数值天赋——影子技能不能只属于有 kit 的教官）。
+ */
+function applyTraineeMentor(battle, kit, def) {
+  const tm = def.traineeMentor;
+  if (!tm || !battle?.data || typeof battle.data.getChess !== 'function') return kit;
+  // 教官是甄选干员（自选槽位件）时按它的 pick 解析（getDiy——否则查到的是空槽位记录）；是补位时按补位 def
+  // （替补干员的身体 / 技能 / 特质）；diy 与 loadout 都缺省 ＝教官自己的默认 def（getChess(id, null) 的既有语义）
+  const mLo = tm.diy && typeof tm.diy === 'object' ? { diy: tm.diy }
+    : tm.loadout && tm.loadout.standIn === true ? { standIn: true }
+    : tm.loadout && typeof tm.loadout === 'object' ? { skillIndex: tm.loadout.skillIndex ?? null, moduleId: tm.loadout.moduleId ?? null } : null;
+  let mdef;
+  try { mdef = battle.data.getChess(tm.chessId, mLo ?? null); } catch { return kit; }
+  if (!mdef || mdef === def) return kit;
+  let mk;
+  try {
+    const injected = battle.opts && battle.opts.kits;
+    const f = (injected && typeof kitOf(mdef, injected) === 'function' ? kitOf(mdef, injected) : null)
+      ?? (typeof kitOf(mdef, KITS) === 'function' ? kitOf(mdef, KITS) : null);
+    const mbb = mdef.skill?.bb ?? {};
+    const mraw = mdef.raw ?? mdef;
+    mk = f ? selectSkillSpec(f(mbb, mraw, mdef), mbb, mraw, mdef) : fallbackKit(mbb, mraw, mdef);
+  } catch (e) {
+    battle._handlerError?.(`traineeMentor:${tm.chessId}`, null, e);
+    return kit;
+  }
+  if (!mk) return kit;
+  const out = { ...kit };
+  const mt = (mk.talents ?? []).filter((x) => x && typeof x.install === 'function');
+  if (mt.length) out.talents = [...(kit.talents ?? []), ...mt];
+  if (mk.trait && typeof mk.trait === 'object') out.trait = { ...mk.trait, ...(kit.trait ?? {}) };
+  const ownI = typeof kit.install === 'function' ? kit.install : null;
+  const mI = typeof mk.install === 'function' ? mk.install : null;
+  if (ownI && mI) out.install = (b, u) => { ownI(b, u); mI(b, u); };
+  else if (mI) out.install = mI;
+  if (kit.skill && mk.skill) out.skill = mergeShadowSpec(kit.skill, mk.skill);
+  return out;
+}
+
 /** Resolve the Kit of an ally unit. Never throws (falls back to the generic kit). */
 export function setupUnitKit(battle, unit, mode = 'full') {
   try { syncUnitLoadout(battle, unit); } catch (e) { battle._handlerError?.('loadout', unit, e); }
@@ -212,6 +331,7 @@ export function setupUnitKit(battle, unit, mode = 'full') {
   }
   if (unit.kind !== 'op') return {};
   const injected = battle.opts && battle.opts.kits;
+  let k = null;
   if (mode === 'full' || injected) {
     const f = kitOf(def, injected) ?? (mode === 'full' ? kitOf(def, KITS) : undefined);
     if (typeof f === 'function') {
@@ -220,8 +340,8 @@ export function setupUnitKit(battle, unit, mode = 'full') {
       const key = injected ? kitKeyOf(def, injected) : null;
       const owner = key === null ? null : packOfKit(battle, 'kitOwners', key);
       try {
-        const k = f(bb, raw, def);
-        if (k) { const out = selectSkillSpec(k, bb, raw, def); if (owner) KIT_PACK.set(out, owner); return out; }
+        const kk = f(bb, raw, def);
+        if (kk) { const out = selectSkillSpec(kk, bb, raw, def); if (owner) KIT_PACK.set(out, owner); k = out; }
       } catch (e) {
         const dslCode = typeof e?.code === 'string' && /^PLUGIN_DSL_[A-Z0-9_]+$/.test(e.code);
         // A record that carries DSL, or a throw whose code is a DSL problem, is a corrupt content set.
@@ -243,7 +363,10 @@ export function setupUnitKit(battle, unit, mode = 'full') {
       }
     }
   }
-  return fallbackKit(bb, raw, def);
+  if (!k) k = fallbackKit(bb, raw, def);
+  // 特训学员（重构模拟，叠加式）：教官的影子技能 / 特质 / 天赋并进学员自己的 kit —— 只在 'full' 模式（'generic' /
+  // 'none' 本来就没有逐干员内容）。
+  return mode === 'full' && def.traineeMentor ? applyTraineeMentor(battle, k, def) : k;
 }
 
 /** A unit's own PlayerBattleInput entry (operators: kind ≠ 'token'; tokens: kind 'token'), or null. */
@@ -268,6 +391,8 @@ function inputLoadout(unit) {
     ...(x.standIn === true ? { standIn: true } : null),
     ...(x.diy && typeof x.diy === 'object' ? { diy: x.diy } : null),
     ...(x.standIn !== true && isPotential(x.potential) ? { potential: x.potential } : null),
+    // 特训学员（重构模拟）：def 由 getChess 的 traineeOf 组成通道决定，syncUnitLoadout 不再按 loadout 重解析。
+    ...(x.reconTrainee && typeof x.reconTrainee === 'object' ? { reconTrainee: x.reconTrainee } : null),
   };
   if (x.skillIndex == null && x.moduleId == null) return extra;
   return { skillIndex: x.skillIndex ?? null, moduleId: x.moduleId ?? null, ...extra };
@@ -300,6 +425,10 @@ export function syncUnitLoadout(battle, unit) {
   if (!battle || battle.started || !unit || unit.deployed || !unit.def || !battle.data) return;
   if (unit.kind === 'op') {
     const lo = inputLoadout(unit);
+    // 特训学员（重构模拟，叠加式）：def 已经是 getChess 的 traineeOf 组成件（学员自己的技能 / 模组 / 属性 = 学员 + 教官 ×0.5 +
+    // 教官的盟约 + traineeMentor 影子技能指针），按 loadout 重解析只会把它换回普通 def —— 输入条目带
+    // reconTrainee 时这条 def 就是终局。
+    if (lo && lo.reconTrainee) return;
     if (!lo || typeof battle.data.getChess !== 'function') return;
     // an entry without loadout fields only needs a look when the def carries a non-default loadout
     if (!Object.keys(lo).length && !(unit.def.loadout && unit.def.loadout.isDefault === false)) return;
