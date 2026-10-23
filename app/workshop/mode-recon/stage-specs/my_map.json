@@ -28,22 +28,22 @@
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "fffffffffffffffffffffXXXXXXXXXXXXXXXXXXXffffffffffffffffffff",
+    "fffffffffffffffffffffXEr###rrXXXrr###rEXffffffffffffffffffff",
+    "fffffffffffffffffffffXXr##rrrfffrrr##rXXffffffffffffffffffff",
+    "fffffffffffffffffffffXXrrrrrfffffrrrrrXXffffffffffffffffffff",
+    "fffffffffffffffffffffXXr##rrfffffrr##rXXffffffffffffffffffff",
+    "fffffffffffffffffffffXIr###rfffffr###rIXffffffffffffffffffff",
+    "fffffffffffffffffffffXXXXXXXXXXXXXXXXXXXffffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffSfffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffSfffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ffffffffffffffffffffXXXXXXXXXXXXXXXXXXXXXfffffffffffffffffff",
+    "ffffffffffffffffffffX###rrrrrXXXrrrrr###Xfffffffffffffffffff",
+    "ffffffffffffffffffffX#rrr##rrrSrrr##rrr#Xfffffffffffffffffff",
+    "ffffffffffffffffffffErrr####XXXXX####rrrEfffffffffffffffffff",
+    "ffffffffffffffffffffX#rrr##rrrSrrr##rrr#Xfffffffffffffffffff",
+    "ffffffffffffffffffffX###rrrrrXXXrrrrr###Xfffffffffffffffffff",
+    "ffffffffffffffffffffXXXXXXXXXXXXXXXXXXXXXfffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -245,14 +245,14 @@
         40
       ],
       "bossLeft": [
-        1,
-        5,
+        25,
+        29,
         22,
         30
       ],
       "bossRight": [
-        1,
-        5,
+        25,
+        29,
         30,
         38
       ]
@@ -268,7 +268,7 @@
         "r0": 32,
         "r1": 38,
         "c0": 18,
-        "c1": 40
+        "c1": 42
       },
       "unite": {
         "r0": 34,
@@ -277,16 +277,16 @@
         "c1": 49
       },
       "boss": {
-        "r0": 0,
-        "r1": 5,
-        "c0": 10,
-        "c1": 50
+        "r0": 24,
+        "r1": 29,
+        "c0": 16,
+        "c1": 45
       },
       "bossPrep": {
-        "r0": 0,
-        "r1": 5,
-        "c0": 20,
-        "c1": 30
+        "r0": 24,
+        "r1": 29,
+        "c0": 21,
+        "c1": 40
       }
     },
     "pen": {
@@ -301,16 +301,255 @@
       "r1": 44,
       "c0": 32,
       "c1": 38
-    }
+    },
+    "bossAreas": [
+      {
+        "battle": {
+          "r0": 24,
+          "r1": 29,
+          "c0": 16,
+          "c1": 45
+        },
+        "prep": {
+          "r0": 24,
+          "r1": 29,
+          "c0": 21,
+          "c1": 40
+        },
+        "deploy": [
+          [
+            24,
+            29,
+            22,
+            31
+          ],
+          [
+            24,
+            29,
+            29,
+            38
+          ]
+        ]
+      },
+      {
+        "battle": {
+          "r0": 11,
+          "r1": 21,
+          "c0": 2,
+          "c1": 16
+        },
+        "prep": {
+          "r0": 11,
+          "r1": 21,
+          "c0": 4,
+          "c1": 14
+        },
+        "deploy": [
+          [
+            13,
+            18,
+            5,
+            14
+          ],
+          [
+            16,
+            21,
+            5,
+            14
+          ]
+        ]
+      },
+      {
+        "battle": {
+          "r0": 11,
+          "r1": 21,
+          "c0": 44,
+          "c1": 58
+        },
+        "prep": {
+          "r0": 11,
+          "r1": 21,
+          "c0": 46,
+          "c1": 56
+        },
+        "deploy": [
+          [
+            13,
+            18,
+            46,
+            55
+          ],
+          [
+            16,
+            21,
+            46,
+            55
+          ]
+        ]
+      },
+      {
+        "battle": {
+          "r0": 13,
+          "r1": 19,
+          "c0": 18,
+          "c1": 42
+        },
+        "prep": {
+          "r0": 13,
+          "r1": 19,
+          "c0": 23,
+          "c1": 38
+        },
+        "deploy": [
+          [
+            13,
+            19,
+            24,
+            33
+          ],
+          [
+            13,
+            19,
+            27,
+            36
+          ]
+        ]
+      }
+    ]
   },
-  "routes": [],
+  "routes": [
+    {
+      "motion": "WALK",
+      "start": [
+        37,
+        30
+      ],
+      "end": [
+        36,
+        20
+      ],
+      "checkpoints": [
+        [
+          37,
+          27
+        ],
+        [
+          38,
+          27
+        ],
+        [
+          38,
+          24
+        ],
+        [
+          37,
+          24
+        ],
+        [
+          36,
+          22
+        ]
+      ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        35,
+        30
+      ],
+      "end": [
+        36,
+        20
+      ],
+      "checkpoints": [
+        [
+          35,
+          27
+        ],
+        [
+          34,
+          27
+        ],
+        [
+          34,
+          24
+        ],
+        [
+          35,
+          24
+        ],
+        [
+          36,
+          22
+        ]
+      ]
+    },
+    {
+      "motion": "FLY",
+      "start": [
+        35,
+        30
+      ],
+      "end": [
+        36,
+        20
+      ],
+      "checkpoints": [
+        [
+          37,
+          27
+        ],
+        [
+          38,
+          27
+        ],
+        [
+          38,
+          24
+        ],
+        [
+          35,
+          24
+        ]
+      ]
+    },
+    {
+      "motion": "FLY",
+      "start": [
+        37,
+        30
+      ],
+      "end": [
+        36,
+        20
+      ],
+      "checkpoints": [
+        [
+          35,
+          27
+        ],
+        [
+          34,
+          27
+        ],
+        [
+          34,
+          24
+        ],
+        [
+          37,
+          24
+        ]
+      ]
+    }
+  ],
   "_meta": {
     "schema": 1,
     "source": "Stronghold-Protocol-Forge",
     "author": "mode-recon mod",
     "pack": "mode-recon",
     "created": "2026-10-20T01:42:30.410Z",
-    "modified": "2026-10-20T01:42:30.410Z",
+    "modified": "2026-10-23T08:33:27.465Z",
     "copyright": {
       "zh": "本 Option 的著作权归创建它的作者本人所有。创作者可自由分享、分发自己的 Option，并可通过其获得合理回报。",
       "en": "This Option is the property of the author who created it. Creators may freely share and distribute their own Options and may reasonably profit from them."

@@ -1,0 +1,12 @@
+enemy_2095_skzamf.png
+size: 174,453
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+body
+  rotate: false
+  xy: 0, 0
+  size: 174, 453
+  orig: 174, 453
+  offset: 0, 0
+  index: -1

@@ -87,6 +87,27 @@ const MUSIC_FADE = 1; // 淡入 / 淡出各 1 秒
  */
 const MUSIC_START_GRACE = 2.5;
 
+/**
+ * 这个 `<audio>` 现在**真的能 seek** 吗？
+ *
+ * `/workshop-assets/**` **不宣告 `Accept-Ranges`**（实测 2026-10-23：带 `Range` 的请求仍回 `200` + 整段，
+ * 没有 `Content-Range`）⇒ 两个素材的 `seekable` 都是 `0–0`：**`seekable.length > 0` 并不代表能定位**，
+ * 判据必须是区间**长度**。
+ *
+ * 业主 2026-10-23 报的「第二次 Fever 播伴奏出现死机的尖锐声」就长在这条上：第一次 Fever 因为起播比战斗时钟
+ * 晚一点，结束时 `currentTime` 停在片段中段 ⇒ 记下续播点；第二次 Fever 用 `pendingFrom` 去 seek，但 seek
+ * 永远落不下去（实际仍在 0）⇒ 原来的守卫按 `length > 0` 认为“可 seek”，**每帧**再写一次 `currentTime =
+ * pendingFrom`：AAC 解码器被每帧重开 ⇒ 爆音（尖锐声），主线程也被这一串 seek 拖死（死机）。MP3 丢 seek 时
+ * 通常只是忽略，所以人声版听不出来 —— 两首的 `seekable` 其实都是 `0–0`。
+ */
+function canSeek(el) {
+  try {
+    const s = el && el.seekable;
+    if (!s || !s.length) return false;
+    return s.end(s.length - 1) - s.start(0) > 0.5;
+  } catch { return false; }
+}
+
 /** 面板的模块级表（同一槽位只有一个实例）。 */
 const state = {
   feed: { priv: null, myId: null },
@@ -569,9 +590,12 @@ function driveMusic(on, full) {
       // 记下**中断位置**：这一段没播完（确实停在**片段中间**）⇒ 下一次 Fever 从这儿接着播（业主 2026-10-17 裁决）。
       // ⚠️ 判据必须两头都卡住：Fever 时长 == 片段时长（都是 20 s）⇒ 正常结束往往恰好停在 `end`，
       // 若把 `end` 记成续播点，下一次 Fever 会「从 end 起播」→ 立刻触发末尾重播分支 → 整段静音（业主 2026-10-18 报的回归）。
+      // ⚠️ 还要**能 seek**：路由不支持 Range 时续播点根本落不下去，记了只会变成下面那个每帧 seek 的爆音源
+      // （业主 2026-10-23 报的「第二次 Fever 尖锐死机声」）。
       const pos = Number.isFinite(m.el.currentTime) ? m.el.currentTime : null;
       const sp = m.spec;
-      if (pos != null && sp && pos > sp.start + 0.25 && pos < sp.end - 0.25) m.resume[m.which] = pos;
+      if (canSeek(m.el) && pos != null && sp && pos > sp.start + 0.25 && pos < sp.end - 0.25) m.resume[m.which] = pos;
+      else if (!canSeek(m.el)) m.resume[m.which] = null;
       m.fading = true;
       m.fadeStart = now;
     }
@@ -599,9 +623,9 @@ function driveMusic(on, full) {
   }
   // 起播定位守卫（见 startMusic）：只服务「同一场内续播」那个几秒的偏移 —— 片段起点是 0，全新的 Fever 不 seek。
   if (Number.isFinite(m.pendingFrom) && el.readyState >= 1) {
-    // `seekable` 空（工坊素材路由不宣告 `Accept-Ranges`）时别每帧空转，认输
-    const seekableEmpty = !el.seekable || el.seekable.length === 0;
-    if (el.currentTime >= m.pendingFrom - 0.25 || seekableEmpty) m.pendingFrom = null;
+    // 路由不宣告 `Accept-Ranges` 时 `seekable` 是 `0–0`（区间长度 0）⇒ 根本落不下去：认输，别每帧重 seek。
+    // 2026-10-23 业主报的「第二次 Fever 尖锐死机声」就是这条守卫在 AAC 上每帧重开解码器。
+    if (el.currentTime >= m.pendingFrom - 0.25 || !canSeek(el)) m.pendingFrom = null;
     else { try { el.currentTime = m.pendingFrom; } catch { /* ignore */ } }
   }
   if (m.fading) {

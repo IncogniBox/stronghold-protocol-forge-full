@@ -410,7 +410,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1503_talula",
-    "spine": "enemy_1503_talula"
+    "spine": "enemy_1503_talula",
+    "attackAnim": {
+      "clip": "Attack_2",
+      "dur": 2.333,
+      "hit": 1.333
+    }
   },
   "enemy_1507_mephi": {
     "key": "enemy_1507_mephi",
@@ -487,7 +492,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1507_mephi",
-    "spine": "enemy_1507_mephi"
+    "spine": "enemy_1507_mephi",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 3.167,
+      "hit": 1.1
+    }
   },
   "enemy_1508_faust": {
     "key": "enemy_1508_faust",
@@ -592,7 +602,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1508_faust",
-    "spine": "enemy_1508_faust"
+    "spine": "enemy_1508_faust",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 3,
+      "hit": 1.333
+    }
   },
   "enemy_1510_frstar2": {
     "key": "enemy_1510_frstar2",
@@ -737,7 +752,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1510_frstar2",
-    "spine": "enemy_1510_frstar2"
+    "spine": "enemy_1510_frstar2",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.6,
+      "hit": 0.933
+    }
   },
   "enemy_1506_patrt": {
     "key": "enemy_1506_patrt",
@@ -900,7 +920,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1506_patrt",
-    "spine": "enemy_1506_patrt"
+    "spine": "enemy_1506_patrt",
+    "attackAnim": {
+      "clip": "Attack_1",
+      "dur": 1.5,
+      "hit": 0.633
+    }
   },
   "enemy_1514_smephi": {
     "key": "enemy_1514_smephi",
@@ -1276,7 +1301,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1515_bsnake",
-    "spine": "enemy_1515_bsnake"
+    "spine": "enemy_1515_bsnake",
+    "attackAnim": {
+      "clip": "Attack_A",
+      "dur": 2.333,
+      "hit": 1.033
+    }
   },
   "enemy_1524_bldkgt": {
     "key": "enemy_1524_bldkgt",
@@ -1464,7 +1494,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1524_bldkgt",
-    "spine": "enemy_1524_bldkgt"
+    "spine": "enemy_1524_bldkgt",
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 2.233,
+      "hit": 1.267
+    }
   },
   "enemy_1523_mandra": {
     "key": "enemy_1523_mandra",
@@ -1656,7 +1691,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1523_mandra",
-    "spine": "enemy_1523_mandra"
+    "spine": "enemy_1523_mandra",
+    "attackAnim": {
+      "clip": "C1_Attack",
+      "dur": 1.5,
+      "hit": 0.833
+    }
   },
   "enemy_1526_sfsui": {
     "key": "enemy_1526_sfsui",
@@ -3455,7 +3495,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1568_dirctr",
-    "spine": "enemy_1568_dirctr"
+    "spine": "enemy_1568_dirctr",
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 3,
+      "hit": 1.833
+    }
   },
   "enemy_1571_mirbst": {
     "key": "enemy_1571_mirbst",
@@ -3604,7 +3649,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_1571_mirbst",
-    "spine": "enemy_1571_mirbst"
+    "spine": "enemy_1571_mirbst",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.567,
+      "hit": 0.633
+    }
   },
   "enemy_1575_xdmon": {
     "key": "enemy_1575_xdmon",
@@ -5232,7 +5282,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_2039_syskad",
-    "spine": "enemy_2039_syskad"
+    "spine": "enemy_2039_syskad",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 2.667,
+      "hit": 1.167
+    }
   },
   "enemy_2042_syboss": {
     "key": "enemy_2042_syboss",
@@ -6329,7 +6384,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_2089_skzjkl",
-    "spine": "enemy_2089_skzjkl"
+    "spine": "enemy_2089_skzjkl",
+    "attackAnim": {
+      "clip": "B_Attack",
+      "dur": 1.5,
+      "hit": 0.467
+    }
   },
   "enemy_2092_skzamy": {
     "key": "enemy_2092_skzamy",
@@ -6892,7 +6952,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_2120_dywqgs",
-    "spine": "enemy_2120_dywqgs"
+    "spine": "enemy_2120_dywqgs",
+    "attackAnim": {
+      "clip": "B_Attack",
+      "dur": 2.167,
+      "hit": 1.067
+    }
   },
   "enemy_2123_dyjsww": {
     "key": "enemy_2123_dyjsww",
@@ -7315,14 +7380,19 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_2126_dycyue",
-    "spine": "enemy_2126_dycyue"
+    "spine": "enemy_2126_dycyue",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 3,
+      "hit": 1
+    }
   },
   "enemy_2128_dysuib": {
     "key": "enemy_2128_dysuib",
     "name": "身形",
     "level": 0,
-    "rank": "BOSS",
-    "handbookIndex": "WQH",
+    "rank": "NORMAL",
+    "handbookIndex": null,
     "desc": "祂最不似人的部分。",
     "descRaw": "祂最不似人的部分。",
     "applyWay": "NONE",
@@ -7334,57 +7404,37 @@
       "moveSpeed": 0.6,
       "bat": 5,
       "aspd": 100,
-      "rangeRadius": 2.5,
-      "rawRangeRadius": 2.5,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
       "blockCnt": 1,
-      "massLevel": 13,
-      "lpr": 1,
+      "massLevel": 5,
+      "lpr": 0,
       "hpRecoveryPerSec": 0,
       "elementRes": 0,
       "elementDmgRes": 0,
       "hitRatePhys": 0,
       "hitRateArts": 0,
       "dmgType": "none",
-      "dmgTypes": [
-        "none"
-      ],
+      "dmgTypes": [],
       "motion": "WALK",
+      "tauntLevel": 0,
       "immunities": {
-        "stun": true,
-        "silence": true,
-        "sleep": true,
-        "frozen": true,
-        "levitate": true
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
       },
-      "otherImmunities": [
-        "disarmedCombat",
-        "feared",
-        "palsy",
-        "attract"
-      ],
-      "tauntLevel": 0
+      "otherImmunities": []
     },
     "abilities": [],
     "talents": {
-      "bb": {
-        "WithdrawAlly.attack@respawn_time": 0.15,
-        "DysuihAura.damage_resistance": 0.5,
-        "DysuihAura.stun": 15,
-        "SecondRelicTalent.def": 1500,
-        "SecondRelicTalent.enemy_dysuib_second_relic_t[summon_enemy].interval": 30,
-        "SecondRelicTalent.active_relic_a": 0,
-        "SecondRelicTalent.active_relic_b": 0,
-        "inverseDamage.atk_scale": 0
-      },
-      "bbStr": {
-        "SecondRelicTalent.enemy_dysuib_second_relic_t[summon_enemy].branch_id": "dysuib_relic_branch"
-      }
+      "bb": {},
+      "bbStr": {}
     },
     "skills": [],
-    "notCountInTotal": false,
-    "tags": [
-      "animated"
-    ],
+    "notCountInTotal": true,
+    "tags": [],
     "be": 84090,
     "beFactor": 1,
     "attrPower": 84090,
@@ -7397,7 +7447,8 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_2128_dysuib",
-    "spine": "enemy_2128_dysuib"
+    "spine": "enemy_2128_dysuib",
+    "attackAnim": null
   },
   "enemy_2127_dysuih": {
     "key": "enemy_2127_dysuih",
@@ -8353,7 +8404,12 @@
     "inactiveIn": [],
     "seasonOverride": null,
     "iconId": "enemy_2150_shchmr",
-    "spine": "enemy_2150_shchmr"
+    "spine": "enemy_2150_shchmr",
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 2.4,
+      "hit": 0.967
+    }
   },
   "enemy_2151_shwolf": {
     "key": "enemy_2151_shwolf",
@@ -9710,5 +9766,1733 @@
     "seasonOverride": null,
     "iconId": "enemy_8018_etouch",
     "spine": "enemy_8018_etouch"
+  },
+  "enemy_1569_ldevil": {
+    "key": "enemy_1569_ldevil",
+    "name": "莫菲丝",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": null,
+    "desc": "梦中的一切明明这么有趣，为什么还想要逃离呢......留在这里多好。",
+    "descRaw": "梦中的一切明明这么有趣，为什么还想要逃离呢......留在这里多好。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 60000,
+      "atk": 680,
+      "def": 580,
+      "res": 35,
+      "moveSpeed": 0.7,
+      "bat": 2.8,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 5,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "tauntLevel": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "rawRangeRadius": 2.5,
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": false
+      },
+      "otherImmunities": []
+    },
+    "abilities": [
+      {
+        "text": "莫菲丝会连接可被我方单位阻挡的丝线，每根未被阻挡的丝线都会使莫菲丝攻击力提升",
+        "textRaw": "莫菲丝会连接可被我方单位阻挡的丝线，每根未被阻挡的丝线都会使莫菲丝攻击力提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【幻梦的纠缠】以丝线连接攻击范围内最远的我方单位，持续造成法术伤害",
+        "textRaw": "【幻梦的纠缠】以丝线连接攻击范围内最远的我方单位，持续造成法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【感官的剥离】以丝线连接敌方单位，使其分担莫菲丝受到的大部分伤害",
+        "textRaw": "【感官的剥离】以丝线连接敌方单位，使其分担莫菲丝受到的大部分伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【梦境的演变】莫菲丝召唤并骑乘一只“安眠伴随兽”，使自身不可阻挡、移动速度增加并获得屏障，持续一段时间或屏障被击破后停止",
+        "textRaw": "【梦境的演变】莫菲丝召唤并骑乘一只“安眠伴随兽”，使自身不可阻挡、移动速度增加并获得屏障，持续一段时间或屏障被击破后停止",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】技能梦境的演变［第一形态］获得的屏障数值改为自身10%生命上限，重生的时间降低至10秒，每存在一根有效的【线】获得的攻击力提升至25%",
+        "textRaw": "【重构】技能梦境的演变［第一形态］获得的屏障数值改为自身10%生命上限，重生的时间降低至10秒，每存在一根有效的【线】获得的攻击力提升至25%",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "EnemyLineT.atk": 0.25,
+        "EnemyLineT.duration": 40,
+        "EnemyLineT.damage_share": 0.65,
+        "EnemyLineAdvanceT.damage_share": 0.7,
+        "RedLine.atk_scale": 0.5,
+        "RedLine.atk_scale_2": 0.6,
+        "RedLine.duration": 10,
+        "RedLine.interval": 0.4,
+        "Shield.dynamic_ratio": 0.1,
+        "Shield.dynamic": 20000,
+        "Shield.interval": 8,
+        "Shield.move_speed": 0.7,
+        "Reborn.duration": 10,
+        "Reborn.hit_interval": 4,
+        "Reborn.max_hp": 0.3,
+        "Reborn.atk": 0.1,
+        "Reborn.base_attack_time": -0.2
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 65245,
+    "beFactor": 1,
+    "attrPower": 65245,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1569_ldevil",
+    "spine": "enemy_1569_ldevil",
+    "modelScale": null,
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 1,
+      "hit": 0.267
+    }
+  },
+  "enemy_1186_bldbld": {
+    "key": "enemy_1186_bldbld",
+    "name": "凝血之刃",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "呼应血骑士的意志而活性化的血液，凝聚成了一把利刃的形状。",
+    "descRaw": "呼应血骑士的意志而活性化的血液，凝聚成了一把利刃的形状。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 8000,
+      "atk": 800,
+      "def": 300,
+      "res": 80,
+      "moveSpeed": 1.5,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "tauntLevel": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "rawRangeRadius": 0,
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": []
+    },
+    "abilities": [
+      {
+        "text": "与<血骑士>接触后，消失并恢复<血骑士>一定生命值",
+        "textRaw": "与<血骑士>接触后，消失并恢复<血骑士>一定生命值",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "Devour.hp_ratio": 0.1
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 13140,
+    "beFactor": 1,
+    "attrPower": 13140,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1186_bldbld",
+    "spine": "enemy_1186_bldbld",
+    "modelScale": null,
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.333,
+      "hit": 0.433
+    }
+  },
+  "enemy_2101_dyspll": {
+    "key": "enemy_2101_dyspll",
+    "name": "瑕",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "于“望”的手中凝成的一枚棋子，落在可部署地块上时，周围的我方单位会被它的阴影笼罩。",
+    "descRaw": "于“望”的手中凝成的一枚棋子，落在可部署地块上时，周围的我方单位会被它的阴影笼罩。",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 60000,
+      "atk": 100,
+      "def": 1000,
+      "res": 20,
+      "moveSpeed": 0,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "blockCnt": 0,
+      "massLevel": 0,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "tauntLevel": -1,
+      "dmgType": "none",
+      "dmgTypes": [],
+      "motion": "WALK",
+      "rawRangeRadius": 0,
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": []
+    },
+    "abilities": [
+      {
+        "text": "常态不进行攻击；对周围4格的我方单位每秒造成攻击力100%的法术伤害",
+        "textRaw": "常态不进行攻击；对周围4格的我方单位每秒造成攻击力100%的法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "周围4格每有一名我方单位，自身受到的物理与法术伤害提高50%",
+        "textRaw": "周围4格每有一名我方单位，自身受到的物理与法术伤害提高50%",
+        "format": "NORMAL"
+      },
+      {
+        "text": "处于“望”周围时变换形态，攻击造成眩晕",
+        "textRaw": "处于“望”周围时变换形态，攻击造成眩晕",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "ActiveChessDamage.hp_ratio": 0.02,
+        "ActiveChessDamage.range_radius": 1.6
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 63560,
+    "beFactor": 1,
+    "attrPower": 63560,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2101_dyspll",
+    "spine": "enemy_2101_dyspll",
+    "modelScale": null,
+    "attackAnim": {
+      "clip": "Idle",
+      "dur": 3.333,
+      "hit": 1.667
+    }
+  },
+  "enemy_1001_bigbo_2": {
+    "key": "enemy_1001_bigbo_2",
+    "name": "大亚当",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "12",
+    "desc": "比大鲍勃更具威胁，使用电锯进行攻击，兼具高耐久、攻击力和防御力。",
+    "descRaw": "比大鲍勃更具威胁，使用电锯进行攻击，兼具<@eb.danger>高耐久、攻击力和防御力</>。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 30000,
+      "atk": 2700,
+      "def": 1000,
+      "res": 30,
+      "moveSpeed": 0.5,
+      "bat": 6,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 4,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【重构】生命上限+100%，攻击力+50%",
+        "textRaw": "【重构】生命上限+100%，攻击力+50%",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 46590,
+    "beFactor": 1,
+    "attrPower": 46590,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1001_bigbo_2",
+    "spine": "enemy_1001_bigbo_2",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1,
+      "hit": 0.167
+    }
+  },
+  "enemy_2090_skzjbc": {
+    "key": "enemy_2090_skzjbc",
+    "name": "托生莲座",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "碰触干员后接驳干员，渡四方来客，惟解脱者可行舟。",
+    "descRaw": "碰触干员后接驳干员，渡四方来客，惟解脱者可行舟。",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 50000,
+      "atk": 500,
+      "def": 2000,
+      "res": 50,
+      "moveSpeed": 0.8,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 5,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [],
+      "motion": "FLY",
+      "tauntLevel": 0,
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": []
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": true,
+    "tags": [],
+    "be": 58650,
+    "beFactor": 1,
+    "attrPower": 58650,
+    "isFlyEnemy": true,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2090_skzjbc",
+    "spine": "enemy_2090_skzjbc",
+    "attackAnim": null
+  },
+  "enemy_2129_dylong": {
+    "key": "enemy_2129_dylong",
+    "name": "怨骸",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "被墓主的本质侵染后，这些无机物演化出了与其相似的躯壳……以及生命。司岁台将这种转变称为“化伥”。",
+    "descRaw": "被墓主的本质侵染后，这些无机物演化出了与其相似的躯壳……以及生命。司岁台将这种转变称为“化伥”。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 40000,
+      "atk": 600,
+      "def": 500,
+      "res": 20,
+      "moveSpeed": 0.6,
+      "bat": 5,
+      "aspd": 100,
+      "rangeRadius": 1.5,
+      "rawRangeRadius": 1.5,
+      "blockCnt": 1,
+      "massLevel": 3,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "tauntLevel": 0,
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": []
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": true,
+    "tags": [],
+    "be": 44560,
+    "beFactor": 1,
+    "attrPower": 44560,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2129_dylong",
+    "spine": "enemy_2129_dylong",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1,
+      "hit": 0.367
+    }
+  },
+  "enemy_2130_dyswrd": {
+    "key": "enemy_2130_dyswrd",
+    "name": "敛傲",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "尾生为刃，人以为剑。曾经的祂从不遮掩自己的狂傲，而今时今日，祂却已懂得敛其锋芒。",
+    "descRaw": "尾生为刃，人以为剑。曾经的祂从不遮掩自己的狂傲，而今时今日，祂却已懂得敛其锋芒。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 1800,
+      "def": 500,
+      "res": 20,
+      "moveSpeed": 1,
+      "bat": 5,
+      "aspd": 100,
+      "rangeRadius": 1.5,
+      "rawRangeRadius": 1.5,
+      "blockCnt": 1,
+      "massLevel": 3,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "FLY",
+      "tauntLevel": 0,
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": []
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": true,
+    "tags": [],
+    "be": 30560,
+    "beFactor": 1,
+    "attrPower": 30560,
+    "isFlyEnemy": true,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2130_dyswrd",
+    "spine": "enemy_2130_dyswrd",
+    "attackAnim": null
+  },
+  "enemy_2133_shdopl": {
+    "key": "enemy_2133_shdopl",
+    "name": "空值体",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "初始伪装成一个单位，受到伤害后现身。",
+    "descRaw": "初始伪装成一个单位，受到伤害后现身。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 5000,
+      "atk": 320,
+      "def": 100,
+      "res": 20,
+      "moveSpeed": 1.5,
+      "bat": 1.4,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "tauntLevel": 0,
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": []
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": true,
+    "tags": [],
+    "be": 6960,
+    "beFactor": 1,
+    "attrPower": 6960,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2133_shdopl",
+    "spine": "enemy_2133_shdopl",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.5,
+      "hit": 0.6
+    }
+  },
+  "enemy_2018_csdoll": {
+    "key": "enemy_2018_csdoll",
+    "name": "伤心的大锁",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "DOL",
+    "desc": "剧团报幕人的作品之一，耐久极高且具有强大的自愈能力，释放的护盾存在期间会不断出现额外的敌人。",
+    "descRaw": "剧团报幕人的作品之一，耐久极高且具有<@eb.key>强大的自愈能力</>，释放的护盾存在期间会不断出现额外的敌人。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 300000,
+      "atk": 800,
+      "def": 700,
+      "res": 60,
+      "moveSpeed": 0.1,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 10,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "disarmedCombat",
+        "feared",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "同时攻击2个目标",
+        "textRaw": "同时攻击2个目标",
+        "format": "NORMAL"
+      },
+      {
+        "text": "耐久极高，具有强大的自愈能力，自身在场时会有源源不断的敌人出现",
+        "textRaw": "耐久极高，具有强大的自愈能力，自身在场时会有源源不断的敌人出现",
+        "format": "NORMAL"
+      },
+      {
+        "text": "周期性释放屏障保护自身，屏障期间停止攻击，但全场敌人移动速度提升且会持续出现额外的敌人",
+        "textRaw": "周期性释放屏障保护自身，屏障期间停止攻击，但全场敌人移动速度提升且会持续出现额外的敌人",
+        "format": "NORMAL"
+      },
+      {
+        "text": "每受到一定次数伤害后对全场我方单位造成法术伤害",
+        "textRaw": "每受到一定次数伤害后对全场我方单位造成法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "战斗经过较长时间后扣除30目标生命",
+        "textRaw": "战斗经过较长时间后扣除30目标生命",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "summon.csdoll_summon[1].duration": 90,
+        "summon.csdoll_summon[1].interval": 24,
+        "summon.csdoll_summon[1].branch_id": 0,
+        "summon.csdoll_summon[2].duration": 180,
+        "summon.csdoll_summon[2].interval": 20,
+        "summon.csdoll_summon[2].branch_id": 0,
+        "summon.csdoll_summon[3].interval": 16,
+        "summon.csdoll_summon[3].branch_id": 0,
+        "hprecovery.hp_recovery_per_sec_by_max_hp_ratio": 0.0025,
+        "aoetrigger.stack_cnt": 20,
+        "aoe.atk_scale": 1.5,
+        "aoetrigger.warning_stack_cnt": 10,
+        "movespeedup.move_speed": 2
+      },
+      "bbStr": {
+        "summon.csdoll_summon[1].branch_id": "csdoll_1",
+        "summon.csdoll_summon[2].branch_id": "csdoll_2",
+        "summon.csdoll_summon[3].branch_id": "csdoll_3"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "shield",
+        "priority": 1,
+        "cooldown": 45,
+        "initCooldown": 60,
+        "spCost": 0,
+        "bb": {
+          "hp_ratio": 0.05,
+          "interval": 20,
+          "branch_id": 0
+        },
+        "bbStr": {
+          "branch_id": "csdoll_rush"
+        }
+      },
+      {
+        "prefabKey": "Doom",
+        "priority": 0,
+        "cooldown": 480,
+        "initCooldown": 480,
+        "spCost": 0,
+        "bb": {
+          "value": -30,
+          "atk_scale": 2
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 306280,
+    "beFactor": 1,
+    "attrPower": 306280,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2018_csdoll",
+    "spine": "enemy_2018_csdoll",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.5,
+      "hit": 1
+    }
+  },
+  "enemy_2094_skzamb": {
+    "key": "enemy_2094_skzamb",
+    "name": "仅剩的创意",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "碰触昔日道标后改变方向",
+    "descRaw": "碰触昔日道标后改变方向",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 1000,
+      "atk": 300,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0.2,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": -1,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {
+        "physic.friction_factor": 0,
+        "physic.restitution_factor": 1,
+        "physic.value": 5000,
+        "physic.force": 36
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 2500,
+    "beFactor": 1,
+    "attrPower": 2500,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2094_skzamb",
+    "spine": "enemy_2094_skzamb",
+    "attackAnim": {
+      "clip": "Idle",
+      "dur": 5.333,
+      "hit": null
+    }
+  },
+  "enemy_10172_sheart": {
+    "key": "enemy_10172_sheart",
+    "name": "“未熄”",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": "SUI5",
+    "desc": "岁的怒火，会被岁首的【十方怼怒】点燃引爆，对周围造成高额法术伤害",
+    "descRaw": "岁的怒火，会被岁首的<@eb.key>【十方怼怒】</>点燃引爆，对周围造成<@eb.key>高额法术伤害</>",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 10000,
+      "atk": 700,
+      "def": 550,
+      "res": 20,
+      "moveSpeed": 1,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "被【十方怼怒】引爆后，对周围一定范围的我方单位造成法术伤害",
+        "textRaw": "被【十方怼怒】引爆后，对周围一定范围的我方单位造成法术伤害",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "skill",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 2
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [
+      "animated"
+    ],
+    "be": 15210,
+    "beFactor": 1,
+    "attrPower": 15210,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10172_sheart",
+    "spine": "enemy_10172_sheart",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1,
+      "hit": 0.467
+    }
+  },
+  "enemy_2149_shorsm": {
+    "key": "enemy_2149_shorsm",
+    "name": "源阶粒素",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": "OPT",
+    "desc": "死亡后爆炸造成法术伤害",
+    "descRaw": "死亡后爆炸造成法术伤害",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 2500,
+      "atk": 300,
+      "def": 50,
+      "res": 80,
+      "moveSpeed": 0.7,
+      "bat": 2,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": -1,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "死亡后爆炸造成真实伤害",
+        "textRaw": "死亡后爆炸造成真实伤害",
+        "format": "SILENCE"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "boom.atk_scale": 2
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 4390,
+    "beFactor": 1,
+    "attrPower": 4390,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2149_shorsm",
+    "spine": "enemy_2149_shorsm",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1,
+      "hit": 0.5
+    }
+  },
+  "enemy_1099_nbkght_2": {
+    "key": "enemy_1099_nbkght_2",
+    "name": "无名精锐骑士",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": "K2",
+    "desc": "卡西米尔独立骑士，身价有所上涨，但水准仍旧堪忧",
+    "descRaw": "卡西米尔独立骑士，身价有所上涨，但水准仍旧堪忧",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 3800,
+      "atk": 360,
+      "def": 150,
+      "res": 0,
+      "moveSpeed": 1.1,
+      "bat": 2,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 6050,
+    "beFactor": 1,
+    "attrPower": 6050,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1099_nbkght_2",
+    "spine": "enemy_1099_nbkght_2",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1,
+      "hit": 0.433
+    }
+  },
+  "enemy_1060_emouse_2": {
+    "key": "enemy_1060_emouse_2",
+    "name": "灰尾香主",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": "G22",
+    "desc": "可展开护盾大幅提升防御力。法术伤害可破坏护盾，护盾被摧毁时会大幅提升移动速度",
+    "descRaw": "可展开<@eb.key>护盾大幅提升防御力</>。<@eb.key>法术伤害</>可破坏护盾，护盾被摧毁时会大幅提升移动速度",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 4000,
+      "atk": 800,
+      "def": 250,
+      "res": 20,
+      "moveSpeed": 0.9,
+      "bat": 3.2,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 2,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": true,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "屏障存在时大幅提升防御力",
+        "textRaw": "屏障存在时大幅提升防御力",
+        "format": "NORMAL"
+      },
+      {
+        "text": "屏障被摧毁时大幅提升移动速度",
+        "textRaw": "屏障被摧毁时大幅提升移动速度",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "shield.dynamic": 3334,
+        "shield.def": 1750,
+        "speedup.move_speed": 2
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 8810,
+    "beFactor": 1,
+    "attrPower": 8810,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1060_emouse_2",
+    "spine": "enemy_1060_emouse_2",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 2,
+      "hit": 0.6
+    }
+  },
+  "enemy_2011_csppt": {
+    "key": "enemy_2011_csppt",
+    "name": "剧场组装体",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": "CS3",
+    "desc": "猩红剧团道具师负责维护的巨型组装体，阻挡能力大于等于4的作战人员才能阻挡，攻击对自身周围造成溅射伤害。",
+    "descRaw": "猩红剧团道具师负责维护的巨型组装体，<@eb.key>阻挡能力大于等于4</>的作战人员才能阻挡，攻击对自身周围造成<@eb.key>溅射</>伤害。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 24000,
+      "atk": 1200,
+      "def": 300,
+      "res": 30,
+      "moveSpeed": 0.5,
+      "bat": 5,
+      "aspd": 100,
+      "rangeRadius": 1.3,
+      "rawRangeRadius": 1.3,
+      "blockCnt": 1,
+      "massLevel": 5,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "只能被阻挡数大于等于4的单位阻挡",
+        "textRaw": "只能被阻挡数大于等于4的单位阻挡",
+        "format": "NORMAL"
+      },
+      {
+        "text": "攻击对自身周围较近范围内所有我方单位造成溅射伤害",
+        "textRaw": "攻击对自身周围较近范围内所有我方单位造成溅射伤害",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [
+      "originiumartscraft"
+    ],
+    "be": 30990,
+    "beFactor": 1,
+    "attrPower": 30990,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2011_csppt",
+    "spine": "enemy_2011_csppt",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 3.767,
+      "hit": 1.267
+    }
+  },
+  "enemy_ext_csdoll_aide": {
+    "key": "enemy_ext_csdoll_aide",
+    "name": "“报幕助手”",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "使周围的我方单位攻击力-30%并持续受到真实伤害。",
+    "descRaw": "使周围的我方单位攻击力-30%并持续受到真实伤害。",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 10000,
+      "atk": 100,
+      "def": 700,
+      "res": 60,
+      "moveSpeed": 0,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 0,
+      "massLevel": 0,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": -1
+    },
+    "abilities": [
+      {
+        "text": "不容易受到我方单位的攻击",
+        "textRaw": "不容易受到我方单位的攻击",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "aura.range_radius": 1.5,
+        "aura.atk_ratio": -0.3,
+        "aura.true_damage_ratio": 0.5,
+        "aura.interval": 0.5
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": true,
+    "tags": [],
+    "be": 12780,
+    "beFactor": 1,
+    "attrPower": 12780,
+    "isFlyEnemy": false,
+    "tokenOnly": true,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_ext_csdoll_aide",
+    "spine": "enemy_ext_csdoll_aide"
+  },
+  "enemy_2065_skzjs": {
+    "key": "enemy_2065_skzjs",
+    "name": "恐卡兹",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": "SFF3",
+    "desc": "出生时，对自身所在地块周围的所有友方单位造成法术伤害并生成年代印痕，持续一段时间",
+    "descRaw": "出生时，对自身所在地块周围的所有友方单位造成法术伤害并生成年代印痕，持续一段时间",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 15000,
+      "atk": 800,
+      "def": 350,
+      "res": 50,
+      "moveSpeed": 0.8,
+      "bat": 2.2,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 2,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": true,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "出生时，对自身所在地块周围的所有友方单位造成法术伤害并生成年代印痕，持续一段时间",
+        "textRaw": "出生时，对自身所在地块周围的所有友方单位造成法术伤害并生成年代印痕，持续一段时间",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "1.damage_scale": 0.5,
+        "1.exist_duration": 30
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 20200,
+    "beFactor": 1,
+    "attrPower": 20200,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2065_skzjs",
+    "spine": "enemy_2065_skzjs",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 2.167,
+      "hit": 0.6
+    }
+  },
+  "enemy_2095_skzamf": {
+    "key": "enemy_2095_skzamf",
+    "name": "昔日道标",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "过往故事的内容已被永久静滞，只剩下这如墓碑般的指示物。",
+    "descRaw": "过往故事的内容已被永久静滞，只剩下这如墓碑般的指示物。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 800,
+      "def": 200,
+      "res": 30,
+      "moveSpeed": 0.4,
+      "bat": 3.5,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {
+        "summon.enemy_key": 0,
+        "summon.offset_bound": 0.1
+      },
+      "bbStr": {
+        "summon.enemy_key": "enemy_2065_skzjs"
+      }
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 24690,
+    "beFactor": 1,
+    "attrPower": 24690,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2095_skzamf",
+    "spine": "enemy_2095_skzamf"
+  },
+  "enemy_2096_skzamj": {
+    "key": "enemy_2096_skzamj",
+    "name": "昔日道标",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "过往故事的内容已被永久静滞，只剩下这如墓碑般的指示物。",
+    "descRaw": "过往故事的内容已被永久静滞，只剩下这如墓碑般的指示物。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 800,
+      "def": 200,
+      "res": 30,
+      "moveSpeed": 0.4,
+      "bat": 3.5,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 30,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {
+        "summon.enemy_key": 0,
+        "summon.offset_bound": 0.1
+      },
+      "bbStr": {
+        "summon.enemy_key": "enemy_2065_skzjs"
+      }
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 24690,
+    "beFactor": 1,
+    "attrPower": 24690,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2096_skzamj",
+    "spine": "enemy_2096_skzamj"
+  },
+  "enemy_2086_skzdwx": {
+    "key": "enemy_2086_skzdwx",
+    "name": "年代印痕",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "x-1的年代印痕",
+    "descRaw": "x-1的年代印痕",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [],
+      "motion": "FLY",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {
+        "Apoptosis.range_id": 0,
+        "Apoptosis.element_damage": 100
+      },
+      "bbStr": {
+        "Apoptosis.range_id": "x-1"
+      }
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 20000,
+    "beFactor": 1,
+    "attrPower": 20000,
+    "isFlyEnemy": true,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2086_skzdwx",
+    "spine": "enemy_2086_skzdwx"
+  },
+  "enemy_2087_skzdwy": {
+    "key": "enemy_2087_skzdwy",
+    "name": "年代印痕",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "x-2的年代印痕",
+    "descRaw": "x-2的年代印痕",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [],
+      "motion": "FLY",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {
+        "Apoptosis.range_id": 0,
+        "Apoptosis.element_damage": 100
+      },
+      "bbStr": {
+        "Apoptosis.range_id": "x-2"
+      }
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 20000,
+    "beFactor": 1,
+    "attrPower": 20000,
+    "isFlyEnemy": true,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2087_skzdwy",
+    "spine": "enemy_2087_skzdwy"
+  },
+  "enemy_2088_skzdwz": {
+    "key": "enemy_2088_skzdwz",
+    "name": "年代印痕",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "x-4的年代印痕",
+    "descRaw": "x-4的年代印痕",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [],
+      "motion": "FLY",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {
+        "Apoptosis.range_id": 0,
+        "Apoptosis.element_damage": 100
+      },
+      "bbStr": {
+        "Apoptosis.range_id": "x-4"
+      }
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 20000,
+    "beFactor": 1,
+    "attrPower": 20000,
+    "isFlyEnemy": true,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2088_skzdwz",
+    "spine": "enemy_2088_skzdwz"
   }
 }

@@ -21,10 +21,10 @@
 | 数据面 `content` | `[]`（**不写任何数据文件**） |
 | `overrides` | 无 |
 | `skins` | **264** 套（**168** 名干员） |
-| 素材 `assets/` | 2094 个文件 / 约 326 MB |
+| 素材 `assets/` | 14757 个文件 / 约 529 MB（1.4.0 起含 196 套时装的官方技能 / 攻击特效与 3 套的专属战斗音效；1.4.1 起 528 个模型条目带 `animations` / `events` / `hits` / `bounds` / `pma`） |
 | 服务端 / 客户端代码 | 无 |
 | 包公告 | 无 |
-| 文件数 | 2096（`pack.json` + `README.md` + `assets/**` 2094） |
+| 文件数 | 14759（`pack.json` + `README.md` + `assets/**` 14757） |
 
 ---
 
@@ -373,16 +373,25 @@
   "portrait": "skin/op/<charId>/<model>/portrait.png",
   "spine": {
     "front": { "skel": "…/front/<model>.skel", "atlas": "…/front/<model>.atlas",
-               "textures": ["…/front/<model>.png"], "anims": { "idle": "Idle", "…": "…" } },
+               "textures": ["…/front/<model>.png"], "pma": false,
+               "anims": { "idle": "Idle", "…": "…" },
+               "animations": { "Attack": 1, "Idle": 4, "…": "…" },
+               "events": ["OnAttack", "OnStart"],
+               "hits": { "Attack": [0.3] },
+               "bounds": { "x": 0, "y": 0, "width": 0, "height": 0 } },
     "back":  { "…": "…" }
   }
 }
 ```
 
 - `<model>` = `<charId>_<皮肤组>_<序号>`（如 `char_136_hsguma_nian_3`，就是官方 `portraitId`
-  `char_136_hsguma_nian#3` 把 `@` / `#` 换成 `_`）—— 上游立绘 / 头像 / 模型目录与文件名都用它。
+  `char_136_hsguma#3` 把 `@` / `#` 换成 `_`）—— 上游立绘 / 头像 / 模型目录与文件名都用它。
 - `anims`（动作角色表）由项目 Spine 管线（`tools/assets/skel.mjs` 的 `parseSkel` +
   `tools/assets/anim-roles.mjs` 的 `resolveRoles`）**对真实 `.skel` 实测生成**，不是手抄。
+- `animations` / `events` / `hits` / `bounds` / `pma`（1.4.1 起）同样由 `parseSkel` 实测：
+  少了它们，皮肤模型的攻击命中帧（`hits`，特效落点与挥击同步）、每段 clip 的时长（`animations`，
+  攻击循环缩放 / 死亡时长）与包围盒（`bounds`）都会退回通用近似 —— 表现就是「动作节奏不对、命中特效不跟手」。
+  引擎的 `shared/workshop.js` 早已放开这五个字段（`ART_SPINE_PASSTHROUGH`），包只要带上来即可。
 
 ---
 
@@ -501,3 +510,51 @@ node server/index.js                          # 重启（pack.json 的合并发�
   （属 §1 的 ② 自选编队池，与既有 `nian-shu` 用同一个 `charId`）。
 - 追加方式：只往 `pack.json.skins[]` 末尾**追加 3 条**（`id` 家族 `nlc-…` 与本包/各玩法包都不重叠），
   既有的 261 套一字未动；`version` 1.2.0 → **1.3.0**。
+
+---
+
+## 9. 1.4.0 新增：时装自己的技能 / 攻击特效与战斗音效（196 套 + 3 套音效）
+
+业主：「把游戏中除了 mod 新增的干员以外的其他所有干员的皮肤特效补上」「还有皮肤的技能和攻击特效」。
+
+### 9.1 取证
+
+官方客户端把一套时装的战斗特效放在**同一批** attle/prefabs/effects/<短名>.ab 里，命名 =
+「默认特效 key + `_<时装 id 去掉 <charId>_ 前缀>`」，例如 `gdglow_skill_02_start_01_sanrio#1`。本包 264 套里
+**196 套**有这种变体（共 3260 个 key，闭包后 3469 个 prefab）；剩下的 68 套官方没做变体，穿上去照旧播默认特效。
+
+- 时装自己的**挂载点**（Muzzle / HitPoint / SpecialPoint…）在 `skinpack/<charId>.ab` 的
+  `<charId>_<group>#<n>` prefab 里，与默认皮肤**不共用**（武器位置不同）。
+- **专属战斗音效**只有 41 个文件（47.5 MB），按「基础文件名 + `_<后缀>`」命名；能对上本包干员既有音效键的
+  只有 **3 套**：`sanrio-gdglow`（攻击 / 命中）、`sanrio-amgoat`（攻击 / S3）、`sanrio-excu2`（攻击 / S1–S3）。
+  其余文件属于不在本包名单里的干员，不收（data/assets.json 里没有它们的键，收了也没有消费端）。
+
+### 9.2 本包落了什么
+
+- `assets/fx/prefabs` 3469 个（118.9 MB，走提取器自己的 `fx_file()`：`#` → `_` + CRC32 尾号）、
+  `assets/fx/tex` 3942 张（含半尺寸，66.7 MB）、`assets/fx/mesh` 1334 个（11.3 MB）。
+- `assets/fx/index.json`：**196 条 `skins[<模型 stem>]`**，每条带 `source`（`skinpack/<charId>.ab <时装 id>`）、
+  `graphic`、`points`（该时装自己的挂载点）与 `fx`（特效 key 后缀）；`prefabs` 是这 3469 个的摘要。
+- `assets/fx/manifest.json` + `pack.json.fx.manifest`：按 `docs/WORKSHOP.md` §1.19.2 的包自带特通道分发；
+  与本机提取的那一份**深度合并、包优先**。
+- `assets/audio/sfx/skins` 8 个 wav（`#` 换成 `_` 以保持 URL 合法），并在三套时装的
+  `pack.json.skins[].sfx` 里声明 `attack` / `hit` / `skills` / `attacks`。
+
+### 9.3 引擎那一环
+
+- **视觉**：`render/vfx/wiring.js` 的 `skins[<stem>].fx` 变体解析（2026-10-18 颂乐人偶那批起）——本包把官方那
+  196 套的 `fx` 后缀与挂载点补上；**1.4.1 起命中 / 目标类特效按「特效的主人」（施放者 / 攻击者）解析**（`playOn` 的
+  `fxOwner`）：命中挂在被击中的敌人身上播，但 prefab 属于攻击者的时装 —— 从前按目标解析，皮肤自己的命中变体永远
+  播不出来；链式弹跳（`_bounce`）、浮游单位（`funnelfx`）、天赋命中行与技能绑定投影（`_bound`）同样按主人解析。
+  **多段控制器**（余 S3 的火墙 `yu_skill3_range_01_source` / root / 横竖 / 端头）也逐段换成这套时装的变体
+  （`yuwall.js`）：从前 `playOn` 在认控制器之前就把 key 换成了 `_<fx>`，穿时装时火墙认不出来；而且**变体 source 的
+  `refs` 与 `_effectEachGrid` 仍指基础 root**，基础 root 的 `refs` 只带基础段 —— 变体 root / 段一个都不会被预载。
+  `YuWall` 因此在 `def(root)` 缺失时自己 `lib.preload` 解析后的 root（顺着它的 `refs` 把整套变体段装上），下一帧再搭。
+- **动作**：模型条目的 `anims` / `animations` / `events` / `hits` / `bounds` / `pma` 全部来自 `parseSkel` 实测
+  （1.4.1 起补上后五个）；缺 `hits` 时攻击命中帧退回通用近似，缺 `animations` 时循环 / 死亡时长与攻击节奏都按默认值
+  —— 表现就是「动作和命中特效不跟手」。
+- **音效**（2026-10-23，本次新增）：`SKIN_FIELDS` 多一格 `sfx`（与 `art.units` 的音效条目**同一个解析器**）、
+  `mergeWorkshopSkins` 把它按 URL 转进 `assets.skins[charId][]`、`assets.js unitSfxUrl(…, skinId)` 先问这套
+  时装的 `sfx`、缺哪一格落回干员本体；`audio.js unit()` 的 `_track` 记住 `UnitInfo.skin` 并随
+  攻击 / 命中 / 技能三个事件传下去。
+- 回落不变：没有这套时装、或这套没带 `sfx` / 没有 `fx` 条目时，行为与 1.3.0 逐字相同。
