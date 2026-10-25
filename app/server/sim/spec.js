@@ -77,6 +77,8 @@ export function buildBattleSpec(o = {}) {
     // boss / hidden fields end by the shared pool or the match (null = no limit)
     timeLimit: !bossLike && tl > 0 && Number.isFinite(tl) ? tl : null,
     players: Array.isArray(o.players) ? o.players : [],
+    // 第 2… 块 boss 场地（显示用）：只在真的是别的场地时才出现，官方 / 第 1 块的 spec 与从前逐字节相同
+    ...(Number.isInteger(o.area) && o.area > 0 ? { area: o.area } : {}),
     // a spawn at time Infinity never happens and is not counted (Battle._queueSpawn): leave it out
     spawns: (Array.isArray(o.spawns) ? o.spawns : []).filter((x) => !(x && Number(x.time) === Infinity)),
     routes: Array.isArray(o.routes) ? o.routes : [],
@@ -211,6 +213,7 @@ export function createBattleFromSpec(spec, dataSource, opts = {}) {
     rect: s.rect ?? undefined,
     timeLimit: s.timeLimit == null ? (bossLike ? Infinity : undefined) : s.timeLimit,
     players: s.players ?? [],
+    ...(Number.isInteger(s.area) && s.area > 0 ? { area: s.area } : {}),
     spawns: s.spawns ?? [],
     routes: s.routes ?? [],
     sharedBoss,

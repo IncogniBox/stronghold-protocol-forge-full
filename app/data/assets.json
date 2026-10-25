@@ -56949,6 +56949,7 @@
     "chessLevelSprite/chess_level_icon_5": "/assets/ui/chessLevelSprite/chess_level_icon_5.png",
     "chessLevelSprite/chess_level_icon_6": "/assets/ui/chessLevelSprite/chess_level_icon_6.png",
     "enemyTypeIcon/dot_icon": "/assets/ui/enemyTypeIcon/dot_icon.png",
+    "enemyTypeIcon/dimo_icon": "/assets/ui/enemyTypeIcon/dimo_icon.png",
     "enemyTypeIcon/element_icon": "/assets/ui/enemyTypeIcon/element_icon.png",
     "enemyTypeIcon/fly_icon": "/assets/ui/enemyTypeIcon/fly_icon.png",
     "enemyTypeIcon/invisible_icon": "/assets/ui/enemyTypeIcon/invisible_icon.png",

@@ -19,7 +19,9 @@ import { ORIGINIUM } from '../style.js';
 export function focusUniforms(THREE) {
   return {
     uFocus: { value: new THREE.Vector4(0, 9, 10, 12) },  // x0, y0, x1, y1 (world)
-    uFocusDim: { value: 0.72 },
+    // 1.0 = 取景矩形内外同一套光照（2026-10-25 用户要求：场地外的远景不应比场地内更暗）。焦点压暗的管线还在，
+    // 想恢复「场地聚光」时只要这个系数回到 0.72（`uFocusSoft` 仍是过渡宽度）。
+    uFocusDim: { value: 1 },
     uFocusSoft: { value: 2.2 },
     // glossy "arena light" sheen: smooth surfaces (glass hatches, steel, plate centres; smoothness from TX_…_M) pick
     // up a bright reflection like the official baked reflections — added as sheen · smoothness²
@@ -146,7 +148,9 @@ export function glassMaterial(THREE, tex, focus, opts = {}) {
 /** MT_autochess_common: alpha-tested device plates (drawn slightly above the tops). */
 export function decalMaterial(THREE, tex, focus) {
   const m = new THREE.MeshStandardMaterial({
-    map: tex.common, alphaTest: 0.408, roughness: 0.7, metalness: 0,
+    map: tex.common, alphaTest: 0.408, roughness: 0.7,
+    // 主题自带 _MetallicGlossMap 时用它（themes.js `atlas.commonM`）：金属度贴图要与标量相乘，所以标量给 1
+    metalnessMap: tex.commonM || null, metalness: tex.commonM ? 1 : 0,
     emissiveMap: tex.commonE || null, emissive: tex.commonE ? new THREE.Color(0.559, 0.559, 0.559) : new THREE.Color(0, 0, 0),
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });

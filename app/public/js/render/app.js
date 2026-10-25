@@ -145,7 +145,7 @@
 import { GEO, ANIM } from '../../../shared/constants.js';
 import { fxForm } from '../../../shared/protocol.js';
 import { Camera, presetCamera, lerpCamera, easeInOutCubic, pickTile, normRect } from './projection.js';
-import { layoutOfStage } from './layout.js';
+import { layoutOfStage, rectForKind } from './layout.js';
 import { SnapshotBuffer, frameTime } from './interp.js';
 import { TileField } from './tiles.js';
 import { UnitView, ItemView, DeviceView, FORMS, syncView } from './units.js';
@@ -162,6 +162,7 @@ import { ImpostorAtlas } from './impostor.js';
 import { stepClipBounds } from './spine.js';
 import { FramePacer } from './framePacer.js';
 import { loadThree, loadBoardPack, loadScenePack, webgl2Available, boardArtListed } from './board3d/load.js';
+import { BOARD_THEMES, DEFAULT_BOARD_THEME } from './board3d/themes.js';
 import { BoardScene } from './board3d/scene.js';
 import { layoutPen, penSignature } from './pen.js';
 import { IDENTITY, bossPrepField, normalPrepField, tilesToDisp, leaderStand } from './prepfield.js';
@@ -212,10 +213,16 @@ export async function createFieldView(host, options = {}) {
   // the 3D board (three.js + the official art) loads in parallel with everything else
   const boardPref = boardPreference(opts.board);
   const want3d = boardPref !== '2d' && webgl2Available(boardPref === '3d');
+  /**
+   * A stage may name its own board theme (`stage.theme`, a `themes.js` id — e.g. 'skymirror'), so one map can wear
+   * the 炎国 天镜阁 board while every other map keeps the standard one. An unknown id falls back to the default: a
+   * typo in a pack must never leave the board without a pack.
+   */
+  const stageThemeId = (st) => (st && typeof st.theme === 'string' && BOARD_THEMES[st.theme] ? st.theme : DEFAULT_BOARD_THEME);
   // three.js (~2 MB) is fetched only when the local-art manifest lists the board atlas (in parallel with the art)
   const artListed = want3d ? boardArtListed(assets).catch(() => false) : Promise.resolve(false);
   const threePromise = artListed.then((ok) => (ok ? loadThree() : null)).catch(() => null);
-  const packPromise = artListed.then((ok) => (ok ? Promise.resolve(assets.ready ? assets.ready() : null).catch(() => null).then(() => loadBoardPack(assets)) : null)).catch(() => null);
+  const packPromise = artListed.then((ok) => (ok ? Promise.resolve(assets.ready ? assets.ready() : null).catch(() => null).then(() => loadBoardPack(assets, stageThemeId(stageRec))) : null)).catch(() => null);
   // the manifest, and the optional local-art manifest in parallel: unit views pick an enemy's local-client model by it
   // (assets.js spineEntry, DESIGN §13 — 灼热源石虫 / 炽焰源石虫); absent or slow, they draw the web models
   await withTimeout(Promise.all([assets.ready ? assets.ready() : null, assets.local ? assets.local() : null]
@@ -479,14 +486,18 @@ export async function createFieldView(host, options = {}) {
   // （7 / 8 / 9–12 × 2–10），一张把部署区放大到 5×11 的图则整块跟着走。`field` 是**当前显示的那个部署场** ——
   // boss 回合的休整期看的是它的半场（那里整备行仍是官方的 7），普通休整期看的是普通棋盘。
   const prepSideNow = () => (camKind === 'prep' && camOpts.side === 'R' ? 'R' : 'L');
+  const camLayout = () => camOpts.layout || layout();
   const prepFieldNow = () => {
     // 显示的那个部署场：boss 回合的休整期是它的半场，一张左右两半的图（`normalL`/`normalR`）的普通休整期是它那一半
     if (camKind !== 'prep') return 'normal';
-    if (viewKind(camKind, camOpts, layout()) === 'bossPrep') return prepSideNow() === 'R' ? 'bossR' : 'bossL';
+    if (viewKind(camKind, camOpts, layout()) === 'bossPrep') {
+      // 第 2… 块 boss 场地：每人一条自己的矩形，`camOpts.layout` 里它就是 bossLeft（没有左右半场）
+      return camOpts.area > 0 ? 'bossL' : prepSideNow() === 'R' ? 'bossR' : 'bossL';
+    }
     if (!isDualLayout(layout())) return 'normal';
     return prepSideNow() === 'R' ? 'normalR' : 'normalL';
   };
-  const boardGeoNow = () => boardGeo(layout(), prepFieldNow());
+  const boardGeoNow = () => boardGeo(camLayout(), prepFieldNow());
   tiles.setView(bandFor('prep', layout()), camRect(), fieldRows('prep', layout()));
   // the real board art of the local client (optional): wait briefly so the first frame already uses it; a late
   // arrival swaps the atlas in place
@@ -499,6 +510,11 @@ export async function createFieldView(host, options = {}) {
   let board3d = null;          // BoardScene while the 3D board is on
   let board3dCanvas = null;
   let board3dError = null;
+  /** The theme the pack/board on screen was built with (`themes.js`): a stage's own `theme` switches it. */
+  let boardThemeId = DEFAULT_BOARD_THEME;
+  let boardThemeLoading = null; // theme id of an in-flight switch (a second setStage for it must not queue again)
+  /** Why the 3D board is (not) on — dev / E2E (stats().board3d.status): idle | on | no-three | no-pack | failed | 2d. */
+  let board3dStatus = 'idle';
   // lost-context recovery: the THREE module + art pack of the last 3D board, the pending retry, failures so far
   const recover = { THREE: null, pack: null, timer: 0, tries: 0, since: 0, off: false, count: 0 };
   setupCleanup.push(() => { clearTimeout(recover.timer); disable3d(); });
@@ -513,6 +529,7 @@ export async function createFieldView(host, options = {}) {
   function enable3d(THREE, pack) {
     if (destroyed || board3d || !THREE || !pack) return false;
     recover.THREE = THREE; recover.pack = pack;
+    boardThemeId = pack.theme || DEFAULT_BOARD_THEME;
     try {
       try { if (getComputedStyle(host).position === 'static') host.style.position = 'relative'; } catch { /* ignore */ }
       const c3 = document.createElement('canvas');
@@ -526,6 +543,7 @@ export async function createFieldView(host, options = {}) {
       const sz = size();
       b.resize(sz.width, sz.height, boardDpr());
       board3d = b;
+      board3dStatus = 'on';
       tiles.setExternal(true);
       backdrop.visible = false;
       b.setArea(boardArea(viewKind(camKind, camOpts)));
@@ -539,6 +557,7 @@ export async function createFieldView(host, options = {}) {
       return true;
     } catch (err) {
       board3dError = String(err?.message || err);
+      board3dStatus = 'failed';
       console.warn('[render] 3D board unavailable, using the 2D board:', err);
       disable3d();
       return false;
@@ -547,6 +566,7 @@ export async function createFieldView(host, options = {}) {
   function disable3d() {
     const b = board3d;
     board3d = null;
+    if (!destroyed) board3dStatus = '2d';
     try { b?.destroy(); } catch { /* ignore */ }
     try { board3dCanvas?.remove(); } catch { /* ignore */ }
     board3dCanvas = null;
@@ -581,12 +601,53 @@ export async function createFieldView(host, options = {}) {
       if (!enable3d(recover.THREE, recover.pack)) scheduleRecover();
     }, delay);
   }
+  /**
+   * Switch the 3D board to another theme's pack and rebuild it. A theme is baked into a pack and into the BoardScene
+   * built from it (there is no setTheme), so a stage with its own `theme` gets the board rebuilt — exactly like the
+   * map editor's theme picker. Only such a stage takes this path; every other stage keeps the board it already has.
+   */
+  function rebuildBoardTheme(id) {
+    if (destroyed || recover.off || !want3d || !recover.THREE || boardThemeLoading === id) return;
+    const T = recover.THREE;
+    boardThemeLoading = id;
+    loadBoardPack(assets, id).then((pack) => {
+      boardThemeLoading = null;
+      if (!pack || destroyed || recover.off) return;
+      // the stage may have changed again while the pack loaded
+      if (stageThemeId(stageRec) !== id) return;
+      if (board3d) disable3d();
+      enable3d(T, pack);
+    }, () => { boardThemeLoading = null; });
+  }
   // Attach the board only after synchronous setup completes; enable3d also guards late arrivals.
-  const boardReady = Promise.all([threePromise, packPromise]).then(([THREE, pack]) => (THREE && pack ? enable3d(THREE, pack) : false), () => false);
+  const boardReady = Promise.all([threePromise, packPromise]).then(async ([THREE, pack]) => {
+    if (destroyed) return false;
+    // a failed atlas / manifest fetch at mount is not proof the host lacks 3D art (load.js header): the screen stays on
+    // the 2D board, so ask again a few times instead of waiting for a visibility change that may never come
+    if (!THREE || !pack) {
+      board3dStatus = THREE ? 'no-pack' : 'no-three';
+      retryInitialBoard();
+      return false;
+    }
+    // a stage that arrived while the art was loading may ask for another theme: build that pack instead of rebuilding
+    const want = stageThemeId(stageRec);
+    if (want !== (pack.theme || DEFAULT_BOARD_THEME)) {
+      pack = (await loadBoardPack(assets, want).catch(() => null)) || pack;
+    }
+    return enable3d(THREE, pack);
+  }, () => false);
   let boardRetry = null;
+  let boardInitTries = 0;
+  /** Bounded retry of the FIRST board attach (pack / three failed transiently at mount). */
+  function retryInitialBoard() {
+    if (destroyed || board3d || recover.off || !want3d || boardRetry || boardInitTries >= BOARD3D_RETRY_MS.length) return;
+    board3dStatus = 'retrying';
+    const delay = BOARD3D_RETRY_MS[boardInitTries++];
+    setTimeout(() => { if (!destroyed && !board3d && !recover.off) retryBoard(); }, delay);
+  }
   function retryBoard() {
     if (!want3d || destroyed || board3d || recover.off || recover.timer || boardRetry) return;
-    boardRetry = Promise.all([loadThree(), loadBoardPack(assets)])
+    boardRetry = Promise.all([loadThree(), loadBoardPack(assets, stageThemeId(stageRec))])
       .then(([THREE, pack]) => enable3d(THREE, pack), () => false)
       .finally(() => { boardRetry = null; });
   }
@@ -645,29 +706,34 @@ export async function createFieldView(host, options = {}) {
     return opts.hud && typeof opts.hud === 'object' ? opts.hud : null;
   }
 
+  /**
+   * The rect the camera / the lit focus shows: the caller's rect, else the MAP's own rect for the view kind
+   * (render/layout.js rectForKind — normalised against the map's window, never the official 19×21). A big map's prep
+   * rect must NOT be clamped to the official grid: that put the camera and the lit field in the wrong place.
+   */
   function camRect() {
-    const k = viewKind(camKind, camOpts);
-    if (k === 'pen') return { r0: 14, r1: 18, c0: 7, c1: 13 };
-    // prep lights the bench (hand row 7 / temp row 8) with the field, like the official prep view
-    if (camOpts.rect) { const r = normRect(camOpts.rect); return k === 'prep' ? { ...r, r0: Math.min(r.r0, GEO.HAND_ROW) } : r; }
-    // the boss round's prep lights the whole boss field: the pair partner's half is shown with its pieces (item 51)
-    if (k === 'bossPrep') return { ...GEO.BOSS_RECT };
-    return k === 'boss' ? { ...GEO.BOSS_RECT } : k === 'unite' ? { ...GEO.UNITE_RECT } : k === 'prep' ? { r0: 7, r1: 12, c0: 0, c1: 10 } : { ...GEO.NORMAL_RECT };
+    const L = layout();
+    const k = viewKind(camKind, camOpts, L);
+    // the boss round's prep lights the WHOLE boss field (the pair partner's half is shown with its pieces, item 51);
+    // every other kind frames its own rect
+    return rectForKind(k === 'bossPrep' ? 'boss' : k, L, camOpts.rect || null);
   }
 
   function targetCamera(kind, o) {
     const sz = size();
+    const L = layout();
     const k = kind === 'hidden' ? 'boss' : (['prep', 'normal', 'unite', 'boss', 'bossPrep', 'pen'].includes(kind) ? kind : 'normal');
-    let rect = o.rect ? normRect(o.rect) : null;
-    if (k === 'prep') rect = rect ? { ...rect, r0: Math.min(rect.r0, GEO.HAND_ROW) } : null;
+    // the caller's rect is a MAP-window rect: normalise it against THIS map's window (the official prep rect already
+    // includes the bench row, so no board-coordinate clamp here — render/layout.js rectForKind)
+    const rect = o.rect ? rectForKind(k, L, o.rect) : null;
     // official configBlackBoard framing (render/projection.js presetCamera); the padding only matters for the
     // fitted fallback (custom rects, portrait viewports); a prep camera keeps the bench and the field clear of the HUD
     // — `shop: false` (the folded shop, public issue #5) = the official shop-collapsed camera, clear of the folded
     // shop's HUD band (re-evaluated on resize: camOpts keep the flag)
-    const vk = viewKind(kind, o); // (a 'prep' camera on the boss rows = the Final Assault prep)
+    const vk = viewKind(kind, o, L); // (a 'prep' camera on the boss rows = the Final Assault prep)
     return presetCamera(k, { width: sz.width, height: sz.height, padding: o.padding || defaultPadding(k, sz) }, {
       rect, side: o.side, half: !!o.half, shop: o.shop, fit: !!o.fit, config: stageRec?.config || null,
-      hud: hudBands(vk, sz, { shop: o.shop !== false }),
+      hud: hudBands(vk, sz, { shop: o.shop !== false }), layout: L,
     });
   }
 
@@ -690,12 +756,14 @@ export async function createFieldView(host, options = {}) {
     }
     camKind = nextKind;
     camOpts = { ...o };
-    // the field actually shown (a 'prep' camera on the boss rows is the Final Assault prep: boss field built / drawn)
+    // the field actually shown (a 'prep' camera on the boss rows is the Final Assault prep: boss field built / drawn).
+    // `camOpts.layout`（第 2… 块 boss 场地每人的布局）覆盖这张图的布局：棋盘/整备行/取景都落在自己那块矩形上。
+    const Lv = camOpts.layout || L;
     const vk = viewKind(camKind, camOpts, L);
-    if (vk === 'prep') setPrepField(normalPrepField(camOpts.side === 'R' ? 'R' : 'L', L));
-    else if (vk === 'bossPrep') setPrepField(bossPrepField(camOpts.side === 'R' ? 'R' : 'L', L));
+    if (vk === 'prep') setPrepField(normalPrepField(camOpts.side === 'R' ? 'R' : 'L', Lv));
+    else if (vk === 'bossPrep') setPrepField(bossPrepField(camOpts.side === 'R' ? 'R' : 'L', Lv));
     const target = targetCamera(camKind, camOpts);
-    const rest = restView(vk, L);
+    const rest = restView(vk, Lv);
     const focus = camRect();
     board3d?.setFocus(focus);
     camMs = Number.isFinite(o.ms) && o.ms >= 0 ? o.ms : (vk === 'pen' || prevView === 'pen' ? PEN_CAMERA_MS : CAMERA_MS);
@@ -788,6 +856,8 @@ export async function createFieldView(host, options = {}) {
   function setStage(st) {
     if (!st || typeof st !== 'object' || !Array.isArray(st.rows)) return false;
     stageRec = st;
+    // a stage that names its own board theme rebuilds the 3D board from that theme's pack (themes are baked per pack)
+    if (board3d && stageThemeId(st) !== boardThemeId) rebuildBoardTheme(stageThemeId(st));
     tiles.setStage(st);
     tiles.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null);
     if (board3d) { board3d.setStage(st); board3d.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null); useOfficialScene(st); }
@@ -2439,7 +2509,7 @@ export async function createFieldView(host, options = {}) {
       recover.off = false; recover.tries = 0;
       if (board3d) return true;
       if (!webgl2Available(true)) return false; // an explicit request: a slow GPU is the caller's choice
-      const [THREE, pack] = await Promise.all([loadThree(), loadBoardPack(assets)]);
+      const [THREE, pack] = await Promise.all([loadThree(), loadBoardPack(assets, stageThemeId(stageRec))]);
       return enable3d(THREE, pack);
     },
     destroy() {
@@ -2477,7 +2547,7 @@ export async function createFieldView(host, options = {}) {
     stats() {
       return {
         fps: Math.round(fps * 10) / 10, frameMs: Math.round(frameMs * 100) / 100, cpuMs: Math.round(cpuMs * 100) / 100, renderMs: Math.round(renderMs * 100) / 100, mode, units: views.size, impostor: impInterval, impostorAtlas: { ...impostors.stats }, boardArt: !!tiles.atlas.art,
-        board3d: board3d ? { on: true, ...board3d.stats(), losses: recover.count } : { on: false, error: board3dError, recovering: !!recover.timer, losses: recover.count },
+        board3d: board3d ? { on: true, theme: boardThemeId, status: board3dStatus, ...board3d.stats(), losses: recover.count } : { on: false, theme: boardThemeId, status: board3dStatus, error: board3dError, recovering: !!recover.timer, losses: recover.count },
         pen: penViews.size, penHidden, prepField: prepXf.kind === 'bossPrep' ? prepXf.side : null, lod: loadLevel, culled: culledCount,
         ...fx.counts, officialFx: ofx.stats(), spine: assets.spine?.stats ? assets.spine.stats() : null, renderT: interp.renderT, rate: interp.rate,
         buffered: interp.size, camera: cam.params(),

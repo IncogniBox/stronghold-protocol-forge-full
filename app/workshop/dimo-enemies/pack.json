@@ -1,0 +1,520 @@
+{
+  "id": "dimo-enemies",
+  "name": "特训敌人·涤墨",
+  "version": "0.1.0",
+  "author": "Ark workshop",
+  "license": "CC0-1.0（数据参考 PRTS 明日方舟 Wiki；美术素材版权归 Hypergryph / Yostar，仅限已持有游戏本体的玩家本地使用）",
+  "description": "把危机合约「涤墨作战」（大炎·墨染书阁）系列的 18 个敌人加进本作，并作为一个全新的战术特训类型「特训敌人·涤墨」参与战局生成。",
+  "gameVersion": "0.3.1",
+  "content": [
+    "enemies",
+    "factions"
+  ],
+  "art": {
+    "enemies": {
+      "enemy_10164_tjgxb": {
+        "icon": "enemy/icon/enemy_10164_tjgxb.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10164_tjgxb/enemy_10164_tjgxb.skel",
+          "atlas": "spine/enemy/enemy_10164_tjgxb/enemy_10164_tjgxb.atlas",
+          "textures": [
+            "spine/enemy/enemy_10164_tjgxb/enemy_10164_tjgxb.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die_A",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10164_tjgxb_2": {
+        "icon": "enemy/icon/enemy_10164_tjgxb_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10164_tjgxb_2/enemy_10164_tjgxb_2.skel",
+          "atlas": "spine/enemy/enemy_10164_tjgxb_2/enemy_10164_tjgxb_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10164_tjgxb_2/enemy_10164_tjgxb_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die_A",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10165_tjggb": {
+        "icon": "enemy/icon/enemy_10165_tjggb.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10165_tjggb/enemy_10165_tjggb.skel",
+          "atlas": "spine/enemy/enemy_10165_tjggb/enemy_10165_tjggb.atlas",
+          "textures": [
+            "spine/enemy/enemy_10165_tjggb/enemy_10165_tjggb.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10165_tjggb_2": {
+        "icon": "enemy/icon/enemy_10165_tjggb_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10165_tjggb_2/enemy_10165_tjggb_2.skel",
+          "atlas": "spine/enemy/enemy_10165_tjggb_2/enemy_10165_tjggb_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10165_tjggb_2/enemy_10165_tjggb_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10166_tjgdlb": {
+        "icon": "enemy/icon/enemy_10166_tjgdlb.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10166_tjgdlb/enemy_10166_tjgdlb.skel",
+          "atlas": "spine/enemy/enemy_10166_tjgdlb/enemy_10166_tjgdlb.atlas",
+          "textures": [
+            "spine/enemy/enemy_10166_tjgdlb/enemy_10166_tjgdlb.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10166_tjgdlb_2": {
+        "icon": "enemy/icon/enemy_10166_tjgdlb_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10166_tjgdlb_2/enemy_10166_tjgdlb_2.skel",
+          "atlas": "spine/enemy/enemy_10166_tjgdlb_2/enemy_10166_tjgdlb_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10166_tjgdlb_2/enemy_10166_tjgdlb_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10167_tjgsfj_2": {
+        "icon": "enemy/icon/enemy_10167_tjgsfj_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10167_tjgsfj_2/enemy_10167_tjgsfj_2.skel",
+          "atlas": "spine/enemy/enemy_10167_tjgsfj_2/enemy_10167_tjgsfj_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10167_tjgsfj_2/enemy_10167_tjgsfj_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Black_Idle",
+            "deploy": "Black_Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Black_Idle",
+              "end": null,
+              "via": "idle"
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Black_Die",
+            "move": {
+              "begin": null,
+              "loop": "Black_Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10168_tjgly": {
+        "icon": "enemy/icon/enemy_10168_tjgly.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10168_tjgly/enemy_10168_tjgly.skel",
+          "atlas": "spine/enemy/enemy_10168_tjgly/enemy_10168_tjgly.atlas",
+          "textures": [
+            "spine/enemy/enemy_10168_tjgly/enemy_10168_tjgly.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "F_Idle",
+            "deploy": "F_Idle",
+            "attack": {
+              "begin": null,
+              "loop": "F_Idle",
+              "end": null,
+              "via": "idle"
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "F_Die",
+            "move": {
+              "begin": null,
+              "loop": "F_Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10168_tjgly_2": {
+        "icon": "enemy/icon/enemy_10168_tjgly_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10168_tjgly_2/enemy_10168_tjgly_2.skel",
+          "atlas": "spine/enemy/enemy_10168_tjgly_2/enemy_10168_tjgly_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10168_tjgly_2/enemy_10168_tjgly_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "F_Idle",
+            "deploy": "F_Idle",
+            "attack": {
+              "begin": null,
+              "loop": "F_Idle",
+              "end": null,
+              "via": "idle"
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "F_Die",
+            "move": {
+              "begin": null,
+              "loop": "F_Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10169_tjgtsz": {
+        "icon": "enemy/icon/enemy_10169_tjgtsz.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10169_tjgtsz/enemy_10169_tjgtsz.skel",
+          "atlas": "spine/enemy/enemy_10169_tjgtsz/enemy_10169_tjgtsz.atlas",
+          "textures": [
+            "spine/enemy/enemy_10169_tjgtsz/enemy_10169_tjgtsz.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "B_Idle",
+            "deploy": "B_Idle",
+            "attack": {
+              "begin": null,
+              "loop": "B_Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "B_Die",
+            "move": {
+              "begin": null,
+              "loop": "B_Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10169_tjgtsz_2": {
+        "icon": "enemy/icon/enemy_10169_tjgtsz_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10169_tjgtsz_2/enemy_10169_tjgtsz_2.skel",
+          "atlas": "spine/enemy/enemy_10169_tjgtsz_2/enemy_10169_tjgtsz_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10169_tjgtsz_2/enemy_10169_tjgtsz_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "B_Idle",
+            "deploy": "B_Idle",
+            "attack": {
+              "begin": null,
+              "loop": "B_Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "B_Die",
+            "move": {
+              "begin": null,
+              "loop": "B_Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10170_wangz": {
+        "icon": "enemy/icon/enemy_10170_wangz.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10170_wangz/enemy_10170_wangz.skel",
+          "atlas": "spine/enemy/enemy_10170_wangz/enemy_10170_wangz.atlas",
+          "textures": [
+            "spine/enemy/enemy_10170_wangz/enemy_10170_wangz.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10058_cjfrog": {
+        "icon": "enemy/icon/enemy_10058_cjfrog.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10058_cjfrog/enemy_10058_cjfrog.skel",
+          "atlas": "spine/enemy/enemy_10058_cjfrog/enemy_10058_cjfrog.atlas",
+          "textures": [
+            "spine/enemy/enemy_10058_cjfrog/enemy_10058_cjfrog.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle_a",
+            "deploy": "Idle_a",
+            "attack": {
+              "begin": null,
+              "loop": "Attack_a",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die_a",
+            "move": {
+              "begin": null,
+              "loop": "Move_a",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10058_cjfrog_2": {
+        "icon": "enemy/icon/enemy_10058_cjfrog_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10058_cjfrog_2/enemy_10058_cjfrog_2.skel",
+          "atlas": "spine/enemy/enemy_10058_cjfrog_2/enemy_10058_cjfrog_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10058_cjfrog_2/enemy_10058_cjfrog_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle_a",
+            "deploy": "Idle_a",
+            "attack": {
+              "begin": null,
+              "loop": "Attack_a",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die_a",
+            "move": {
+              "begin": null,
+              "loop": "Move_a",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10052_cjshld": {
+        "icon": "enemy/icon/enemy_10052_cjshld.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10052_cjshld/enemy_10052_cjshld.skel",
+          "atlas": "spine/enemy/enemy_10052_cjshld/enemy_10052_cjshld.atlas",
+          "textures": [
+            "spine/enemy/enemy_10052_cjshld/enemy_10052_cjshld.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10052_cjshld_2": {
+        "icon": "enemy/icon/enemy_10052_cjshld_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10052_cjshld_2/enemy_10052_cjshld_2.skel",
+          "atlas": "spine/enemy/enemy_10052_cjshld_2/enemy_10052_cjshld_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10052_cjshld_2/enemy_10052_cjshld_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Attack",
+              "end": null
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      },
+      "enemy_10054_cjhot_2": {
+        "icon": "enemy/icon/enemy_10054_cjhot_2.png",
+        "spine": {
+          "skel": "spine/enemy/enemy_10054_cjhot_2/enemy_10054_cjhot_2.skel",
+          "atlas": "spine/enemy/enemy_10054_cjhot_2/enemy_10054_cjhot_2.atlas",
+          "textures": [
+            "spine/enemy/enemy_10054_cjhot_2/enemy_10054_cjhot_2.png"
+          ],
+          "pma": false,
+          "anims": {
+            "idle": "Idle",
+            "deploy": "Idle",
+            "attack": {
+              "begin": null,
+              "loop": "Idle",
+              "end": null,
+              "via": "idle"
+            },
+            "attackDown": null,
+            "skill": null,
+            "die": "Die",
+            "move": {
+              "begin": null,
+              "loop": "Move",
+              "end": null
+            },
+            "stun": null
+          }
+        }
+      }
+    }
+  },
+  "combat": true,
+  "server": {
+    "battle": {
+      "module": "battle/main.mjs"
+    }
+  }
+}

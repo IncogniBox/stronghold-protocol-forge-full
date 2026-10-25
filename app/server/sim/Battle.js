@@ -124,6 +124,11 @@ export class Battle {
      */
     this.layout = layoutOf(this.stage);
     /**
+     * 第几块 boss 场地（`layout.bossAreas` 的下标，1 = 第二块；0 / 缺省 = 第 1 块）。它只用于**显示**：客户端的
+     * 场帧把它带回去，让渲染器按这块场地的布局（`battle.boss` / `bossPrep`）取景与点亮当前战场。
+     */
+    this.area = Number.isInteger(opts.area) && opts.area > 0 ? opts.area : null;
+    /**
      * The field rect this battle fights in: whatever the caller passed, else **the map's own rect for this kind**
      * (`layoutOf`). On an official 19×21 stage that is `DEFAULT_RECTS[kind]` verbatim (deep-equal, so every caller and
      * test that passed nothing keeps the rect it always got); on a big map a normal battle defaults to the map's own

@@ -34,10 +34,10 @@ import { slotPolicy } from './bonds.js';
  *   only (the normal field takes them folded into the stage: `effectiveStage`)
  * @returns {{ melee: Set<string>, ranged: Set<string> }} ranged = melee ∪ rangedOnly
  */
-export function deploySets(stage, field = 'normal', overrides = {}) {
+export function deploySets(stage, field = 'normal', overrides = {}, layout = null) {
   const melee = new Set();
   const ranged = new Set();
-  const L = layoutOf(stage);
+  const L = layout || layoutOf(stage);
   // 半场（boss 的左右半，或一张左右两半的图的普通带半场 'normalL'/'normalR'）一律从图例 + 生效装置现推，与
   // server/match/board.js buildDeployMap 在同一条场上读出来的一模一样
   if (field !== 'normal') {
@@ -230,7 +230,7 @@ export function placementContext({ priv, stage, editable, field = 'normal', getC
   // boss round's prep is read from the legend + its devices under the same overrides (server deploy map, field)
   const L = layout || layoutOf(stage);
   const deploy = field === 'bossL' || field === 'bossR'
-    ? deploySets(stage, field, ov)
+    ? deploySets(stage, field, ov, L)
     : deploySets(effectiveStage(stage, ov, L));
   return { priv, pieces, boardAt, handAt, deploy, cap, count, field, editable: !!editable, getChess, getToken, getItem, backups, layout: L };
 }

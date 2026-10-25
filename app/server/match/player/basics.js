@@ -253,12 +253,15 @@ export class PlayerBasics {
    */
   deployMap() {
     const field = typeof this.m.deployFieldOf === 'function' ? this.m.deployFieldOf(this) : 'normal';
-    if (this._deployMap && this._deployField !== undefined && this._deployField !== field) {
+    // 第几块 boss 场地也是缓存的一部分：同一块图的两位棋手、以及换场地后的重配对，读的是不同的矩形
+    const area = typeof this.m.bossAreaOf === 'function' ? this.m.bossAreaOf(this).index : -1;
+    if (this._deployMap && this._deployField !== undefined && (this._deployField !== field || this._deployArea !== area)) {
       this._deployMap = null;
       this._legalityStale = true;
     }
     if (!this._deployMap) this._deployMap = this.m.deployMapFor(this, field);
     this._deployField = field;
+    this._deployArea = area;
     return this._deployMap;
   }
   /**

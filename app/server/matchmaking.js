@@ -413,4 +413,21 @@ export class MatchmakeQueue {
   stats() {
     return { queued: this.entries.size, queuedWaiting: this.waiting().length, queueSize: this.size, queueFormed: this.formed };
   }
+
+  /**
+   * 大厅「N 人匹配中」的按难度计数（`room.listed.matchmaking`，public/js/screens/lobby.js 的
+   * `store.presence.matchmaking`）。只数**在等且在线**的人：掉线的人不占位，也不该被算进这个数字。
+   * @returns {{ total: number, byDifficulty: Record<string, number> }}
+   */
+  counts() {
+    const byDifficulty = {};
+    let total = 0;
+    for (const e of this.entries.values()) {
+      if (!e.connected) continue;
+      total++;
+      const d = typeof e.difficulty === 'string' && e.difficulty ? e.difficulty : this.opts.difficulty;
+      byDifficulty[d] = (byDifficulty[d] || 0) + 1;
+    }
+    return { total, byDifficulty };
+  }
 }

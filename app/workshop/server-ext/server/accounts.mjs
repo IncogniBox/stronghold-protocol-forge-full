@@ -180,13 +180,16 @@ function allow(buckets, key, perMs, burst, now = Date.now()) {
 // 库（`host.io` 上的单个 JSON 文件）
 // ---------------------------------------------------------------------------------------------
 
+/** 名片背景的可选 id（与 shared/namecards.js 的目录同一份顺序：nc00…nc33，共 34 个官方主题）。 */
+export const NAMECARD_IDS = Object.freeze(Array.from({ length: 34 }, (_, i) => `nc${String(i).padStart(2, '0')}`));
+
 /** 账号库：**纯数据**，不认识 socket，也不认识 WebSocket 信封（那些在下面）。 */
 export class AccountDb {
   /** @param {{ read: (rel: string) => string|null, write: (rel: string, data: string) => boolean }} io */
   constructor(io) {
     this.io = io;
     /** @type {{ v: number, nextTag: number, accounts: any[], sessions: Record<string, any>, moderation: any, prefs: Record<string, any> }} */
-    this.data = { v: DB_VERSION, nextTag: 1001, accounts: [], sessions: {}, bindings: {}, moderation: { rules: [...DEFAULT_RULES], pending: [], banned: [], allow: [], observations: [] }, prefs: {} };
+    this.data = { v: DB_VERSION, nextTag: 1001, accounts: [], sessions: {}, bindings: {}, friends: {}, moderation: { rules: [...DEFAULT_RULES], pending: [], banned: [], allow: [], observations: [] }, prefs: {} };
     /** 键 → 账号（内存索引；`accounts[]` 才是真相）。 */
     this.byKey = new Map();
   }
@@ -204,6 +207,7 @@ export class AccountDb {
       this.data = parsed;
       if (!isPlain(this.data.sessions)) this.data.sessions = {};
       if (!isPlain(this.data.bindings)) this.data.bindings = {};
+      if (!isPlain(this.data.friends)) this.data.friends = {};
       if (!isPlain(this.data.prefs)) this.data.prefs = {};
       if (!isPlain(this.data.moderation)) this.data.moderation = { rules: [...DEFAULT_RULES], pending: [], banned: [], allow: [], observations: [] };
       if (!Number.isInteger(this.data.nextTag) || this.data.nextTag < 1001) this.data.nextTag = 1001;
@@ -250,6 +254,7 @@ export class AccountDb {
       rejected: row.rejected === true,
       uploadBanned: row.uploadBanned === true,
       nameBanned: banned,
+      namecard: typeof row.namecard === 'string' && NAMECARD_IDS.includes(row.namecard) ? row.namecard : null,
       ...(banned && row.originalName ? { originalName: row.originalName } : {}),
     };
   }
@@ -374,6 +379,7 @@ export class AccountService {
       uploadBanned: false,
       nameBanned: false,
       originalName: null,
+      namecard: NAMECARD_IDS[tag % NAMECARD_IDS.length],
       createdAt: Date.now(),
     };
     this.db.data.accounts.push(row);
@@ -572,6 +578,7 @@ export class AccountService {
       out.push({
         playerId, accountId: row.id, name: view.name, tag: view.tag,
         avatar: view.pending || view.rejected ? null : (row.avatar || null),
+        namecard: view.namecard,
       });
     }
     return { players: out };
@@ -603,6 +610,94 @@ export class AccountService {
     this.db.data.prefs[row.id] = next;
     this.db.save();
     return { prefs: next };
+  }
+
+  // ---- 名片 / 好友 / 成就（engine UI 的三个模块读它们） ---------------------------------------
+
+  /** 自己的公开资料（`ui/accounts.js` 的 `me()`）。 */
+  profileOf(row) { return { profile: this.db.publicAccount(row) }; }
+
+  /** 名片背景：只接受 `NAMECARD_IDS`（客户端配色表同一份字面量）。 */
+  setNamecard(row, namecard) {
+    const id = typeof namecard === 'string' ? namecard : '';
+    if (!NAMECARD_IDS.includes(id)) return { error: 'BAD_NAMECARD', message: '未知的名片背景' };
+    row.namecard = id;
+    this.db.save();
+    return { profile: this.db.publicAccount(row) };
+  }
+
+  friendIds(row) {
+    const list = this.db.data.friends[row.id];
+    return Array.isArray(list) ? list.filter((id) => typeof id === 'string') : [];
+  }
+
+  /** 在线 = 这个账号还有一个活着的登录会话（`sessions` 由 `issueSession` / `logout` 维护）。 */
+  onlineAccountIds() {
+    const online = new Set();
+    for (const s of Object.values(this.db.data.sessions)) if (s && typeof s.accountId === 'string') online.add(s.accountId);
+    return online;
+  }
+
+  /** 好友列表（含在线状态）。 */
+  friendView(row) {
+    const online = this.onlineAccountIds();
+    const friends = this.friendIds(row).map((id) => this.db.accountById(id)).filter(Boolean).map((a) => {
+      const view = this.db.publicAccount(a);
+      return { id: view.id, name: view.name, tag: view.tag, avatar: view.avatar, namecard: view.namecard, online: online.has(view.id) };
+    });
+    return { friends };
+  }
+
+  /** 加好友：`login` 可以是昵称、`昵称#编号`，或 QQ。双向写入 —— 私有服不需要「申请/同意」两步。 */
+  friendAdd(row, login) {
+    if (typeof login !== 'string' || !login.trim()) return { error: 'BAD_LOGIN', message: '请填写好友的昵称或 昵称#编号' };
+    const text = login.trim();
+    const hashAt = text.lastIndexOf('#');
+    const name = hashAt >= 0 ? text.slice(0, hashAt).trim() : text;
+    const tag = hashAt >= 0 ? Number(text.slice(hashAt + 1).replace(/\D/g, '')) : null;
+    let target = this.db.accountByKey(nameKey(name));
+    if (!target && QQ_RE.test(text)) target = this.db.data.accounts.find((a) => a.qq === text) || null;
+    if (!target || (tag !== null && Number.isFinite(tag) && target.tag !== tag)) return { error: 'NOT_FOUND', message: '没有这个账号' };
+    if (target.id === row.id) return { error: 'SELF', message: '不能加自己' };
+    const add = (a, b) => {
+      const list = Array.isArray(this.db.data.friends[a]) ? this.db.data.friends[a] : (this.db.data.friends[a] = []);
+      if (!list.includes(b)) list.push(b);
+    };
+    add(row.id, target.id);
+    add(target.id, row.id);
+    this.db.save();
+    return this.friendView(row);
+  }
+
+  friendRemove(row, id) {
+    const drop = (a, b) => {
+      const list = this.db.data.friends[a];
+      if (!Array.isArray(list)) return;
+      this.db.data.friends[a] = list.filter((x) => x !== b);
+    };
+    if (typeof id === 'string' && id) { drop(row.id, id); drop(id, row.id); this.db.save(); }
+    return this.friendView(row);
+  }
+
+  /**
+   * 账号侧成就：全部由这台服务器**已有的账号数据**推出来（注册、头像过审、名片、好友、绑定、账号年龄）。
+   * 不伪造对局战绩 —— 没有战绩来源就不列「通关」这类条目。
+   */
+  achievementsOf(row) {
+    const friends = this.friendIds(row).length;
+    const binds = Object.values(this.db.data.bindings).filter((b) => b && b.accountId === row.id).length;
+    const ageDays = Math.max(0, Math.floor((Date.now() - (Number(row.createdAt) || Date.now())) / 86400000));
+    const approved = !!row.avatar && row.pending !== true && row.rejected !== true;
+    return {
+      achievements: [
+        { id: 'account', progress: 1, total: 1 },
+        { id: 'avatar', progress: approved ? 1 : 0, total: 1 },
+        { id: 'namecard', progress: row.namecard ? 1 : 0, total: 1 },
+        { id: 'bind', progress: binds > 0 ? 1 : 0, total: 1 },
+        { id: 'friends', progress: Math.min(3, friends), total: 3 },
+        { id: 'veteran', progress: Math.min(30, ageDays), total: 30 },
+      ],
+    };
   }
 
   // ---- 管理 ---------------------------------------------------------------------------------
@@ -728,6 +823,36 @@ export class AccountService {
           const row = this.sessionAccount(token);
           if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
           return { id, ...this.prefsPut(row, msg.patch) };
+        }
+        case 'profile': {
+          const row = this.sessionAccount(token);
+          if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
+          return { id, ...this.profileOf(row) };
+        }
+        case 'namecard': {
+          const row = this.sessionAccount(token);
+          if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
+          return { id, ...this.setNamecard(row, msg.namecard) };
+        }
+        case 'friendList': {
+          const row = this.sessionAccount(token);
+          if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
+          return { id, ...this.friendView(row) };
+        }
+        case 'friendAdd': {
+          const row = this.sessionAccount(token);
+          if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
+          return { id, ...this.friendAdd(row, msg.login) };
+        }
+        case 'friendRemove': {
+          const row = this.sessionAccount(token);
+          if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
+          return { id, ...this.friendRemove(row, msg.id) };
+        }
+        case 'achievements': {
+          const row = this.sessionAccount(token);
+          if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
+          return { id, ...this.achievementsOf(row) };
         }
         case 'bind': {
           const row = this.sessionAccount(token);

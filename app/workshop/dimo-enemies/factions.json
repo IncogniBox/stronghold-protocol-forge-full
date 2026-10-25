@@ -1,0 +1,20 @@
+{
+  "types": {
+    "DIMO": {
+      "type": "DIMO",
+      "name": "特训敌人·涤墨",
+      "desc": "墨染书阁的字伥与器物之灵：以笔为兵、以墨为潮，擅长在成群的同族之间互相增益。",
+      "icon": "dimo_icon",
+      "sortId": 8,
+      "typeIdentifier": 8,
+      "involveRandom": true,
+      "count": 3,
+      "weight": 3,
+      "pool": ["enemy_9090_probe"],
+      "entries": {}
+    }
+  },
+  "entries": {
+    "enemy_9090_probe": { "key": "enemy_9090_probe", "type": "DIMO", "weight": 10, "firstHalf": true, "fly": false, "N": [], "E": [], "inactiveIn": [] }
+  }
+}

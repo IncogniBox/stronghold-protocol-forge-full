@@ -14,6 +14,7 @@ import { roundRows, waveOptions, missingBindings, setRoundBinding, setBossRoundB
 import { packSelect, createPack, autoPackId } from './packPicker.js';
 import { colorOfGlyph, deployRuleOf } from './terrain.js';
 import { createStageView3d } from './stage3d.js';
+import { drawThumb } from './propThumb.js';
 // 这一张地图的格子里其实住着三个区（业主 2026-10-08：「为什么要把怪物等待区、普通对战、boss 对战写在一整张大图上」）：
 // 分区定义、部署矩形与「道路画在了部署区外」的判定都在 shared/stageAuthoring.js 里，只有一份口径。
 import { zonesOf, zoneOf, deployRectsAt, roadsOutsideDeployRects, validateStage } from '../../shared/stageAuthoring.js';
@@ -44,6 +45,10 @@ const state = {
   data: null, packId: null, stageId: null,
   cells: null, spec: null, preview: null,
   brush: 'r', tool: 'brush', deviceRole: 'crate',
+  // 「装饰」工具：选中哪种道具，以及正在拖动的那一件（画布上手动摆放，见 board3d/decor.js）
+  decorKind: 'lantern', decorDrag: null, lastDecor: null, hoverCell: null,
+  // 「官方摆件」：kind 'prop' 时选中的是主题素材包里的哪个模型 id（props.json 的 id，如 prop_8）
+  decorProp: null,
   // showPaths 默认 false：业主口径是「不许默认新建地图就有寻路」。它画的是引擎的流场寻路表，
   // 而那张表在没点过「自动寻路」之前根本不该被当成这张图的属性来展示。
   showDeploy: true, showPaths: false, showRoutes: true,
@@ -192,6 +197,11 @@ function currentSpec() {
     // 这里是显式拼字段的，**必须原样带上** —— 漏掉就等于「打开一张绑好回合的地图、随手保存一下，绑定全没了」。
     ...(state.spec.rounds ? { rounds: state.spec.rounds } : {}),
     ...(state.spec.bossRounds ? { bossRounds: state.spec.bossRounds } : {}),
+    // 这张图自己的 3D 棋盘主题（board3d/themes.js 的 id，如 'skymirror'）：由 3D 预览的主题下拉写入，进记录后
+    // 游戏内也只对这张图生效（未声明就不写，别的图仍用标准主题）。
+    ...(typeof state.spec.theme === 'string' && state.spec.theme ? { theme: state.spec.theme } : {}),
+    // hand-placed decorations (the decor tool): the engine renders exactly this list (board3d/decor.js)
+    ...(Array.isArray(state.spec.decor) && state.spec.decor.length ? { decor: state.spec.decor } : {}),
   };
 }
 
@@ -206,6 +216,10 @@ function loadSpec(spec) {
   // 分区：记录里没声明 layout 的就**保持没声明**，只在编辑时（改尺寸 / 拖分区）才写一份进去 ——
   // 这样「打开一张官方图、随手保存」写回去的仍然是一条没有 layout 的记录。
   state.spec.layout = spec.layout === undefined || spec.layout === null ? undefined : normalizeLayout(spec.layout, size);
+  // 这张图的 3D 棋盘主题：记录里声明过就照它预览（null = 还没选过，3D 视图用默认主题）
+  state.theme3d = typeof spec.theme === 'string' && spec.theme ? spec.theme : null;
+  state.decorDrag = null;
+  if (!Array.isArray(state.spec.decor)) state.spec.decor = [];
   state.draft = [];
   state.zoneHandle = null;
   // 画布上的格子：**只有这张图的窗口里才有字符**，窗口之外是空白（不是空气字形）。
@@ -558,6 +572,7 @@ function draw() {
   // 「分区」模式：地形压暗，三块部署区 / 三个战斗矩形 / 等待区与镜像轴画在最上面，带头是可拖的。
   // 这一模式下**只画分区**（不改地形）：作者进这一模式就是为了把分区摆对，地形与路线叠在上面只会挡住线。
   if (state.editingZones) { drawZoneEditor(); return; }
+  drawDecorMarkers(ctx);
   const rec = state.preview?.record;
   // deploy tiles: what the sim derives, not what the author typed
   if (state.showDeploy && rec?.deployTiles) {
@@ -575,6 +590,13 @@ function draw() {
       paint(t.rangedOnly ?? [], '#5b9dff55');
     }
     paint((dt.bossLeft?.melee ?? []).concat(dt.bossRight?.melee ?? []), '#4ec98a25');
+    // 第 2… 块 boss 场地（`bossA<i>:<k>`，server/stageAuthoring.js 派生）：每块场地自己的部署区同样画出来，
+    // 否则作者在「显示部署」里会以为那几块场地没有可放干员的地块。
+    for (const [key, t] of Object.entries(dt)) {
+      if (!/^bossA\d+:\d+$/.test(key) || !t) continue;
+      paint(t.melee ?? [], '#4ec98a25');
+      paint(t.rangedOnly ?? [], '#5b9dff25');
+    }
   }
   // 「显示寻路」：叠的是引擎的流场寻路表。业主口径是**默认不画、不许自动生成**，所以
   // showPaths 默认 false，这里再兜一道：表是空的就什么都不画（开着也不会有假线）。
@@ -778,8 +800,8 @@ function drawZoneEditor() {
     strokeRectArr(rect, rectColors[name], false);
     drawHandles('deploy', name, rect);
   }
-  // 多块 boss 场地（`layout.bossAreas`）：一块 = 一支队伍的首领战场。只读叠层 —— 分区编辑的手柄仍只动上面那套单块场地，
-  // 多块场地按玩家数/队伍分配属于引擎侧（这一版只把它们画出来、让作者看见自己声明的四块）。
+  // 多块 boss 场地（`layout.bossAreas`）：一块 = 一支队伍的首领战场。第 2…N 块的部署区现在也能拖（`bossA<i>:<k>`）；
+  // 第 1 块的部署区由上面那套 `bossLeft` / `bossRight` 代表，这里只画它的战斗/整备框。
   if (Array.isArray(lay.bossAreas)) {
     lay.bossAreas.forEach((a, i) => {
       const title = `BOSS 区域${i + 1}`;
@@ -787,9 +809,13 @@ function drawZoneEditor() {
       strokeRectArr(rectArr(a.battle), battleColors.boss);
       labelOfRect = () => `${title} · ${battleLabel('bossPrep')}`;
       strokeRectArr(rectArr(a.prep), battleColors.bossPrep);
+      // 第 1 块的部署区就是上面那套 `bossLeft` / `bossRight`（已经画过、有手柄）；`bossAreas[0].deploy` 只是旧数据里
+      // 的一份影子，画出来会和真正生效的那两块错开 —— 所以第 1 块不再单画。
+      if (i === 0) return;
       (Array.isArray(a.deploy) ? a.deploy : [a.deploy]).forEach((d, k, all) => {
         labelOfRect = () => `${title} · ${t('部署区')}${all.length > 1 ? ` ${k + 1}` : ''}`;
         strokeRectArr(d, '#ff7a7af0', false);
+        drawHandles('areaDeploy', `bossA${i + 1}:${k}`, d);
       });
     });
   }
@@ -831,6 +857,35 @@ function drawZoneEditor() {
 const deployRectNames = (lay) => (isDualLayout(lay) ? ['normalLeft', 'normalRight', 'bossLeft', 'bossRight'] : ['normal', 'bossLeft', 'bossRight']);
 const BATTLE_NAMES = Object.freeze(['normal', 'prep', 'unite', 'boss', 'bossPrep']);
 
+/**
+ * 多块 boss 场地（`layout.bossAreas`）里那些**额外的**部署区。
+ *
+ * 第 1 块的部署区已经由上面那套 `bossLeft` / `bossRight` 代表（它们有手柄、能拖、进 `deployTiles`）；
+ * 第 2…N 块以前只是只读叠层，业主 2026-10-24 要「和 boss 区域1 一样能设置」。这里给它们一个可拖的名字
+ * `bossA<i>:<k>`（i 从 2 起、k 从 0 起），于是手柄 / 数字框 / 方向键全都共用同一套分区编辑。
+ *
+ * 它们的列**不属于**镜像轴那一套（每块场地自己的部署区），所以四个边都能拖 —— 与上面三块「列定死、只挪行」不同。
+ */
+const AREA_DEPLOY_RE = /^bossA(\d+):(\d+)$/;
+function areaDeployNames(lay = mapLayout()) {
+  const out = [];
+  (Array.isArray(lay.bossAreas) ? lay.bossAreas : []).forEach((a, i) => {
+    if (i === 0) return;                       // 第 1 块 = deployRects.bossLeft / bossRight，已经能拖
+    const d = Array.isArray(a && a.deploy) ? a.deploy : [];
+    d.forEach((_, k) => out.push(`bossA${i + 1}:${k}`));
+  });
+  return out;
+}
+/** `bossA2:1` → 那块部署区的 `[r0, r1, c0, c1]`（读的是 layout.bossAreas 里的原数组）。 */
+function areaDeployRect(name) {
+  const m = AREA_DEPLOY_RE.exec(String(name));
+  if (!m) return null;
+  const lay = mapLayout();
+  const a = lay.bossAreas && lay.bossAreas[Number(m[1]) - 1];
+  const rect = a && Array.isArray(a.deploy) ? a.deploy[Number(m[2])] : null;
+  return Array.isArray(rect) ? { r0: rect[0], r1: rect[1], c0: rect[2], c1: rect[3] } : null;
+}
+
 /** 一个分区在画布上的矩形 `[r0, r1, c0, c1]`（镜像轴没有矩形，返回 null）。 */
 function rectAt(kind, name) {
   const r = zoneRect(kind, name);
@@ -845,6 +900,7 @@ function zoneRect(kind, name) {
     return { r0, r1, c0, c1 };
   }
   if (kind === 'battle' && lay.battle[name]) return lay.battle[name];
+  if (kind === 'areaDeploy') return areaDeployRect(name);
   if (kind === 'pen') return name === 'penRight' ? lay.penRight : lay.pen;
   return null;
 }
@@ -857,6 +913,11 @@ function setZoneRect(kind, name, r) {
     lay.deployRects[name] = [r.r0, r.r1, c0, c1];
   }
   else if (kind === 'battle' && lay.battle[name]) lay.battle[name] = { ...r };
+  else if (kind === 'areaDeploy') {
+    const m = AREA_DEPLOY_RE.exec(String(name));
+    const a = m && lay.bossAreas && lay.bossAreas[Number(m[1]) - 1];
+    if (a && Array.isArray(a.deploy) && Array.isArray(a.deploy[Number(m[2])])) a.deploy[Number(m[2])] = [r.r0, r.r1, r.c0, r.c1];
+  }
   else if (kind === 'pen' && name === 'penRight' && lay.penRight) lay.penRight = { ...r };
   else if (kind === 'pen') lay.pen = { ...r };
   state.spec.layout = lay;
@@ -947,6 +1008,10 @@ function nudgeHandle(dr, dc) {
 function zoneNameOf(kind, name) {
   if (kind === 'mirror') return MIRROR_LABEL();
   if (kind === 'deploy') return `${rectLabel(name)} · ${fieldLabel(name)}`;
+  if (kind === 'areaDeploy') {
+    const m = AREA_DEPLOY_RE.exec(String(name));
+    return `BOSS 区域${m ? Number(m[1]) : 1} · ${t('部署区')} ${m ? Number(m[2]) + 1 : 1}`;
+  }
   if (kind === 'battle') return battleLabel(name);
   return PEN_LABEL();
 }
@@ -1035,6 +1100,11 @@ function zonePanel() {
     const el = rectInputs('deploy', name, false);
     if (el) box.append(el);
   }
+  // 第 2…N 块 boss 场地的部署区（四边都能改，见 areaDeployNames）
+  for (const name of areaDeployNames()) {
+    const el = rectInputs('areaDeploy', name, true);
+    if (el) box.append(el);
+  }
   for (const name of BATTLE_NAMES) {
     const el = rectInputs('battle', name, true);
     if (el) box.append(el);
@@ -1097,6 +1167,7 @@ function liveZoneErrors() {
 function handleCandidates() {
   const out = [];
   for (const name of deployRectNames(mapLayout())) out.push({ kind: 'deploy', name });
+  for (const name of areaDeployNames()) out.push({ kind: 'areaDeploy', name });
   for (const name of BATTLE_NAMES) out.push({ kind: 'battle', name });
   out.push({ kind: 'pen', name: 'pen' });
   if (mapLayout().penRight) out.push({ kind: 'pen', name: 'penRight' });
@@ -1165,6 +1236,19 @@ function airStripe(c, r) {
 
 // ---- interaction -------------------------------------------------------------------------------------------------
 
+/** 删除某格上的装饰（右键 / Alt+点 / Delete 键 / 清空按钮都走这一条）。 */
+function removeDecorAt(cell) {
+  if (!cell || !state.spec) return false;
+  const list = state.spec.decor;
+  if (!Array.isArray(list)) return false;
+  const i = list.findIndex((d) => d.r === cell.r && d.c === cell.c);
+  if (i < 0) return false;
+  list.splice(i, 1);
+  if (state.lastDecor && state.lastDecor.r === cell.r && state.lastDecor.c === cell.c) state.lastDecor = null;
+  draw(); renderSide(); schedulePreview();
+  return true;
+}
+
 function paintAt(cell) {
   if (!cell || !state.cells) return false;
   // 窗口之外不是这张图（大图旁边多出来的画布）：画笔在那里什么都不做，而不是画到窗口外面去
@@ -1197,6 +1281,22 @@ if (canvas) canvas.addEventListener('mousedown', (ev) => {
   }
   const cell = cellAt(ev);
   if (!cell) return;
+  // 「装饰」工具：点已有道具把它拎起来拖；点空地按当前选择放一件；Alt+点 = 删除
+  if (state.tool === 'decor') {
+    ev.preventDefault();
+    if (ev.altKey) { removeDecorAt(cell); return; }
+    const list = Array.isArray(state.spec.decor) ? state.spec.decor : (state.spec.decor = []);
+    const hit = list.findIndex((d) => d.r === cell.r && d.c === cell.c);
+    if (hit >= 0) state.decorDrag = { i: hit };
+    else {
+      const v = state.decorKind === 'prop' && state.decorProp ? { v: state.decorProp } : {};
+      list.push({ kind: state.decorKind, r: cell.r, c: cell.c, ...v });
+      state.decorDrag = { i: list.length - 1 };
+    }
+    state.lastDecor = { r: cell.r, c: cell.c };
+    draw(); renderSide(); schedulePreview();
+    return;
+  }
   // 放装置原来只能靠工具栏切换，结果「想放一个箱子」要来回点两次工具；Shift / Ctrl 点一下就放，切回去也容易。
   const wantsDevice = state.tool === 'device' || ev.shiftKey || ev.ctrlKey;
   if (wantsDevice) {
@@ -1214,6 +1314,16 @@ if (canvas) canvas.addEventListener('mousedown', (ev) => {
 });
 if (canvas) canvas.addEventListener('mousemove', (ev) => {
   if (panning) { movePan(ev.clientX, ev.clientY); return; }
+  // 拖动装饰：跟着指针换格子（松手才落盘，拖动期间只改内存）
+  if (state.decorDrag) {
+    const d = state.spec?.decor?.[state.decorDrag.i];
+    const cell = cellAt(ev);
+    if (d && cell && (d.r !== cell.r || d.c !== cell.c)) {
+      d.r = cell.r; d.c = cell.c; state.lastDecor = { r: cell.r, c: cell.c }; draw();
+    }
+    return;
+  }
+  state.hoverCell = cellAt(ev);
   if (state.editingZones) {
     if (draggingZone && state.zoneHandle) {
       const rect = canvas.getBoundingClientRect();
@@ -1237,7 +1347,22 @@ if (canvas) canvas.addEventListener('mousemove', (ev) => {
     : t('把鼠标移到网格上看坐标。row 0 在最下面一行（和引擎一致）。');
   if (painting && cell && paintAt(cell)) { draw(); schedulePreview(); }
 });
-window.addEventListener('mouseup', () => { painting = false; draggingZone = false; endPan(); });
+window.addEventListener('mouseup', () => {
+  if (state.decorDrag) { state.decorDrag = null; renderSide(); schedulePreview(); }
+  painting = false; draggingZone = false; endPan();
+});
+// 装饰的删除：右键点已有道具（只在装饰工具下生效，避免抢走画布的其它右键行为）
+if (canvas) canvas.addEventListener('contextmenu', (ev) => {
+  if (state.tool !== 'decor' || !state.spec) return;
+  const cell = cellAt(ev);
+  if (!cell) return;
+  const list = state.spec.decor || [];
+  const i = list.findIndex((d) => d.r === cell.r && d.c === cell.c);
+  if (i < 0) return;
+  ev.preventDefault();
+  list.splice(i, 1);
+  draw(); renderSide(); schedulePreview();
+});
 if (canvas) canvas.addEventListener('mouseleave', () => { painting = false; draggingZone = false; endPan(); });
 
 // ---- 缩放与平移 ---------------------------------------------------------------------------------------------------
@@ -1290,6 +1415,10 @@ if (canvas) canvas.addEventListener('wheel', (ev) => {
 window.addEventListener('keydown', (ev) => {
   const tag = ev.target?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  // 装饰删除：Delete/Backspace 删「鼠标所在格」或「最后放/拖过的那一件」—— 在 3D 预览里也有效
+  if (ev.key === 'Delete' || ev.key === 'Backspace') {
+    if (removeDecorAt(state.hoverCell || state.lastDecor)) { ev.preventDefault(); return; }
+  }
   if (ev.code === 'Space') {
     ev.preventDefault();
     if (!state.space) { state.space = true; if (canvas) canvas.style.cursor = 'grab'; }
@@ -1358,7 +1487,7 @@ function stageFor3d() {
   const rec = state.preview?.record;
   if (rec && Array.isArray(rec.rows)) return rec;
   if (!state.cells) return null;
-  return { id: state.spec?.id || 'unsaved', rows: rowsFromCells(), devices: state.spec?.devices ?? [], size: mapSize() };
+  return { id: state.spec?.id || 'unsaved', rows: rowsFromCells(), devices: state.spec?.devices ?? [], decor: state.spec?.decor ?? [], size: mapSize() };
 }
 
 /**
@@ -1492,6 +1621,89 @@ async function reload3dTheme() {
 
 // ---- panels ------------------------------------------------------------------------------------------------------
 
+// 装饰道具（画布标记 + 调色板标签）：engine side 是 board3d/decor.js，两边 kind 必须一致
+const DECOR_PALETTE = [
+  ['block', '石块', '#3b424c'],
+  ['lantern', '灯笼', '#ffa24e'],
+  ['crate', '补给箱', '#b0804a'],
+  ['mark', '角标', '#e8eef4'],
+  ['edging', '压边', '#8d98a6'],
+  ['hatch', '格栅板', '#3f6172'],
+  ['stand', '笔架', '#cfc6ae'],
+  ['fence', '木栅栏', '#7a5a3a'],
+];
+
+// 官方摆件（kind 'prop'）：主题素材包里真实模型的清单，惰性从 /data/local-assets.json → props.json 读一次。
+// 每一项带上自己的 .obj 地址与 2D 缩略图（propThumb.js）—— 只写「官方 4」的编号，作者认不出是哪一个。
+let propList = null;             // [{ id, file, url }]
+const propMeshes = new Map();    // id → parseObj 网格 | null（null = 这个模型没有几何 / 拉取失败）
+const propJobs = new Map();      // id → 正在解析的 Promise（同一帧里不重复请求）
+let objModule = null;
+async function loadProps() {
+  if (propList) return propList;
+  try {
+    const man = await fetch('/data/local-assets.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null));
+    const group = man?.groups?.['props/skymirror'];
+    const path = group?.props?.path;
+    const doc = path ? await fetch(path, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)) : null;
+    const base = typeof path === 'string' ? path.replace(/\/[^/]+$/, '') : '';
+    propList = (Array.isArray(doc?.props) ? doc.props : [])
+      .filter((p) => p && typeof p.id === 'string')
+      .map((p) => {
+        const entry = group && group[p.id];
+        const url = entry && typeof entry.path === 'string' && entry.path
+          ? entry.path
+          : (typeof p.file === 'string' && p.file ? `${base}/${p.file}` : null);
+        return { id: p.id, file: typeof p.file === 'string' ? p.file : null, url };
+      })
+      .filter((p) => !!p.url);
+  } catch { propList = []; }
+  return propList;
+}
+
+/** 惰性解析一个摆件的 OBJ（同一个 id 只取/解析一次）；失败记为 null，缩略图显示编号占位。 */
+async function loadPropMesh(p) {
+  if (propMeshes.has(p.id)) return propMeshes.get(p.id);
+  if (propJobs.has(p.id)) return propJobs.get(p.id);
+  const job = (async () => {
+    try {
+      const text = await fetch(p.url, { cache: 'force-cache' }).then((r) => (r.ok ? r.text() : null));
+      if (!text) return null;
+      objModule = objModule || await import('/client/js/render/board3d/obj.js');
+      return objModule.parseObj(text);
+    } catch { return null; }
+  })().then((mesh) => {
+    propMeshes.set(p.id, mesh);
+    propJobs.delete(p.id);
+    return mesh;
+  });
+  propJobs.set(p.id, job);
+  return job;
+}
+
+/** 画布上的装饰标记：每件道具一个带字的小方块（不可交互，拖动/删除在指针事件里做）。 */
+function drawDecorMarkers(ctx) {
+  const list = state.spec?.decor;
+  if (!Array.isArray(list) || !list.length) return;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${textWorld(10)}px sans-serif`;
+  for (const d of list) {
+    const meta = DECOR_PALETTE.find(([k]) => k === d.kind) || (d.kind === 'prop' ? ['prop', '官', '#9fc2d8'] : null);
+    if (!meta) continue;
+    const x = d.c * CELL + CELL * 0.19, y = py(d.r) + CELL * 0.19, w = CELL * 0.62;
+    ctx.fillStyle = meta[2];
+    ctx.strokeStyle = '#0b0e12';
+    ctx.lineWidth = lineWorld(1);
+    ctx.fillRect(x, y, w, w);
+    ctx.strokeRect(x, y, w, w);
+    ctx.fillStyle = d.kind === 'mark' ? '#0b0e12' : '#0b0e12';
+    ctx.fillText(meta[1][0], x + w / 2, y + w / 2 + 0.5);
+  }
+  ctx.restore();
+}
+
 function renderPalette() {
   const box = $('#palette');
   box.replaceChildren();
@@ -1510,6 +1722,94 @@ function renderPalette() {
     el.addEventListener('click', () => { state.brush = tile.glyph; state.tool = 'brush'; syncTools(); renderPalette(); });
     box.append(el);
   }
+  // 装饰道具的调色板：选中后在地图上点格子放置，拖动改位置，右键删除
+  const sep = document.createElement('div');
+  sep.style.cssText = 'flex-basis:100%;height:1px;background:#ffffff22;margin:4px 0';
+  box.append(sep);
+  for (const [kind, label, color] of DECOR_PALETTE) {
+    const el = document.createElement('div');
+    el.className = `sw${state.tool === 'decor' && state.decorKind === kind ? ' on' : ''}`;
+    el.title = `装饰：${label}（点格子放置，拖动移动，右键 / Alt+点 / Delete 删除）`;
+    el.innerHTML = `<i style="background:${color}"></i><span>${label}</span>`;
+    el.addEventListener('click', () => {
+      state.tool = 'decor'; state.decorKind = kind;
+      // 放置/拖动/删除都发生在 2D 画布上（指针事件绑在 #board），3D 只是预览：选了道具就切回 2D，
+      // 否则在 3D 里点不到任何格子，看起来就是「放了删不掉」。
+      if (state.mode3d) toggle3d();
+      syncTools(); renderPalette();
+    });
+    box.append(el);
+  }
+  // 「官方摆件」：主题素材包里的真实模型（props/skymirror）。每一项都带**缩略图**（propThumb.js：把 OBJ 网格
+  // 按固定 3/4 视角画进 56×56 的 2D canvas）—— 只写「官方 4」的编号，作者根本认不出是桌子还是灯笼。
+  if (propList === null) void loadProps().then((list) => { if (list.length) renderPalette(); });
+  else if (propList.length) {
+    const head = document.createElement('div');
+    head.style.cssText = 'flex-basis:100%;display:flex;align-items:center;gap:6px;margin:6px 0 2px;color:#cfd8e3;font-size:12px';
+    head.textContent = '官方摆件';
+    const count = document.createElement('span');
+    count.style.cssText = 'color:#7f8b99;font-size:11px';
+    count.textContent = `${propList.length}`;
+    head.append(count);
+    box.append(head);
+    const grid = document.createElement('div');
+    grid.style.cssText = 'flex-basis:100%;display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:4px;max-height:280px;overflow:auto;padding:2px 0 4px';
+    for (const p of propList) {
+      const on = state.decorKind === 'prop' && state.decorProp === p.id;
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = `prop-cell${on ? ' on' : ''}`;
+      cell.title = `官方 ${p.id.replace(/^prop_/, '')}：选中后在地图上点格子摆放`;
+      cell.style.cssText = [
+        'display:flex;flex-direction:column;align-items:center;gap:2px;padding:3px;cursor:pointer',
+        'background:#0f141a;border:1px solid ' + (on ? '#7fd4a5' : '#ffffff22') + ';border-radius:4px',
+        'color:' + (on ? '#bff0d3' : '#cfd8e3') + ';font:11px/1 sans-serif',
+      ].join(';');
+      const cv = document.createElement('canvas');
+      cv.width = 56; cv.height = 56;
+      cv.style.cssText = 'width:56px;height:56px;display:block';
+      const label = document.createElement('span');
+      label.textContent = p.id.replace(/^prop_/, '');
+      cell.append(cv, label);
+      const mesh = propMeshes.get(p.id);
+      if (mesh) drawThumb(cv, mesh);
+      else {
+        // 还没解析好：先写编号占位，解析完再补画（上面这张 canvas 已被替换出 DOM 时不补）
+        label.style.opacity = '0.55';
+        void loadPropMesh(p).then((m) => {
+          if (m && cv.isConnected) { drawThumb(cv, m); label.style.opacity = ''; }
+        });
+      }
+      cell.addEventListener('click', () => {
+        // 再点一次 = 取消选择：回到画笔，免得「装饰」工具带着空的 kind 往格子上放一件看不见的东西
+        const same = state.decorKind === 'prop' && state.decorProp === p.id;
+        if (same) {
+          state.decorProp = null;
+          state.decorKind = null;
+          state.tool = 'brush';
+        } else {
+          state.decorProp = p.id;
+          state.decorKind = 'prop';
+          state.tool = 'decor';
+          if (state.mode3d) toggle3d();   // 3D 里点不到格子：选了摆件就切回 2D
+        }
+        syncTools(); renderPalette();
+      });
+      grid.append(cell);
+    }
+    box.append(grid);
+  }
+  const clear = document.createElement('div');
+  clear.className = 'sw';
+  clear.title = '清空这张图上的所有装饰';
+  clear.innerHTML = '<i style="background:#7a2b2b"></i><span>清空装饰</span>';
+  clear.addEventListener('click', () => {
+    if (!state.spec || !Array.isArray(state.spec.decor) || !state.spec.decor.length) return;
+    state.spec.decor = [];
+    state.lastDecor = null;
+    draw(); renderSide(); schedulePreview();
+  });
+  box.append(clear);
 }
 
 /**
@@ -2458,7 +2758,12 @@ function syncTools() {
           if (th.id === current) o.selected = true;
           sel.append(o);
         }
-        sel.addEventListener('change', () => { state.theme3d = sel.value; reload3dTheme(); });
+        sel.addEventListener('change', () => {
+          state.theme3d = sel.value;
+          // 选定即写进这张图的 spec：保存后进 stage 记录，游戏内这张图就用它（别的图不受影响）
+          if (state.spec) state.spec.theme = sel.value;
+          reload3dTheme();
+        });
         row.append(sel);
       }
     }

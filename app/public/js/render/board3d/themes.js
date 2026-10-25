@@ -13,12 +13,18 @@
 //   mood   = the theme's lighting override (scene.js LIGHTING), null for the official rig: any of
 //            { clear, fog, hemiSky, hemiGround, bgColor, keyIntensity } — keyIntensity because a night-time atlas
 //            (天镜阁 averages 18–79/255) needs a stronger key light or the board reads as black
-//   atlas  = { d, e, n, r, common, commonE: manifest image names of this theme's atlases (e/n/r/common/commonE
-//              optional; n / r are the DERIVED _rgb / _rough maps, tools/local-extract DERIVED),
+//   atlas  = { d, e, n, r, common, commonE, commonM: manifest image names of this theme's atlases (e/n/r/commonE/
+//              commonM optional; n / r are the DERIVED _rgb / _rough maps, tools/local-extract DERIVED),
 //              wood: [image name, w, h] optional — this theme's OWN high-ground material (a whole image, not a crop)
 //              sources: { D: { w, h } } — the pixel size of the atlas each src is measured in (surfaceUV divides by it;
 //                         the shape is board3d/atlas.js SOURCES' one),
-//              surfaces: { <board3d/atlas.js surface name>: { src, rect: [x, y, w, h], rot?, flipX? } } }
+//              surfaces: { <board3d/atlas.js surface name>: { src, rect: [x, y, w, h], rot?, flipX? } },
+//              fade: manifest image name of the theme's radial FADE mask (optional, 天镜阁's TX_SkyMirror_Fade_D):
+//                    scene.js lays it over the board rim so the island dissolves into the backdrop like the official field }
+//   bgMesh = [manifest group, prefab node] of a backdrop MESH (optional): the official 辞岁行 battlefields put their
+//            panorama on a sky sphere instead of the shared background plane, so the far scenery wraps the board
+//   props  = manifest group of the field's own prop meshes (optional): its `props` record lists [{ id, file }], and
+//            the stage's hand-placed decor (`kind: 'prop'`, `v` = id) draws them (board3d/decor.js)
 //
 // The DISPLAY LABELS are deliberately not here: the map designer's i18n dictionary is keyed by Chinese source strings
 // that must appear in its own UI files (a dictionary entry no page uses is a failure), so the designer owns them
@@ -89,17 +95,37 @@ export const BOARD_THEMES = Object.freeze({
   // (tools/local-extract/extract.py JOBS).
   skymirror: Object.freeze({
     bg: Object.freeze(['map/skymirror', 'TX_SkyMirror_background']),
+    // the official field's backdrop is the BG_SkyMirror sphere (mesh/skymirror_bkg), not the shared ground plane
+    bgMesh: Object.freeze(['mesh/skymirror_bkg', 'BG_SkyMirror']),
+    // 官方地图场景的远景：arts/maps/map_skymirror/mesh/skymirror_test.ab 里的 S_outworld_* 网格（冰湖、山、桥、楼阁、
+    // 栏杆…），已按世界变换烘焙成按材质分的 OBJ。它画在棋盘下方当「地图场景背景」；官方棋盘中心在场景坐标 (3,0,-5)，
+    // rot 是按用户要求把整块远景向左转 90°（placeMesh 的四分之一圈，1 = 逆时针）。
+    bgScene: 'mesh/skymirror_scene',
+    bgSceneScale: 2,
+    // 右键 90°：用户确认官方场景是「向右转 90°」，四分之一圈计数里顺时针是 3（左转 90° 是 1）
+    bgSceneRot: 3,
+    // 实时飘雪（官方天镜阁战场是雪景）：BoardScene 里用 Points 做的一层雪，随镜头一直飘
+    snow: true,
+    // the field's real prop meshes (the map_skymirror bundle's objects, imported by hand under props/skymirror):
+    // the editor's 摆件 tool places them (`stage.decor` kind 'prop'), board3d/decor.js draws them
+    props: 'props/skymirror',
     mood: Object.freeze({ clear: 0x060a12, fog: 0x060a12, hemiSky: 0xc6d4e6, hemiGround: 0x40495a, bgColor: 1, keyIntensity: 6.4 }),
     atlas: Object.freeze({
       d: 'TX_SkyMirror_D', e: 'TX_SkyMirror_E',
       n: 'TX_SkyMirror_N_rgb', r: 'TX_SkyMirror_M_rough',
+      // 天镜阁的岛缘渐隐：一张径向蒙版（白心黑边），官方用 MT_SkyMirror_Fade 的 alpha blend 把棋盘边缘融进背景
+      // （scene.js `_buildBackground` 的 fade 面）。`fadeE` 是同一材质的 _EmissionMap（一圈侧光），叠在渐隐带里。
+      fade: 'TX_SkyMirror_Fade_D', fadeE: 'TX_SkyMirror_Fade_E',
       // 天镜阁的高台是一整片木板：用这张材质图（1024² 纯木纹）当高台顶面，而不是从 _D 切一小块重复平铺
       // （用户参考图：「整片大木板」）。它是 [图名, 宽, 高]。
       wood: Object.freeze(['TX_SkyMirror_Wood_D', 1024, 1024]),
+      // 这张木板图本身很暗（平均 RGB 37/20/14）：在本主题的实时灯光（key 6.4 + 冷色天光）下，木框和用同一材质的
+      // 摆件（栅栏、灯座）几乎读成黑色，看起来像「消失了」。给材质乘一个提亮系数，把木板拉回可见的暖木色。
+      woodTint: Object.freeze([10, 8, 6]),
       // 哪种「面」用这张木板图：抬高的方块里 surface 是 blockX 的那些 —— 那是 X（高台 / 竞技场块），
       // #（阻隔块 / 分隔带）保持深色。官方棋盘上 X 与 # 本是同一块贴图，我拆成了两个面名（atlas.js `blockX`）。
       woodOn: Object.freeze(['blockX']),
-      common: 'TX_SkyMirror_common_D', commonE: 'TX_SkyMirror_common_E',
+      common: 'TX_SkyMirror_common_D', commonE: 'TX_SkyMirror_common_E', commonM: 'TX_SkyMirror_common_M',
       sources: Object.freeze({ D: Object.freeze({ w: 1024, h: 1024 }) }),
       surfaces: Object.freeze(toSurfaces(SKYMIRROR_R, SKYMIRROR_SURFACES)),
     }),

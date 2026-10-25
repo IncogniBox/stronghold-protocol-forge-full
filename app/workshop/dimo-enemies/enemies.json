@@ -1,0 +1,1225 @@
+{
+  "enemy_10164_tjgxb": {
+    "key": "enemy_10164_tjgxb",
+    "name": "操戈",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "以自身消亡为代价，把力量分给同族的字兵。",
+    "descRaw": "以自身消亡为代价，把力量分给同族的字兵。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 4500,
+      "atk": 400,
+      "def": 200,
+      "res": 5,
+      "moveSpeed": 1,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "死亡时，使自身所在格与周围八格内种类为涤墨的友军获得1层【操戈增益】（攻击力+10%，防御力+25%，法术抗性+25%，最多2层）",
+        "textRaw": "死亡时，使自身所在格与周围八格内种类为涤墨的友军获得1层【操戈增益】（攻击力+10%，防御力+25%，法术抗性+25%，最多2层）",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10164_tjgxb",
+    "spine": "enemy_10164_tjgxb",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10164_tjgxb_2": {
+    "key": "enemy_10164_tjgxb_2",
+    "name": "操戈·凌",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "以自身消亡为代价，把力量分给同族的字兵。",
+    "descRaw": "以自身消亡为代价，把力量分给同族的字兵。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 5400,
+      "atk": 500,
+      "def": 250,
+      "res": 5,
+      "moveSpeed": 1,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "死亡时，使自身所在格与周围八格内种类为涤墨的友军获得1层【操戈增益】（攻击力+20%，防御力+50%，法术抗性+50%，最多2层；与操戈共享层数上限）",
+        "textRaw": "死亡时，使自身所在格与周围八格内种类为涤墨的友军获得1层【操戈增益】（攻击力+20%，防御力+50%，法术抗性+50%，最多2层；与操戈共享层数上限）",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10164_tjgxb_2",
+    "spine": "enemy_10164_tjgxb_2",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10165_tjggb": {
+    "key": "enemy_10165_tjggb",
+    "name": "挽弓",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "连射三箭的墨中弓手。",
+    "descRaw": "连射三箭的墨中弓手。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 7000,
+      "atk": 120,
+      "def": 100,
+      "res": 5,
+      "moveSpeed": 0.7,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 1.9,
+      "rawRangeRadius": 1.9,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "普通攻击为三连击，优先攻击自身周围八格内防御力最低的干员",
+        "textRaw": "普通攻击为三连击，优先攻击自身周围八格内防御力最低的干员",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10165_tjggb",
+    "spine": "enemy_10165_tjggb",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10165_tjggb_2": {
+    "key": "enemy_10165_tjggb_2",
+    "name": "挽弓·鸣",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "连射三箭的墨中弓手。",
+    "descRaw": "连射三箭的墨中弓手。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 9000,
+      "atk": 210,
+      "def": 150,
+      "res": 5,
+      "moveSpeed": 0.7,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 1.9,
+      "rawRangeRadius": 1.9,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "普通攻击为三连击，优先攻击自身周围八格内防御力最低的干员",
+        "textRaw": "普通攻击为三连击，优先攻击自身周围八格内防御力最低的干员",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10165_tjggb_2",
+    "spine": "enemy_10165_tjggb_2",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10166_tjgdlb": {
+    "key": "enemy_10166_tjgdlb",
+    "name": "拔山",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "以身作盾，替同族挡下伤害。",
+    "descRaw": "以身作盾，替同族挡下伤害。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 16000,
+      "atk": 800,
+      "def": 1300,
+      "res": 5,
+      "moveSpeed": 0.7,
+      "bat": 3.8,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 3,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "自身周围八格内的涤墨友军受到的伤害降低25%",
+        "textRaw": "自身周围八格内的涤墨友军受到的伤害降低25%",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10166_tjgdlb",
+    "spine": "enemy_10166_tjgdlb",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10166_tjgdlb_2": {
+    "key": "enemy_10166_tjgdlb_2",
+    "name": "拔山·盖",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "以身作盾，替同族挡下伤害。",
+    "descRaw": "以身作盾，替同族挡下伤害。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 800,
+      "def": 1550,
+      "res": 5,
+      "moveSpeed": 0.7,
+      "bat": 3.8,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 3,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "自身周围八格内的涤墨友军受到的伤害降低50%",
+        "textRaw": "自身周围八格内的涤墨友军受到的伤害降低50%",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10166_tjgdlb_2",
+    "spine": "enemy_10166_tjgdlb_2",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10167_tjgsfj_2": {
+    "key": "enemy_10167_tjgsfj_2",
+    "name": "挟潮·来",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "执笔成兵，潮起兵至。",
+    "descRaw": "执笔成兵，潮起兵至。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 9600,
+      "atk": 300,
+      "def": 100,
+      "res": 40,
+      "moveSpeed": 0.5,
+      "bat": 4.5,
+      "aspd": 100,
+      "rangeRadius": 2,
+      "rawRangeRadius": 2,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "优先攻击处于高台的干员",
+        "textRaw": "优先攻击处于高台的干员",
+        "format": "NORMAL"
+      },
+      {
+        "text": "每10秒在自身位置召唤2只操戈",
+        "textRaw": "每10秒在自身位置召唤2只操戈",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10167_tjgsfj_2",
+    "spine": "enemy_10167_tjgsfj_2",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10168_tjgly": {
+    "key": "enemy_10168_tjgly",
+    "name": "浪里玄条",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "潜行于墨色中的游鳞。",
+    "descRaw": "潜行于墨色中的游鳞。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 35000,
+      "atk": 550,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 1.2,
+      "bat": 2.5,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "常态隐匿，不优先成为干员的攻击目标，被阻挡时才会受到伤害",
+        "textRaw": "常态隐匿，不优先成为干员的攻击目标，被阻挡时才会受到伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "拥有25%的闪避",
+        "textRaw": "拥有25%的闪避",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10168_tjgly",
+    "spine": "enemy_10168_tjgly",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10168_tjgly_2": {
+    "key": "enemy_10168_tjgly_2",
+    "name": "浪里玄条·锈",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "潜行于墨色中的游鳞。",
+    "descRaw": "潜行于墨色中的游鳞。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 50000,
+      "atk": 650,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 1.2,
+      "bat": 2.5,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 1,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "常态隐匿，不优先成为干员的攻击目标，被阻挡时才会受到伤害",
+        "textRaw": "常态隐匿，不优先成为干员的攻击目标，被阻挡时才会受到伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "拥有50%的闪避",
+        "textRaw": "拥有50%的闪避",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10168_tjgly_2",
+    "spine": "enemy_10168_tjgly_2",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10169_tjgtsz": {
+    "key": "enemy_10169_tjgtsz",
+    "name": "云中墨贼",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "掠过敌阵的窃墨之贼。",
+    "descRaw": "掠过敌阵的窃墨之贼。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 10000,
+      "atk": 450,
+      "def": 450,
+      "res": 20,
+      "moveSpeed": 1.3,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 1.4,
+      "rawRangeRadius": 1.4,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "FLY",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【飞行单位】",
+        "textRaw": "【飞行单位】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "靠近我方干员后，偷取该干员25%的攻击力与25%的防御力（仅1次）",
+        "textRaw": "靠近我方干员后，偷取该干员25%的攻击力与25%的防御力（仅1次）",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": true,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10169_tjgtsz",
+    "spine": "enemy_10169_tjgtsz",
+    "attrPower": 3000,
+    "be": 3000
+  },
+  "enemy_10169_tjgtsz_2": {
+    "key": "enemy_10169_tjgtsz_2",
+    "name": "云中墨贼·蚀",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "掠过敌阵的窃墨之贼。",
+    "descRaw": "掠过敌阵的窃墨之贼。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 12000,
+      "atk": 550,
+      "def": 550,
+      "res": 10,
+      "moveSpeed": 1.3,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 1.4,
+      "rawRangeRadius": 1.4,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "FLY",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【飞行单位】",
+        "textRaw": "【飞行单位】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "靠近我方干员后，偷取该干员50%的攻击力与50%的防御力（仅1次）",
+        "textRaw": "靠近我方干员后，偷取该干员50%的攻击力与50%的防御力（仅1次）",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": true,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10169_tjgtsz_2",
+    "spine": "enemy_10169_tjgtsz_2",
+    "attrPower": 3000,
+    "be": 3000
+  },
+  "enemy_10170_wangz": {
+    "key": "enemy_10170_wangz",
+    "name": "霜劫",
+    "level": 0,
+    "rank": "NORMAL",
+    "handbookIndex": null,
+    "desc": "被击碎时绽放的霜墨。",
+    "descRaw": "被击碎时绽放的霜墨。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 9000,
+      "atk": 280,
+      "def": 300,
+      "res": 15,
+      "moveSpeed": 0.7,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 0,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "死亡时，根据自身周围八格内涤墨友军的数量，造成对应次数250%攻击力的范围爆炸伤害（最多3次）",
+        "textRaw": "死亡时，根据自身周围八格内涤墨友军的数量，造成对应次数250%攻击力的范围爆炸伤害（最多3次）",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10170_wangz",
+    "spine": "enemy_10170_wangz",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10058_cjfrog": {
+    "key": "enemy_10058_cjfrog",
+    "name": "旺财",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "吐出铜币的守财之兽。",
+    "descRaw": "吐出铜币的守财之兽。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 15000,
+      "atk": 1200,
+      "def": 700,
+      "res": 20,
+      "moveSpeed": 0.7,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 4,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "初始为有币状态：攻击造成攻击力200%的远程物理伤害，并额外选择1名干员",
+        "textRaw": "初始为有币状态：攻击造成攻击力200%的远程物理伤害，并额外选择1名干员",
+        "format": "NORMAL"
+      },
+      {
+        "text": "攻击后进入无币状态：仅进行近战攻击，造成攻击力100%的物理伤害",
+        "textRaw": "攻击后进入无币状态：仅进行近战攻击，造成攻击力100%的物理伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "30秒后重新进入有币状态",
+        "textRaw": "30秒后重新进入有币状态",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10058_cjfrog",
+    "spine": "enemy_10058_cjfrog",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10058_cjfrog_2": {
+    "key": "enemy_10058_cjfrog_2",
+    "name": "招财",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "吐出金币的守财之兽。",
+    "descRaw": "吐出金币的守财之兽。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 1600,
+      "def": 1000,
+      "res": 20,
+      "moveSpeed": 0.7,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 4,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "初始为有币状态：攻击造成攻击力200%的远程物理伤害，并额外选择1名干员",
+        "textRaw": "初始为有币状态：攻击造成攻击力200%的远程物理伤害，并额外选择1名干员",
+        "format": "NORMAL"
+      },
+      {
+        "text": "攻击后进入无币状态：仅进行近战攻击，造成攻击力100%的物理伤害",
+        "textRaw": "攻击后进入无币状态：仅进行近战攻击，造成攻击力100%的物理伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "20秒后重新进入有币状态",
+        "textRaw": "20秒后重新进入有币状态",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10058_cjfrog_2",
+    "spine": "enemy_10058_cjfrog_2",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10052_cjshld": {
+    "key": "enemy_10052_cjshld",
+    "name": "“果腹”",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "更容易受到攻击。",
+    "descRaw": "更容易受到攻击。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 5000,
+      "atk": 550,
+      "def": 4000,
+      "res": 90,
+      "moveSpeed": 0.5,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 4,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10052_cjshld",
+    "spine": "enemy_10052_cjshld",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10052_cjshld_2": {
+    "key": "enemy_10052_cjshld_2",
+    "name": "“饱食”",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "更容易受到攻击。",
+    "descRaw": "更容易受到攻击。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 7500,
+      "atk": 800,
+      "def": 4000,
+      "res": 90,
+      "moveSpeed": 0.5,
+      "bat": 3,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 4,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10052_cjshld_2",
+    "spine": "enemy_10052_cjshld_2",
+    "attrPower": 6620,
+    "be": 6620
+  },
+  "enemy_10054_cjhot_2": {
+    "key": "enemy_10054_cjhot_2",
+    "name": "飘香",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": null,
+    "desc": "持续对周围造成法术伤害和灼燃损伤，免疫停顿",
+    "descRaw": "持续对周围造成法术伤害和灼燃损伤，免疫停顿",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 20000,
+      "atk": 200,
+      "def": 325,
+      "res": 60,
+      "moveSpeed": 0.8,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 1.6,
+      "rawRangeRadius": 1.6,
+      "blockCnt": 1,
+      "massLevel": 3,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "不进行普通攻击，停顿免疫",
+        "textRaw": "不进行普通攻击，停顿免疫",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {},
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "beFactor": 1,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10054_cjhot_2",
+    "spine": "enemy_10054_cjhot_2",
+    "attrPower": 6620,
+    "be": 6620
+  }
+}

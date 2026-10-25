@@ -261,7 +261,8 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
         const dmap = typeof m.deployMapFor === 'function' ? m.deployMapFor(ps) : ps.deployMap();
         const dfield = typeof m.deployFieldOf === 'function' ? m.deployFieldOf(ps) : 'normal';
         const pos = placeClass(ps, (ps.gd || gd).chess(elite.id));
-        const want = mergeTile([...tiles.keys()].map((key) => ({ key })), (r, c) => canPlace(dmap, pos, r, c, m.layout, dfield), m.layout, dfield);
+        const dlay = typeof m.deployLayoutOf === 'function' ? m.deployLayoutOf(ps) : m.layout;
+        const want = mergeTile([...tiles.keys()].map((key) => ({ key })), (r, c) => canPlace(dmap, pos, r, c, dlay, dfield), dlay, dfield);
         if (want) {
           if (loc.area !== 'board' || loc.key !== want.key) fail(`${id}: the elite of ${baseId} went to ${loc.area} ${loc.key || ''}, expected the deployed copy's tile ${want.key}`);
           else if (pieceDir(elite) !== tiles.get(want.key)) fail(`${id}: the elite of ${baseId} faces ${pieceDir(elite)}, its copy faced ${tiles.get(want.key)}`);

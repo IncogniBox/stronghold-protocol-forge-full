@@ -115,6 +115,7 @@ import { EquipReplaceDialog, replaceRequest, replaceIntent } from '../ui/equipRe
 import { pauseAvailable, isPaused, frozenNow } from '../ui/matchStatus.js';
 import { pieceTile, boardGeo } from '../render/drag.js';
 import { layoutOf, mapRectOf } from '../render/layout.js';
+import { bossAreaLayout } from '../../../shared/layout.js';
 import { FOLD_CAMERA_MS } from '../render/app/tune.js';
 import {
   phaseMode, phaseBanner, isCombatPhase, showDeadPill, isBossPhase, placementContext, canPlace, boardTargets, dropIntent,
@@ -122,7 +123,7 @@ import {
   snapHud, activeBubbles, shortcutFor, shortcutBlocked, prepShortcutsSuspended, closesOnFieldPress, phaseTotalSeconds, homeFieldId, ownFieldId, normalizeSp, normalizePersonalChoice, sortedPlayers,
   terrainInfo, deviceInfo, deviceTipAt, noteDeviceUnits, deviceUnitsForEntry,
   countdownState, shopBlockReason, stageOverrides, effectiveStage, watchTarget, dropFailureReason,
-  previewEnemyKey, prepCamera, prepCameraFor, foldCamera, deployFoldsShop, deployZoomStep, deployZoomRemember, prepDeployCamera, deployFieldOf, fieldTile, panelSide, panelSlots, bondPopupPlace, unitLoadout, deployedRecord,
+  previewEnemyKey, prepCamera, prepCameraFor, foldCamera, deployFoldsShop, deployZoomStep, deployZoomRemember, prepDeployCamera, deployFieldOf, deployLayoutOf, fieldTile, panelSide, panelSlots, bondPopupPlace, unitLoadout, deployedRecord,
   mergeTarget, modeOffBonds, removedBondSet, readyFundsPrompt, readyShopFold, ownerBandId, ownDiyRecord, ownStandIn, roundStartReplay,
 } from '../ui/gameLogic.js';
 import { toast } from '../ui/toasts.js';
@@ -369,6 +370,8 @@ function MatchScreen() {
   // the field the own pieces are deployed on: the own board, or the player's half of the boss field in a boss round's
   // prep (user playtest #5 item 7: legality and the legal-tile highlights read THOSE tiles, like the server)
   const deployField = deployFieldOf(pub, myId, stageLayout);
+  // 第 2… 块 boss 场地：这位棋手自己的那条部署矩形（不镜像）；其余同 stageLayout
+  const deployLayout = deployLayoutOf(pub, myId, stageLayout);
   // the own pieces' records: a DIY slot the player filled is its 自选 operator (0.2.0, m.private.diy — position, range,
   // name; gameLogic/diy.js), every other chess its data record
   const ownChess = (id) => { const c = gd.chess(id); return ownDiyRecord(c, live.current.priv, { chess: data.get('chess'), backups: data.get('backups') }) || c; };
@@ -379,10 +382,10 @@ function MatchScreen() {
   // `data.locale()`: getChess reads the localized record. Without it a language switch mid-match keeps this context,
   // and anything that memoizes on it keeps the previous language's placement (GitHub #676).
   const placeCtx = useMemo(() => placementContext({
-    priv, stage: gd.stage(pub?.stageId), editable, field: deployField,
+    priv, stage: gd.stage(pub?.stageId), editable, field: deployField, layout: deployLayout,
     getChess: (id) => { const c = gd.chess(id); return ownDiyRecord(c, priv, { chess: data.get('chess'), backups: data.get('backups') }) || c; },
     getToken: gd.token, getItem: gd.item, getEffect: gd.effect, backups: gd.backups, morphMode,
-  }), [priv, pub?.stageId, editable, gd.ready, deployField, data.locale(), morphMode]);
+  }), [priv, pub?.stageId, editable, gd.ready, deployField, deployLayout, data.locale(), morphMode]);
   live.current = { pub, priv, field, view, editable, hasPersonalChoice, placeCtx, watching, watchWho, watchingOther, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused };
 
   // ---- camera: every request goes through setCam, which remembers it for the pen's way back -----------------------
@@ -396,7 +399,7 @@ function MatchScreen() {
   // setCam when the key changes — with kind:side alone, R15's prep matched R14's recorded key, early-returned,
   // and the prep board stayed on whatever camera the intermission had left (the normal field) until the battle
   // started (owner report, 2026-10-19: 隐秘核心休整期画回普通场地、开战才回 boss 场地).
-  const prepCamKey = `${pub?.round ?? 0}:${prepCam.kind}:${prepCam.opts.side}`;
+  const prepCamKey = `${pub?.round ?? 0}:${prepCam.kind}:${prepCam.opts.side}:${prepCam.opts.area ?? 0}`;
   const prepCamSeen = useRef(prepCamKey);                // the prep camera last requested
   const camRef = useRef({ kind: 'prep', opts: { rect: { ...GEO.NORMAL_RECT }, side: 'L' } });
   // the previous frame applied the deploy zoom, so turning 设置「部署时收起商店」 off mid-drag can give it back.
@@ -524,7 +527,7 @@ function MatchScreen() {
   // (render/prepfield.js toDisp), which is exactly gameLogic.fieldTile.
   live.current.terrainStage = ownView ? ownStage : baseStage;
   live.current.terrainTile = showPrep && deployField !== 'normal'
-    ? (row, col) => fieldTile(deployField, row, col, layoutOf(ownView ? ownStage : baseStage))
+    ? (row, col) => fieldTile(deployField, row, col, deployLayout || layoutOf(ownView ? ownStage : baseStage))
     : (row, col) => [row, col];
   // The underframe's 出售 / 销毁 plates are tinted through their official sprite as a CSS mask, and a mask image that
   // has not loaded paints nothing (the plate would show its dark backing on the first tap). Warm the ~1 KB sprites as
@@ -623,8 +626,14 @@ function MatchScreen() {
     // a lone player's boss field (solo modes, the odd player of a co-op Final Assault: the `_s` templates route every
     // enemy to the left objective) is framed on its own half like the ‹ › half view; pairs start on 全景
     const lone = kind === 'boss' && members.length === 1;
+    // 第 2… 块 boss 场地：这块场地自己的布局（战斗/整备矩形换成它的）。休整期还要按 seat 取这人的部署矩形；
+    // 战斗帧没有 seat（两位棋手同场），seat 0 的布局在渲染上就够了 —— 取景看的是 battle.boss。
+    const areaLay = Number.isInteger(field.area) && field.area > 0
+      ? bossAreaLayout(stageLayout, field.area, Number.isInteger(field.seat) ? field.seat : 0)
+      : null;
     setCam(kind, helperHalf ? layerCamera(field, helperHalf, side)
-      : lone ? { rect: field.rect, side, half: true } : { rect: field.rect, side, ...(field.prep ? { shop: false } : {}) });
+      : lone ? { rect: field.rect, side, half: true, ...(areaLay ? { layout: areaLay, area: field.area } : {}) }
+        : { rect: field.rect, side, ...(field.prep ? { shop: false } : {}), ...(areaLay ? { layout: areaLay, area: field.area } : {}) });
     audio.setFieldUnits(field.units);
     if (early && early.length) {
       // replay state-bearing events only (a burst of stale hit sparks / damage numbers would look wrong)

@@ -106,6 +106,11 @@ export function packImages(themeId = DEFAULT_BOARD_THEME) {
     if (a.wood) out.wood = [grp, a.wood[0]];
     if (a.common) out.common = [grp, a.common];
     if (a.commonE) out.commonE = [grp, a.commonE];
+    // the theme's device metalness map (themes.js `atlas.commonM`): the device plates' reflectivity
+    if (a.commonM) out.commonM = [grp, a.commonM];
+    // the theme's radial fade mask (themes.js `atlas.fade`): scene.js blends it over the board rim
+    if (a.fade) out.fade = [grp, a.fade];
+    if (a.fadeE) out.fadeE = [grp, a.fadeE];
   }
   return out;
 }
@@ -185,16 +190,73 @@ export function loadBoardPack(assets, themeId = DEFAULT_BOARD_THEME) {
       const m = text ? parseObj(text) : null;
       if (m) meshes.gate[slot] = { mesh: m, material: rec && Array.isArray(rec.materials) ? rec.materials[0] || null : null };
     }));
+    // A theme whose backdrop is a MESH (themes.js `bgMesh`, the 辞岁行 battlefields' sky sphere): load that group's
+    // prefab (it carries the node's scale) and the mesh it names. The shared ground plane stays as the fallback when the
+    // group is not installed — a backdrop is never worth failing the whole pack over.
+    if (bt.bgMesh) {
+      const [g, node] = bt.bgMesh;
+      const pu = url(g, 'prefab');
+      const doc = pu ? await fetchJson(pu) : null;
+      const rec = Array.isArray(doc) ? doc.find((p) => p && p.name === node) : null;
+      const mu = rec && typeof rec.mesh === 'string' ? url(g, rec.mesh) : null;
+      const text = mu ? await fetchText(mu) : null;
+      const m = text ? parseObj(text) : null;
+      if (m) meshes.bgSphere = { mesh: m, prefab: rec };
+    }
+    // The field's own prop meshes (themes.js `props`): its `props` record lists the OBJs to load, and the stage's
+    // hand-placed decorations reference them by id (decor.js kind 'prop'). Missing group → no props, nothing fails.
+    let props = null;
+    if (bt.props) {
+      const pu = url(bt.props, 'props');
+      const doc = pu ? await fetchJson(pu) : null;
+      const list = Array.isArray(doc && doc.props) ? doc.props : [];
+      if (list.length) {
+        props = {};
+        await Promise.all(list.map(async (p) => {
+          if (!p || typeof p.id !== 'string') return;
+          // the manifest keys the mesh by its id (the path already names the .obj), so try the id first
+          const ou = url(bt.props, p.id) || (typeof p.file === 'string' ? url(bt.props, p.file) : null);
+          const text = ou ? await fetchText(ou) : null;
+          const m = text ? parseObj(text) : null;
+          if (m) props[p.id] = m;
+        }));
+      }
+    }
+    // 主题的「地图场景背景」（themes.js `bgScene`）：官方地图远景的网格组，prefab 里一个节点一件（按材质分）。
+    // 组不存在时就没有远景，不影响棋盘本身。
+    if (bt.bgScene) {
+      const pu = url(bt.bgScene, 'prefab');
+      const doc = pu ? await fetchJson(pu) : null;
+      const list = Array.isArray(doc) ? doc : [];
+      if (list.length) {
+        const scene = [];
+        await Promise.all(list.map(async (rec) => {
+          if (!rec || typeof rec.mesh !== 'string') return;
+          const mu = url(bt.bgScene, rec.mesh);
+          const text = mu ? await fetchText(mu) : null;
+          const m = text ? parseObj(text) : null;
+          if (m) scene.push({ mesh: m, material: Array.isArray(rec.materials) ? rec.materials[0] || null : null });
+        }));
+        if (scene.length) {
+          meshes.bgScene = scene;
+          meshes.bgSceneScale = Number.isFinite(bt.bgSceneScale) ? bt.bgSceneScale : 1;
+          meshes.bgSceneRot = Number.isFinite(bt.bgSceneRot) ? bt.bgSceneRot : 0;
+        }
+      }
+    }
     return {
       key: `${dUrl}#${tiles?.version || 0}`,
-      theme: id, mood: bt.mood, themeAtlas: !!bt.atlas,
+      theme: id, mood: bt.mood, themeAtlas: !!bt.atlas, snow: bt.snow === true,
       // The theme's own high-ground material, as the FULL rect of its image: raised tiles whose surface is in `woodOn`
       // sample it instead of the tile atlas (layout.js `wood` bucket + scene.js woodMaterial). null when it has none.
       woodUv: bt.atlas && bt.atlas.wood && images.wood
         ? { src: 'wood', rect: [0, 0, bt.atlas.wood[1], bt.atlas.wood[2]], rot: 0, flipX: false, sw: bt.atlas.wood[1], sh: bt.atlas.wood[2] }
         : null,
       woodOn: bt.atlas && bt.atlas.woodOn ? bt.atlas.woodOn : null,
+      // 木板材质的提亮系数（themes.js `atlas.woodTint`）：图本身太暗的主题靠它把木框/木摆件拉回可见
+      woodTint: bt.atlas && Array.isArray(bt.atlas.woodTint) ? bt.atlas.woodTint : null,
       images, meshes, tiles: isObj(tiles) ? tiles : null,
+      props,
       // A theme with its own atlas carries its own rect table (themes.js): the autochess one is measured against a
       // 2048² image and would sample the wrong pixels of a 1024² theme atlas.
       uv: bt.atlas ? resolveUvTable({ board3d: bt.atlas.surfaces }, bt.atlas.sources) : resolveUvTable(isObj(tiles) ? tiles : null),

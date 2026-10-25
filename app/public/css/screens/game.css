@@ -41,8 +41,8 @@
 .gm__vignette {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(6, 9, 8, .78) 0%, rgba(6, 9, 8, 0) 18%),
-    linear-gradient(0deg, rgba(6, 9, 8, .6) 0%, rgba(6, 9, 8, 0) 22%),
+    linear-gradient(180deg, rgba(6, 9, 8, .3) 0%, rgba(6, 9, 8, 0) 18%),
+    linear-gradient(0deg, rgba(6, 9, 8, .3) 0%, rgba(6, 9, 8, 0) 22%),
     radial-gradient(120% 90% at 45% 50%, transparent 60%, rgba(0, 0, 0, .5) 100%);
 }
 .gm__loading { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; pointer-events: none; }

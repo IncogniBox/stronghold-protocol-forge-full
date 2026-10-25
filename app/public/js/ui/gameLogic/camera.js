@@ -2,7 +2,7 @@
 
 import { PHASE } from '../../../../shared/constants.js';
 import { fieldTile as layoutFieldTile, boardTile as layoutBoardTile, mapRectOf } from '../../render/layout.js';
-import { OFFICIAL_LAYOUT, isDualLayout } from '../../../../shared/layout.js';
+import { OFFICIAL_LAYOUT, isDualLayout, bossAreaCount, bossAreaLayout, bossAreaPrepRect } from '../../../../shared/layout.js';
 import { int, isObj } from './shared.js';
 
 /** Server-owned random pairs. Seat inference is only for an older server without the field. */
@@ -15,6 +15,17 @@ function prepPair(pub, myId) {
   const ids = alive.sort((a, b) => int(a.seat, 99) - int(b.seat, 99)).map(p => p.playerId);
   const i = ids.indexOf(myId);
   return ids.slice(i - i % 2, i - i % 2 + 2);
+}
+
+/**
+ * 这位棋手在第几块 boss 场地（`layout.bossAreas` 的下标；第 1 块 = 0）与它在这块场地里的座位（0 / 1）—— 与服务器
+ * `Match.bossAreaOf` 同一条：`pub.bossPairs` 的顺序就是分场顺序，配对内第二位坐 1 号位。
+ * @returns {{ index: number, seat: number }}
+ */
+export function bossAreaOfPair(pub, myId, pair = prepPair(pub, myId), idx = pair.indexOf(myId)) {
+  const pairs = Array.isArray(pub?.bossPairs) ? pub.bossPairs : [];
+  const index = pairs.findIndex((g) => Array.isArray(g) && g.includes(myId));
+  return { index: index >= 0 ? index : idx >= 0 ? Math.floor(idx / 2) : -1, seat: idx === 1 ? 1 : 0 };
 }
 
 /**
@@ -40,9 +51,25 @@ export function prepCamera(pub, myId, layout = null) {
   const r = pub?.round;
   const bossRound = Number.isInteger(r) && r > 0 && (r === pub.bossRound || r === pub.hiddenRound);
   if (bossRound) {
-    const idx = prepPair(pub, myId).indexOf(myId);
+    const pair = prepPair(pub, myId);
+    const idx = pair.indexOf(myId);
     // an eliminated / unknown player owns no board of its own on the boss field: the ordinary prep
-    if (idx >= 0) return { kind: 'bossPrep', opts: { side: idx % 2 === 1 ? 'R' : 'L' } };
+    if (idx >= 0) {
+      const L = layout || OFFICIAL_LAYOUT;
+      const { index: raw, seat } = bossAreaOfPair(pub, myId, pair, idx);
+      // 组比声明的地块多（远超 8 人的房间）：与服务器 Match.bossAreaOf 同一条 —— 多出来的组退回第 1 块（左右两半、镜像）
+      const index = raw < bossAreaCount(L) ? raw : 0;
+      // 第 2… 块 boss 场地：每人一条自己的矩形（`bossAreaLayout`），整块区域一个取景 ⇒ side 恒 'L'、rect 是这块场地的
+      // 整备矩形（地图声明的「boss 整备矩形」——它包含战斗矩形，比它多出整备行/整备列）；缺省同战斗矩形。
+      if (index > 0) {
+        return {
+          kind: 'bossPrep',
+          opts: { side: 'L', rect: bossAreaPrepRect(L, index), layout: bossAreaLayout(L, index, seat), area: index },
+        };
+      }
+      // 第 1 块照旧是左右两个半场：返回形状与从前逐字节相同（不带 area 键）
+      return { kind: 'bossPrep', opts: { side: idx % 2 === 1 ? 'R' : 'L' } };
+    }
   }
   // 普通带的左右两半（shared/layout.js `isDualLayout`）：同一套按座位两两一组的配对，第 1 位 'R'（与服务器
   // Match.normalSideOf 同一条规则）。单块普通带的图恒 'L'，revert 到历史那条 `{ rect: battle.prep, side: 'L' }`。
@@ -212,10 +239,19 @@ export function prepDeployCamera(s) {
  */
 export function deployFieldOf(pub, myId, layout = null) {
   const cam = prepCamera(pub, myId, layout);
-  if (cam.kind === 'bossPrep') return cam.opts.side === 'R' ? 'bossR' : 'bossL';
+  if (cam.kind === 'bossPrep') return cam.opts.area > 0 ? 'bossL' : cam.opts.side === 'R' ? 'bossR' : 'bossL';
   // 一张左右两半的图：普通回合也在自己的半场上（服务器 Match.deployFieldOf → 'normalL' / 'normalR'）
   if (isDualLayout(layout)) return cam.opts.side === 'R' ? 'normalR' : 'normalL';
   return 'normal';
+}
+
+/**
+ * 这位棋手自己的布局：第 2… 块 boss 场地每人一条矩形（`prepCamera` 已经算好），其余就是地图自己的布局
+ * （服务器 `Match.deployLayoutOf` 同一条）。放置合法性（placementContext → deployMap）与棋盘几何都读它。
+ */
+export function deployLayoutOf(pub, myId, layout = null) {
+  const cam = prepCamera(pub, myId, layout);
+  return cam.opts && cam.opts.layout ? cam.opts.layout : layout;
 }
 
 /** The deploy fields whose board is a HALF of a band — the boss halves, and a two-half map's ordinary halves. */

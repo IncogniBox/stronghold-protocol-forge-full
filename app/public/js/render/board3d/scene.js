@@ -26,12 +26,13 @@
 // The key light's shadow map is rendered only when the geometry changes (autoUpdate off).
 
 import { buildBoard, objToBoard, boxProjectUV, DEVICE_H, AREAS } from './layout.js';
+import { buildDecor } from './decor.js';
 import { layoutOf, mapSize } from '../layout.js';
 import { surfaceUV } from './atlas.js';
 import {
   focusUniforms, makeTexture, boardMaterial, woodMaterial, glassMaterial, decalMaterial, pipeMaterial, unlitMaterial, gateMaterial, glowMaterial,
   waterMaterial, mireMaterial, infectionMaterial, smogMaterial, dashTexture, environmentMap, sceneMaterial, sceneWaterDecalMaterial,
-  sceneEnvTexture, applyWaterMaterial, trapMaterial,
+  sceneEnvTexture, applyWaterMaterial, trapMaterial, softTexture,
 } from './materials.js';
 import { syncThreeCamera } from '../projection.js';
 import { mergeSceneChunks, sceneMaterialKey, sceneWaterInfo, isSceneWater } from './load.js';
@@ -135,6 +136,50 @@ export function extendPlane(src, cx, cy, k = 1) {
   return { ...src, position: pos, uv };
 }
 
+/**
+ * 岛缘渐隐的材质（themes.js `atlas.fade`，官方是 MT_SkyMirror_Fade：_ALPHABLEND_ON + 一张径向蒙版 + 一圈 _Emission）。
+ *
+ * 蒙版是「白心黑边」，所以透明度取 **1 − 亮度**：中心全透明（棋盘照常），越靠边越盖上雾色，岛缘就融进背景，
+ * 而不是一圈硬边悬崖。遮罩自己的正方形边界也按半径削掉（否则四角会留下一条硬直线）。
+ * `mapE` 是同一材质的发光图（`atlas.fadeE`）：渐隐带里那圈侧光就来自它，颜色叠加在雾色上而不是纯黑。
+ *
+ * @param {any} THREE
+ * @param {any} map the theme's fade mask (a non-sRGB texture)
+ * @param {number} color the fog colour the rim dissolves into
+ * @param {any} [mapE] the fade material's emission map (optional)
+ */
+function fadeMaterial(THREE, map, color, mapE) {
+  // 没有发光图时给一张 1×1 黑图：采样器不能是 null，而黑色正好等于「没有发光」
+  const black = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+  black.needsUpdate = true;
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: map }, mapE: { value: mapE || black },
+      color: { value: new THREE.Color(color) }, uStrength: { value: 0.94 }, uGlow: { value: 0.7 },
+      // 蒙版的透明区（白心）在世界里的半边长，单位 tile。它决定「岛周围多大一片不被雾盖」——四边形可以铺满整幅背景，
+      // 白心大小却与四边形尺寸无关，由 _buildFade 按岛的大小给。
+      uCenter: { value: new THREE.Vector2(0, 0) }, uHalf: { value: 36 },
+    },
+    transparent: true, depthWrite: false,
+    vertexShader: 'varying vec2 vUv; varying vec3 vWorld; void main() { vUv = uv; vWorld = (modelMatrix * vec4(position, 1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `
+      uniform sampler2D map; uniform sampler2D mapE; uniform vec3 color; uniform float uStrength; uniform float uGlow;
+      uniform vec2 uCenter; uniform float uHalf;
+      varying vec2 vUv; varying vec3 vWorld;
+      void main() {
+        // The mask stores its opacity in the alpha channel (centre A=0, edge A≈0.95); RGB is a fixed dark purple and
+        // must not be read as brightness.
+        vec2 raw = (vWorld.xy - uCenter) / (2.0 * uHalf) + 0.5;
+        float inside = step(0.0, raw.x) * step(raw.x, 1.0) * step(0.0, raw.y) * step(raw.y, 1.0);
+        vec2 uv = clamp(raw, 0.0, 1.0);
+        float a = texture2D(map, uv).a * uStrength;
+        // Feather the outermost ring so the quad's edge never shows as a hard line.
+        a *= 1.0 - smoothstep(0.94, 1.0, length(vUv - 0.5) * 2.0);
+        gl_FragColor = vec4(color + texture2D(mapE, uv).rgb * uGlow * inside, a);
+      }`,
+  });
+}
+
 /** Quarter turns (counter-clockwise about +z) that point the wind device's outlet (−x in the mesh) along `dir`. */
 export const DIR_TURNS = Object.freeze({ LEFT: 0, DOWN: 1, RIGHT: 2, UP: 3 });
 
@@ -200,12 +245,15 @@ export class BoardScene {
     this.tex = {
       D: makeTexture(T, img.D, { aniso }), N: makeTexture(T, img.N, { srgb: false, aniso }), R: makeTexture(T, img.R, { srgb: false, aniso }),
       E: makeTexture(T, img.E, { aniso }), common: makeTexture(T, img.common, { aniso }), commonE: makeTexture(T, img.commonE, { aniso }),
+      commonM: makeTexture(T, img.commonM, { srgb: false, aniso }),
       BG: makeTexture(T, img.BG, { aniso }), wind: makeTexture(T, img.wind, { aniso }), gate: makeTexture(T, img.gate, { srgb: false }),
       wood: makeTexture(T, img.wood, { aniso }),   // a theme's own high-ground material (pack.woodUv)
       waterN: makeTexture(T, img.waterN, { srgb: false, repeat: true }), caustics: makeTexture(T, img.caustics, { srgb: false, repeat: true }),
       noise: makeTexture(T, img.noise, { srgb: false, repeat: true }),
       platform: makeTexture(T, img.platform, { aniso }),
       crate: makeTexture(T, img.crate, { aniso }),
+      fade: makeTexture(T, img.fade, { srgb: false, aniso }),
+      fadeE: makeTexture(T, img.fadeE, { aniso }),
     };
     if (this.tex.BG) { this.tex.BG.wrapS = T.MirroredRepeatWrapping; this.tex.BG.wrapT = T.MirroredRepeatWrapping; }
     this.mat = {
@@ -215,6 +263,8 @@ export class BoardScene {
       decal: this.tex.common ? decalMaterial(T, this.tex, this.focus) : null,
       pipe: pipeMaterial(T, this.focus),
       bg: this.tex.BG ? unlitMaterial(T, this.tex.BG, new T.Color().setScalar(BG_LEVEL)) : new T.MeshBasicMaterial({ color: 0x1a1d1f }),
+      // 岛缘渐隐：主题自带一张径向蒙版时，把它按「透明 = 亮、黑 = 不透明」贴到棋盘下方（见 _buildBackground）
+      fade: this.tex.fade ? fadeMaterial(T, this.tex.fade, MOOD?.fog ?? LIGHTING.fog.color, this.tex.fadeE) : null,
       wind: this.tex.wind ? unlitMaterial(T, this.tex.wind) : null,
       gateStartAdd: this.tex.gate ? gateMaterial(T, this.tex.gate, { additive: true, tint: GATE_TINT.start.rgb }) : null,
       gateEndAdd: this.tex.gate ? gateMaterial(T, this.tex.gate, { additive: true, tint: GATE_TINT.end.rgb }) : null,
@@ -229,6 +279,16 @@ export class BoardScene {
       crate: this.tex.crate ? trapMaterial(T, this.tex.crate, this.focus, pack?.materials?.trap?.MT_trap_1105_accrate
         || { floats: { _Ambient: 0.809, _Diffuse: 0.271 } }, LIGHTING.key.dir) : null,
     };
+    // 岛外的一层灰白霭：与岛缘渐隐同一张蒙版（同一白心/黑边形状），只换成灰白低不透明度，把远景的黑雾提成发白的雾霭
+    if (this.mat.fade) {
+      this.mat.fadeVeil = fadeMaterial(T, this.tex.fade, 0xb8c0c8, null);
+      this.mat.fadeVeil.uniforms.uStrength.value = 0.35;
+      this.mat.fadeVeil.uniforms.uGlow.value = 0;
+    }
+    // A theme whose plank image is far darker than its tile atlas (天镜阁's wood averages 20/255) needs a material gain,
+    // or the wooden frame and every wood-shaded prop (fences, lantern pedestals) read as black under the theme's own
+    // key light. The tint lives on the shared wood material, so the frame and the props come back together.
+    if (this.mat.wood && Array.isArray(this.pack?.woodTint)) this.mat.wood.color.setRGB(...this.pack.woodTint);
     // lights
     const hemi = new T.HemisphereLight(HEMI_SKY, HEMI_GROUND, LIGHTING.hemi.intensity);
     hemi.position.set(0, 0, 1);
@@ -247,6 +307,8 @@ export class BoardScene {
     this.root = new T.Group();
     this.dynamic = new T.Group();
     this.scene.add(this.root, this.dynamic);
+    // 主题要求下的实时飘雪（themes.js `snow`）
+    if (pack?.snow) this._buildSnow();
     this.stageKey = null;
     this.stage = null;
     this.scenePacks = new Map();   // stage id → official scene pack (setScenePack)
@@ -304,6 +366,60 @@ export class BoardScene {
       ch.traverse?.((o) => { if (o.geometry) o.geometry.dispose(); });
     }
     this.meshes = {};
+  }
+
+  /**
+   * 实时飘雪（themes.js `snow`，天镜阁是雪景战场）：一层 Points，每帧下落 + 轻微横向摆动，落到脚下就回到顶部。
+   * 放在 `dynamic` 组里，重建棋盘（换区 / 换图）时不会被清掉。
+   */
+  _buildSnow() {
+    const T = this.THREE;
+    if (!T?.Points || !T?.PointsMaterial || !T?.BufferGeometry) return null;
+    const N = 1200;
+    const pos = new Float32Array(N * 3);
+    const vel = new Float32Array(N);
+    const phase = new Float32Array(N);
+    // 雪只下在棋盘这一小片（局部坐标，整层跟着当前场地的中心走）
+    for (let i = 0; i < N; i++) {
+      pos[i * 3] = -16 + Math.random() * 32;
+      pos[i * 3 + 1] = -12 + Math.random() * 24;
+      // 雪落在棋盘**下面**这一层：棋盘会把它挡住，只在场地的外圈看得到
+      pos[i * 3 + 2] = -14 + Math.random() * 13;
+      vel[i] = 1.0 + Math.random() * 1.8;
+      phase[i] = Math.random() * Math.PI * 2;
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+    const mat = new T.PointsMaterial({
+      size: 0.16, map: softTexture(T, 32) || null, color: 0xffffff,
+      transparent: true, opacity: 0.9, depthWrite: false, sizeAttenuation: true, fog: false,
+    });
+    const pts = new T.Points(geo, mat);
+    pts.frustumCulled = false;
+    pts.renderOrder = 8;
+    this.dynamic.add(pts);
+    this.snow = { pts, vel, phase };
+    return pts;
+  }
+
+  /** 每帧推进雪：`dt` 秒，落到 y=-20 以下回到 y=62。 */
+  _stepSnow(dt) {
+    const s = this.snow;
+    if (!s || dt <= 0) return;
+    // 整层雪跟着当前场地的中心（局部坐标范围只有棋盘大小）
+    if (this.boardCenter) s.pts.position.set(this.boardCenter[0], this.boardCenter[1], 0);
+    const arr = s.pts.geometry.attributes.position.array;
+    const t = this.time;
+    for (let i = 0; i < s.vel.length; i++) {
+      const o = i * 3;
+      arr[o + 1] -= s.vel[i] * dt;
+      arr[o] += Math.sin(t * 0.8 + s.phase[i]) * dt * 0.35;
+      if (arr[o + 1] < -12) {
+        arr[o + 1] = 12;
+        arr[o] = -16 + Math.random() * 32;
+      }
+    }
+    s.pts.geometry.attributes.position.needsUpdate = true;
   }
 
   /** The old atlas box: kept for mounds and missing-art installs (including the procedural-box fallback). */
@@ -369,7 +485,9 @@ export class BoardScene {
   setStage(stage) {
     if (this.destroyed) return;
     const official = stage ? this.scenePacks.get(stage.id) || null : null;
-    const key = stage ? `${stage.id || ''}|${official ? official.key : ''}|${(stage.rows || []).join('/')}|${JSON.stringify((stage.devices || []).map((d) => [d.key, d.pos, d.active, d.dir]))}` : '';
+    // `decor` is part of the key: the editor's manual decorations are hand-placed, so adding / moving / removing one must
+    // rebuild the meshes even though the grid and the devices are unchanged (otherwise the 3D preview keeps the old set).
+    const key = stage ? `${stage.id || ''}|${official ? official.key : ''}|${(stage.rows || []).join('/')}|${JSON.stringify((stage.devices || []).map((d) => [d.key, d.pos, d.active, d.dir]))}|${JSON.stringify(stage.decor || [])}` : '';
     if (key === this.stageKey) return;
     this.stageKey = key;
     this.stage = stage || null;
@@ -414,7 +532,27 @@ export class BoardScene {
     this._buildGates(board);
     this._buildEdges(board);
     this._buildTerrain(board);
+    // the stage's manual decorations (editor-authored `decor`): nothing is placed automatically
+    const decor = buildDecor(stage, board.grid, this.pack?.uv || null, this.pack?.props || null);
+    if (decor) {
+      const T3 = this.THREE;
+      const dm = this.decorMats || (this.decorMats = {
+        glow: new T3.MeshBasicMaterial({ color: 0xffa24e }),
+        mark: new T3.MeshBasicMaterial({ color: 0xdfe6ee }),
+      });
+      if (decor.board) M.decorBoard = this._mesh(decor.board, this.mat.board, { cast: false });
+      if (decor.wood) M.decorWood = this._mesh(decor.wood, this.mat.wood || this.mat.board);
+      if (decor.glow) M.decorGlow = this._mesh(decor.glow, dm.glow, { cast: false });
+      if (decor.mark) M.decorMark = this._mesh(decor.mark, dm.mark, { cast: false });
+    }
+    // 飘雪层的中心跟着当前场地走（局部坐标只在棋盘附近）
+    if (board.bounds) {
+      this.boardCenter = [(board.bounds.x0 + board.bounds.x1) / 2, (board.bounds.y0 + board.bounds.y1) / 2];
+      this.boardBox = board.bounds;
+    }
     if (!this.official) this._buildBackground(board);
+    // 岛缘渐隐对官方场景的战场同样要建（位置在远景与棋盘之间，见 _buildFade）
+    this._buildFade(board);
     this._fitShadow(board);
     this.renderer.shadowMap.needsUpdate = true;
   }
@@ -642,23 +780,106 @@ export class BoardScene {
     const B = LIGHTING.bg;
     // the plane and its shadow sit under the middle of the MAP's own window (a big map's island is bigger)
     const cx = (board.bounds.x0 + board.bounds.x1) / 2, cy = (board.bounds.y0 + board.bounds.y1) / 2;
-    let plane = null;
-    const obj = this.pack?.meshes?.bgPlane;
-    if (obj) plane = objToBoard(obj, B.size / 100);
-    const data = plane || { position: new Float32Array([-B.size / 2, -B.size / 2, 0, B.size / 2, -B.size / 2, 0, B.size / 2, B.size / 2, 0, -B.size / 2, B.size / 2, 0]), normal: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]), uv: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), index: new Uint16Array([0, 1, 2, 0, 2, 3]) };
-    const placed = extendPlane(placeMesh(data, { x: cx, y: cy, z: B.z }), cx, cy, this.bgScale);
-    // the plane may face either way after the axis swap: make it face up
-    if (placed.normal && placed.normal[2] < 0) {
-      for (let i = 0; i < placed.normal.length; i++) placed.normal[i] = -placed.normal[i];
-      const ix = placed.index;
-      for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; }
+    // 主题的「地图场景背景」（themes.js `bgScene`）：官方地图远景的网格，按材质各画一块，画在棋盘下方。
+    // 官方棋盘中心在 Unity (3, 0, -5) → objToBoard 后 (-3s, -5s)，按主题的 `bgSceneRot`（四分之一圈）转过后再平移到本图中心。
+    const bgScene = this.pack?.meshes?.bgScene;
+    if (bgScene && bgScene.length) {
+      const s = this.pack.meshes.bgSceneScale || 1;
+      const rot = this.pack.meshes.bgSceneRot | 0;
+      const a = (rot * Math.PI) / 2, ca = Math.round(Math.cos(a)), sa = Math.round(Math.sin(a));
+      const cx0 = -3 * s, cy0 = -5 * s;
+      const tx = cx - (cx0 * ca - cy0 * sa), ty = cy - (cx0 * sa + cy0 * ca);
+      // 远景网格没有 per-vertex 颜色（棋盘材质开了 vertexColors），复制一份关掉它，并关掉雾
+      const mkMat = (base) => {
+        const m = base.clone();
+        m.fog = false; m.vertexColors = false;
+        m.needsUpdate = true;
+        return m;
+      };
+      const mb = this.mat.bgBoard || (this.mat.bgBoard = mkMat(this.mat.board));
+      const mw = this.mat.wood
+        ? (this.mat.bgWood || (this.mat.bgWood = Object.assign(mkMat(this.mat.wood), { color: new T.Color(1, 1, 1) })))
+        : mb;
+      for (const part of bgScene) {
+        const raw = objToBoard(part.mesh, s);
+        const placed = placeMesh(raw, { x: tx, y: ty, z: B.z - 2, rot });
+        this._mesh({ ...placed, color: null }, part.material === 'MT_SkyMirror_Wood' ? mw : mb, { cast: false, receive: false, order: -2 });
+      }
     }
-    this.meshes.bg = this._mesh({ ...placed, color: null }, this.mat.bg, { cast: false, receive: false, order: -2 });
+    // A theme may put its panorama on a MESH instead of the shared ground plane (themes.js `bgMesh`: the 辞岁行
+    // battlefields' BG_SkyMirror sphere). It is scaled about the island centre until it ENCLOSES the board (and the
+    // camera): the official sphere is sized for the 19×21 field, a 45×60 map would otherwise swallow it.
+    const dome = this.pack?.meshes?.bgSphere;
+    if (dome && dome.mesh) {
+      const raw = objToBoard(dome.mesh, 1);
+      let r0 = 0;
+      const p = raw.position;
+      for (let i = 0; i < p.length; i += 3) r0 = Math.max(r0, Math.hypot(p[i], p[i + 1], p[i + 2]));
+      const span = Math.max(board.bounds.x1 - board.bounds.x0, board.bounds.y1 - board.bounds.y0, 30);
+      const placed = placeMesh(raw, { x: cx, y: cy, z: 0, s: r0 > 0 ? (span * 2.2) / r0 : 1 });
+      // seen from the INSIDE: the camera sits within the sphere, so only its back faces are in front of it
+      const mat = this.mat.bgDome || (this.mat.bgDome = Object.assign(this.mat.bg.clone(), { side: T.BackSide, depthWrite: false }));
+      this.meshes.bg = this._mesh({ ...placed, color: null }, mat, { cast: false, receive: false, order: -2 });
+    } else {
+      let plane = null;
+      const obj = this.pack?.meshes?.bgPlane;
+      if (obj) plane = objToBoard(obj, B.size / 100);
+      const data = plane || { position: new Float32Array([-B.size / 2, -B.size / 2, 0, B.size / 2, -B.size / 2, 0, B.size / 2, B.size / 2, 0, -B.size / 2, B.size / 2, 0]), normal: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]), uv: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), index: new Uint16Array([0, 1, 2, 0, 2, 3]) };
+      const placed = extendPlane(placeMesh(data, { x: cx, y: cy, z: B.z }), cx, cy, this.bgScale);
+      // the plane may face either way after the axis swap: make it face up
+      if (placed.normal && placed.normal[2] < 0) {
+        for (let i = 0; i < placed.normal.length; i++) placed.normal[i] = -placed.normal[i];
+        const ix = placed.index;
+        for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; }
+      }
+      this.meshes.bg = this._mesh({ ...placed, color: null }, this.mat.bg, { cast: false, receive: false, order: -2 });
+    }
     // the key light's shadow of the island on the ground far below (S_Background_shadow's role)
     const s = B.size * Math.max(B.tiles, this.bgScale) / B.tiles;
     const q = { position: new Float32Array([cx - s / 2, cy - s / 2, B.z + 0.02, cx + s / 2, cy - s / 2, B.z + 0.02, cx + s / 2, cy + s / 2, B.z + 0.02, cx - s / 2, cy + s / 2, B.z + 0.02]), normal: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]), uv: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), color: null, index: new Uint16Array([0, 1, 2, 0, 2, 3]) };
     this.meshes.bgShadow = this._mesh(q, this.mat.shadowCatcher, { cast: false, receive: true, order: -1 });
     void T;
+  }
+
+  /**
+   * 岛缘渐隐（themes.js `atlas.fade`）：棋盘**下方**一张径向蒙版，把岛外整个背景压进同一层雾色，让岛看起来浮在远景之上。
+   * 位置固定在远景建模与地图之间（远景网格在 `B.z − 2`，这块在 `B.z + 0.05`，棋盘再高一层），所以无论有没有官方
+   * 远景都建一层：官方场景的战场（天镜阁）也要同样的融边。飘雪层 renderOrder 8 更高，始终画在它上面。
+   * 四边形按**整幅背景**铺开（和背景阴影板同尺寸），岛缘过渡的尺寸由材质里的 `uHalf` 单独给出，所以扩大覆盖范围不会
+   * 把过渡推离岛缘。
+   * 不能放在棋盘上方 —— 相机是斜的，一块高出地面的横板会一路铺到地平线，把整幅远景盖黑。
+   */
+  _buildFade(board) {
+    if (!this.mat.fade) return null;
+    const B = LIGHTING.bg;
+    const b = board && board.bounds;
+    if (!b) return null;
+    const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    const zf = B.z + 0.05;
+    // 四边形：整幅背景（与背景阴影板同一尺寸，`bgScale` 已按地图窗口放大）
+    const hx = (B.size * Math.max(B.tiles, this.bgScale) / B.tiles) / 2;
+    const hy = hx;
+    // 蒙版的透明区半径 ≈ 白心的 1/2：取岛的 1.5 倍长度，岛周围留一圈不被雾盖，往外渐深
+    const u = this.mat.fade.uniforms;
+    u.uCenter.value.set(cx, cy);
+    u.uHalf.value = Math.min(hx * 0.95, Math.max(20, Math.max(b.x1 - b.x0, b.y1 - b.y0) * 1.5));
+    const fq = {
+      position: new Float32Array([cx - hx, cy - hy, zf, cx + hx, cy - hy, zf, cx + hx, cy + hy, zf, cx - hx, cy + hy, zf]),
+      normal: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
+      uv: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]),
+      color: null, index: new Uint16Array([0, 1, 2, 0, 2, 3]),
+    };
+    this.meshes.fade = this._mesh(fq, this.mat.fade, { cast: false, receive: false, order: 5 });
+    // 灰白霭：同一块四边形再往上一层（order 6），深度测试仍让棋盘挡住它；飘雪 order 8 在其上
+    if (this.mat.fadeVeil) {
+      const vu = this.mat.fadeVeil.uniforms;
+      vu.uCenter.value.copy(u.uCenter.value);
+      vu.uHalf.value = u.uHalf.value;
+      const vq = { ...fq, position: fq.position.slice() };
+      for (let i = 2; i < vq.position.length; i += 3) vq.position[i] = zf + 0.02;
+      this.meshes.fadeVeil = this._mesh(vq, this.mat.fadeVeil, { cast: false, receive: false, order: 6 });
+    }
+    return this.meshes.fade;
   }
 
   _fitShadow(board) {
@@ -793,6 +1014,8 @@ export class BoardScene {
     for (const m of [this.mat.gateEndAdd, this.mat.gateEndAb]) if (m) m.uniforms.uFlash.value.setRGB(flash, flash * 0.12, flash * 0.1);
     for (const k of ['water', 'mire', 'infection', 'smog']) this.mat[k].uniforms.uTime.value = t;
     if (this.official) for (const m of this.sceneWater || []) m.uniforms.uTime.value = t;
+    // 实时飘雪
+    this._stepSnow(dt);
     this.renderer.render(this.scene, this.camera);
     this.frames++;
     if (t0) this.lastMs = this.lastMs * 0.9 + ((typeof performance !== 'undefined' ? performance.now() : t0) - t0) * 0.1;
@@ -801,7 +1024,7 @@ export class BoardScene {
 
   stats() {
     const info = this.renderer.info;
-    return { calls: info?.render?.calls ?? 0, triangles: info?.render?.triangles ?? 0, textures: info?.memory?.textures ?? 0, geometries: info?.memory?.geometries ?? 0, frames: this.frames, cpuMs: Math.round(this.lastMs * 100) / 100, lost: this.lost };
+    return { calls: info?.render?.calls ?? 0, triangles: info?.render?.triangles ?? 0, textures: info?.memory?.textures ?? 0, geometries: info?.memory?.geometries ?? 0, frames: this.frames, cpuMs: Math.round(this.lastMs * 100) / 100, lost: this.lost, scene: this.official?.stage || null };
   }
 
   destroy() {

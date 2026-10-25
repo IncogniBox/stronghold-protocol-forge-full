@@ -5,7 +5,7 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { buildDeployMap } from '../board.js';
-import { isDualLayout } from '../../../shared/layout.js';
+import { isDualLayout, bossAreaCount, bossAreaLayout, bossAreaMidCol, bossAreaBattleRect } from '../../../shared/layout.js';
 
 export class MatchInfra {
   /** Run a callback with error isolation, then flush the views. */
@@ -160,6 +160,38 @@ export class MatchInfra {
   }
 
   /**
+   * 这位棋手在**第几块** boss 场地（`layout.bossAreas` 的下标；第 1 块的组 = 0）与它在这块场地里的座位（0 / 1），
+   * 不在首领回合/没有配对时 `{ index: -1, seat: 0 }`。一块场地 = 一个 boss 组（`bossWaves` 的一组分场）。
+   * @returns {{ index: number, seat: number }}
+   */
+  bossAreaOf(ps) {
+    if (!ps || !Array.isArray(this.bossWaves)) return { index: -1, seat: 0 };
+    const i = this.bossWaves.findIndex((x) => Array.isArray(x.players) && x.players.includes(ps.playerId));
+    if (i < 0) return { index: -1, seat: 0 };
+    const players = this.bossWaves[i].players;
+    // 组比声明的地块多（远超 8 人的房间）：多出来的组退回第 1 块（左右两半、镜像），与从前一样，不让它掉进空布局
+    return { index: i < bossAreaCount(this.layout) ? i : 0, seat: players.indexOf(ps.playerId) === 1 ? 1 : 0 };
+  }
+
+  /** 这位棋手自己的布局：第 2… 块 boss 场地每人一条矩形（不镜像）；第 1 块与普通回合就是地图自己的布局。 */
+  deployLayoutOf(ps) {
+    const a = this.bossAreaOf(ps);
+    return a.index > 0 ? bossAreaLayout(this.layout, a.index, a.seat) : this.layout;
+  }
+
+  /** 这块 boss 场地的战斗矩形（第 1 块 = 地图自己的 boss 带；非首领回合 = 普通带）。 */
+  bossAreaRectOf(ps) {
+    const a = this.bossAreaOf(ps);
+    return a.index >= 0 ? bossAreaBattleRect(this.layout, a.index) : { ...this.layout.battle.normal };
+  }
+
+  /** 这块 boss 场地的中列（悬赏出怪的 L/R 路线、分半）。 */
+  bossAreaMidOf(ps) {
+    const a = this.bossAreaOf(ps);
+    return a.index >= 0 ? bossAreaMidCol(this.layout, a.index) : this.layout.mirrorCol / 2;
+  }
+
+  /**
    * 这张图的普通带是不是**左右两半**（shared/layout.js `isDualLayout` ⇒ 声明了 `normalLeft` / `normalRight`）：是的话，
    * 普通回合也像 boss 回合那样**配对同场**，每位棋手有自己的半场（业主 2026-10-21「普通对战部署区左右各一位玩家同时在
    * 场」）。官方图与所有单块普通带的图恒 false，行为逐字节不变。
@@ -204,7 +236,10 @@ export class MatchInfra {
    */
   deployFieldOf(ps) {
     const g = this.bossGroupOf(ps);
-    if (g) return g.side === 'R' ? 'bossR' : 'bossL';
+    if (g) {
+      // 第 2… 块 boss 场地：每人**一条自己的矩形**（不镜像）⇒ 两位棋手都读 'bossL'（自己的布局里 bossLeft 就是它）
+      return this.bossAreaOf(ps).index > 0 ? 'bossL' : g.side === 'R' ? 'bossR' : 'bossL';
+    }
     const side = this.normalSideOf(ps);
     if (side) return side === 'R' ? 'normalR' : 'normalL';
     return 'normal';
@@ -215,7 +250,9 @@ export class MatchInfra {
    * Pure — no PlayerState cache is touched (the read-only checker invariants.js uses it; PlayerState.deployMap caches).
    */
   deployMapFor(ps, field = this.deployFieldOf(ps)) {
-    return buildDeployMap(this.stage, { deviceOverrides: ps.deviceOverrides, tileOverrides: ps.tileOverrides, field });
+    return buildDeployMap(this.stage, {
+      deviceOverrides: ps.deviceOverrides, tileOverrides: ps.tileOverrides, field, layout: this.deployLayoutOf(ps),
+    });
   }
 
   dispatch(ps, hook, ev = {}, opts = {}) {

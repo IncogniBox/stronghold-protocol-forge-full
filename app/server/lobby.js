@@ -295,6 +295,7 @@ const noopLog = { info() {}, warn() {}, error() {}, debug() {} };
  *             conflict?: Readonly<Record<string, string>> | null,
  *             modConsent?: string | null,
  *             skins?: Readonly<Record<string, string>> | null,
+ *             card?: string | null,
  *             content?: 'ready' | 'failed' | null, contentGen?: number, loadoutCs?: string | null, notOwnedCs?: string | null,
  *             diyCs?: string | null }} Seat
  *   content: a room with gameplay plugins — whether the player's page loaded and checked its content (header "Gameplay
@@ -615,6 +616,8 @@ export class Room {
           // 外观选择（皮肤层）：**别人看到的你** —— `{ picks?, avatar? }`（见 `appearance()`）。
           // 只有选过才有这个键 —— 一个没换装的房间与从前逐字节相同。
           ...(s.appearance && Object.keys(s.appearance).length ? { appearance: s.appearance } : {}),
+          // 名片干员（room.card）：只有选过才有这个键 —— 没选过的房态与从前逐字节相同。
+          ...(!s.isBot && s.card ? { card: s.card } : {}),
           // a room with gameplay plugins (header "Gameplay plugins"): has this player's page loaded and checked its content?
           ...(this.modded && !s.isBot ? { content: s.content || 'loading' } : {}) }
         : null)),
@@ -986,7 +989,9 @@ export class Lobby {  /**
           hostName: host ? host.name : null,
         };
       });
-    return { ok: true, online, roomsCount: rooms.length, matchesCount: rooms.filter((r) => r.inMatch).length, rooms };
+    return { ok: true, online, roomsCount: rooms.length, matchesCount: rooms.filter((r) => r.inMatch).length, rooms,
+      // 野排匹配人数（按难度）：大厅的「N 人匹配中」读它（public/js/ui/matchmaking.js）。
+      matchmaking: this.matchmake && typeof this.matchmake.counts === 'function' ? this.matchmake.counts() : null };
   }
 
   /** `room.list` 的处理器：回执只发给请求者，并带上那次请求的 `rid`（客户端按 rid 收下这一条，`net.js` 的 `_pending` 认任何类型）。 */
@@ -1167,6 +1172,7 @@ export class Lobby {  /**
       case 'room.conflict': return this.conflict(session, msg);
       // 外观选择（皮肤层）：别人看到的你长什么样 —— 纯展示，比赛中也接受，变更即广播
       case 'room.appearance': return this.appearance(session, msg);
+      case 'room.card': return this.card(session, msg);
       case 'room.skins': return this.skins(session, msg);
       case 'room.spectate': return this.spectate(session, msg);
       case 'room.removeSpectator': return this.removeSpectator(session, msg);
@@ -2395,6 +2401,21 @@ export class Lobby {  /**
   }
 
   /**
+   * room.card { charId }: 名片干员（纯展示）。`''` = 清空，回到「按 playerId 分配」。
+   * 只接受本房内容里的干员；比赛中也接受；绝不改 ready。
+   * @param {import('./net.js').Session} session @param {{ charId?: string }} msg
+   */
+  card(session, { charId }) {
+    const id = charId || '';
+    const room = this.roomOf(session);
+    if (id && !operatorCharIds(this.dataFor(room)).has(id)) return fail(ERR.BAD_MSG, 'unknown operator');
+    session.card = id || null;
+    const seat = room ? room.seatOf(session.playerId) : null;
+    if (seat && seat.card !== session.card) { seat.card = session.card; this.broadcastState(room); }
+    return OK;
+  }
+
+  /**
    * room.skins (docs/SKINS.md): store the appearances this player chose for their operators, on the session and the
    * seat, and hand them to a running match.
    *
@@ -3032,6 +3053,8 @@ export class Lobby {  /**
       // 干员皮肤 (docs/SKINS.md): the appearances this player wears, keyed by operator charId (PUBLIC: the match
       // publishes them to teammates)
       skins: session.skins || null,
+      // 名片干员（room.card）：会话上先选过的那一张也跟着进座位（与 appearance 同一条「大厅先选好、再进房」的路）
+      card: session.card || null,
       // the content each was checked for (header "Gameplay plugins": filtered at the match start when it is another)
       loadoutCs: session.loadoutCs ?? null,
       notOwnedCs: session.notOwnedCs ?? null,

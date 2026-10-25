@@ -16,6 +16,7 @@ import {
   activeBubbles, sortedPlayers, tileKey, prepCapsuleLabel, prepCamera, dropFailureReason, terrainInfo,
 } from '../../public/js/ui/gameLogic.js';
 import { PHASE, GEO, DEFAULT_VOICE_LANG } from '../../shared/constants.js';
+import { normalizeLayout, bossAreaPrepRect } from '../../shared/layout.js';
 import { setLang, setMessages } from '../../shared/i18n.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -828,6 +829,27 @@ describe('prepCamera (research 09 §1.2: the Final Assault prep on the own half 
     assert.equal(prepCamera(pub(14, left), 'b').kind, 'prep', 'an eliminated player has no half');
     // solo / a lone last player: the left half
     assert.deepEqual(prepCamera(pub(14, [pl('a', 0)]), 'a'), { kind: 'bossPrep', opts: { side: 'L' } });
+  });
+  // 第 2… 块 boss 场地：整备镜头取**这块场地的整备矩形**（地图声明的绿框，含战斗矩形并向整备行/整备列多出一圈）
+  test('第 2… 块 boss 场地的整备镜头用那块场地的整备矩形', () => {
+    const layout = normalizeLayout({
+      size: [45, 60],
+      battle: { boss: { r0: 14, r1: 20, c0: 21, c1: 39 }, bossPrep: { r0: 12, r1: 20, c0: 21, c1: 39 } },
+      bossAreas: [
+        { battle: { r0: 14, r1: 20, c0: 21, c1: 39 }, prep: { r0: 12, r1: 20, c0: 21, c1: 39 }, deploy: [[15, 19, 22, 30], [15, 19, 30, 38]] },
+        { battle: { r0: 12, r1: 22, c0: 3, c1: 15 }, prep: { r0: 10, r1: 22, c0: 1, c1: 17 }, deploy: [[17, 21, 4, 14], [13, 17, 4, 14]] },
+      ],
+    }, [45, 60]);
+    const players = [pl('a', 0), pl('b', 1), pl('c', 2)];
+    const p = { ...pub(14, players), bossPairs: [['a', 'b'], ['c']] };
+    const c = prepCamera(p, 'c', layout);
+    assert.equal(c.kind, 'bossPrep');
+    assert.equal(c.opts.area, 1);
+    assert.deepEqual(c.opts.rect, bossAreaPrepRect(layout, 1));
+    assert.deepEqual(c.opts.rect, { r0: 10, r1: 22, c0: 1, c1: 17 });
+    assert.deepEqual(c.opts.layout.battle.boss, { r0: 12, r1: 22, c0: 3, c1: 15 });
+    // 第 1 块仍是左右两个半场，返回形状不带 area（与历史一致）
+    assert.deepEqual(prepCamera(p, 'a', layout), { kind: 'bossPrep', opts: { side: 'L' } });
   });
 });
 

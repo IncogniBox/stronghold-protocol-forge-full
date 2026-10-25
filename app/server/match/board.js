@@ -106,19 +106,21 @@ export function boardTileOf(field, r, c, layout = OFFICIAL_LAYOUT) {
 
 /**
  * @param {object|null} stage data/stages.json entry
- * @param {{ deviceOverrides?: Record<string, boolean>, tileOverrides?: Record<string, string>, field?: 'normal'|'bossL'|'bossR' }} [opts]
+ * @param {{ deviceOverrides?: Record<string, boolean>, tileOverrides?: Record<string, string>,
+ *   field?: 'normal'|'bossL'|'bossR', layout?: object }} [opts] `layout` = 这位棋手自己那块 boss 场地的布局
+ *   （shared/layout.js `bossAreaLayout`：第 2… 块场地每人一条矩形）；缺省 = 地图自己的布局
  * @returns {Map<string, 'melee'|'ranged'>} keyed by BOARD tile (the map's own board — rows 9–12 × cols 2–10 officially)
  */
-export function buildDeployMap(stage, { deviceOverrides = {}, tileOverrides = {}, field = 'normal' } = {}) {
+export function buildDeployMap(stage, { deviceOverrides = {}, tileOverrides = {}, field = 'normal', layout = null } = {}) {
   /** @type {Map<string, 'melee'|'ranged'>} */
   const map = new Map();
-  const layout = layoutOf(stage);
-  const B = boardOf(layout, field);
+  const L = layout || layoutOf(stage);
+  const B = boardOf(L, field);
   const rows = stage && Array.isArray(stage.rows) ? stage.rows : null;
   const legend = stage && stage.tiles && typeof stage.tiles === 'object' ? stage.tiles : {};
   for (let r = B.r0; r <= B.r1; r++) {
     for (let c = B.c0; c <= B.c1; c++) {
-      const [sr, sc] = fieldTile(field, r, c, layout);
+      const [sr, sc] = fieldTile(field, r, c, L);
       const line = rows && typeof rows[sr] === 'string' ? rows[sr] : null;
       let cls = null;
       if (line) {
@@ -139,8 +141,8 @@ export function buildDeployMap(stage, { deviceOverrides = {}, tileOverrides = {}
   const devices = stage && Array.isArray(stage.devices) ? stage.devices : [];
   for (const d of devices) {
     if (!d || !Array.isArray(d.pos)) continue;
-    const [r, c] = boardTileOf(field, d.pos[0], d.pos[1], layout);
-    if (!inField(r, c, layout, field)) continue;
+    const [r, c] = boardTileOf(field, d.pos[0], d.pos[1], L);
+    if (!inField(r, c, L, field)) continue;
     let active;
     if (d.alias != null && deviceOverrides && Object.hasOwn(deviceOverrides, d.alias)) active = !!deviceOverrides[d.alias];
     else if (typeof d.active === 'boolean') active = d.active;
@@ -153,7 +155,7 @@ export function buildDeployMap(stage, { deviceOverrides = {}, tileOverrides = {}
   }
   for (const [k, v] of Object.entries(tileOverrides || {})) {
     const [r, c] = parseKey(k);
-    if (!inField(r, c, layout, field)) continue;
+    if (!inField(r, c, L, field)) continue;
     if (v === 'melee' || v === 'ranged') map.set(tileKey(r, c), v);
     else if (v === 'none') map.delete(tileKey(r, c));
   }

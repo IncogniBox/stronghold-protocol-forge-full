@@ -51,7 +51,8 @@ export class PlayerPlacement {
    */
   _inField(r, c) {
     const field = this.deployMap() && this._deployField;
-    return inField(r, c, this.m && this.m.layout, field);
+    const layout = this.m && typeof this.m.deployLayoutOf === 'function' ? this.m.deployLayoutOf(this) : this.m && this.m.layout;
+    return inField(r, c, layout, field);
   }
 
   /**
@@ -64,7 +65,8 @@ export class PlayerPlacement {
    */
   _legal(piece, r, c, owner = null) {
     const dmap = this.deployMap();     // also refreshes `_deployField` (the field that map was built for)
-    if (!canPlace(dmap, this._placementOf(piece), r, c, this.m && this.m.layout, this._deployField)) return false;
+    const layout = this.m && typeof this.m.deployLayoutOf === 'function' ? this.m.deployLayoutOf(this) : this.m && this.m.layout;
+    if (!canPlace(dmap, this._placementOf(piece), r, c, layout, this._deployField)) return false;
     const k = tileKey(r, c);
     const range = this.summonRange(piece, owner);
     if (range && !range.has(k)) return false;

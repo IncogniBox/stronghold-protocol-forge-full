@@ -37,6 +37,7 @@ import { SURFACES, surfaceUV, sideRect, tintRgb } from './atlas.js';
 import { GLYPH, TILEKEY_GLYPH, TILE_H } from '../style.js';
 import { penRects } from '../pen.js';
 import { layoutOf, OFFICIAL_LAYOUT, mapSize } from '../layout.js';
+import { isOfficialLayout, penRectOf } from '../../../../shared/layout.js';
 
 /** How far the island's cliff faces go down (tiles). */
 export const CLIFF = 0.75;
@@ -92,6 +93,22 @@ export function areaFor(kind, layout = null) {
   // `AREAS.all` itself, so nothing changes for a 19×21 map.
   if (kind === 'all') {
     return R === OFFICIAL_ROWS && C === OFFICIAL_COLS ? AREAS.all : [{ r0: 0, r1: R - 1, c0: 0, c1: C - 1 }];
+  }
+  // 一张**自己声明了分区**的图（不是官方 19×21 那套）：它的战斗/整备带可能挪到了地图任意位置（例如四块 boss
+  // 擂台各在一处），按「窗口尺寸平移官方带」画出来的地块会落在空地上。这里改成**按这张图自己的矩形**建区块：
+  //   普通带 = 普通矩形 + 下方整备两行 + 左侧两列（官方那块就是这么留的）· 联防 = 联防矩形 + 两行整备
+  //   boss = boss 矩形 + 上方一行墙 · 等待区 = 自己声明的 pen / penRight 各扩 1 格
+  if (!isOfficialLayout(L)) {
+    const win = (r, up, down, left, right) => ({
+      r0: Math.max(0, r.r0 - down), r1: Math.min(R - 1, r.r1 + up),
+      c0: Math.max(0, r.c0 - left), c1: Math.min(C - 1, r.c1 + right),
+    });
+    const pen = (side) => win(penRectOf(L, side), 0, 1, 1, 1);
+    if (kind === 'boss' || kind === 'hidden' || kind === 'bossPrep') return [win(L.battle.boss, 1, 0, 0, 0)];
+    if (kind === 'unite') return [win(L.battle.unite, 1, 2, 0, 0)];
+    const normal = [win(L.battle.normal, 1, 2, 2, 0), pen('L')];
+    if (L.penRight) normal.push(pen('R'));
+    return normal;
   }
   const { dr, dc } = growOf(L);
   const set = kind === 'unite' ? AREAS.unite

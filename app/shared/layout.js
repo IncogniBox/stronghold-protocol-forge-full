@@ -359,6 +359,106 @@ export function layoutOf(stage) {
   return normalizeLayout(stage && stage.layout, sizeOf(stage));
 }
 
+/** 这张图声明了几块 boss 场地（没声明 = 1：那唯一的一块就是 `deployRects.bossLeft` / `bossRight`）。 */
+export function bossAreaCount(layout) {
+  const l = layout || OFFICIAL_LAYOUT;
+  return Array.isArray(l.bossAreas) && l.bossAreas.length ? l.bossAreas.length : 1;
+}
+
+/**
+ * 第 `i` 块 boss 场地里第 `k` 位（0 / 1）的部署矩形 `[r0,r1,c0,c1]` —— 引擎/客户端眼里「这块场地的棋盘落在哪」。
+ *
+ * 第 1 块（i = 0）就是图自己声明的两个半场（`deployRects.bossLeft` / `bossRight`，镜像轴仍是那张图的轴）；
+ * 第 2… 块读 `layout.bossAreas[i].deploy[k]`，两块矩形相互独立、**不镜像**（它们可以是左右并排，也可以上下叠放）。
+ * 一块场地只声明了一条矩形时，两位棋手共用它（队里只有一个人时也是这样）。
+ * @returns {number[]|null}
+ */
+export function bossAreaDeployRect(layout, i, k = 0) {
+  const l = layout || OFFICIAL_LAYOUT;
+  if (!Number.isInteger(i) || i <= 0) return l.deployRects[k === 1 ? 'bossRight' : 'bossLeft'] || null;
+  const a = Array.isArray(l.bossAreas) ? l.bossAreas[i] : null;
+  const d = a && Array.isArray(a.deploy) ? a.deploy : null;
+  if (!d || !d.length) return null;
+  const j = Number.isInteger(k) ? Math.max(0, Math.min(d.length - 1, k)) : 0;
+  return Array.isArray(d[j]) ? d[j] : null;
+}
+
+/**
+ * 第 2… 块 boss 场地的部署矩形，按作者/编辑器那边的名字给出来：`bossA<i>:<k>`（i 从 2 起、k 从 0 起，与编辑器
+ * 「分区」里那套可拖的名字同一套）。第 1 块不在这里 —— 它就是 `deployRects.bossLeft` / `bossRight`。
+ *
+ * 用途：授权层把每块场地的可部署格也派生进记录（`deployTiles`），编辑器的「显示部署」才画得出它们；引擎本来就在
+ * 运行时从图例现推，不读这张表。
+ * @returns {Record<string, number[]>}
+ */
+export function bossAreaDeployRectMap(layout) {
+  const l = layout || OFFICIAL_LAYOUT;
+  const out = {};
+  const n = bossAreaCount(l);
+  for (let i = 1; i < n; i++) {
+    const a = Array.isArray(l.bossAreas) ? l.bossAreas[i] : null;
+    const d = a && Array.isArray(a.deploy) ? a.deploy : [];
+    d.forEach((rect, k) => { if (Array.isArray(rect)) out[`bossA${i + 1}:${k}`] = rect; });
+  }
+  return out;
+}
+
+/** 第 `i` 块 boss 场地的战斗矩形（没声明 = 这张图自己的 boss 带）。 */
+export function bossAreaBattleRect(layout, i) {
+  const l = layout || OFFICIAL_LAYOUT;
+  const a = i > 0 && Array.isArray(l.bossAreas) ? l.bossAreas[i] : null;
+  return { ...(a && a.battle ? a.battle : l.battle.boss) };
+}
+
+/** 第 `i` 块 boss 场地的整备矩形（没声明 = 它的战斗矩形）。 */
+export function bossAreaPrepRect(layout, i) {
+  const l = layout || OFFICIAL_LAYOUT;
+  const a = i > 0 && Array.isArray(l.bossAreas) ? l.bossAreas[i] : null;
+  const r = a && a.prep ? a.prep : (a && a.battle ? a.battle : l.battle.bossPrep);
+  return { ...r };
+}
+
+/** 第 `i` 块 boss 场地的中列（`side` 分半 / 悬赏出怪的路线下标读它）。 */
+export function bossAreaMidCol(layout, i) {
+  const b = bossAreaBattleRect(layout, i);
+  return Math.floor((b.c0 + b.c1) / 2);
+}
+
+/**
+ * 一位棋手在第 `i` 块 boss 场地上的**自己的**布局：把这名棋手的那块部署矩形当成 `bossLeft` / `bossRight`，战斗/整备
+ * 矩形换成这块场地的，镜像列设成「该矩形自己关于它对称」（`c0 + c1`）—— 于是 `fieldTileOf(…, 'bossL', …)` 就是
+ * 一名棋手的棋盘到这块场地的正向映射，**没有任何镜像**。
+ *
+ * 第 1 块（i = 0）返回原布局：那块场地就是 `deployRects.bossLeft` / `bossRight` 与镜像轴，行为与从前逐字节相同。
+ * @returns {object}
+ */
+export function bossAreaLayout(layout, i, k = 0) {
+  const l = layout || OFFICIAL_LAYOUT;
+  if (!Number.isInteger(i) || i <= 0) return l;
+  const rect = bossAreaDeployRect(l, i, k);
+  if (!rect) return l;
+  return bossRectLayout(l, rect, bossAreaBattleRect(l, i), bossAreaPrepRect(l, i));
+}
+
+/**
+ * 把一个布局的 boss 场地换成**一条指定的矩形**：`bossLeft` / `bossRight` 都是它（不镜像），战斗/整备矩形换成这块场地
+ * 的（缺省保持原样）。战斗里一名棋手拿到的就是它（`bossAreaLayout` 与 bossRounds 传下去的 `bossRect` 同一条）。
+ * @param {object} layout @param {number[]|object} rect @param {number[]|object} [battle] @param {number[]|object} [prep]
+ */
+export function bossRectLayout(layout, rect, battle = null, prep = null) {
+  const l = layout || OFFICIAL_LAYOUT;
+  const r = toRectArr(rect);
+  if (!r) return l;
+  const b = toRectObj(battle);
+  const p = toRectObj(prep) || b;
+  return {
+    ...l,
+    deployRects: { ...l.deployRects, bossLeft: [...r], bossRight: [...r] },
+    battle: { ...l.battle, boss: b || l.battle.boss, bossPrep: p || l.battle.bossPrep },
+    mirrorCol: r[2] + r[3],
+  };
+}
+
 /** Whether a layout is the official one — 决定用官方相机还是 `fitCamera`（render/projection.js）。 */
 export function isOfficialLayout(layout) {
   return JSON.stringify(normalizeLayout(layout, sizeOf(layout))) === JSON.stringify(OFFICIAL_LAYOUT);

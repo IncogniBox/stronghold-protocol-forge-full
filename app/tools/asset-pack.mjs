@@ -13,11 +13,12 @@
 // 以内，所以不写 ZIP64；条目里不写 extra field，字节完全由内容决定。
 //
 // 用法：
-//   node tools/asset-pack.mjs [--out dist/asset-pack] [--repo <owner/name>] [--tag <tag>] [--full] [--base-url <前缀>] [--apply]
+//   node tools/asset-pack.mjs [--out dist/asset-pack] [--repo <owner/name>] [--tag <tag>] [--full|--only-full] [--base-url <前缀>] [--apply]
 //     --out       产物目录（默认 dist/asset-pack；git 忽略 dist/）
 //     --repo      公开仓 owner/name：给了它（配合 --tag）就打印每个包的 Release 直链
 //     --tag       Release 的 tag（如 asset-pack-2026-10）
 //     --full      额外再合一个 full.zip（全部文件打一起）
+//     --only-full 只打 full.zip、**不**打每组那份（给「导入素材包」手动整包导入用；manifest 的 groups 因此为空）
 //     --base-url  覆盖 releaseBase（默认 https://github.com/<repo>/releases/download）
 //     --apply     把本次的 repo / tag / releaseBase 与产出的 groups **写进** `data/asset-pack.json`（原子写：临时文件 +
 //                 rename）。既有 `mirrors` 非空则**原样保留**（那是运维手填的，工具不许清掉）；不给 --apply 就只打印。
@@ -216,9 +217,9 @@ function writeJsonAtomic(abs, value) {
  * 打包：读清单 → 每组一个 zip → 写 manifest.json（+ 可选的 full.zip）。
  * `apply` 为真时把本次的 repo / tag / releaseBase 与产出的 groups 写进 `data/asset-pack.json`（原子写；
  * 既有 `mirrors` 原样保留）。
- * @param {{ root?: string, out?: string, repo?: string, tag?: string, baseUrl?: string, full?: boolean, apply?: boolean, log?: (s: string) => void }} o
+ * @param {{ root?: string, out?: string, repo?: string, tag?: string, baseUrl?: string, full?: boolean, onlyFull?: boolean, apply?: boolean, log?: (s: string) => void }} o
  */
-export function pack({ root = ROOT, out = path.join(root, DEFAULT_OUT), repo = '', tag = '', baseUrl = '', full = false, apply = false, log = console.log } = {}) {
+export function pack({ root = ROOT, out = path.join(root, DEFAULT_OUT), repo = '', tag = '', baseUrl = '', full = false, onlyFull = false, apply = false, log = console.log } = {}) {
   const manifestAbs = path.join(root, LARGE_MANIFEST_REL);
   const manifest = readJson(manifestAbs);
   if (!manifest || !manifest.files) {
@@ -233,16 +234,22 @@ export function pack({ root = ROOT, out = path.join(root, DEFAULT_OUT), repo = '
     abs: absOf(root, rel),
   }));
   const made = [];
-  for (const g of groups) {
-    const missing = g.rels.filter((rel) => !fs.existsSync(absOf(root, rel)));
+  // `onlyFull`：只打整包 ⇒ 每组那份不写（manifest 的 groups 为空），但仍要先确认清单里的文件都在盘上。
+  if (onlyFull) {
+    const missing = Object.keys(manifest.files).filter((rel) => !fs.existsSync(absOf(root, rel)));
     if (missing.length) throw new Error(`清单里的文件不在盘上：${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ' …' : ''}`);
-    const abs = path.join(out, g.file);
-    const { bytes } = writeZip(abs, itemsOf(g.rels));
-    made.push({ id: g.id, name: g.name, file: g.file, bytes, sha256: sha256File(abs), files: g.rels.length });
-    log(`[素材包] ${g.file} ← ${g.rels.length} 个文件 / ${MB(bytes).toFixed(1)} MB（zip）`);
-    if (bytes > RELEASE_LIMIT_BYTES) log(`[素材包] ⚠ ${g.file} ${MB(bytes).toFixed(1)} MB 超过 1.9 GiB —— GitHub Release 单个附件上限 2 GiB，会被拒收`);
+  } else {
+    for (const g of groups) {
+      const missing = g.rels.filter((rel) => !fs.existsSync(absOf(root, rel)));
+      if (missing.length) throw new Error(`清单里的文件不在盘上：${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ' …' : ''}`);
+      const abs = path.join(out, g.file);
+      const { bytes } = writeZip(abs, itemsOf(g.rels));
+      made.push({ id: g.id, name: g.name, file: g.file, bytes, sha256: sha256File(abs), files: g.rels.length });
+      log(`[素材包] ${g.file} ← ${g.rels.length} 个文件 / ${MB(bytes).toFixed(1)} MB（zip）`);
+      if (bytes > RELEASE_LIMIT_BYTES) log(`[素材包] ⚠ ${g.file} ${MB(bytes).toFixed(1)} MB 超过 1.9 GiB —— GitHub Release 单个附件上限 2 GiB，会被拒收`);
+    }
   }
-  if (full) {
+  if (full || onlyFull) {
     const allRels = [...Object.keys(manifest.files || {})].sort();
     const abs = path.join(out, 'full.zip');
     const { bytes } = writeZip(abs, itemsOf(allRels));
@@ -275,7 +282,7 @@ export function pack({ root = ROOT, out = path.join(root, DEFAULT_OUT), repo = '
   if (repo && tag) {
     log('[素材包] Release 直链：');
     for (const m of made) log(`  <${releaseBase}/${tag}/${m.file}>`);
-    if (full) log(`  <${releaseBase}/${tag}/full.zip>`);
+    if (full || onlyFull) log(`  <${releaseBase}/${tag}/full.zip>`);
   } else {
     log('[素材包] 未给 --repo/--tag：不打印 Release 直链（给了才打印）');
   }
@@ -289,7 +296,7 @@ async function main() {
   const has = (f) => argv.includes(f);
   const val = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
   if (has('--help') || has('-h')) {
-    console.log('node tools/asset-pack.mjs [--out dist/asset-pack] [--repo <owner/name>] [--tag <tag>] [--full] [--base-url <前缀>] [--apply]');
+    console.log('node tools/asset-pack.mjs [--out dist/asset-pack] [--repo <owner/name>] [--tag <tag>] [--full|--only-full] [--base-url <前缀>] [--apply]');
     return 0;
   }
   const root = path.resolve(val('--root', ROOT));
@@ -300,10 +307,13 @@ async function main() {
     tag: val('--tag', ''),
     baseUrl: val('--base-url', ''),
     full: has('--full'),
+    onlyFull: has('--only-full'),
     apply: has('--apply'),
   });
   const total = r.groups.reduce((s, g) => s + g.bytes, 0);
-  console.log(`[素材包] 完成：${r.groups.length} 个包 / ${MB(total).toFixed(1)} MB → ${path.relative(root, r.out)}`);
+  console.log(r.groups.length
+    ? `[素材包] 完成：${r.groups.length} 个包 / ${MB(total).toFixed(1)} MB → ${path.relative(root, r.out)}`
+    : `[素材包] 完成：只有 full.zip → ${path.relative(root, r.out)}`);
   return 0;
 }
 

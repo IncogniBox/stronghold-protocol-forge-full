@@ -9,6 +9,42 @@
 
 ---
 
+**账号、好友、成就、名片背景、联邦目录与匹配人数全部启用：账号沿用 `server-ext` 已有的 `accounts.json`，引擎 UI 通过它的 `/mod-ws/server-ext/accounts` 读取资料，不迁移、不改写现有账号。**
+
+`APP_VERSION`（`0.19.1`）与 `PROTOCOL_VERSION`（`2`）未动；新增 C2S `room.card` 与 `room.state.seats[].card` 都是**可缺省**的加性字段，老页面不认时不发、不读，既有帧逐字节不变。服务端改动需**重启**生效（无对局时）。
+
+### 名片干员（room.card）
+
+- 新 C2S `room.card { charId }`：`''` 清空，其余必须是 `isCharId`；白名单是**本房内容**的干员（`operatorCharIds`），未知 id 返回 `BAD_MSG`。
+- 会话上持久，`humanSeat()` 带进座位，`room.state` 只在非空且非 bot 时输出 `card`；比赛中也接受，**不改 ready**。
+- 前端无需改动：`screens/room.js` 早已按 `C2S['room.card']` 自动开启同步，`ui/seatArt.js` 读 `seats[].card`。
+
+### 账号 / 好友 / 成就 / 名片背景（复用 `server-ext`）
+
+- `public/js/ui/accounts.js` 从兼容垫片改为真实模块：连 `server-ext` 的 lane，按座位 `playerId` 调 `lookup`，顶栏显示昵称 + `#编号` + 头像；令牌沿用同一份 `sp.pref.panel.server-ext.token`，**不改写** `var/mod/server-ext/accounts.json` 的既有记录。
+- `server-ext`（`workshop/server-ext/server/accounts.mjs`，包版本 `2.5.0`）新增 lane 操作：`profile` / `namecard` / `friendList` / `friendAdd` / `friendRemove` / `achievements`；`lookup` 与 `me` 的公开资料多一个 `namecard`。账号库只新增 `friends` 与 `namecard` 两个可选字段，旧库装载时自动补齐。
+- `public/js/ui/friends.js`：大厅「好友」入口 + 房间「邀请好友」；好友关系双向写入账号库，在线状态取账号是否还有活着的登录会话；邀请 = 复制当前同盟的房间链接。
+- `public/js/ui/achievements.js`：成就面板读账号侧的 `achievements`（注册、头像过审、名片、绑定、好友、账号满 30 天），**不伪造对局战绩**。
+- `public/js/ui/namecards.js`：席位卡背后一层官方「个人名片」美术 —— PRTS 个人名片一览的 **34 个主题**（`nc00`…`nc33`，`shared/namecards.js` 是目录，美术在 `public/assets/ui/namecard/<id>.png`，取每个主题的无界面文字 `预览1+`，缺失时回落 `预览1`；原图不换色）。账号没设过时按编号给一张；设置里新增「名片背景」缩略图选择，写入账号资料。
+
+### 联邦目录与匹配人数
+
+- `public/js/federation.js` 的 `enabled` 改为 `true`：大厅走 `room.list` 目录（单节点，`currentNode()` 为 `local`），房间邀请链接附带 `&node=local`。
+- `server/matchmaking.js` 新增 `counts()`（在等且在线的按难度计数）；`roomDirectory()` 的 `room.listed` 多一个 `matchmaking` 字段。
+- 大厅每 10 秒的 `room.list` 轮询现在同时写入 `store.lobbyStats` 与 `store.presence.matchmaking` —— 在此之前**没有任何地方写这两个键**，在线人数恒为 1、缺人同盟恒为空、匹配人数永不显示。
+- `lobbySimulationPreference()` 在服务器没有 `room.setRandom` 时不允许返回 `firepower`，旧偏好不会把玩家留在看不见的模式里。
+
+### 无限火力
+
+- 仍按能力隐藏（本服没有 `room.setRandom` 与服务端随机玩法骨架）；本次未实现。
+
+### 测试
+
+- 新增 `test/lobby-card.test.js`（协议形状、进房带卡、队友可见、变更广播、未知 id、清空、ready 不变、无服务端错误日志）。
+- `server-ext` 的好友 / 名片 / 成就方法用临时脚本做过内存断言（脚本已删除）。
+
+---
+
 **大厅与房间的 ♫ 音乐弹窗新增「Fever 音乐」：颂乐人偶盟约触发 Fever 时可以自己调音量、从本服务器可播放的音乐里选曲，并裁出一段时间替换默认的 KillKiss 两首。**
 上游游戏本体仍是 **0.3.1**；`APP_VERSION`（`0.19.1`）**未动**（本节因此也还没有版本号与 tag —— 发版时在最上面加一行
 `## <版本> — <日期>` 即可，本段第一句就是那一条公告的摘要）。`PROTOCOL_VERSION`（`2`）与 `MOD_API_VERSION`（`1`）
@@ -62,6 +98,28 @@
 - 假日威龙陈 S2/S3 的攻击特效固定在**她自己脚下的地块**（以她为圆心、半径 2；上一版按攻击范围格子铺会落到敌人那边）。
 - 技能特效挂载：prefab 声明了 `FollowMountPoint`、但当前 skin 上**没有那个点**时，改用 prefab 自己的 `ParticleEffect` 出生点（不再落到「脚上方」的兜底）——假日威龙陈 S3 的水花因此回到炮口（`chen2_skill_03_buff_02`：SPECIAL_3 不存在，MP_SPECIAL_2 存在）。
 - 多索雷斯包新增 `assets/bgm/dossoles_holiday.mp3` 与对局音乐面板 `ui/music.js`：**场上 4 名【多索雷斯】成员**时把对局 BGM 换成「多索雷斯假日」，人数掉下去还原。
+
+### 3D 棋盘：官方场景战场去掉屏幕雾层
+
+- 屏幕雾层（`board3d/scene.js` `_buildFogOverlay` / `_updateFogRect`）**整个删掉**：它在棋盘投影矩形外铺一层雾色（先是随方向加深的渐晕，后改成 50% 均匀薄纱），无论怎么调都会把场地外的远景压暗成「阴影」。现在官方远景建模按自身光照直接呈现，`render()` 里的雾矩形重算一并移除。
+- 对局屏 CSS 暗角（`.gm__vignette`）的上下两条线性渐变压暗带从 78% / 60% 降到 30%（径向暗角保留）。
+- 取消「场地聚光」压暗：`board3d/materials.js` 的焦点系数 `uFocusDim` 由 0.72 改为 1。此前相机取景矩形外的所有受光面（含官方远景建模、穹顶钢架）都被乘掉 28%，看起来像落在阴影里；现在场地内外同一套光照。压暗管线保留，系数调回 0.72 即可恢复原来的聚光效果。
+- 岛缘渐隐（`board3d/scene.js` 新的 `_buildFade`）**对官方场景战场也生效**：原来 `atlas.fade` 在带 `bgScene` 的图上被跳过，现在无论有没有官方远景都建这一层。位置固定在远景建模（`z = B.z − 2`）与棋盘之间（`z = B.z + 0.05`，renderOrder 5，深度测试仍被棋盘挡住中心），飘雪层 renderOrder 8 更高，继续画在它上面。
+- 岛缘渐隐的四边形改为**铺满整幅背景**（与背景阴影板同尺寸，`bgScale` 已按地图窗口放大），蒙版按固定世界尺寸采样（新增 `uCenter` / `uHalf`，取岛长度的 1.5 倍），所以扩大覆盖范围不会把白心缩没：岛周围仍是一大片透明区，往外渐深，方格之外整幅背景被同一层雾盖住，取景边缘再收一圈避免硬直角。
+- 修正岛缘渐隐取错了通道：`TX_SkyMirror_Fade_D` 的不透明度在 **alpha 通道**（中心 A=0 全透明 → 边缘 A≈0.95），RGB 只是固定的暗紫色。旧着色器拿 RGB 亮度当遮罩，而中心的 RGB 是 0（黑），算出来恰好是「最不透明」——所以整片背影像一块黑边、白心消失。现在直接用 `texture2D(map, uv).a`。
+- 岛外再加一层**灰白霭**（`mat.fadeVeil`，同一张蒙版、同一块四边形、`z + 0.02`、renderOrder 6），颜色 `0xb8c0c8`、不透明度 0.35：远景从纯黑雾变成发灰发白的雾霭。深度测试仍让棋盘挡住它，飘雪 renderOrder 8 仍在其上。
+
+### 新内容：战术特训敌人「涤墨」
+
+- 新增工坊包 `workshop/dimo-enemies`：17 条敌人记录（`enemies.json`，数值取自 PRTS 明日方舟 Wiki 的「危机合约·涤墨作战 / 大炎·墨染书阁」敌人页）+ 18 张头像（`assets/enemy/icon/`）+ **18 套 Spine 模型**（`assets/spine/enemy/`，来自 PRTS 页面里 `SPINEDATA` 指向的 `torappu.prts.wiki/assets/enemy_spine/<官方key>/`，即人形单位同源的官方 3D 骨骼），全部按 `pack.json.art` 声明。
+- 官方内部 key 与动画名从 Wiki 页面源码里取：操戈 `enemy_10164_tjgxb`、挽弓 `10165_tjggb`、拔山 `10166_tjgdlb`、挟潮·来 `10167_tjgsfj_2`、浪里玄条 `10168_tjgly`、云中墨贼 `10169_tjgtsz`、霜劫 `10170_wangz`、旺财 `10058_cjfrog`、果腹 `10052_cjshld`、鼎沸 `10054_cjhot`、飘香 `10054_cjhot_2`。模型文件按官方基名落盘，**记录键也已从临时自造键 `enemy_88xx_dimo_*` 全部改成官方内部键**（`factions` 的 pool/entries、`pack.json.art`、素材目录一起改）。
+- 动画名不是统一的 Idle/Attack：挟潮·来是 `Black_*`、浪里玄条是 `F_*`、云中墨贼是 `B_*`（A/B 两套形态，取 B）、旺财/招财是 `*_a`、操戈是 `Die_A`；没有 Attack 的（挟潮·来、浪里玄条、飘香）用 `attack: { loop: <idle>, via: 'idle' }` 兜底（与官方 `enemy_10054_cjhot` 同一条）。
+- 新增特训类型 `DIMO`「特训敌人·涤墨」（`data/factions.json` 的 `types`/`entries`，`sortId`/`typeIdentifier` 8，`involveRandom: true`、`count: 3`、`pool` 18 个键）。**类型不能由工坊包新增**：`shared/workshop.js` 的 content 合并按「记录 id」并表，`factions.json` 不是 id 表，包里的 `factions.json` 会被静默忽略——所以这一格落在核心数据里，敌人本体仍在包里。
+- 类型图标 `dimo_icon`：`public/assets/ui/enemyTypeIcon/dimo_icon.png` + `data/assets.json` 的 `ui["enemyTypeIcon/dimo_icon"]`（用户提供的「特训敌人·涤墨」图）。
+- 数值口径：只做基础数值（生命/攻击/防御/法抗/移速/攻速/重量/阻挡/射程/地面或飞行），字格、拓印、窃字等机制尚未实现（`server/sim/content/enemies.js` 不登记这些键 ⇒ 无 kit，按数据白板作战）。`attrPower` 显式写成地面 6620 / 飞行 3000，使官方「同盟险境 R3 每块 6–10 个」的平衡测试继续成立。
+- 鼎沸沿用官方已有记录 `enemy_10054_cjhot`（官方自带模型），其余 17 个是本包新增。
+- **机制层**（`workshop/dimo-enemies/battle/main.mjs`，`pack.json.server.battle` 通道，不碰引擎 KITS）：操戈/凌=死亡时给八格内涤墨友军叠【操戈增益】（攻 +10/20%、防 +25/50%、抗 +25/50，共享 2 层上限）；挽弓/鸣=索敌按防御最低、普攻三连击；拔山/盖=八格内友军受伤 ×0.75/×0.5 光环；挟潮·来=优先高台、每 10 秒召唤 2 只操戈；浪里玄条/锈=常态隐匿 + 25%/50% 闪避；云中墨贼/蚀=靠近干员一次性偷 25%/50% 攻防；霜劫=死亡时按八格内友军数量（≤3）造成 250% 攻击力范围爆炸；旺财/招财=有币（200% 远程物理、额外选 1 名干员）↔ 无币（仅近战、100%），30/20 秒回币；果腹/饱食=嘲讽；鼎沸/飘香=不普攻，范围内每秒 100% 法伤 + 40% 灼燃。
+- 鼎沸/飘香的数据记录 `stats.dmgType` 改为 `none`（引擎据此跳过普通攻击），伤害由包内光环结算。
 
 ### 测试
 

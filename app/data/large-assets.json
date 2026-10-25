@@ -51255,6 +51255,18 @@
    "size": 172,
    "sha256": "5943cce62ca1aba2d9773c63068acedbb34c4bf77a6bd9a6f38fa39d1409bcc4"
   },
+  "assets/local/mesh/skymirror_scene/outworld_main.obj": {
+   "size": 4596743,
+   "sha256": "c53396ab62639b7859a734aa17338f97836dfb8b1d11c05c6336401f54048a73"
+  },
+  "assets/local/mesh/skymirror_scene/outworld_wood.obj": {
+   "size": 50725,
+   "sha256": "11ae7005235be34f3d9b683968726336f4c0e19cc8e70e501c45fddcf3185267"
+  },
+  "assets/local/mesh/skymirror_scene/prefab.json": {
+   "size": 286,
+   "sha256": "57a910281e06793b2d78fcb264c4cfac2bd226d7e3d67e556e07cb8342d29f93"
+  },
   "assets/local/mesh/suilingcave_bkg/S_outworld_pPlane1.obj": {
    "size": 1754,
    "sha256": "fe70c09d2acba806af623451267f3585a57b1bc8f1d7ce72ab943c7c0e520fac"
@@ -51851,6 +51863,174 @@
    "size": 144,
    "sha256": "52ecb8a9fd15368f5e3c0e6f5ce234cb92e225c85c57bb2b7266d5d9d314f8a2"
   },
+  "assets/local/props/skymirror/prop_10.obj": {
+   "size": 116737,
+   "sha256": "a61d9600c95c4a6109055fb3588c9baafd8b6bd5fd8a47290b94916ad4a9a90d"
+  },
+  "assets/local/props/skymirror/prop_107.obj": {
+   "size": 1876,
+   "sha256": "39b1bfb91c5c37de223407bc3a96b3d98dcb3531de4af14ecd179fe6928d390c"
+  },
+  "assets/local/props/skymirror/prop_109.obj": {
+   "size": 5471,
+   "sha256": "f2c4519f6e9e0790f49adf256def01339f7d32e63e04af5c19747dad3feb68f8"
+  },
+  "assets/local/props/skymirror/prop_110.obj": {
+   "size": 3634,
+   "sha256": "bffde804d80f20222deaf29b21fcee6bdd5bc8dac24b868f8504da2f98aa61e1"
+  },
+  "assets/local/props/skymirror/prop_12.obj": {
+   "size": 1835,
+   "sha256": "f12f5dc2569c7ed0fa1eda7925078ed135b8a31437e916be2747d303caca16e3"
+  },
+  "assets/local/props/skymirror/prop_128.obj": {
+   "size": 1825,
+   "sha256": "5aceea30a246fc5ad4cdc8965d67c71eb1a0c38d17e28c6cd29e815ed7412916"
+  },
+  "assets/local/props/skymirror/prop_13.obj": {
+   "size": 3634,
+   "sha256": "a9ef83cffebdb72ccfe2871d84e70ef55f4d06a0bd120e4d86746dd8cdf8e4b6"
+  },
+  "assets/local/props/skymirror/prop_137.obj": {
+   "size": 233016,
+   "sha256": "7c4e28fce2201c23aad52e50db145e8c81ced24eb49418108f62a17328b29599"
+  },
+  "assets/local/props/skymirror/prop_14.obj": {
+   "size": 3122,
+   "sha256": "72992699d128153967dc22efbcc5fd7760be21b22c08678ee70c2ec4b9a07208"
+  },
+  "assets/local/props/skymirror/prop_141.obj": {
+   "size": 164191,
+   "sha256": "485d9aa376f4e864806090955ccdfcd3fc33ab8e136e4c26b96c9074d7637bed"
+  },
+  "assets/local/props/skymirror/prop_146.obj": {
+   "size": 65159,
+   "sha256": "c26562ca3ec8094ee2a3976f30304f9b5b1279708daf723afd1b804d8426e409"
+  },
+  "assets/local/props/skymirror/prop_15.obj": {
+   "size": 1836,
+   "sha256": "359de2e96ac65015e12f563594dbe3d90dbe3cd63baadcd16f88ec43a45970e6"
+  },
+  "assets/local/props/skymirror/prop_164.obj": {
+   "size": 64805,
+   "sha256": "2a3e0e65b604ae2be3cff5dc5fb8166ff8d003505d4013dd8e684a8bec4382bf"
+  },
+  "assets/local/props/skymirror/prop_165.obj": {
+   "size": 232700,
+   "sha256": "59b4a9bdd9fce8cb5ec0ad645aa87698c81031fe49c00388a4cda10bdaabadcf"
+  },
+  "assets/local/props/skymirror/prop_17.obj": {
+   "size": 31339,
+   "sha256": "64e8894992d5ed812bfdc3ec1ed7a30a1b97adf6eb472ebdcbd1749013e66fc5"
+  },
+  "assets/local/props/skymirror/prop_18.obj": {
+   "size": 364,
+   "sha256": "d37536451edb96a5df9eef17b82086f730bd84b3abefeaacb76e21beecc1b131"
+  },
+  "assets/local/props/skymirror/prop_181.obj": {
+   "size": 39375,
+   "sha256": "2a7f3b95a4001fe70c499672548dd65e7a5cd73448679e2c1e1cce0a84a1c6c7"
+  },
+  "assets/local/props/skymirror/prop_210.obj": {
+   "size": 175130,
+   "sha256": "802e4a26fba7577d511b1394ab4b7b4aae5bd3b6d41032bc58c5897993fbb4c1"
+  },
+  "assets/local/props/skymirror/prop_213.obj": {
+   "size": 46335,
+   "sha256": "c1103087edf1cf591a45b0ee74f4052b20b024f5223d7980c9b76dd315f52132"
+  },
+  "assets/local/props/skymirror/prop_22.obj": {
+   "size": 42759,
+   "sha256": "6932a4ad27476549f80f70aff6bbcd8bf329d396fc04b71a38b8df8760d29a50"
+  },
+  "assets/local/props/skymirror/prop_26.obj": {
+   "size": 39375,
+   "sha256": "32a7cc2be271ee3448640939d879137d7afacf20e4368cf054c083e0e7e1d994"
+  },
+  "assets/local/props/skymirror/prop_33.obj": {
+   "size": 1523,
+   "sha256": "f1a8a465c20151b6c97f6d2575ae024a06ee1c249efd7282c02eda41689cae18"
+  },
+  "assets/local/props/skymirror/prop_35.obj": {
+   "size": 1836,
+   "sha256": "74c72e371e74df8ee41e8f8afe1455ac50b0c477f116e26631a4619e5f7209ae"
+  },
+  "assets/local/props/skymirror/prop_38.obj": {
+   "size": 368,
+   "sha256": "756b5cb5faa7847409c11c411dbad70f23c42f0037e004b924264ad3af28b77e"
+  },
+  "assets/local/props/skymirror/prop_39.obj": {
+   "size": 1683,
+   "sha256": "348d6980079b8ad99b4f30834a3a2ecfb887734b85cce605438b1e3d0b1d6549"
+  },
+  "assets/local/props/skymirror/prop_4.obj": {
+   "size": 1800,
+   "sha256": "1dcb3ac5af10b3bc321f0b7f934fcc6151520a52202030eda1a14d147fa7c93d"
+  },
+  "assets/local/props/skymirror/prop_43.obj": {
+   "size": 88328,
+   "sha256": "13b838fc1bb8acd880b644e3fee3af7024d0ea2176bddbba60a7f15e1eaf7c5d"
+  },
+  "assets/local/props/skymirror/prop_44.obj": {
+   "size": 1821,
+   "sha256": "ecbade1b5519a6104fd7ba8c70c8d3c1645f8eb29f1abe3578c14a7f1318a5ac"
+  },
+  "assets/local/props/skymirror/prop_5.obj": {
+   "size": 64233,
+   "sha256": "7704e051752846253ff01294cf29e26ffb37d068259b3979fdc2d0b939e44c46"
+  },
+  "assets/local/props/skymirror/prop_54.obj": {
+   "size": 1836,
+   "sha256": "0cf286f75bee2c47a7af1ce77389593e29e1e2b7c5e9f8afcf5f8867648519a1"
+  },
+  "assets/local/props/skymirror/prop_55.obj": {
+   "size": 48204,
+   "sha256": "47e422c8bffa3ef62253aa4e3eeb4e85fd55c92bb17ae35732de32d2f883df79"
+  },
+  "assets/local/props/skymirror/prop_58.obj": {
+   "size": 20461,
+   "sha256": "e0c1a27efd25387dca0dc92296c0e3cb8132b31dbacfff357a487a78995a0f95"
+  },
+  "assets/local/props/skymirror/prop_6.obj": {
+   "size": 51116,
+   "sha256": "39457a3b65734728960fa8c9c3cd42429a19012f2595d2dbd3bce27d99f9b0cc"
+  },
+  "assets/local/props/skymirror/prop_69.obj": {
+   "size": 64299,
+   "sha256": "68e9c68aa28ba5d93dcb30d79a2aad950d4aece9fe42a15de809f3055a0fa8ed"
+  },
+  "assets/local/props/skymirror/prop_71.obj": {
+   "size": 1811,
+   "sha256": "95aa1c21d7c03d1c74af9bfdf952153f88c8aa595804c004ce7732257f21ebd7"
+  },
+  "assets/local/props/skymirror/prop_74.obj": {
+   "size": 20700,
+   "sha256": "b33a8a0ba4242d62d113407ab2118e1bab1c961af91774b93d5410178a4f2f02"
+  },
+  "assets/local/props/skymirror/prop_75.obj": {
+   "size": 22961,
+   "sha256": "93cb2ce37a9b974d75532a4e3883acfdc22f63e569e46c3ac0497d053588b398"
+  },
+  "assets/local/props/skymirror/prop_76.obj": {
+   "size": 1793,
+   "sha256": "f1bff78cb0724246f53bc90bb8ca848ac0c60518cd0beb128efdca3a0b40c462"
+  },
+  "assets/local/props/skymirror/prop_79.obj": {
+   "size": 20277,
+   "sha256": "df247e44ac824c79e1e858554bc706c4fe2800e61cfd92f0e6fed32987ffea8c"
+  },
+  "assets/local/props/skymirror/prop_8.obj": {
+   "size": 20700,
+   "sha256": "93fd91b56328fa3285d1640125a76c14abdaee0eb58a392d93fdbdb86a7fe5d0"
+  },
+  "assets/local/props/skymirror/prop_94.obj": {
+   "size": 88228,
+   "sha256": "56d4604f86a73ceb01c25e3d89767c12bfa8a27463feaa6718d38c3940e1295b"
+  },
+  "assets/local/props/skymirror/props.json": {
+   "size": 2945,
+   "sha256": "9abcb00db8d5e9a3e01c3c7a5c72e2bd280b67e1f883d9d8b165e48c5ca74aac"
+  },
   "assets/local/scene/act1autochess_m01/env.png": {
    "size": 158028,
    "sha256": "d681faa8b12a6eba3fe8352d4f2d68f93f531398d090aab7cc605c8cb1f3bcae"
@@ -52143,6 +52323,18 @@
    "size": 18136,
    "sha256": "970f3ac453caa816d33d603c852554032550aa9d481239c215d349c4a000d689"
   },
+  "assets/local/scene/my_map/lm0.png": {
+   "size": 4285,
+   "sha256": "ab42a63ba6cf4e7caff5d4d1bcec1f1ebf80d7d47e6bc291ddc987606a0b9db8"
+  },
+  "assets/local/scene/my_map/scene.bin": {
+   "size": 545856,
+   "sha256": "fe07d4baf14bbf817f6741d8b8af769666c9435dba63abf2b7cc5929a87c45d1"
+  },
+  "assets/local/scene/my_map/scene.json": {
+   "size": 2652,
+   "sha256": "0e66192b8d7c2e99e300f463a189e3a9466d3b1c1bd47b665ec0384c52a13d6f"
+  },
   "assets/local/scene/tex/TX_AutochessSand_A.png": {
    "size": 2739751,
    "sha256": "7ba36ef24aee75f04394d7d482df3b9e24284fadbe5c51213a12edc86d6b1370"
@@ -52302,6 +52494,18 @@
   "assets/local/scene/tex/TX_LMZ_common.webp": {
    "size": 186614,
    "sha256": "95b0f04644d9487bf43bd638d2acd88398a628fc86c79480f8fc6390bdab9a35"
+  },
+  "assets/local/scene/tex/TX_MyMap_D.png": {
+   "size": 442224,
+   "sha256": "cae5341ab8635f9dd72af2c7075273785e535c3c0e45e585e8b7b320e9857308"
+  },
+  "assets/local/scene/tex/TX_MyMap_Glow.png": {
+   "size": 72,
+   "sha256": "f0e1c8ef3bdc28093427b22e79dbc84a53ff22d74eb0756bfccfb50d12282cda"
+  },
+  "assets/local/scene/tex/TX_MyMap_Wood.png": {
+   "size": 499716,
+   "sha256": "c80cca5888e9fd40ecfe69aec6475ef18be065a7c5f6f6708ac9f327f54b79e4"
   },
   "assets/local/scene/tex/TX_Syracuse_metro_BG.png": {
    "size": 279435,
@@ -69755,6 +69959,10 @@
    "size": 9904,
    "sha256": "6d368d7daf2f5995741bb72b1f7c0bf54686e4e20a9b7f04f0f42a62098afd27"
   },
+  "assets/ui/enemyTypeIcon/dimo_icon.png": {
+   "size": 131429,
+   "sha256": "9e97c15aa11267099edbb3172026dbd6afd95b5d31c6632abea7950b63727ba1"
+  },
   "assets/ui/enemyTypeIcon/dot_icon.png": {
    "size": 22133,
    "sha256": "4afdf474632d6c17b6611ac94b5effa7d41d2282666dfa82e1f48fa2b803c39b"
@@ -70318,6 +70526,142 @@
   "assets/ui/modeIcon/mode_training_icon.png": {
    "size": 587,
    "sha256": "7073af48f7c008f5d27220b115a8a2f98fde32929930fcb4695151780ba73bcd"
+  },
+  "assets/ui/namecard/nc00.png": {
+   "size": 283810,
+   "sha256": "b13afccde0dc9c7a07814adbaaf8cfeb55b51ff61d07b0821ec2b549deba1b4c"
+  },
+  "assets/ui/namecard/nc01.png": {
+   "size": 3528680,
+   "sha256": "0acf75fed16e0c689b03489a27f62a60551bf4eeab9a825ad3b26f36156c2b7f"
+  },
+  "assets/ui/namecard/nc02.png": {
+   "size": 1332810,
+   "sha256": "7e9cd16dcbace146df404061d5a68c752175b6a6778cf4802ef4aec0b9ca08d0"
+  },
+  "assets/ui/namecard/nc03.png": {
+   "size": 4748074,
+   "sha256": "a625c03d0a2b67b63bd2322bca61b53040d01545b0ae6616c6be6c31caedb183"
+  },
+  "assets/ui/namecard/nc04.png": {
+   "size": 3904140,
+   "sha256": "510a3c4fb8901146887faecf01aa71023788cca0c6518b11fb487ab356fba624"
+  },
+  "assets/ui/namecard/nc05.png": {
+   "size": 4020599,
+   "sha256": "573bdcbca9a8bf782deb0e838b13b1387c6f8b912cc476c1246de1d56d45b909"
+  },
+  "assets/ui/namecard/nc06.png": {
+   "size": 1545450,
+   "sha256": "bb9f04b6356dc6886912a5dabb33e70c13ef06ded408eb2581ff65e947794778"
+  },
+  "assets/ui/namecard/nc07.png": {
+   "size": 980395,
+   "sha256": "3a7213006520927e0a3ffdd310d36a640f9a35c0f6acc80f5fd0f84cc66d6ee3"
+  },
+  "assets/ui/namecard/nc08.png": {
+   "size": 970156,
+   "sha256": "6d7d6b91cf104227dfc9bdf931fb6f0d304722c35ac5856b4bdccb45db00b201"
+  },
+  "assets/ui/namecard/nc09.png": {
+   "size": 36781,
+   "sha256": "8e5777cf9acfd9c0e70fad481dbf48b8f898234f8af8bcb54be1b9e86c0e59a4"
+  },
+  "assets/ui/namecard/nc10.png": {
+   "size": 1246216,
+   "sha256": "fa8159855cc5bec1d5558aafb7cf640d22cda4297c19c0f87dfebc30289a1fe4"
+  },
+  "assets/ui/namecard/nc11.png": {
+   "size": 572737,
+   "sha256": "d00a07287fc4f66a6669257dcd9b9c17b2122ad34d9e6d341597f49473389300"
+  },
+  "assets/ui/namecard/nc12.png": {
+   "size": 3442465,
+   "sha256": "c7ee8dcac8a960a4ebd7b853be6dae901df5a99b3e1ebe4333e1c1e092a972b1"
+  },
+  "assets/ui/namecard/nc13.png": {
+   "size": 3333509,
+   "sha256": "0e0633870dda07cc10082eb69f951489fc2c456ddcf122312e28cc2c69090d23"
+  },
+  "assets/ui/namecard/nc14.png": {
+   "size": 409203,
+   "sha256": "3bed10dc70e44fcbefce825abd491655bf5352ebf83337b434eb2a93aa42b258"
+  },
+  "assets/ui/namecard/nc15.png": {
+   "size": 991180,
+   "sha256": "dc320ddf0ec91a749bb523ded8093ea4d4379001356bef002baa8bc860dba0d5"
+  },
+  "assets/ui/namecard/nc16.png": {
+   "size": 1258114,
+   "sha256": "b5d855b2d1b9568c3afd5d1b7d994526af02c2681d5d21bee40909ec09c40a58"
+  },
+  "assets/ui/namecard/nc17.png": {
+   "size": 692288,
+   "sha256": "a92104b6bff9110ef17515d23a48152fcbd706104e9680f5390b64e4a34ab0c2"
+  },
+  "assets/ui/namecard/nc18.png": {
+   "size": 3701104,
+   "sha256": "105ec13b64da280be30fa9adee5bc0c6c69f5217a43dd0de6b6b01abd52e8b96"
+  },
+  "assets/ui/namecard/nc19.png": {
+   "size": 3228476,
+   "sha256": "bca7bb3721ee3ba6c399aa7330ca082a56a4a10538aa85e34301bbee3b752cf6"
+  },
+  "assets/ui/namecard/nc20.png": {
+   "size": 1186945,
+   "sha256": "0b0984c0359909267fe8f49ef08b75af8317ca7445f1d2211e1afcd6a0c811a0"
+  },
+  "assets/ui/namecard/nc21.png": {
+   "size": 3197742,
+   "sha256": "d2b5b31c65806028ea3b1e7e029306bad54d1f93347f8a8c72d7d4334005dd84"
+  },
+  "assets/ui/namecard/nc22.png": {
+   "size": 4457033,
+   "sha256": "7d7a3bc2a95d0ce0aaa2a5142d3bfdd685f03b7d29e93324c0c395099793063e"
+  },
+  "assets/ui/namecard/nc23.png": {
+   "size": 960513,
+   "sha256": "1712a050eb577ef0e44b9acaec47fc7e82d765f212b8568ab8718c42f1b14520"
+  },
+  "assets/ui/namecard/nc24.png": {
+   "size": 3421858,
+   "sha256": "66a9ddf33c0fbde509d6872d1dc60a427aba39f46cd10bc48242d6852261860b"
+  },
+  "assets/ui/namecard/nc25.png": {
+   "size": 752345,
+   "sha256": "a4b71930a2f5b337d6ca0a98251807a9220a3c765ec98b5701b5fa161df53a84"
+  },
+  "assets/ui/namecard/nc26.png": {
+   "size": 3546478,
+   "sha256": "c18080fd0e588b3e968dff25ce4c9d5e5627390d2cc049734ef7b5284b42b782"
+  },
+  "assets/ui/namecard/nc27.png": {
+   "size": 3069597,
+   "sha256": "f1ed9d275c5bb2c08c7da260b24338ba5308b57bb44a6ee18ec955d3d2ddd9c7"
+  },
+  "assets/ui/namecard/nc28.png": {
+   "size": 2767121,
+   "sha256": "81fd3d92fb16874eb62b82cbdfceaf4941b7e3e4b16acd44eb063cfd96997f1c"
+  },
+  "assets/ui/namecard/nc29.png": {
+   "size": 3630213,
+   "sha256": "ba354d8d5e2ff25e375e72b24774c9e71c2414cfe50469fe2fd760ccca501436"
+  },
+  "assets/ui/namecard/nc30.png": {
+   "size": 3122913,
+   "sha256": "7dcb902019a55450904e57d5190d75faa81015040771250355f64fe8523a6ab1"
+  },
+  "assets/ui/namecard/nc31.png": {
+   "size": 2972621,
+   "sha256": "e04761fbe6c2d801296ea750e7cf0a9cfb955547b84ecf5a9da5f55a0faf7918"
+  },
+  "assets/ui/namecard/nc32.png": {
+   "size": 863033,
+   "sha256": "026242519b70819ecb80e2bb20ef0dacb39242c691bc512729abd8e67a155a2b"
+  },
+  "assets/ui/namecard/nc33.png": {
+   "size": 2562152,
+   "sha256": "b23da7a860fd930ba00676b8538b545c656adeb3e8a4978cc53c440fe79c6454"
   },
   "assets/ui/prepReady/cancel_bg.png": {
    "size": 1509,

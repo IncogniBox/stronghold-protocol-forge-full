@@ -176,6 +176,8 @@ export function firepowerVariantPreference() {
 
 /** A presentation choice; the protocol still uses solo/coop plus Room.random. */
 export function lobbySimulationPreference() {
+  // 服务器没有 room.setRandom 时「无限火力」没有入口：旧偏好里的 'firepower' 不许把玩家留在一个看不见的模式里。
+  if (!CAN_FIREPOWER) return 'coop';
   const selected = loadPref('lobby.simulation', null);
   if (MODE_CARDS.some((c) => c.id === selected)) return selected;
   // Preserve the old random toggle, including random solo preferences, as the new dedicated mode.
@@ -1166,6 +1168,17 @@ export function LobbyScreen() {
           setOnlineCount(res.online);
         }
         if (!cancelled && res && res.ok && Array.isArray(res.rooms)) setRooms(res.rooms);
+        // 把同一条回执写进全局 store：其它界面（同盟目录、匹配人数）读的是 `store.lobbyStats` /
+        // `store.presence.matchmaking`，在此之前没有任何地方写入它们。
+        if (!cancelled && res && res.ok) {
+          store.set({
+            lobbyStats: {
+              online: res.online, roomsCount: res.roomsCount, matchesCount: res.matchesCount,
+              rooms: Array.isArray(res.rooms) ? res.rooms : [],
+            },
+            ...(res.matchmaking ? { presence: { ...(store.get().presence || {}), matchmaking: res.matchmaking } } : {}),
+          });
+        }
       }).catch(() => {});
     };
     poll();

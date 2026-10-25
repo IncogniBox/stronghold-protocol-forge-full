@@ -12,6 +12,7 @@ import { cardView } from '../choices.js';
 import { bountySpawns, previewOf } from '../waves.js';
 import { timelineAt } from '../fields.js';
 import { bossFieldPlacement } from '../finalAssault.js';
+import { fieldTileOf as layoutFieldTile } from '../../../shared/layout.js';
 import { battleProgress } from '../../sim/spec.js';
 
 /** Milliseconds since the match started. A stamp before the start, or a bad stamp, is 0. The stored log keeps the epoch. */
@@ -329,7 +330,7 @@ export class MatchViews {
     if (this.bossWaves) {
       const g = this.bossGroupOf(ps);
       if (!g) return [];
-      return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side, mid: this.layout.mirrorCol / 2 }), ...dev]);
+      return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side, mid: typeof this.bossAreaMidOf === 'function' ? this.bossAreaMidOf(ps) : this.layout.mirrorCol / 2 }), ...dev]);
     }
     if (!this.wave) return [];
     const bounty = bountySpawns(this.gd, this.round, this.wave, ps.bounties, ps.playerId, { solo: this.isSolo });
@@ -422,7 +423,7 @@ export class MatchViews {
   bossMateView(ps) {
     const m = ps && ps.alive ? this._bossMateOf(ps) : null;
     if (!m) return null;
-    return { playerId: m.mate.playerId, side: m.side, units: this._prepBoardUnits(m.mate).map((u) => this._onBossHalf(u, m.side)) };
+    return { playerId: m.mate.playerId, side: m.side, units: this._prepBoardUnits(m.mate).map((u) => this._onBossHalf(u, m.side, m.mate)) };
   }
 
   /** UnitInfo list of a player's board and hand (prep scouting): board pieces on their tiles, held pieces on the
@@ -468,8 +469,10 @@ export class MatchViews {
     // 而且看的是这个玩家现在部署的那个场（boss 回合的休整期是它的半场，见 Match.deployFieldOf）：一张把普通带
     // 放大到 5×11 的图，它的整备行比官方低一行。
     const benchField = this.deployFieldOf(ps);
-    const handRowNow = handRow(this.layout, benchField);
-    const tempRowNow = tempRow(this.layout, benchField);
+    // 第 2… 块 boss 场地的整备行跟着**这位棋手自己的**矩形走（第 1 块 / 普通回合仍读地图自己的布局）
+    const benchLayout = typeof this.deployLayoutOf === 'function' ? this.deployLayoutOf(ps) : this.layout;
+    const handRowNow = handRow(benchLayout, benchField);
+    const tempRowNow = tempRow(benchLayout, benchField);
     for (let i = 0; i < ps.hand.length; i++) {
       if (ps.hand[i]) benchUnit(ps.hand[i], i, handRowNow, 'hand');
     }
@@ -492,13 +495,33 @@ export class MatchViews {
     const g = this.fields.length ? null : this.bossGroupOf(ps);
     if (!g) return meta;
     const mate = this.bossMateView(ps);
-    const own = units.map((u) => this._onBossHalf(u, g.side));
-    return { ...meta, kind: 'boss', rect: { ...this.layout.battle.boss }, side: g.side, units: mate ? [...own, ...mate.units] : own, ...(mate ? { mate: { playerId: mate.playerId, side: mate.side } } : {}) };
+    const area = typeof this.bossAreaOf === 'function' ? this.bossAreaOf(ps) : { index: 0, seat: 0 };
+    const own = units.map((u) => this._onBossHalf(u, g.side, ps));
+    // 第 2… 块场地：整块区域一个取景（每人一条矩形、没有左右半场之分）⇒ `side` 给 'L'，`rect` 给这块场地的战斗矩形；
+    // `area` / `seat` 让客户端用同一条 `bossAreaLayout` 建 prep 的棋盘映射
+    return {
+      ...meta, kind: 'boss',
+      rect: typeof this.bossAreaRectOf === 'function' ? this.bossAreaRectOf(ps) : { ...this.layout.battle.boss },
+      side: area.index > 0 ? 'L' : g.side,
+      ...(area.index > 0 ? { area: area.index, seat: area.seat } : {}),
+      units: mate ? [...own, ...mate.units] : own,
+      ...(mate ? { mate: { playerId: mate.playerId, side: mate.side } } : {}),
+    };
   }
 
-  /** A prep UnitInfo (board, bench or temp row) placed on side 'L' | 'R' of the boss field (bossFieldPlacement). */
-  _onBossHalf(u, side) {
-    const p = bossFieldPlacement(side, u.y, u.x, u.dir || 'RIGHT');
+  /**
+   * A prep UnitInfo (board, bench or temp row) placed on the boss field: the official halves through
+   * `bossFieldPlacement`; a player's own rect of boss area 2… through its per-player layout (no mirror).
+   */
+  _onBossHalf(u, side, ps = null) {
+    const area = ps && typeof this.bossAreaOf === 'function' ? this.bossAreaOf(ps) : { index: 0 };
+    let p;
+    if (area.index > 0) {
+      const [row, col] = layoutFieldTile(this.deployLayoutOf(ps), 'bossL', u.y, u.x);
+      p = { row, col, dir: u.dir || 'RIGHT' };
+    } else {
+      p = bossFieldPlacement(side, u.y, u.x, u.dir || 'RIGHT');
+    }
     const v = { ...u, x: p.col, y: p.row };
     // a board piece keeps facing the same way relative to the leader (mirrored on the right half); a bench piece has no
     // stored facing (it faces right, as the own prep bench draws it)

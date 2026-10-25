@@ -163,9 +163,9 @@ export async function createStageView3d({ canvas, getStage, onError, theme } = {
     // map's own 45×60 window for the 大战场 sample, so a big map is built whole instead of only its bottom-left corner
     // (`ensureArea`, below: re-applied whenever the map's window changes).
     scene.setArea(areaFor('all', null));
-    // Light the WHOLE board. BoardScene dims everything outside its focus rect (materials.js uFocusDim 0.72), and the
-    // uniform's default is a small rect — so a preview that never calls this renders a correctly built but nearly black
-    // board. `setFocus(null)` is the scene's own "everything lit" (scene.js:503).
+    // Light the WHOLE board. BoardScene's focus uniform defaults to a small rect (materials.js `uFocus`); its dimming
+    // factor is 1 since 2026-10-25, but calling this still pins the rect to the whole board so a future dim would not
+    // pick the wrong one. `setFocus(null)` is the scene's own "everything lit" (scene.js:503).
     scene.setFocus(null);
     // The scene's fog (near 17, far 36, near-black) is a BATTLE depth cue, tuned for the game's ~16-unit camera. A
     // whole-map overview sits further back, where the same fog swallows the board into the void. Push it past the
@@ -254,7 +254,7 @@ export async function createStageView3d({ canvas, getStage, onError, theme } = {
         // **`size` / `layout` 必须一起带上**：BoardScene 用 `mapSize(layoutOf(stage))` 算它自己的网格，只给
         // `{id, rows, devices}` 的话它永远算成官方 19×21，整张图就只画出标准地图那一片（业主：「3D 预览的显示不全，
         // 只会显示标准地图的」）。
-        scene.setStage(stage ? { id: stage.id, rows: stage.rows, devices: stage.devices, size: stage.size, layout: stage.layout } : null);
+        scene.setStage(stage ? { id: stage.id, rows: stage.rows, devices: stage.devices, size: stage.size, layout: stage.layout, decor: stage.decor } : null);
         // 整张图（这张图自己的窗口）都要建出来：换了尺寸就重设一次 area，并让下一次 frameBoard 重新取景
         ensureArea(stage);
         view.resize();

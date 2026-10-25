@@ -12,6 +12,7 @@ import { buildBossWave, bountySpawns } from '../waves.js';
 import { pairPlayers, bossPoolHp, SharedBossPool, CreditPool, hiddenEligible, BOSS_HIT_STEPS } from '../finalAssault.js';
 import { FieldRunner, HeadlessPacer, syntheticResult, BOSS_SILENCE_MS, CATCHUP_TICKS_PER_INTERVAL } from '../fields.js';
 import { FLOW_TICKER_PRIORITY, BOSS_CLOCK_MS, DELAYS } from './common.js';
+import { bossAreaBattleRect, bossAreaDeployRect, bossAreaMidCol } from '../../../shared/layout.js';
 
 /** b.pool broadcasts at most this often (ms). */
 const POOL_MIN_GAP_MS = 250;
@@ -104,13 +105,18 @@ export class MatchBoss {
       const spawns = wave.spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
       // bounties with battles left (a multi-round card lasts MULTI_ROUND_BOUNTY_BATTLES) follow their player into the
       // boss field, on the player's half
-      // the map's own half boundary: the two boss halves meet at the window's middle column (shared/layout.js bandMidOf)
-      const mid = this.layout.mirrorCol / 2;
+      // 这块 boss 场地自己的战斗矩形与中列：第 1 块 = 地图自己的 boss 带（从前那条），第 2… 块 = `bossAreas[i]` 的
+      // （业主 2026-10-24「boss区域2/3/4 和 boss区域1 一样可设置」）。
+      const areaBattle = bossAreaBattleRect(this.layout, i);
+      const mid = i > 0 ? bossAreaMidCol(this.layout, i) : this.layout.mirrorCol / 2;
       g.forEach((ps, j) => {
         for (const b of bountySpawns(this.gd, this.round, wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: j === 0 ? 'L' : 'R', mid })) spawns.push(b);
       });
       const inputs = g.map((ps, j) => {
-        const input = ps.battleInput({ side: j === 0 ? 'L' : 'R', colOffset: j === 0 ? 0 : 8 });
+        // 第 2… 块场地：每位棋手一条自己的矩形（不镜像、无列偏移）；第 1 块照旧（右半场镜像，colOffset 8）
+        const ownRect = i > 0 ? bossAreaDeployRect(this.layout, i, j) : null;
+        const input = ps.battleInput({ side: j === 0 ? 'L' : 'R', colOffset: i > 0 ? 0 : j === 0 ? 0 : 8 });
+        if (ownRect) input.bossRect = [...ownRect];
         input.lpForBoss = this.teamLp;
         // `side` + `routes`: the player's half of a pair field (spawn-list edits for one player, e.g. 鸭爵's swap)
         const ev = { input, kind: hidden ? 'hidden' : 'boss', round: this.round, spawns, routes: wave.routes, side: g.length > 1 ? (j === 0 ? 'L' : 'R') : null, mid };
@@ -124,7 +130,9 @@ export class MatchBoss {
         modeId: this.modeId,
         round: this.round,
         stageId: this.stageId,
-        rect: { ...this.layout.battle.boss },
+        rect: { ...areaBattle },
+        // 第 2… 块 boss 场地：场帧带上区域下标，客户端按这块场地的布局取景（0 = 第 1 块，不带这个键）
+        ...(i > 0 ? { area: i } : {}),
         timeLimit: Infinity,
         players: inputs,
         spawns: this._sanitizeSpawns(spawns),

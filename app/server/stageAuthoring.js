@@ -14,7 +14,7 @@ import {
   deriveDeployTiles, groundRuleOf, validateStage, stageErrors, normalizeRows,
   gridRectOf, gatePairsFor, deployRectsOf,
 } from '../shared/stageAuthoring.js';
-import { normalizeLayout, layoutForSize, sizeOf, OFFICIAL_SIZE } from '../shared/layout.js';
+import { normalizeLayout, layoutForSize, sizeOf, bossAreaDeployRectMap, OFFICIAL_SIZE } from '../shared/layout.js';
 
 const isPlain = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -133,6 +133,26 @@ export function deriveRoutePaths(stage, routes) {
  * @param {{ paths?: boolean }} [opts]
  * @returns {{ ok: true, stage: object, routePaths: object[], warnings: string[] } | { ok: false, errors: object[] }}
  */
+/** Props the map editor may place by hand (`public/js/render/board3d/decor.js` renders exactly these). */
+export const DECOR_KINDS = Object.freeze(['block', 'lantern', 'crate', 'mark', 'edging', 'hatch', 'stand', 'fence', 'prop']);
+/**
+ * Keep only well-formed `{ kind, r, c }` entries on the map's window; anything else is dropped.
+ * `kind: 'prop'` also carries `v` (the theme's own prop id, themes.js `props` — e.g. `prop_8`). The server does not know
+ * which ids a theme has, so it only bounds the string; an id the theme does not provide simply draws nothing.
+ */
+function decorOf(list, rows) {
+  const R = rows.length, C = rows[0]?.length || 0;
+  const out = [];
+  for (const d of Array.isArray(list) ? list : []) {
+    if (!d || typeof d !== 'object' || !DECOR_KINDS.includes(d.kind)) continue;
+    const r = Number(d.r) | 0, c = Number(d.c) | 0;
+    if (!(r >= 0 && r < R && c >= 0 && c < C)) continue;
+    const v = d.kind === 'prop' && typeof d.v === 'string' && d.v ? { v: d.v.slice(0, 40) } : {};
+    out.push({ kind: d.kind, r, c, ...v });
+  }
+  return out;
+}
+
 export function deriveStage(spec, opts = {}) {
   const errors = stageErrors(validateStage(spec));
   if (errors.length) return { ok: false, errors };
@@ -141,6 +161,7 @@ export function deriveStage(spec, opts = {}) {
   const layout = normalizeLayout(spec.layout, size);
   const rows = normalizeRows(spec.rows);
   const tiles = spec.tiles;
+  const decor = decorOf(spec.decor, rows);
   const devices = (Array.isArray(spec.devices) ? spec.devices : []).map((d) => {
     const out = { ...d };
     // build-data's deviceActiveAtStart: exactly the non-hidden devices are active at match start
@@ -177,7 +198,12 @@ export function deriveStage(spec, opts = {}) {
     special: isPlain(spec.special) ? spec.special : {},
     runes: Array.isArray(spec.runes) ? spec.runes : [],
     globalBuffs: Array.isArray(spec.globalBuffs) ? spec.globalBuffs : [],
-    deployTiles: deriveDeployTiles(rows, tiles, devices, { groundHighGround: groundRuleOf(spec), rects: layout.deployRects }),
+    // 除三块老矩形外，第 2… 块 boss 场地各自的部署区也派生成 `bossA<i>:<k>`（编辑器的「显示部署」照这张表画；
+    // 引擎在运行时从图例现推，不依赖它）
+    deployTiles: deriveDeployTiles(rows, tiles, devices, {
+      groundHighGround: groundRuleOf(spec),
+      rects: { ...layout.deployRects, ...bossAreaDeployRectMap(layout) },
+    }),
     groundPaths: paths.groundPaths,
     groundPathsWithDevices: paths.groundPathsWithDevices,
     // 联防图 (kind 'unite'): validateStage already enforced helpers ∈ 1..2 and rejected kind on anything else
@@ -188,6 +214,11 @@ export function deriveStage(spec, opts = {}) {
     // official-shaped record stays exactly as it was.
     ...(isPlain(spec.rounds) ? { rounds: { ...spec.rounds } } : {}),
     ...(isPlain(spec.bossRounds) ? { bossRounds: { ...spec.bossRounds } } : {}),
+    // the map's own 3D board theme (`public/js/render/board3d/themes.js` id, e.g. 'skymirror'): the client hands it to
+    // loadBoardPack so ONE map can wear another theme; omitted when not declared, so every existing record is unchanged
+    ...(typeof spec.theme === 'string' && spec.theme ? { theme: spec.theme } : {}),
+    // hand-placed decorations (the editor's decor tool); omitted when empty so older records stay byte-identical
+    ...(decor.length ? { decor } : {}),
     options: {
       characterLimit: Number.isFinite(options.characterLimit) ? options.characterLimit : 8,
       moveMultiplier: Number.isFinite(options.moveMultiplier) ? options.moveMultiplier : 0.5,
@@ -261,8 +292,9 @@ export function validateStageRecord(stage, opts = {}) {
       issues.push({ field: key, code: 'INCOMPLETE_DERIVED', severity: 'warning', message: `${missing} route(s) the sim can compute are absent` });
     }
   }
+  const stageLayout = normalizeLayout(stage.layout, sizeOf(stage));
   const wantDeploy = deriveDeployTiles(normalizeRows(stage.rows), stage.tiles, stage.devices,
-    { groundHighGround: groundRuleOf(stage), rects: normalizeLayout(stage.layout, sizeOf(stage)).deployRects });
+    { groundHighGround: groundRuleOf(stage), rects: { ...stageLayout.deployRects, ...bossAreaDeployRectMap(stageLayout) } });
   if (isPlain(stage.deployTiles) && JSON.stringify(stage.deployTiles) !== JSON.stringify(wantDeploy)) {
     issues.push({ field: 'deployTiles', code: 'STALE_DERIVED', severity: 'error', message: 'deployTiles no longer match the legend/devices', hint: 're-derive it' });
   }

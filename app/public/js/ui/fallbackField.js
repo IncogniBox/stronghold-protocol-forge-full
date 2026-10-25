@@ -24,7 +24,7 @@ import { html, TierChip } from './components.js';
 import { GEO } from '../../../shared/constants.js';
 import { itemIconUrl, tokenAvatarUrl, enemyIconUrl } from './assetUrls.js';
 import { avatarUrlOf, currentAppearanceLookup } from './portraitChain.js';
-import { layoutOf, mapRectOf, isDualLayout } from '../render/layout.js';
+import { layoutOf, mapRectOf, isDualLayout, fieldTile as layoutFieldTile } from '../render/layout.js';
 import { boardGeo } from '../render/drag.js';
 import { penRect } from '../render/pen.js';
 import { tileKey, hasFlag, UF, penPlacement, fieldTile, ownStandIn, ownDiyRecord } from './gameLogic.js';
@@ -149,7 +149,7 @@ export function createFallbackView(host, opts = {}) {
   const handPos = (L, idx) => ({ x: idx * L.tile, y: (L.rows + 0.6) * L.tile });
   const tempPos = (L, idx) => ({ x: (GEO.TEMP_C0 + idx) * L.tile, y: (L.rows + 1.72) * L.tile });
   /** 这张图棋盘的几何（整备行 / 临时整备行 / 棋盘矩形，棋盘坐标）：官方 = GEO 那一套，大图自己声明的那套。 */
-  const geoNow = () => boardGeo(layoutOf(st.stage), st.deployField || 'normal');
+  const geoNow = () => boardGeo(st.layout || layoutOf(st.stage), st.deployField || 'normal');
 
   // ---- pieces (prep) ---------------------------------------------------------------------------------------
   function pieceArt(p) {
@@ -261,7 +261,10 @@ export function createFallbackView(host, opts = {}) {
   // ---- tiles ----------------------------------------------------------------------------------------------
   // the stage tile a board tile shows: in a boss round's prep the player's half of the boss field (fieldTile)
   function tileClass(row, col) {
-    const [r, c] = st.mode === 'prep' ? fieldTile(st.deployField, row, col) : [row, col];
+    // 第 2… 块 boss 场地：这位棋手自己的布局（`bossAreaLayout`）走同一条映射
+    const [r, c] = st.mode === 'prep'
+      ? (st.layout ? layoutFieldTile(st.deployField, row, col, st.layout) : fieldTile(st.deployField, row, col))
+      : [row, col];
     return fallbackTileClass(st.stage, r, c);
   }
 
@@ -434,7 +437,9 @@ export function createFallbackView(host, opts = {}) {
     setCamera(kind, o = {}) {
       st.camera = kind || 'prep';
       if (kind === 'pen') { schedule(); return; } // the board keeps its rect for the way back
-      const L = layoutOf(st.stage);
+      // 第 2… 块 boss 场地：调用方给的 per-player 布局（`bossAreaLayout`，每人一条矩形、不镜像）
+      const L = o?.layout || layoutOf(st.stage);
+      st.layout = o?.layout || null;
       // the rect the board draws, in BOARD coordinates: the server's / caller's own rect, else the map's own band of
       // that kind (shared/layout.js; official 19×21 → the historical GEO rects unchanged)
       st.rect = o && o.rect && Number.isFinite(o.rect.r0) ? { ...o.rect } : mapRectOf(L, kind);
@@ -442,6 +447,8 @@ export function createFallbackView(host, opts = {}) {
       const sideR = o?.side === 'R';
       st.deployField = kind === 'bossPrep' ? (sideR ? 'bossR' : 'bossL')
         : (isDualLayout(L) ? (sideR ? 'normalR' : 'normalL') : 'normal');
+      // 第 2… 块 boss 场地：每人一条自己的矩形（`bossAreaLayout`），没有左右半场之分 ⇒ 两位都读 bossL
+      if (kind === 'bossPrep' && o?.area > 0) st.deployField = 'bossL';
       st.camera = kind === 'bossPrep' ? 'prep' : st.camera;
       st.side = o?.side || 'L';
       schedule();
@@ -456,7 +463,7 @@ export function createFallbackView(host, opts = {}) {
       // highlights and the pieces read is the board either way; the TILES drawn are that half — tilePos / terrainTile)
       if (st.camera !== 'prep' && st.camera !== 'pen') {
         st.camera = 'prep';
-        const L = layoutOf(st.stage);
+        const L = st.layout || layoutOf(st.stage);
         st.rect = mapRectOf(L, st.deployField === 'bossL' || st.deployField === 'bossR' ? 'boss' : 'normal');
       }
       if (!st.editable && st.drag) { endDrag(); st.drag = null; st.hoverTarget = null; }

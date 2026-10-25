@@ -886,6 +886,9 @@ export const C2S = {
   //     拆开就会出现「两个都没给」被当成合法的缝）—— 坏形状**点名拒绝**，而不是存一个没人能解释的东西；
   //   * `picks` 上限 64 项（一间房最多就这么多干员，多出来是坏数据）。
   'room.appearance': { $check: isAppearanceMsg },
+  // 名片干员（room.card）：纯展示，`''` = 用「按 playerId 分配」的默认立绘。
+  // 形状层只认 charId；「这个 id 本房有没有」由 server/lobby.js 的 card() 裁决。
+  'room.card': { charId: (v) => v === '' || isCharId(v) },
   // spectator seats (remake feature, community report #26; MAX_SPECTATORS): take one of a co-op room's spectator seats —
   // in its lobby or while its match runs — never a player seat; the host frees one by playerId (the spectator gets
   // room.closed { reason: 'kicked' }). room.leave / g.leave leave a spectator seat like a player seat.

@@ -4,7 +4,7 @@
 
 import { COLS } from '../constants.js';
 import { GEO } from '../../../shared/constants.js';
-import { stageRowOfBoard, deployRectOf, boardRectOf, handRowOf, isDualLayout } from '../../../shared/layout.js';
+import { stageRowOfBoard, deployRectOf, boardRectOf, handRowOf, isDualLayout, bossRectLayout } from '../../../shared/layout.js';
 import { Unit } from '../units.js';
 import { normDir, mirrorDir } from '../dir.js';
 import { SkillRuntime } from '../skills.js';
@@ -30,23 +30,30 @@ const boardField = (kind, side, layout) => {
 export class BattlePlayers {
   _addPlayer(p) {
     const side = p.side === 'R' ? 'R' : 'L';
+    // 第 2… 块 boss 场地：这位棋手带着**自己那条部署矩形**（`bossRect`，地图坐标）—— 每人一块、不镜像（业主
+    // 2026-10-24「boss区域2/3/4 和 boss区域1 一样可设置」）。它的棋盘就是那条矩形，战斗取景是这块场地的战斗矩形。
+    const bossRect = Array.isArray(p.bossRect) ? p.bossRect : null;
+    const layoutP = bossRect ? bossRectLayout(this.layout, bossRect, this.rect) : this.layout;
     // 镜像的不是「boss 那个 kind」，而是**这一场这一位棋手站的那个半场**：boss 的右半场，或一张左右两半的图的普通带
     // 右半场（业主 2026-10-21「左右各一位玩家同场」）。`colOffset` 侧（联防的右帮手）不镜像。
-    const field = boardField(this.kind, side, this.layout);
-    const mirror = field === 'normalR' || field === 'bossR';
+    const field = bossRect ? 'bossL' : boardField(this.kind, side, this.layout);
+    const mirror = !bossRect && (field === 'normalR' || field === 'bossR');
     const ps = {
       playerId: p.playerId,
       seat: p.seat ?? this.players.length,
       side,
       colOffset: Number(p.colOffset) || 0,
       deployField: field,
+      /** 这位棋手自己的布局（第 2… 块 boss 场地每人一条矩形；其余就是这张图的布局）。 */
+      layout: layoutP,
       rowOffset: p.rowOffset,
       coords: p.coords ?? 'board',
       mirror,
       facing: mirror ? -1 : 1,
       // default direction of this player's units on this field (the FA right side is mirrored: RIGHT ↔ LEFT)
       dir: mirror ? 'LEFT' : 'RIGHT',
-      half: mirror || (Number(p.colOffset) || 0) >= 8 ? 'R' : 'L',
+      // 自己一块矩形（不镜像）的场地上，半场就是自己那一侧（敌人的归属按 side，不按列）
+      half: bossRect ? (side === 'R' ? 'R' : 'L') : mirror || (Number(p.colOffset) || 0) >= 8 ? 'R' : 'L',
       bonds: clone(p.bonds ?? {}),
       bandId: p.bandId ?? null,
       playerEffects: clone(p.playerEffects ?? []),
@@ -110,7 +117,7 @@ export class BattlePlayers {
     let keys = ps._boardKeys;
     if (!keys) {
       keys = ps._boardKeys = new Set();
-      const B = boardRectOf(this.layout, ps.deployField || boardField(this.kind, ps.side, this.layout));
+      const B = boardRectOf(ps.layout || this.layout, ps.deployField || boardField(this.kind, ps.side, this.layout));
       for (let br = B.r0; br <= B.r1; br++) {
         for (let bc = B.c0; bc <= B.c1; bc++) { const [fr, fc] = this._boardTile(ps, br, bc); keys.add(fr * COLS + fc); }
       }
@@ -138,7 +145,7 @@ export class BattlePlayers {
   }
 
   _boardTile(ps, row, col) {
-    const L = this.layout;
+    const L = (ps && ps.layout) || this.layout;
     const field = ps.deployField || boardField(this.kind, ps.side, L);
     let r = row;
     // a board row ≥ the 整备行 lands on the band this battle fights in: the boss band on a boss field, the normal

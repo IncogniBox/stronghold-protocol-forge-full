@@ -168,13 +168,15 @@ export function collectViolations(m, { limit = 25 } = {}) {
     const dmap = typeof m.deployMapFor === 'function' ? m.deployMapFor(ps) : ps.deployMap();
     // the field that map was built for — a map's board is its own shape, and its boss half is narrower (shared/layout.js)
     const dfield = typeof m.deployFieldOf === 'function' ? m.deployFieldOf(ps) : 'normal';
+    // 这位棋手自己那块 boss 场地的形状（第 2… 块 per-player 矩形；其余就是地图自己的布局）
+    const dlay = typeof m.deployLayoutOf === 'function' ? m.deployLayoutOf(ps) : m.layout;
     for (const [k, p] of ps.board) {
       const [r, c] = parseKey(k);
-      if (!inField(r, c, m.layout, dfield)) fail(`${id}: piece outside the board at ${k}`);
+      if (!inField(r, c, dlay, dfield)) fail(`${id}: piece outside the board at ${k}`);
       if (p.kind === 'item') { fail(`${id}: item ${p.id} stands on the board`); continue; }
       const rec = p.kind === 'token' ? pgd.token(p.id) : pgd.chess(p.id);
       const cls = p.kind === 'chess' ? placeClass(ps, rec) : positionClass(rec);
-      if (rec && !canPlace(dmap, cls, r, c, m.layout, dfield)) fail(`${id}: ${p.id} on an illegal tile ${k}`);
+      if (rec && !canPlace(dmap, cls, r, c, dlay, dfield)) fail(`${id}: ${p.id} on an illegal tile ${k}`);
       // a "只能部署在召唤者攻击范围内" summon inside its owner's attack range (PlayerState.summonRange: a pure read)
       const range = p.kind === 'token' && typeof ps.summonRange === 'function' ? ps.summonRange(p) : null;
       if (range && !range.has(k)) fail(`${id}: ${p.id} on ${k}, outside its owner's attack range`);

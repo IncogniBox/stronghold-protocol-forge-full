@@ -134,6 +134,8 @@ export class BattleEvents {
   fieldMeta() {
     return {
       fieldId: this.fieldId, kind: this.kind, rect: { ...this.rect }, stageId: this.stageId,
+      // 第 2… 块 boss 场地：客户端用它找到这块场地的布局（不是第 1 块的默认带）
+      ...(this.area ? { area: this.area } : {}),
       units: this.units.filter((u) => (u.alive && u.deployed && !u.hidden) || this.isDown(u)).map(unitInfo),
     };
   }
