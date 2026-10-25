@@ -259,6 +259,8 @@ export class AccountDb {
       nameBanned: banned,
       namecard: typeof row.namecard === 'string' && NAMECARD_IDS.includes(row.namecard) ? row.namecard : null,
       trophies: Math.max(0, Math.floor(Number(row.trophies) || 0)),
+      // 管理账号（只回给**本人**的 me / 登录 / 注册；lookupPlayer 的对外字段里没有它）
+      admin: row.admin === true,
       ...(banned && row.originalName ? { originalName: row.originalName } : {}),
     };
   }
@@ -741,8 +743,15 @@ export class AccountService {
 
   // ---- 管理 ---------------------------------------------------------------------------------
 
+  /**
+   * 管理鉴权：**管理口令**，或**账号库里的 `admin: true` 账号**的本机会话 token。
+   * 后者由运营方在 `accounts.json` 里指定（见 README「管理口令」一节），登录后不必再敲口令。
+   */
   adminGuard(token) {
-    return typeof token === 'string' && token.length > 0 && token === this.adminToken;
+    if (typeof token !== 'string' || !token) return false;
+    if (token === this.adminToken) return true;
+    const row = this.sessionAccount(token);
+    return !!(row && row.admin === true);
   }
 
   adminView(status = 'pending', q = '') {
@@ -918,15 +927,17 @@ export class AccountService {
           return { id, ...this.lookupPlayer(ids) };
         }
         case 'admin': {
-          // **每一个管理动作都要口令** —— 包括只读的列表。把这一句放在分支里逐个写，正是「新增一个动作时忘了
+          // **每一个管理动作都要鉴权** —— 包括只读的列表。把这一句放在分支里逐个写，正是「新增一个动作时忘了
           // 加鉴权」最容易发生的地方（本包的第一次自测就是这么漏掉 `names` 的）。
-          if (!this.adminGuard(msg.adminToken)) return { id, error: 'ADMIN_DENIED', message: '管理口令不对' };
+          // 凭证可以是管理口令，也可以是管理账号的会话 token（没填口令时用本请求的 token）。
+          const adminCred = msg.adminToken || token;
+          if (!this.adminGuard(adminCred)) return { id, error: 'ADMIN_DENIED', message: '管理口令不对' };
           if (msg.action === 'names') return { id, ...this.adminView(msg.status, msg.q) };
           if (msg.action === 'avatars') return { id, ...this.adminAvatars(msg.status) };
-          if (msg.action === 'avatar-review') return { id, ...this.adminAvatarReview(msg.adminToken, msg.accountId, msg.reviewAction, msg.note) };
-          if (msg.action === 'scan') return { id, ...this.adminScan(msg.adminToken) };
-          if (msg.action === 'review') return { id, ...this.adminReview(msg.adminToken, msg.name, msg.reviewAction, msg.note) };
-          if (msg.action === 'rules') return { id, ...this.adminRules(msg.adminToken, msg.words) };
+          if (msg.action === 'avatar-review') return { id, ...this.adminAvatarReview(adminCred, msg.accountId, msg.reviewAction, msg.note) };
+          if (msg.action === 'scan') return { id, ...this.adminScan(adminCred) };
+          if (msg.action === 'review') return { id, ...this.adminReview(adminCred, msg.name, msg.reviewAction, msg.note) };
+          if (msg.action === 'rules') return { id, ...this.adminRules(adminCred, msg.words) };
           return { id, error: 'ADMIN_BAD_INPUT', message: `未知的管理动作「${msg.action}」` };
         }
         default: return { id, error: 'UNKNOWN_OP', message: `未知操作「${op}」` };

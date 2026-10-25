@@ -243,6 +243,8 @@ function ProfileBlock({ ctx }) {
   const [bind, setBind] = useState('idle');
   const [boundId, setBoundId] = useState('');
   const fileRef = useRef(null);
+  /** 账号库里的管理账号（`accounts.json` 里 `admin: true`）：登录后不必再敲管理口令。 */
+  const isAdmin = !!(account && account.admin === true);
 
   /** 引擎两格表面的可用性（探测一次，写进界面说明里 —— 点了没反应是最坏的一种失败）。 */
   const canSetName = !!(ctx && ctx.session && typeof ctx.session.setName === 'function');
@@ -442,8 +444,10 @@ function ProfileBlock({ ctx }) {
    * （服务器启动日志里那一串）。所以它被提成一个独立的「视图」（`tab === 'admin'`），两个状态都能进去。
    */
   const adminSection = html`<div class="acct-sec">
-    <div class="acct-hint">管理口令在服务器启动日志里（本包首次启动生成，存于服务器的 mod/server-ext/ 目录）。</div>
-    <${Field} label="管理口令" value=${adminToken} onInput=${setAdminToken} />
+    ${isAdmin
+    ? html`<div class="acct-hint">当前账号 ${account.name}#${account.tag} 拥有管理权限，无需再输入管理口令。</div>`
+    : html`<div class="acct-hint">管理口令在服务器启动日志里（本包首次启动生成，存于服务器的 mod/server-ext/ 目录）。</div>
+      <${Field} label="管理口令" value=${adminToken} onInput=${setAdminToken} />`}
     <div class="acct-actions">
       <button type="button" class="acct-btn" disabled=${busy} onClick=${doAdminScan}>扫描</button>
       <button type="button" class="acct-btn acct-btn--go" disabled=${busy} onClick=${doAdminFetch}>取列表</button>
