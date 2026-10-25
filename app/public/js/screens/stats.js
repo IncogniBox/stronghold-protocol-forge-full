@@ -24,6 +24,7 @@ import { fmtNum, diyRecordFor, cardStandIn } from '../ui/gameLogic.js';
 import { useDocClass } from '../ui/device.js';
 import { uiUrl, itemIconUrl } from '../ui/assetUrls.js';
 import { portraitUrlOf, avatarUrlOf, currentAppearanceLookup } from '../ui/portraitChain.js';
+import { NamecardPicker } from '../ui/namecards.js';
 import { identity } from '../net.js';
 import { TITLE_HEX_SECTORS, titleSectorClip } from '../ui/titleHexagon.js';
 import { store, createStore, useStore, selectRoute } from '../store.js';
@@ -55,6 +56,7 @@ export const closeStats = () => statsStore.set({ open: false });
 
 const TABS = [
   { id: 'overview', name: N_('总览'), micro: 'OVERVIEW' },
+  { id: 'namecard', name: N_('名片背景'), micro: 'NAMECARD' },
   { id: 'bands', name: N_('盟约&策略'), micro: 'ALLIANCES / STRATEGIES' },
   { id: 'totals', name: N_('战斗累计'), micro: 'COMBAT TOTALS' },
   { id: 'history', name: N_('对局记录'), micro: 'HISTORY' },
@@ -600,6 +602,7 @@ function StatsScreen({ tab }) {
       <div class="mod-host" data-mod-slot="screen.stats.profile"></div>
       ${!ready ? html`<div class="st-loading"><${Spinner} size="md" /></div>`
         : stats.newer ? html`<p class="st-empty">${t('检测到更新版本的统计数据，请先升级客户端再查看，以免覆盖数据。')}</p>`
+          : tab === 'namecard' ? html`<${NamecardPicker} />`
           : empty ? html`<p class="st-empty">${t('还没有记录 —— 完成一局对局后，这里会开始积累。')}</p>`
             : tab === 'bands' ? html`<${Bands} agg=${agg} gd=${gd} records=${stats.records} />`
               : tab === 'totals' ? html`<${CombatSums} agg=${agg} />`

@@ -359,3 +359,7 @@
 }
 .sp-coarse .st-tab, .sp-coarse .st-table tr.is-clickable td { min-height: 30px; }
 @media (prefers-reduced-motion: reduce) { .st { animation: none; } }
+
+/* 名片背景页签 (js/ui/namecards.js NamecardPicker)：设置里那份网格在整页里不再限高。 */
+.st .set-namecards--page { max-height: none; overflow: visible; grid-template-columns: repeat(auto-fill, minmax(1.9rem, 1fr)); }
+.st .set-namecards--page .set-namecard { height: .58rem; }

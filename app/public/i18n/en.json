@@ -2830,5 +2830,8 @@
   "熠曲丰碑": "Gleaming Monument",
   "永恒的演出": "Eternal Performance",
   "月落镜水": "Moon Over Mirror Water",
-  "祝鼓祭": "Drum Festival"
+  "祝鼓祭": "Drum Festival",
+  "登录账号后可以更换名片背景。": "Sign in to change your namecard background.",
+  "名片背景会显示在大厅右上角的个人信息、房间席位卡与账号资料上；同房的人都能看到。": "The namecard background appears on the top-right profile chip in the lobby, room seat cards and the account profile; everyone in the room sees it.",
+  "账号服务未就绪：请确认已登录；若服务器刚更新，重启后可用": "The account service is not ready: make sure you are signed in; if the server was just updated, it becomes available after a restart."
 }

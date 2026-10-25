@@ -39,6 +39,8 @@ class Lane {
     this.ws = null;
     this.opening = null;
     this.seq = 1;
+    /** 最近一次失败的原因（`{ code, message }`）：界面的「未连接 / 未登录」据此说清楚是哪一种。 */
+    this.lastError = null;
     /** @type {Map<number, { resolve: Function, timer: any }>} */
     this.pending = new Map();
   }
@@ -69,7 +71,9 @@ class Lane {
     if (!slot) return;
     this.pending.delete(msg.id);
     try { clearTimeout(slot.timer); } catch { /* 已经触发 */ }
-    slot.resolve(msg.ok === false ? null : msg);
+    if (msg.ok === false) { this.lastError = msg.error || { code: 'ERROR' }; slot.resolve(null); return; }
+    this.lastError = null;
+    slot.resolve(msg);
   }
 
   failAll() {
@@ -203,14 +207,25 @@ export const accountLane = {
   request: (op, fields) => lane.request(op, fields),
   lookup: (ids) => lane.request('lookup', { ids: Array.isArray(ids) ? ids.slice(0, LOOKUP_MAX) : [] }),
   token: readToken,
+  error: () => lane.lastError,
 };
 
-/** The hub's top-right chip: avatar + name (+ #tag when known); a click opens 统计数据. */
+/** 换完名片后刷新这一席的展示面（缓存作废，重新 lookup）。 */
+export function refreshAccount(playerId) {
+  if (!playerId) return;
+  cache.delete(playerId);
+  queued.add(playerId);
+  if (!timer) timer = globalThis.setTimeout(flushLookups, LOOKUP_DEBOUNCE_MS);
+}
+
+/** The hub's top-right chip: the account's namecard, avatar + name (+ #tag when known); a click opens 统计数据. */
 export function AccountMeChip({ player, onStats }) {
   const account = useAccount(player?.playerId);
   const name = account?.name || player?.name || t('博士');
   const tag = account && Number.isFinite(account.tag) ? account.tag : null;
-  return html`<button type="button" class="me-chip me-chip--btn stats-entry" onClick=${onStats} title=${t('统计数据')} aria-label=${t('统计数据')}>
+  const card = account && typeof account.card === 'string' && NAMECARD_IDS.includes(account.card) ? account.card : null;
+  return html`<button type="button" class=${`me-chip me-chip--btn stats-entry${card ? ' has-nc' : ''}`} onClick=${onStats} title=${t('统计数据')} aria-label=${t('统计数据')}>
+    ${card ? html`<div class="nc-layer" style=${`--nc: url("/assets/ui/namecard/${card}.png")`} aria-hidden="true"></div>` : null}
     <${AvatarFrame} size="sm" name=${name} src=${account?.avatar || player?.avatar || undefined} seat=${0} self=${true} />
     <span class="me-chip__text"><span class="me-chip__name">${name}${tag === null ? null : html`<span class="num"> #${tag}</span>`}</span><${MicroLabel}>STATS<//></span>
   </button>`;

@@ -2361,7 +2361,7 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 .acct-me.has-nc { padding: 10px 12px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 4px; --nc-shade: linear-gradient(90deg, rgba(8, 11, 11, .82), rgba(8, 11, 11, .45) 55%, rgba(8, 11, 11, .1)); }
 .acct-me.has-nc .acct-who small, .acct-title-card.has-nc .acct-title-card__who small { color: #d6dedb; }
 .acct-title-card.has-nc { --nc-shade: linear-gradient(90deg, rgba(8, 11, 11, .84), rgba(8, 11, 11, .5) 55%, rgba(8, 11, 11, .2)); }
-.me-chip.has-nc { border-color: rgba(255, 255, 255, .22); }
+.me-chip.has-nc { border-color: rgba(255, 255, 255, .22); overflow: hidden; }
 .rseat__plate.has-nc, .tcard__plate.has-nc, .frow.has-nc { --nc-shade: linear-gradient(90deg, rgba(8, 11, 11, .86), rgba(8, 11, 11, .5) 55%, rgba(8, 11, 11, .12)); }
 .dorder__card.has-nc { --nc-shade: linear-gradient(90deg, rgba(8, 11, 11, .84), rgba(8, 11, 11, .45) 40%, rgba(8, 11, 11, .25)); }
 .splate__info.has-nc { --nc-shade: linear-gradient(90deg, rgba(8, 30, 25, .78), rgba(8, 20, 18, .4) 60%, rgba(8, 11, 11, .1)); }

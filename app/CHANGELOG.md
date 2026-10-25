@@ -25,7 +25,9 @@
 - `server-ext`（`workshop/server-ext/server/accounts.mjs`，包版本 `2.5.0`）新增 lane 操作：`profile` / `namecard` / `friendList` / `friendAdd` / `friendRemove` / `achievements`；`lookup` 与 `me` 的公开资料多一个 `namecard`。账号库只新增 `friends` 与 `namecard` 两个可选字段，旧库装载时自动补齐。
 - `public/js/ui/friends.js`：大厅「好友」入口 + 房间「邀请好友」；好友关系双向写入账号库，在线状态取账号是否还有活着的登录会话；邀请 = 复制当前同盟的房间链接。
 - `public/js/ui/achievements.js`：成就面板读账号侧的 `achievements`（注册、头像过审、名片、绑定、好友、账号满 30 天），**不伪造对局战绩**。
-- `public/js/ui/namecards.js`：席位卡背后一层官方「个人名片」美术 —— PRTS 个人名片一览的 **34 个主题**（`nc00`…`nc33`，`shared/namecards.js` 是目录，美术在 `public/assets/ui/namecard/<id>.png`，取每个主题的无界面文字 `预览1+`，缺失时回落 `预览1`；原图不换色）。账号没设过时按编号给一张；设置里新增「名片背景」缩略图选择，写入账号资料。
+- `public/js/ui/namecards.js`：席位卡背后一层官方「个人名片」美术 —— PRTS 个人名片一览的 **34 个主题**（`nc00`…`nc33`，`shared/namecards.js` 是目录，美术在 `public/assets/ui/namecard/<id>.png`，取每个主题的无界面文字 `预览1+`，缺失时回落 `预览1`；原图不换色）。账号没设过时按编号给一张；换名片放在「统计数据 → 名片背景」页签（`总览` 旁边），设置里不再重复。
+- 大厅右上角的个人芯片也带上这张名片背景（`.me-chip.has-nc` + `.nc-layer`），换完立刻刷新，不用重进房间。
+- 好友 / 成就面板的失败文案区分「未登录」与「服务器还没重启到含账号接口的版本」；账号服务本身仍由 `server-ext` 的 lane 提供。
 
 ### 联邦目录与匹配人数
 

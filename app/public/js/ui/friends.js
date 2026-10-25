@@ -57,7 +57,7 @@ function FriendsDialog({ onClose }) {
 
   const load = async () => {
     const res = await accountLane.request('friendList');
-    if (!res) { setNote(t('账号服务未连接，或还没有登录账号')); setFriends([]); return; }
+    if (!res) { setNote(t('账号服务未就绪：请确认已登录；若服务器刚更新，重启后可用')); setFriends([]); return; }
     setFriends(Array.isArray(res.friends) ? res.friends : []);
     setNote('');
   };

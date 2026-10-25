@@ -56,7 +56,7 @@ export function AchievementPanel({ me, onClose }) {
     let alive = true;
     accountLane.request('achievements').then((res) => {
       if (!alive) return;
-      if (!res) { setItems([]); setNote(t('账号服务未连接，或还没有登录账号')); return; }
+      if (!res) { setItems([]); setNote(t('账号服务未就绪：请确认已登录；若服务器刚更新，重启后可用')); return; }
       setItems(Array.isArray(res.achievements) ? res.achievements : []);
       setNote('');
     });

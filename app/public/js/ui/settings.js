@@ -42,8 +42,6 @@ import { pluginMicro } from './pluginTag.js';
 import { fxAvailable } from '../render/vfx/available.js';
 import { resolveOfficialFx } from '../render/vfx/tier.js';
 import { html, Modal, Button, Icon, MicroLabel } from './components.js';
-import { accountLane, readToken } from './accounts.js';
-import { NAMECARDS } from './namecards.js';
 import { createStore, useStore, loadPref, savePref, store } from '../store.js';
 import { GIcon } from './gameComponents.js';
 // 本仓库的语音词表是共用的那一份（shared/constants.js），所以这里不要 VOICE_LANGS：
@@ -482,45 +480,6 @@ function OtherSkinsRow({ value, onSet }) {
  * Settings modal.
  * @param {{ open: boolean, onClose: Function }} props
  */
-/**
- * 名片背景 (ui/namecards.js): 只在**这台机器已登录账号**时出现 —— 它写的是账号资料（server-ext 的
- * `namecard`），不是本机偏好，所以没有 token 就没有可改的东西。色块本身就是席位卡上那一层。
- */
-function NamecardSection() {
-  const [current, setCurrent] = useState(null);
-  const [note, setNote] = useState('');
-  const logged = !!readToken();
-  useEffect(() => {
-    if (!logged) return undefined;
-    let alive = true;
-    accountLane.request('profile').then((res) => {
-      if (!alive) return;
-      const id = res && res.profile && typeof res.profile.namecard === 'string' ? res.profile.namecard : null;
-      setCurrent(id);
-    });
-    return () => { alive = false; };
-  }, [logged]);
-  if (!logged) return null;
-  const pick = async (id) => {
-    setCurrent(id);
-    const res = await accountLane.request('namecard', { namecard: id });
-    setNote(res ? '' : t('保存失败：账号服务未连接'));
-  };
-  return html`<section class="set-plugins" aria-labelledby="set-namecard-title" data-testid="namecard">
-    <div class="set-keys__head"><span class="set-row__label" id="set-namecard-title">${t('名片背景')}<${MicroLabel}>NAMECARD<//></span></div>
-    <p class="set-hint">${t('名片背景显示在房间席位卡与账号资料上，同房的人都能看到。')}</p>
-    <div class="set-namecards" role="radiogroup" aria-label=${t('名片背景')}>
-      ${NAMECARDS.map((c) => html`<button key=${c.id} type="button" role="radio"
-        aria-checked=${current === c.id ? 'true' : 'false'} class=${`set-namecard${current === c.id ? ' is-on' : ''}`}
-        title=${t(c.name)} onClick=${() => pick(c.id)}>
-        <img class="set-namecard__img" src=${`/assets/ui/namecard/${c.id}.png`} alt="" loading="lazy" draggable=${false} />
-        <span class="set-namecard__name">${t(c.name)}</span>
-      </button>`)}
-    </div>
-    ${note ? html`<p class="set-hint is-warn">${note}</p>` : null}
-  </section>`;
-}
-
 export function SettingsModal({ open, onClose }) {
   const s = useSettings();
   const [tested, setTested] = useState(false);
@@ -595,7 +554,6 @@ export function SettingsModal({ open, onClose }) {
       </div>
       <p class="set-hint set-textsize-note">${t('调整界面文字大小，棋盘保持原比例。')}</p>
       <${ScreenFitSection} />
-      <${NamecardSection} />
       <${HotkeySection} keys=${s.keys} touchUi=${touchUi} />
       <${CosmeticSection} />
       <${UiPluginSection} />
