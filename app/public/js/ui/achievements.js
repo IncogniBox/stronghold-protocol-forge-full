@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
 import { html, Icon } from './components.js';
 import { TrophyBadge, trophyLevel } from './trophies.js';
-import { aggregateStats, loadStats } from './stats.js';
+import { aggregateStats, loadStats, selfRowOf } from './stats.js';
 import { accountLane, readToken } from './accounts.js';
 import { t } from '../../../shared/i18n.js';
 
@@ -23,12 +23,44 @@ const META = Object.freeze({
 const metaOf = (id) => (META[id] ? META[id]() : { name: id, desc: '', icon: 'rook' });
 const doneOf = (items) => (Array.isArray(items) ? items.filter((x) => x && Number(x.progress) >= Number(x.total)).length : 0);
 
-/** 本机统计里的「获得奖杯」总额（与统计页 `获得奖杯 N` 同一份数据）；奖杯图标的等级由它决定。 */
+/** 本机统计里的「获得奖杯」总额（与统计页 `获得奖杯 N` 同一份数据）。 */
+function localTrophies() {
+  try { return Math.max(0, Number(aggregateStats(loadStats().records).trophies) || 0); }
+  catch { return 0; }
+}
+
+/** 本机记录里每一局自己拿到的奖杯（`id` 是跨设备去重键）。 */
+function localTrophyRecords() {
+  try {
+    return loadStats().records
+      .filter((r) => r && r.end !== 'quit' && r.roomMode === 'coop' && typeof r.id === 'string' && r.id)
+      .map((r) => {
+        const row = selfRowOf(r);
+        const n = row ? Math.max(0, Math.floor(Number(row.trophies) || 0)) : 0;
+        return n > 0 ? { id: r.id, trophies: n } : null;
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+/**
+ * 账号累计奖杯：登录后把本机记录上报给账号库（按对局 id 去重），再读服务端总数；
+ * 未登录 / 服务器还没有这两个接口时回落到本机统计。
+ */
 function useTrophies() {
-  return useMemo(() => {
-    try { return Math.max(0, Number(aggregateStats(loadStats().records).trophies) || 0); }
-    catch { return 0; }
+  const local = useMemo(localTrophies, []);
+  const [server, setServer] = useState(null);
+  useEffect(() => {
+    if (!readToken()) return undefined;
+    let alive = true;
+    const records = localTrophyRecords();
+    const req = records.length ? accountLane.request('trophySync', { records }) : accountLane.request('trophies');
+    req.then((res) => {
+      if (alive && res && Number.isFinite(res.trophies)) setServer(Math.max(0, Math.floor(res.trophies)));
+    });
+    return () => { alive = false; };
   }, []);
+  return Number.isFinite(server) ? server : local;
 }
 
 /** The hub's 成就统计 card (the reference page's top-left entry). */

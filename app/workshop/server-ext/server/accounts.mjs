@@ -183,6 +183,9 @@ function allow(buckets, key, perMs, burst, now = Date.now()) {
 /** 名片背景的可选 id（与 shared/namecards.js 的目录同一份顺序：nc00…nc33，共 34 个官方主题）。 */
 export const NAMECARD_IDS = Object.freeze(Array.from({ length: 34 }, (_, i) => `nc${String(i).padStart(2, '0')}`));
 
+/** 奖杯去重账本最多记多少个对局 id（单设备本机记录上限 1000；账本要能盖住几台设备的并集，留 4000）。 */
+const TROPHY_LEDGER_MAX = 4000;
+
 /** 账号库：**纯数据**，不认识 socket，也不认识 WebSocket 信封（那些在下面）。 */
 export class AccountDb {
   /** @param {{ read: (rel: string) => string|null, write: (rel: string, data: string) => boolean }} io */
@@ -255,6 +258,7 @@ export class AccountDb {
       uploadBanned: row.uploadBanned === true,
       nameBanned: banned,
       namecard: typeof row.namecard === 'string' && NAMECARD_IDS.includes(row.namecard) ? row.namecard : null,
+      trophies: Math.max(0, Math.floor(Number(row.trophies) || 0)),
       ...(banned && row.originalName ? { originalName: row.originalName } : {}),
     };
   }
@@ -380,6 +384,8 @@ export class AccountService {
       nameBanned: false,
       originalName: null,
       namecard: NAMECARD_IDS[tag % NAMECARD_IDS.length],
+      trophies: 0,
+      trophyIds: [],
       createdAt: Date.now(),
     };
     this.db.data.accounts.push(row);
@@ -579,6 +585,7 @@ export class AccountService {
         playerId, accountId: row.id, name: view.name, tag: view.tag,
         avatar: view.pending || view.rejected ? null : (row.avatar || null),
         namecard: view.namecard,
+        trophies: view.trophies,
       });
     }
     return { players: out };
@@ -677,6 +684,38 @@ export class AccountService {
     };
     if (typeof id === 'string' && id) { drop(row.id, id); drop(id, row.id); this.db.save(); }
     return this.friendView(row);
+  }
+
+  /** 账号累计奖杯（`trophies`）。 */
+  trophyView(row) { return { trophies: Math.max(0, Math.floor(Number(row.trophies) || 0)) }; }
+
+  /**
+   * 跨设备累计奖杯：客户端把**本机统计记录**（`id` + 该局自己获得的奖杯数）上报，服务端按对局 `id` 去重后累加。
+   * 同一局在两台设备上各上报一次只算一次；不同设备打的不同对局各算一次。
+   * @param {any} row @param {Array<{ id: string, trophies: number }>} records
+   */
+  syncTrophies(row, records) {
+    const list = Array.isArray(records) ? records.slice(0, 5000) : [];
+    const ids = Array.isArray(row.trophyIds) ? row.trophyIds.filter((x) => typeof x === 'string') : [];
+    const known = new Set(ids);
+    let added = 0;
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const id = typeof item.id === 'string' ? item.id.slice(0, 64) : '';
+      if (!id || known.has(id)) continue;
+      const n = Math.floor(Number(item.trophies));
+      if (!Number.isFinite(n) || n < 0 || n > 1e6) continue;
+      known.add(id);
+      ids.push(id);
+      added += n;
+    }
+    // 全是已记过的 id ⇒ 不写盘（每次进大厅都会同步一次，没必要每次都落盘）
+    if (added > 0) {
+      row.trophies = Math.max(0, Math.floor(Number(row.trophies) || 0) + added);
+      row.trophyIds = ids.slice(-TROPHY_LEDGER_MAX);
+      this.db.save();
+    }
+    return { trophies: Math.max(0, Math.floor(Number(row.trophies) || 0)), added };
   }
 
   /**
@@ -853,6 +892,16 @@ export class AccountService {
           const row = this.sessionAccount(token);
           if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
           return { id, ...this.achievementsOf(row) };
+        }
+        case 'trophies': {
+          const row = this.sessionAccount(token);
+          if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
+          return { id, ...this.trophyView(row) };
+        }
+        case 'trophySync': {
+          const row = this.sessionAccount(token);
+          if (!row) return { id, error: 'BAD_CREDENTIALS', message: '需要先登录' };
+          return { id, ...this.syncTrophies(row, msg.records) };
         }
         case 'bind': {
           const row = this.sessionAccount(token);
