@@ -37,6 +37,27 @@ import {
 import { syncThreeCamera } from '../projection.js';
 import { mergeSceneChunks, sceneMaterialKey, sceneWaterInfo, isSceneWater } from './load.js';
 
+/**
+ * Per-theme cap on the key light (2026-10-25). 天镜阁（skymirror）的 6.4 倍主光是为**官方场景材质**（带烘焙 lightmap）
+ * 调的；复刻版的棋盘是程序化的 `MeshStandardMaterial`（只有顶点 AO，没有那张 lightmap），6.4 倍会把浅色面
+ * （木板高台、浅色摆件、雪面）直接推成纯白 —— 用户在对局截图里看到的就是整片战场泛白、只有自写着色器的水面还是青色。
+ * 只对这张主题把主光夹到 3.0；其它地图（官方战场）仍用 `LIGHTING.key.intensity` 的 2.6，不受影响。
+ */
+export const THEME_KEY_CAP = Object.freeze({ skymirror: 3.0 });
+
+/**
+ * Key light intensity of a board pack: the theme's own value when it has one, capped per theme.
+ * @param {string|undefined} theme pack.theme (board3d/themes.js id)
+ * @param {{ keyIntensity?: number }|null|undefined} mood pack.mood
+ * @param {number} [fallback] the default rig's key intensity
+ * @returns {number}
+ */
+export function keyIntensityFor(theme, mood, fallback = LIGHTING.key.intensity) {
+  const want = Number.isFinite(mood?.keyIntensity) ? mood.keyIntensity : fallback;
+  const cap = THEME_KEY_CAP[theme];
+  return Number.isFinite(cap) ? Math.min(want, cap) : want;
+}
+
 /** Lighting rig (tuned against the official screenshots: bright even tops, darker sides, soft shadows). */
 export const LIGHTING = Object.freeze({
   key: { color: 0xfff1df, intensity: 2.6, dir: [-5.2, -3.4, 10] },
@@ -204,9 +225,10 @@ export class BoardScene {
     const HEMI_SKY = MOOD?.hemiSky ?? LIGHTING.hemi.sky;
     const HEMI_GROUND = MOOD?.hemiGround ?? LIGHTING.hemi.ground;
     const BG_LEVEL = MOOD?.bgColor ?? LIGHTING.bg.color * LIGHTING.bg.dim;
-    // A theme whose atlas is dark by nature (天镜阁 is a night scene: its _D averages 18–79/255) needs a stronger key
-    // light, or the whole board reads as black. Nothing else in the rig changes.
-    const KEY_INTENSITY = MOOD?.keyIntensity ?? LIGHTING.key.intensity;
+    // A theme whose atlas is dark by nature (天镜阁 is a night scene: its _D averages 18–79/255) asks for a stronger key
+    // light, or the whole board reads as black — but only up to that theme's cap (THEME_KEY_CAP): the procedural board
+    // has no baked lightmap to absorb the official scene's 6.4x. Nothing else in the rig changes.
+    const KEY_INTENSITY = keyIntensityFor(pack?.theme, MOOD);
     this.renderer = opts.renderer || new T.WebGLRenderer({
       canvas: opts.canvas, antialias: opts.antialias ?? true, alpha: false, stencil: false, depth: true,
       powerPreference: 'high-performance', preserveDrawingBuffer: !!opts.preserveDrawingBuffer,

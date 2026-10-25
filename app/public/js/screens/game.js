@@ -101,6 +101,7 @@ import { EffectsList } from '../ui/effectsList.js';
 import { CombatHud } from '../ui/combatHud.js';
 import { SettingsModal, settingsStore, useSettings } from '../ui/settings.js';
 import { CombatMetricsPanel } from '../ui/combatMetrics.js';
+import { BattleMusicButton } from '../ui/battleMusic.js';
 // 局内开发者面板（「全量模拟」专属，见 ui/devPanel.js 与 m.public.dev）
 import { DevPanel } from '../ui/devPanel.js';
 import { ExitModal, AwayOverlay, awayStore } from '../ui/matchChrome.js';
@@ -1799,6 +1800,7 @@ function MatchScreen() {
           ? html`<${LoadoutButton} from="prep" size="sm" />` : null}
         ${trainRound && priv && !priv.ready && !spectator
           ? html`<${ReconTrainButton} done=${trainDone} onClick=${() => setTrainOpen(true)} />` : null}
+        <${BattleMusicButton} />
         <button type="button" class="gm__gear" aria-label=${t('设置')} title=${t('设置')} onClick=${() => setSettingsOpen(true)}><${GIcon} name="gear" /></button>
         <button type="button" class="gm__gear gm__guide" aria-label=${t('玩法说明')} title=${t('玩法说明')} onClick=${() => openGuide(0)}><${Icon} name="book" /></button>
         <${FullscreenButton} class="gm__gear gm__fs" />

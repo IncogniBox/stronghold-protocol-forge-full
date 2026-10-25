@@ -2849,6 +2849,12 @@
   "暂无策略记录": "No strategy records yet",
   "还没有可展示的战绩：完成一局模拟后在这里记录盟约叠加最高的一局": "No records to show yet: finish a simulation and the highest bond stack will be recorded here.",
   "账号数据 · 本机累计 · 每局结束后更新": "Account data · local totals · updated after each match",
+  "跟随本局默认音乐": "Use this match's default music",
+  "正在播放": "Playing",
+  "正在加载音乐库…": "Loading the music library…",
+  "这首无法播放，已回到默认音乐": "This track cannot play; back to the default music",
+  "选择一首替换战斗中的开战 / 首领 / 联防音乐；选择保存在本浏览器，之后每局沿用。音量与静音沿用游戏设置。": "Pick a track to replace the battle, boss and unite music. The choice is saved in this browser and used in later matches; volume and mute follow the game settings.",
+  "和默认音乐一样，进入结算 / 大厅时自动停下；大厅音乐另有自己的播放器。": "Like the default music, it stops at the settlement / lobby; lobby music has its own player.",
   "在线 {n}": "{n} online",
   "现在没有在线的好友。": "No friends are online right now."
 }

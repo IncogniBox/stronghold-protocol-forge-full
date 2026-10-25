@@ -902,6 +902,8 @@ export class AudioManager {
     try {
       this.lastBgmKey = key;
       if (this.lobbyMusicOverride?.(key)) { this.wantBgm = null; ++this.bgmToken; this._fadeOutBgm(); return; }
+      // 战斗侧的自定曲目（ui/battleMusic.js）：与大厅那条同一套约定 —— 返回 true 表示由它接管，引擎淡出
+      if (this.battleMusicOverride?.(key)) { this.wantBgm = null; ++this.bgmToken; this._fadeOutBgm(); return; }
       if (!this.ctx) { this.wantBgm = key; return; }
       if (this.bgmSilent) {
         this.wantBgm = key;

@@ -579,6 +579,8 @@
   border: 1px solid var(--line-2); color: var(--text-lo); transition: color var(--t-fast), border-color var(--t-fast);
 }
 .gm__gear .icon { width: .28rem; height: .28rem; }
+/* 战斗音乐按钮（ui/battleMusic.js）：和齿轮同一尺寸，只用 ♫ 字形 */
+.gm__gear.gm__music span { font-size: .32rem; line-height: 1; font-family: var(--font-display, inherit); }
 .gm__gear:hover { color: var(--mint-400); border-color: var(--mint-700); }
 
 .gm__metrics[aria-expanded="true"] { color: var(--mint-400); border-color: var(--mint-700); background: var(--mint-900); }

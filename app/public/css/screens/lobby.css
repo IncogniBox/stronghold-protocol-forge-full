@@ -2192,9 +2192,11 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 .ach__body { position: relative; z-index: 1; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: .1rem .7rem .5rem .66rem; scrollbar-width: thin; scrollbar-color: rgba(220, 230, 226, .45) transparent; }
 .ach__body::-webkit-scrollbar { width: .07rem; }
 .ach__body::-webkit-scrollbar-thumb { background: rgba(220, 230, 226, .45); border-radius: .04rem; }
-.ach__close { position: absolute; right: -.52rem; top: -.36rem; z-index: 2; width: .5rem; height: .5rem; display: grid; place-items: center; padding: 0; border: 0; background: none; color: #f4f7f6; cursor: pointer; }
-.ach__close .icon { width: .5rem; height: .5rem; filter: drop-shadow(0 0 .04rem #000); }
-.ach__close:hover, .ach__close:focus-visible { color: var(--mint-400); outline: none; }
+/* 关闭按钮在标题栏**里面**（标题栏 overflow:hidden，放在负偏移上会被裁掉 —— 2026-10-25 用户报「无法退出」）。 */
+.ach__close { position: absolute; right: .14rem; top: .12rem; z-index: 3; width: .46rem; height: .46rem; display: grid; place-items: center; padding: 0;
+  border: 1px solid rgba(24, 18, 8, .55); background: rgba(14, 18, 17, .62); color: #f4f7f6; cursor: pointer; }
+.ach__close .icon { width: .3rem; height: .3rem; filter: drop-shadow(0 0 .04rem #000); }
+.ach__close:hover, .ach__close:focus-visible { color: var(--mint-400); border-color: var(--mint-400); outline: none; }
 .ach__foot { position: absolute; right: -.06rem; bottom: -.16rem; z-index: 2; padding: .06rem .16rem; font-size: calc(.2 * var(--t)); color: #e2e8e6; background: rgba(16, 22, 21, .94);
   border: 0; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(78, 216, 175, .35); }
 @media (max-width: 1100px) { .ach__close { right: .06rem; top: .06rem; } }
