@@ -2124,6 +2124,9 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 .hub-ach__scene::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .18) 0 1px, transparent 1px 3px), linear-gradient(90deg, rgba(8, 10, 10, .55), transparent 40%); }
 .hub-ach .hub-ach__mark { position: relative; z-index: 1; display: grid; place-items: center; }
 .hub-ach .hub-ach__mark .icon { width: .52rem; height: .56rem; color: #eef3f1; filter: drop-shadow(0 0 .04rem rgba(0, 0, 0, .6)); }
+.hub-ach__trophy { width: .52rem; height: .56rem; object-fit: contain; filter: drop-shadow(0 0 .05rem rgba(0, 0, 0, .7)); }
+.hub-ach__rank-icon { width: .3rem; height: .3rem; display: grid; place-items: center; }
+.hub-ach__rank-icon .tbadge { width: 100%; height: 100%; }
 .hub-ach .hub-ach__mark .emblem { margin: 0; gap: .06rem; animation: none; }
 .hub-ach .hub-ach__mark .emblem__svg { width: .52rem; height: .56rem; filter: drop-shadow(0 0 .04rem rgba(0, 0, 0, .6)); }
 .hub-ach .hub-ach__mark .emblem__svg circle { fill: #15110c; animation: none; }
@@ -2139,7 +2142,7 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 .hub-ach__label::before, .hub-ach__label::after { content: ''; position: absolute; top: .06rem; bottom: .06rem; width: .06rem; border: 1px solid rgba(220, 230, 226, .3); }
 .hub-ach__label::before { left: .04rem; border-right: 0; }
 .hub-ach__label::after { right: .04rem; border-left: 0; }
-.hub-ach__badge { width: .24rem; height: .24rem; fill: #e8eeec; flex: none; }
+.hub-ach__badge { width: .24rem; height: .24rem; object-fit: contain; fill: #e8eeec; flex: none; }
 .hub-ach__lv { margin-left: auto; font-size: calc(.15 * var(--t)); color: var(--mint-400); font-weight: 600; }
 /* a guest: the achievements are the account's (2026-10-14) */
 .hub-ach__login { color: #b9c2bf; }
@@ -2258,6 +2261,7 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 .ach-bar::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .4; background: repeating-linear-gradient(90deg, rgba(0, 0, 0, .25) 0 1px, transparent 1px 7px); }
 .ach-bar__icon { position: absolute; left: .3rem; top: -.2rem; width: .9rem; height: 1.04rem; display: grid; place-items: center; background: #2b302f; box-shadow: 0 0 0 2px rgba(200, 210, 206, .32); }
 .ach-bar__icon svg { width: .52rem; height: .52rem; fill: #eef3f1; }
+.ach-bar__icon .tbadge { width: .72rem; height: .72rem; }
 .ach-bar__title { position: relative; z-index: 1; font-size: calc(.34 * var(--t)); font-weight: 800; color: #f2f6f5; letter-spacing: .04em; }
 .ach-bar__marks { position: relative; z-index: 1; margin-left: auto; display: flex; align-items: center; gap: .06rem; color: rgba(220, 230, 226, .55); }
 .ach-bar__marks > i { width: .3rem; height: .3rem; display: grid; place-items: center; border: 1px solid rgba(220, 230, 226, .45); }

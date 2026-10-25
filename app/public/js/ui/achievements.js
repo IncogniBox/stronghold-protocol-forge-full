@@ -4,8 +4,10 @@
 //
 // 样式全部走 css/screens/lobby.css 已有的 `.hub-ach` / `.ach` 一节（这一节本来就是为这块界面写的）。
 
-import { useEffect, useState } from '../../vendor/hooks.module.js';
+import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
 import { html, Icon } from './components.js';
+import { TrophyBadge, trophyLevel } from './trophies.js';
+import { aggregateStats, loadStats } from './stats.js';
 import { accountLane, readToken } from './accounts.js';
 import { t } from '../../../shared/i18n.js';
 
@@ -21,18 +23,18 @@ const META = Object.freeze({
 const metaOf = (id) => (META[id] ? META[id]() : { name: id, desc: '', icon: 'rook' });
 const doneOf = (items) => (Array.isArray(items) ? items.filter((x) => x && Number(x.progress) >= Number(x.total)).length : 0);
 
+/** 本机统计里的「获得奖杯」总额（与统计页 `获得奖杯 N` 同一份数据）；奖杯图标的等级由它决定。 */
+function useTrophies() {
+  return useMemo(() => {
+    try { return Math.max(0, Number(aggregateStats(loadStats().records).trophies) || 0); }
+    catch { return 0; }
+  }, []);
+}
+
 /** The hub's 成就统计 card (the reference page's top-left entry). */
 export function AchievementEntry({ onOpen }) {
-  const [level, setLevel] = useState(1);
-  useEffect(() => {
-    let alive = true;
-    accountLane.request('achievements').then((res) => {
-      if (!alive || !res) return;
-      const done = doneOf(res.achievements);
-      if (done > 0) setLevel(done);
-    });
-    return () => { alive = false; };
-  }, []);
+  const trophies = useTrophies();
+  const level = Math.max(1, trophyLevel(trophies));
   return html`<button type="button" class=${`hub-ach${readToken() ? '' : ' is-guest'}`} onClick=${onOpen} title=${t('成就统计')} aria-label=${t('成就统计')}>
     <span class="hub-ach__scene">
       <svg class="hub-ach__land" viewBox="0 0 160 40" preserveAspectRatio="none" aria-hidden="true">
@@ -45,24 +47,24 @@ export function AchievementEntry({ onOpen }) {
         <path d="M0 30 L18 20 L32 27 L48 14 L64 25 L82 17 L98 29 L116 21 L132 30 L148 24 L160 30 L160 40 L0 40Z" fill="#221812" opacity=".82" />
         <path d="M0 34 L24 28 L42 33 L60 26 L78 34 L96 29 L114 35 L132 30 L150 34 L160 31 L160 40 L0 40Z" fill="#0e0b09" opacity=".9" />
       </svg>
-      <span class="hub-ach__mark"><${Icon} name="rook" /></span>
+      <span class="hub-ach__mark"><${TrophyBadge} count=${trophies} class="hub-ach__trophy" /></span>
     </span>
-    <span class="hub-ach__rank"><${Icon} name="rook" /><small>LV${level}</small></span>
+    <span class="hub-ach__rank"><span class="hub-ach__rank-icon"><${TrophyBadge} count=${trophies} class="hub-ach__trophy" /></span><small>LV${level}</small></span>
     <span class="hub-ach__label">
-      <${Icon} name="rook" class="hub-ach__badge" />
+      <${TrophyBadge} count=${trophies} class="hub-ach__badge" />
       <span>${t('成就统计')}</span>
       <span class="hub-ach__lv">LV${level}</span>
     </span>
   </button>`;
 }
 
-function AccountPlate({ account, items, done }) {
+function AccountPlate({ account, items, done, trophies }) {
   const name = (account && account.name) || t('博士');
   const tag = account && Number.isFinite(account.tag) ? account.tag : null;
   const first = [...name][0] || '?';
   return html`<div class="ach-plate">
     <div class="ach-card">
-      <span class="ach-card__lv"><b>LV</b><small>${Math.max(1, done)}</small></span>
+      <span class="ach-card__lv"><b>LV</b><small>${Math.max(1, trophyLevel(trophies))}</small></span>
       <span class="ach-card__ava">${account && account.avatar
     ? html`<img src=${account.avatar} alt="" draggable=${false} />`
     : html`<span class="ach-card__glyph">${first}</span>`}</span>
@@ -73,10 +75,10 @@ function AccountPlate({ account, items, done }) {
       <span class="ach-card__brand">STRONGHOLD<br />PROTOCOL</span>
     </div>
     <div class="ach-counts">
-      <span class="ach-counts__badge"><${Icon} name="rook" /></span>
-      <span class="ach-counts__row"><small>${t('已完成成就')}</small><b>${done} / ${items.length}</b></span>
+      <span class="ach-counts__badge is-trophy"><${TrophyBadge} count=${trophies} /></span>
+      <span class="ach-counts__row"><small>${t('获得奖杯')}</small><b>${trophies}</b></span>
       <span class="ach-counts__badge"><${Icon} name="users" /></span>
-      <span class="ach-counts__row"><small>${t('账号编号')}</small><b>${tag === null ? '—' : `#${tag}`}</b></span>
+      <span class="ach-counts__row"><small>${t('已完成成就')}</small><b>${done} / ${items.length}</b></span>
     </div>
   </div>`;
 }
@@ -105,6 +107,7 @@ export function AchievementPanel({ me, onClose }) {
   }, [logged]);
 
   const done = doneOf(items || []);
+  const trophies = useTrophies();
   return html`<div class="ach" role="dialog" aria-modal="true" aria-label=${t('成就统计')}>
     <div class="ach__box">
       <header class="ach__head">
@@ -126,10 +129,10 @@ export function AchievementPanel({ me, onClose }) {
           <p>${note}</p>
         </div>` : null}
         ${items && items.length ? html`
-          <${AccountPlate} account=${account} items=${items} done=${done} />
+          <${AccountPlate} account=${account} items=${items} done=${done} trophies=${trophies} />
           <div class="ach-bar">
-            <span class="ach-bar__icon"><${Icon} name="rook" /></span>
-            <span class="ach-bar__title">${t('账号成就')}</span>
+            <span class="ach-bar__icon"><${TrophyBadge} count=${trophies} /></span>
+            <span class="ach-bar__title">${t('卫戍成就')}</span>
             <span class="ach-bar__marks"><i class="num">${done}</i><i class="num">${items.length}</i></span>
           </div>
           <div class="ach-maxima">
