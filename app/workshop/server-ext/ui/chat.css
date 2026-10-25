@@ -33,31 +33,37 @@
   line-height: 1.35;
 }
 
-/* 标题行 + 两个页签 */
+/* 标题行 */
 .community-chat__head {
   flex: none;
   display: flex;
   align-items: center;
-  gap: .06rem;
-  height: .3rem;
-  padding: 0 .08rem;
+  gap: .08rem;
+  height: .34rem;
+  padding: 0 .1rem;
   border-bottom: 1px solid rgba(223, 230, 226, .1);
 }
-.community-chat__title { font-size: .14rem; font-weight: 800; letter-spacing: .08em; white-space: nowrap; }
-.community-chat__tabs { margin-left: auto; display: flex; gap: .02rem; min-width: 0; }
+.community-chat__micro { font: 700 .1rem/1 ui-monospace, Consolas, monospace; letter-spacing: .12em; color: var(--text-dim); white-space: nowrap; }
+.community-chat__title { font-size: .16rem; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
+.community-chat__status { margin-left: auto; display: inline-flex; align-items: center; gap: .04rem; font-size: .11rem; color: var(--mint-400); }
+.community-chat__status i { width: .07rem; height: .07rem; border-radius: 50%; background: var(--mint-400); box-shadow: 0 0 .06rem var(--mint-400); }
+
+/* 频道页签（标题行下面一整条，与参考页面的频道切换同一条） */
+.community-chat__tabs { flex: none; display: flex; gap: .02rem; padding: 0 .06rem; border-bottom: 1px solid rgba(223, 230, 226, .1); }
 .community-chat__tab {
   pointer-events: auto;
   font: inherit;
   font-size: .12rem;
-  padding: .02rem .06rem;
+  padding: .05rem .1rem;
   color: var(--text-lo);
   background: none;
-  border: 1px solid transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
   white-space: nowrap;
 }
 .community-chat__tab:hover { color: var(--text-hi); }
-.community-chat__tab.is-on { color: var(--mint-400); border-color: var(--mint-a35); background: var(--mint-a10); }
+.community-chat__tab.is-on { color: var(--mint-400); border-bottom-color: var(--mint-500); }
 
 /* 滚动列表（消息 / 邀约共用） */
 .community-chat__list {
@@ -74,9 +80,11 @@
 .community-chat__empty { margin: auto; padding: .1rem .02rem; color: var(--text-dim); text-align: center; }
 
 /* 一条消息 */
-.community-chat__row { display: flex; gap: .06rem; word-break: break-word; }
+.community-chat__row { display: flex; align-items: baseline; gap: .06rem; word-break: break-word; }
+.community-chat__time { flex: none; font: .1rem/1.3 ui-monospace, Consolas, monospace; color: var(--text-dim); }
 .community-chat__name { flex: none; max-width: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mint-400); font-weight: 700; }
 .community-chat__text { color: var(--text-md); }
+.community-chat__row.is-system .community-chat__text { color: var(--gold); }
 
 /* 表情一排 */
 .community-chat__emoji {

@@ -73,10 +73,16 @@ const lineOf = (data, msg) => ({
   text: data && typeof data.text === 'string' ? data.text : '',
 });
 
+/** `HH:MM`（大厅消息的时间戳，与参考页面的聊天行一致）。 */
+const timeOf = (at) => {
+  const d = new Date(Number.isFinite(at) ? at : Date.now());
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
 /** 面板本体：两个页签 + 已接收的消息 / 邀约。 */
 function LobbyChat({ net: api }) {
   const [tab, setTab] = useState('chat');
-  const [lines, setLines] = useState([]);
+  const [lines, setLines] = useState(() => [{ system: true, text: '你已进入大厅频道', at: Date.now() }]);
   const [invites, setInvites] = useState([]);
   const [draft, setDraft] = useState('');
   const listRef = useRef(null);
@@ -86,7 +92,7 @@ function LobbyChat({ net: api }) {
     const offLobby = api.on('lobby', (data, msg) => {
       const line = lineOf(data, msg);
       if (!line.text) return;
-      setLines((prev) => [...prev, line].slice(-HISTORY_MAX));
+      setLines((prev) => [...prev, { ...line, at: Date.now() }].slice(-HISTORY_MAX));
     });
     const offInvite = api.on('invite', (data, msg) => {
       if (!data || typeof data !== 'object') return;
@@ -123,22 +129,26 @@ function LobbyChat({ net: api }) {
 
   return html`
     <div class="community-chat__head">
-      <span class="community-chat__title">${'大厅'}</span>
-      <div class="community-chat__tabs" role="tablist">
-        <button type="button" role="tab" aria-selected=${tab === 'chat'}
-          class=${`community-chat__tab${tab === 'chat' ? ' is-on' : ''}`} onClick=${() => setTab('chat')}>${'大厅交流'}</button>
-        <button type="button" role="tab" aria-selected=${tab === 'invite'}
-          class=${`community-chat__tab${tab === 'invite' ? ' is-on' : ''}`} onClick=${() => setTab('invite')}>${invites.length ? `同盟邀约 ${invites.length}` : '同盟邀约'}</button>
-      </div>
+      <span class="community-chat__micro">LOBBY CHAT</span>
+      <span class="community-chat__title">${'大厅聊天'}</span>
+      <span class="community-chat__status"><i></i>${'在线'}</span>
+    </div>
+    <div class="community-chat__tabs" role="tablist">
+      <button type="button" role="tab" aria-selected=${tab === 'chat'}
+        class=${`community-chat__tab${tab === 'chat' ? ' is-on' : ''}`} onClick=${() => setTab('chat')}>${'大厅频道'}</button>
+      <button type="button" role="tab" aria-selected=${tab === 'invite'}
+        class=${`community-chat__tab${tab === 'invite' ? ' is-on' : ''}`} onClick=${() => setTab('invite')}>${'招募频道'}${invites.length ? ` ${invites.length}` : ''}</button>
     </div>
     ${tab === 'chat' ? html`
       <div class="community-chat__list" ref=${listRef}>
         ${lines.length === 0
           ? html`<div class="community-chat__empty">${'还没有人说话'}</div>`
           : lines.map((m, i) => html`
-            <div class="community-chat__row" key=${`${m.name}:${i}`}>
-              <span class="community-chat__name">${m.name}</span>
-              <span class="community-chat__text">${m.text}</span>
+            <div class=${`community-chat__row${m.system ? ' is-system' : ''}`} key=${`${m.name}:${i}`}>
+              <time class="community-chat__time">${timeOf(m.at)}</time>
+              ${m.system
+              ? html`<span class="community-chat__text">${m.text}</span>`
+              : html`<span class="community-chat__name">${m.name}</span><span class="community-chat__text">${m.text}</span>`}
             </div>`)}
       </div>
       <div class="community-chat__emoji">
@@ -147,7 +157,7 @@ function LobbyChat({ net: api }) {
             onClick=${() => insert(e)}>${e}</button>`)}
       </div>
       <div class="community-chat__send">
-        <input class="community-chat__input" value=${draft} maxlength=${TEXT_MAX} placeholder=${'说点什么…'}
+        <input class="community-chat__input" value=${draft} maxlength=${TEXT_MAX} placeholder=${'和大厅的博士聊聊…'}
           onInput=${(e) => setDraft(e.currentTarget.value)}
           onKeyDown=${(e) => { if (e.key === 'Enter') send(); }} />
         <button type="button" class="community-chat__go" disabled=${!draft.trim()} onClick=${send}>${'发送'}</button>
