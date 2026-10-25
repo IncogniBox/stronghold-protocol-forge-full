@@ -219,7 +219,7 @@ function Overview({ agg, gd, nickname, records }) {
   <//>`;
 }
 
-function RecordHeading({ title, manifest, class: cls }) {
+export function RecordHeading({ title, manifest, class: cls }) {
   return html`<h3 class=${cx('st-record-heading', cls)} style=${`background-image:url(${uiUrl(manifest, 'statistics/headingBar')})`}>
     <span class="st-record-heading__icon" aria-hidden="true">
       <${Img} src=${uiUrl(manifest, 'statistics/headingIconFrame')} class="st-record-heading__frame" />
@@ -276,7 +276,7 @@ function BondAchievement({ peak, gd }) {
 }
 
 /** The official statistics view fills and highlights counts at 20 awards. */
-function TitleHexagon({ titles, manifest }) {
+export function TitleHexagon({ titles, manifest }) {
   const byId = new Map(titles.map((x) => [x.id, x]));
   const mask = uiUrl(manifest, 'statistics/titleMask');
   const glow = uiUrl(manifest, 'statistics/countGlow');

@@ -2308,6 +2308,36 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 .ach-max__glyph { position: absolute; right: .36rem; top: 50%; width: 1.1rem; height: 1.1rem; margin-top: -.55rem; fill: var(--mx, #4af2c4); opacity: .45; }
 .ach-max.is-gold { --mx: #ffcf1f; } .ach-max.is-orange { --mx: #ff8a2a; } .ach-max.is-mint { --mx: #3fe3b2; }
 
+/* 官方版式的单局纪录卡：美术是 statistics/recordFunds 等（金币 / 折线 / 叉），数值保持白色 */
+.ach-max__art { position: absolute; right: .36rem; top: 50%; width: 1.05rem; height: 1.05rem; margin-top: -.525rem; object-fit: contain; opacity: .9; pointer-events: none; }
+/* 官方版式里单局纪录的数字是白色（绿色只给模式表的计数与六边形） */
+.ach-maxima:not(.ach-maxima--account) .ach-max__num .num { color: #f4f7f6; }
+.ach-maxima--account { margin-top: .2rem; }
+.ach-maxima--account .ach-max { height: 1.2rem; }
+
+/* 官方版式的分区提示与页脚（图1/图2 的「还没有可展示的战绩…」与右下角说明） */
+.ach-hint { margin: .06rem 0 .18rem .1rem; font-size: calc(.22 * var(--t)); line-height: 1.5; color: #83908c; }
+.ach-note { margin: .16rem 0 0; font-size: calc(.22 * var(--t)); color: #b9c2bf; }
+.ach-footer { display: flex; justify-content: flex-end; margin-top: .3rem; padding: .1rem .18rem; background: rgba(14, 19, 18, .86);
+  border-top: 1px solid rgba(220, 230, 226, .12); }
+.ach-footer span { font-size: calc(.2 * var(--t)); color: #b9c2bf; letter-spacing: .02em; }
+
+/* 参考图第一行：左边账号卡、右边已获奖杯 / 获赞数；两列都在六边形左边 */
+.ach-top-area__main { min-width: 0; }
+@media (max-width: 900px) { .ach-top-area { grid-template-columns: minmax(0, 1fr); } .ach-hex { min-height: 0; } }
+.ach-modegrid { margin-top: .24rem; }
+.ach-counts__medal { width: 82%; height: 82%; object-fit: contain; }
+.ach-counts__badge.is-like svg { width: 74%; height: 74%; fill: #e8823a; }
+
+/* 大厅卡横幅中间的「卫戍成就」图标：括号相框 + 奖杯+星（statistics/headingIcon） */
+.hub-ach__achievement { position: relative; display: block; width: .62rem; height: .68rem; }
+.hub-ach__achievement-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.hub-ach__achievement-glyph { position: absolute; left: 50%; top: 50%; width: 63.4%; height: 71.4%; transform: translate(-50%, -50%); object-fit: contain; }
+
+/* 顶部横幅里的等级方块（参考图：ALLIANCE / 卫戍协议：盟约 左边那个「1」） */
+.ach__band-level { display: grid; place-items: center; font-family: var(--font-display); font-size: calc(.36 * var(--t)); font-weight: 700;
+  color: #15110c; border: 2px solid rgba(20, 16, 10, .75); }
+
 /* 盟约纪录 / 策略纪录 */
 .ach-list { padding-bottom: .1rem; }
 .ach-sub { margin: .26rem 0 .2rem .4rem; font-size: calc(.26 * var(--t)); color: #b9c2bf; }

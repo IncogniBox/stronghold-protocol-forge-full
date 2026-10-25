@@ -2839,6 +2839,16 @@
   "账号编号": "Account number",
   "已完成成就": "Achievements completed",
   "登录账号后可以查看成就。": "Sign in to view your achievements.",
+  "登录账号后可以查看账号成就。": "Sign in to view your account achievements.",
+  "已获奖杯": "Trophies earned",
+  "获赞数": "Likes",
+  "账号": "Account",
+  "单局最多晋级次数": "Most promotions in one match",
+  "账号成就": "Account achievements",
+  "暂无盟约记录": "No alliance records yet",
+  "暂无策略记录": "No strategy records yet",
+  "还没有可展示的战绩：完成一局模拟后在这里记录盟约叠加最高的一局": "No records to show yet: finish a simulation and the highest bond stack will be recorded here.",
+  "账号数据 · 本机累计 · 每局结束后更新": "Account data · local totals · updated after each match",
   "在线 {n}": "{n} online",
   "现在没有在线的好友。": "No friends are online right now."
 }
