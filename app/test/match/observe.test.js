@@ -34,6 +34,10 @@ test('observeTarget: prep, own battle running / over, boss pairs, eliminated pla
   ], [...players, P('d', 3)]);
   assert.match(observeTarget(P('d', 3), fa, 'a').reason, /另一组/);
   assert.match(observeTarget(players[1], fa, 'a').reason, /同一战场/);
+  // 左右两半的普通带：两位玩家在**同一块战场**上（每人一半），观战队友没有独立战场可看 —— 用 ‹ › 切到他那半
+  const pairCombat = pubOf('COMBAT', [{ fieldId: 'n:a+b', kind: 'normal', players: ['a', 'b'], live: true }], players);
+  assert.match(observeTarget(players[1], pairCombat, 'a').reason, /同一战场/);
+  assert.match(observeTarget(players[1], pairCombat, 'a', { ownDone: true }).reason, /同一战场/, 'own battle over does not change it');
   const dead = pubOf('FINAL_ASSAULT', fa.fields, [{ ...players[0], alive: false }, players[1], P('d', 3)]);
   assert.deepEqual(observeTarget(P('d', 3), dead, 'a'), { fieldId: 'b2' }, 'eliminated: anything');
 });
@@ -46,6 +50,13 @@ test('cameraLayers: ‹ LEFT / 全景 / RIGHT › with "你自己" / name / "无
   assert.deepEqual(cameraLayers(single, pub, 'a').map((l) => l.label), ['B', '全景', '无人在家']);
   assert.deepEqual(cameraLayers({ kind: 'normal' }, pub, 'a'), []);
   assert.deepEqual(cameraLayers({ kind: 'boss', players: ['a'], sides: { a: 'L' } }, pub, 'a'), [], 'a solo boss field has no halves');
+  // 左右两半的普通带（重构战场）：一张图上两位玩家同场，‹ › 也要有 —— 否则看不到队友那半场/整条带
+  const dual = { deployRects: { normalLeft: [34, 38, 20, 30], normalRight: [34, 38, 30, 40] } };
+  const pair = { fieldId: 'n:a+b', kind: 'normal', players: ['a', 'b'], sides: { a: 'L', b: 'R' } };
+  assert.deepEqual(cameraLayers(pair, pub, 'a', dual).map((l) => [l.key, l.label, l.self]),
+    [['L', '你自己', true], ['ALL', '全景', false], ['R', 'B', false]]);
+  assert.deepEqual(cameraLayers(pair, pub, 'a'), [], 'without the map layout a normal field still has no halves');
+  assert.deepEqual(cameraLayers({ ...pair, prep: true }, pub, 'a', dual), [], 'a prep scout field is not a battle');
   assert.deepEqual(layerCamera(unite, 'R', 'R'), { rect: unite.rect, side: 'R', half: true });
   assert.deepEqual(layerCamera(unite, 'ALL', 'R'), { rect: unite.rect, side: 'R' });
   // a lone helper's 联防 starts on its half; 全景 stays the whole field (GitHub #635, PR #637)

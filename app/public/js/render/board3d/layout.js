@@ -37,7 +37,7 @@ import { SURFACES, surfaceUV, sideRect, tintRgb } from './atlas.js';
 import { GLYPH, TILEKEY_GLYPH, TILE_H } from '../style.js';
 import { penRects } from '../pen.js';
 import { layoutOf, OFFICIAL_LAYOUT, mapSize } from '../layout.js';
-import { isOfficialLayout, penRectOf } from '../../../../shared/layout.js';
+import { isOfficialLayout, isDualLayout, benchOf, fieldTileOf, penRectOf } from '../../../../shared/layout.js';
 
 /** How far the island's cliff faces go down (tiles). */
 export const CLIFF = 0.75;
@@ -97,16 +97,36 @@ export function areaFor(kind, layout = null) {
   // 一张**自己声明了分区**的图（不是官方 19×21 那套）：它的战斗/整备带可能挪到了地图任意位置（例如四块 boss
   // 擂台各在一处），按「窗口尺寸平移官方带」画出来的地块会落在空地上。这里改成**按这张图自己的矩形**建区块：
   //   普通带 = 普通矩形 + 下方整备两行 + 左侧两列（官方那块就是这么留的）· 联防 = 联防矩形 + 两行整备
-  //   boss = boss 矩形 + 上方一行墙 · 等待区 = 自己声明的 pen / penRight 各扩 1 格
+  //   boss = boss 矩形 + 上方一行墙 · boss 整备 = 这一带**连整备矩形一起**（多块 boss 场地各自声明的
+  //   `bossAreas[i].prep` 常把板凳那两行画在战斗矩形下方，只按 `battle` 建区块会把它们漏掉）· 等待区 = 声明的 pen 各扩 1 格
   if (!isOfficialLayout(L)) {
     const win = (r, up, down, left, right) => ({
       r0: Math.max(0, r.r0 - down), r1: Math.min(R - 1, r.r1 + up),
       c0: Math.max(0, r.c0 - left), c1: Math.min(C - 1, r.c1 + right),
     });
     const pen = (side) => win(penRectOf(L, side), 0, 1, 1, 1);
-    if (kind === 'boss' || kind === 'hidden' || kind === 'bossPrep') return [win(L.battle.boss, 1, 0, 0, 0)];
+    // 整备区可能把手牌画成两行、把临时整备区放在手牌行**下方**（45×60 重构战场：临时行 30 在手牌行 31 下面）：
+    // 取景/建区必须一直画到那一条临时行，否则临时区的格子与棋子根本不在场面上。
+    const benchField = kind === 'bossPrep' || kind === 'boss' || kind === 'hidden'
+      ? 'bossL' : (isDualLayout(L) ? 'normalL' : 'normal');
+    const bench = benchOf(L, benchField);
+    const tempRowMap = bench.temp ? fieldTileOf(L, benchField, bench.temp.row, bench.temp.c0)[0] : null;
+    const benchTop = Number.isInteger(tempRowMap) ? tempRowMap : Infinity;
+    if (kind === 'bossPrep') {
+      const b = L.battle.boss, p = L.battle.bossPrep || b;
+      return [win({
+        r0: Math.min(b.r0, p.r0, benchTop), r1: Math.max(b.r1, p.r1),
+        c0: Math.min(b.c0, p.c0), c1: Math.max(b.c1, p.c1),
+      }, 1, 0, 0, 0)];
+    }
+    if (kind === 'boss' || kind === 'hidden') return [win(L.battle.boss, 1, 0, 0, 0)];
     if (kind === 'unite') return [win(L.battle.unite, 1, 2, 0, 0)];
-    const normal = [win(L.battle.normal, 1, 2, 2, 0), pen('L')];
+    // 普通带的整备行/整备列按地图声明的 `battle.prep`（缺省 = 棋盘下两行 + 左两列）：板凳画得离场地远一行的图，
+    // 那两行板凳才建得出来（与 `handRowOf` 同一条规则）。
+    const down = Math.max(2, L.battle.normal.r0 - Math.min(L.battle.prep.r0, benchTop));
+    const left = Math.max(2, L.battle.normal.c0 - L.battle.prep.c0);
+    const right = Math.max(0, L.battle.prep.c1 - L.battle.normal.c1);
+    const normal = [win(L.battle.normal, 1, down, left, right), pen('L')];
     if (L.penRight) normal.push(pen('R'));
     return normal;
   }
@@ -224,6 +244,18 @@ export function classifyStage(stage, area = null, opts = {}) {
       if (n && n.content) { near = true; break; }
     }
     t.drawn = near;
+  }
+  // 被同类**完全围住**的一格（例如 3×3 的 '#' 高台正中那一格）不是「岛外」：它的四邻都已建出来，
+  // 它自己却按「只建贴着内容的一圈」被跳过 —— 玩家能站上去的高台中间就会露出一个洞。补到不再变化为止。
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      const t = grid[r][c];
+      if (t.drawn || !t.inArea) continue;
+      const nb = [grid[r - 1]?.[c], grid[r + 1]?.[c], grid[r]?.[c - 1], grid[r]?.[c + 1]];
+      if (nb.every((x) => x && x.drawn)) { t.drawn = true; changed = true; }
+    }
+    if (!changed) break;
   }
   const at = (r, c) => grid[r]?.[c] || null;
   for (const row of grid) for (const t of row) {

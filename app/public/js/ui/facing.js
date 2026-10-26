@@ -234,7 +234,8 @@ export function underframeActions(ctx, uid) {
 export function retreatSlot(ctx, uid) {
   const e = ctx?.pieces?.get(uid);
   if (!e || e.area !== 'board') return null;
-  for (let i = 0; i < GEO.HAND_SIZE; i++) if (!ctx.handAt?.has(i)) return { area: 'hand', idx: i };
+  const cap = Number.isInteger(ctx.handSize) ? ctx.handSize : GEO.HAND_SIZE;
+  for (let i = 0; i < cap; i++) if (!ctx.handAt?.has(i)) return { area: 'hand', idx: i };
   if (e.piece.kind === 'token') return { area: 'hand', idx: 0 };
   for (const [i, h] of ctx.handAt || []) {
     if (h?.piece?.kind === 'token' && h.piece.ownerUid === e.piece.uid) return { area: 'hand', idx: i };

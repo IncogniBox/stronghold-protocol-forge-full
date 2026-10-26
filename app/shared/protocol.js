@@ -1,7 +1,7 @@
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
-import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_ROOM_MODS, EMOTES, GEO, maxSeatsFrom, MIN_SEATS, RECON } from './constants.js';
+import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_ROOM_MODS, EMOTES, GEO, BENCH_SIZE_MAX, maxSeatsFrom, MIN_SEATS, RECON } from './constants.js';
 import { isDroppableChess } from './standIn.js';
 import { diySlotIds, validateDiyPicks } from './diy.js';
 import { isSupportEntries } from './support.js';
@@ -714,7 +714,7 @@ const target = (v) => {
   // band is rows 17–20, so the official bound silently refused its top two rows (the sim still judges the tile:
   // the canvas outside the window is impassable, so an out-of-window drop is refused there, as it always was).
   if (v.area === 'board') return isInt(v.row, 0, GEO.CANVAS_ROWS - 1) && isInt(v.col, 0, GEO.CANVAS_COLS - 1);
-  if (v.area === 'hand') return isInt(v.idx, 0, GEO.HAND_SIZE - 1);
+  if (v.area === 'hand') return isInt(v.idx, 0, BENCH_SIZE_MAX - 1);
   return false;
 };
 
@@ -991,10 +991,10 @@ export const C2S = {
   // the strategy highlighted in the draft screen (user playtest #4 item 4): a turn that runs out takes it while it is
   // free (Match.timeoutBand); absent / null clears it
   'g.bandFocus': { bandId: nullable(isId), $optional: ['bandId'] },
-  // 预重构提交（模式扩展-重构模拟，PHASE.PRE_RECON）：盟约倾向（主 ≤2 / 副 ≤3 / 故事集 ≤1，具体键在
-  // config.recon.assistPools）与占位选择。全部键可选 —— 一帧可以只带玩家刚改的那一组；形状层只管形状，
-  // 归属 / 计数 / 是否可选在处理器（Match.reconChoice）按 config.recon 判。新增 C2S 类型 ⇒ `PROTOCOL_VERSION`
-  // 不动（先例 `g.unequip`）；非 PRE_RECON 阶段收到回 WRONG_PHASE。
+  // 预重构提交（模式扩展-重构模拟，PHASE.PRE_RECON）：盟约倾向（主 ≤2 / 副 ≤3 / 故事集 ≤1）、试炼首领、
+  // 重构协助 / 熔芯负载各 1，以及**自主禁用**的 1 个盟约（`ban`，只影响自己的卡牌池）。全部键可选 —— 一帧可以只带
+  // 玩家刚改的那一组；形状层只管形状，归属 / 计数 / 是否可选在处理器（Match.reconChoice）判。新增 C2S 类型 ⇒
+  // `PROTOCOL_VERSION` 不动（先例 `g.unequip`）；非 PRE_RECON 阶段收到回 WRONG_PHASE。
   'g.reconChoice': {
     major: (v) => Array.isArray(v) && v.length <= 2 && v.every(isId),
     minor: (v) => Array.isArray(v) && v.length <= 3 && v.every(isId),
@@ -1002,8 +1002,12 @@ export const C2S = {
     bosses: (v) => v === undefined || v === null || (typeof v === 'object' && Object.keys(v).length <= 8 && Object.values(v).every((x) => x === null || isId(x))),
     assist: (v) => v === undefined || v === null || isId(v),
     load: (v) => v === undefined || v === null || isId(v),
-    $optional: ['major', 'minor', 'story', 'bosses', 'assist', 'load'],
+    ban: (v) => v === undefined || v === null || isId(v),
+    $optional: ['major', 'minor', 'story', 'bosses', 'assist', 'load', 'ban'],
   },
+  // 「队伍预重构总览」的「继续」：全员的选择都交齐后，这一局停在总览上等每位真人自己点确认，齐了才进入
+  // 下一阶段（业主 2026-10-26）。无载荷；阶段 / 是否已在总览由处理器判，不在时回 WRONG_PHASE。
+  'g.reconContinue': {},
   // 重构协议·特训（模式扩展-重构模拟，PHASE.PREP 的特训回合）：从**场上与待部署区**各点一名干员——前者教官、
   // 后者学员。学员本局永久继承教官的技能 / 特质 / 天赋（sim 的 traineeOf 组成通道，simdata.js getTrainee）并
   // 攻 / 防 / 生命 = 学员 + 教官 ×0.5（shared/reconModes.js RECON_TRAINEE_STAT_RATIO，固定不叠加）、获授附加盟约 bond_recon。

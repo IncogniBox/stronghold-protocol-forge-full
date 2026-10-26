@@ -7,7 +7,6 @@
 // the player state).
 
 import { tileKey, boardOrder, freeSlot } from '../board.js';
-import { TEMP_SIZE } from './common.js';
 
 export class PlayerPieces {
   newPiece(kind, id, extra = {}) {
@@ -83,16 +82,16 @@ export class PlayerPieces {
       if (i >= 0) { this.hand[i] = piece; return 'hand'; }
       if (!allowTemp) return null;
     }
-    // Five visible slots are a window, not a capacity limit. Once resources are queued, append
+    // 可见的几格（`this.tempSize`，官方 5 / 45×60 重构战场 8）是一扇窗口，不是容量上限。Once resources are queued, append
     // new gains behind them; recompute fills visible holes without changing an in-progress merge's indices.
-    const j = this.temp.length > TEMP_SIZE ? -1 : freeSlot(this.temp);
+    const j = this.temp.length > this.tempSize ? -1 : freeSlot(this.temp);
     this._putTemp(j >= 0 ? j : this.temp.length, piece);
     return 'temp';
   }
 
   /** Overflow refill order: the visible row right-to-left, then the hidden queue. */
   tempPieces() {
-    return this.temp.slice(0, TEMP_SIZE).reverse().concat(this.temp.slice(TEMP_SIZE)).filter(Boolean);
+    return this.temp.slice(0, this.tempSize).reverse().concat(this.temp.slice(this.tempSize)).filter(Boolean);
   }
 
   /**
@@ -105,8 +104,8 @@ export class PlayerPieces {
    */
   _fillHandFromTemp() {
     let moved = 0;
-    const indices = Array.from({ length: TEMP_SIZE }, (_, i) => TEMP_SIZE - 1 - i)
-      .concat(Array.from({ length: Math.max(0, this.temp.length - TEMP_SIZE) }, (_, i) => TEMP_SIZE + i));
+    const indices = Array.from({ length: this.tempSize }, (_, i) => this.tempSize - 1 - i)
+      .concat(Array.from({ length: Math.max(0, this.temp.length - this.tempSize) }, (_, i) => this.tempSize + i));
     for (const j of indices) {
       const p = this.temp[j];
       if (!p) continue;
@@ -116,12 +115,12 @@ export class PlayerPieces {
       this.hand[i] = p;
       moved++;
     }
-    if (this.temp.length > TEMP_SIZE) {
-      // Keep the oldest five visible and refill them after sales, deployments, equipment use or merges.
+    if (this.temp.length > this.tempSize) {
+      // Keep the oldest visible slots and refill them after sales, deployments, equipment use or merges.
       // Moving within temp preserves each UID's existing prep deadline.
       const pending = this.tempPieces();
-      this.temp = new Array(TEMP_SIZE).fill(null);
-      pending.forEach((p, i) => { this.temp[i < TEMP_SIZE ? TEMP_SIZE - 1 - i : i] = p; });
+      this.temp = new Array(this.tempSize).fill(null);
+      pending.forEach((p, i) => { this.temp[i < this.tempSize ? this.tempSize - 1 - i : i] = p; });
     }
     return moved;
   }

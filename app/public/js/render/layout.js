@@ -15,7 +15,7 @@ import { normRect } from './projection.js';
 
 // 棋盘本身的那两个数也一并转出去：客户端凡是遍历 / 夹棋盘的地方读 `boardRectOf` / `handRowOf` / `tempRowOf`
 // （一张图的棋盘是它自己声明的形状，官方 4×9；见 shared/layout.js）。
-export { OFFICIAL_LAYOUT, layoutOf, sizeOf, viewRectOf, boardRectOf, handRowOf, tempRowOf, penRectOf, isDualLayout } from '../../../shared/layout.js';
+export { OFFICIAL_LAYOUT, layoutOf, sizeOf, viewRectOf, boardRectOf, handRowOf, tempRowOf, benchOf, benchTileOf, benchBottomRow, penRectOf, isDualLayout } from '../../../shared/layout.js';
 
 /** 部署场的名字（与 server/match/board.js DEPLOY_FIELDS 同口径）：普通带整块，或它左右两半（一张左右两半的图），或 boss 的左右半。 */
 export const DEPLOY_FIELDS = Object.freeze(['normal', 'normalL', 'normalR', 'bossL', 'bossR']);

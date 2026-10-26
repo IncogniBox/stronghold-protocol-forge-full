@@ -21,7 +21,7 @@
 // there instead of in the pen, and lights its hit tiles in red beside an operator's orange range preview (render/app.js).
 
 import { GEO } from '../../../shared/constants.js';
-import { OFFICIAL_LAYOUT, fieldTile, boardTile, mirrorColOf, boardRectOf, handRowOf } from './layout.js';
+import { OFFICIAL_LAYOUT, fieldTile, boardTile, mirrorColOf, boardRectOf, benchOf, benchBottomRow } from './layout.js';
 
 /** Board row → display (boss-field) row of the OFFICIAL layout: row − 7 (server/match/board.js BOARD_ROWS_ABOVE_BOSS
  * is +7, the inverse). A map that moves its boss half carries its own — read it through `bossPrepField(side, layout)`. */
@@ -60,17 +60,23 @@ export function mirrorDir(d) {
  * its boss half shows it where that map put it. Omitted → the official layout, which reproduces the historical
  * `−7` / `20 − c` exactly — a missing layout keeps meaning "official".
  */
-export function bossPrepField(side, layout = OFFICIAL_LAYOUT) {
+export function bossPrepField(side, layout = OFFICIAL_LAYOUT, area = 0, seat = 0) {
   const L = layout || OFFICIAL_LAYOUT;
   const R = side === 'R';
   const field = R ? 'bossR' : 'bossL';
   const bossR1 = L.battle.boss.r1;
-  // The display window of the player's half: every map tile the pieces' own board window (its 整备行 … the board's back
+  // The display window of the player's half: every map tile the pieces' own board window (its 整备区格 … the board's back
   // row, its hand columns … the board's right edge — see the note above) maps onto. Those are BOARD coordinates: they
-  // follow the map's own board (shared/layout.js `boardRectOf`), so `toBoard` accepts exactly what `toDisp` can produce.
+  // follow the map's own board (shared/layout.js `boardRectOf`) AND its 整备区 (`benchOf`: 官方一行 10 格 / 一行 5 格，
+  // 45×60 重构战场是两行 8 格 + 8 格临时), so `toBoard` accepts exactly what `toDisp` can produce.
   const B = boardRectOf(L, field);
-  const BOARD_ROW_MIN = handRowOf(L, field), BOARD_ROW_MAX = B.r1;
-  const BOARD_COL_MIN = 0, BOARD_COL_MAX = Math.max(GEO.HAND_SIZE - 1, B.c1);
+  const bench = benchOf(L, field, Number.isInteger(area) ? area : 0, Number.isInteger(seat) ? seat : 0);
+  const BOARD_ROW_MIN = benchBottomRow(L, field, Number.isInteger(area) ? area : 0, Number.isInteger(seat) ? seat : 0);
+  const BOARD_ROW_MAX = B.r1;
+  const benchC0 = Math.min(bench.hand.c0, bench.temp ? bench.temp.c0 : bench.hand.c0);
+  const benchC1 = Math.max(bench.hand.c0 + bench.hand.cols - 1,
+    bench.temp ? bench.temp.c0 + bench.temp.size - 1 : bench.hand.c0 + bench.hand.cols - 1);
+  const BOARD_COL_MIN = Math.min(0, benchC0), BOARD_COL_MAX = Math.max(benchC1, B.c1);
   const ownDisp = new Set();
   for (let r = BOARD_ROW_MIN; r <= BOARD_ROW_MAX; r++) {
     for (let c = BOARD_COL_MIN; c <= BOARD_COL_MAX; c++) {
@@ -112,13 +118,19 @@ export const BOSS_DISP_MAX_ROW = OFFICIAL_LAYOUT.battle.boss.r1 + 1;
  * @param {'L'|'R'} [side]
  * @param {object} [layout] the map's own layout (shared/layout.js); omitted → the official one
  */
-export function normalPrepField(side = 'L', layout = OFFICIAL_LAYOUT) {
+export function normalPrepField(side = 'L', layout = OFFICIAL_LAYOUT, area = 0, seat = 0) {
   const L = layout || OFFICIAL_LAYOUT;
   const R = side === 'R';
   const field = R ? 'normalR' : 'normalL';
   const B = boardRectOf(L, field);
-  const BOARD_ROW_MIN = handRowOf(L, field), BOARD_ROW_MAX = B.r1;
-  const BOARD_COL_MIN = 0, BOARD_COL_MAX = Math.max(GEO.HAND_SIZE - 1, B.c1);
+  // 整备区（两张图各自的 `layout.bench`）：窗口的下界是**临时行**（它可能在手牌行下方），右界是整备区最右一格或棋盘右缘。
+  const bench = benchOf(L, field, Number.isInteger(area) ? area : 0, Number.isInteger(seat) ? seat : 0);
+  const BOARD_ROW_MIN = benchBottomRow(L, field, Number.isInteger(area) ? area : 0, Number.isInteger(seat) ? seat : 0);
+  const BOARD_ROW_MAX = B.r1;
+  const benchC0 = Math.min(bench.hand.c0, bench.temp ? bench.temp.c0 : bench.hand.c0);
+  const benchC1 = Math.max(bench.hand.c0 + bench.hand.cols - 1,
+    bench.temp ? bench.temp.c0 + bench.temp.size - 1 : bench.hand.c0 + bench.hand.cols - 1);
+  const BOARD_COL_MIN = Math.min(0, benchC0), BOARD_COL_MAX = Math.max(benchC1, B.c1);
   // the official band (and any map whose board sits exactly where the official one does): nothing moves
   if (!R && BOARD_ROW_MIN === GEO.HAND_ROW && B.c0 === GEO.FIELD.c0 && B.r0 === GEO.FIELD.r0) return IDENTITY;
   const maxRow = L.size[0] - 1, maxCol = L.size[1] - 1;

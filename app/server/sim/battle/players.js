@@ -4,7 +4,7 @@
 
 import { COLS } from '../constants.js';
 import { GEO } from '../../../shared/constants.js';
-import { stageRowOfBoard, deployRectOf, boardRectOf, handRowOf, isDualLayout, bossRectLayout } from '../../../shared/layout.js';
+import { stageRowOfBoard, deployRectOf, boardRectOf, benchBottomRow, isDualLayout, bossRectLayout } from '../../../shared/layout.js';
 import { Unit } from '../units.js';
 import { normDir, mirrorDir } from '../dir.js';
 import { SkillRuntime } from '../skills.js';
@@ -153,7 +153,7 @@ export class BattlePlayers {
     // on a big map the bands sit higher — board row 9 is the map row the map's own `normal` deploy rect starts at —
     // and a map that declares a bigger board (shared/layout.js `boardRectOf`) also moves its 整备行 up two rows.
     if (ps.rowOffset != null) r = row + ps.rowOffset;
-    else if (row >= handRowOf(L, field)) r = stageRowOfBoard(L, field, row);
+    else if (row >= benchBottomRow(L, field)) r = stageRowOfBoard(L, field, row);
     // the mirrored right side reflects the PLACEMENT through the map's own axis (reflecting the column number itself
     // would only coincide when the window's middle column is 10); the plain side lands the board's left edge on THIS
     // map's own rect (officially FIELD.c0 = 2, i.e. no shift). `colOffset` is the extra hand / 整备区 shift the caller

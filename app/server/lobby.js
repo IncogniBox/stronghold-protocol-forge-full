@@ -2613,6 +2613,8 @@ export class Lobby {  /**
       const own = s.isBot ? null : this.seatSettings(room, s, data);
       return {
         seat: s.seat, playerId: s.playerId, name: s.name, isBot: s.isBot, connected: s.connected,
+        // 重构模拟的房间队伍（1..teamCount）：只在这类房间出现，其它模式的座位逐字节不变；总览按它分组。
+        ...(room.mode === 'recon' ? { team: s.team ?? 1 } : {}),
         // DESIGN §16: the human's checked operator loadout and (0.2.2) per-operator 潜能 / 练度 (bots fight with the defaults)
         loadout: own ? own.loadout : null,
         ops: own ? own.ops : null,

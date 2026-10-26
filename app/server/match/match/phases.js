@@ -291,35 +291,82 @@ export class MatchPhases {
 
   /**
    * 预重构（PHASE.PRE_RECON，模式扩展-重构模拟专属，room mode 'recon' ⇒ mode_recon_*）：策略选择之后、协议启动
-   * 之前的 60 s（config.timers.preRecon）。玩家在这一屏交 `g.reconChoice`（盟约倾向 / 首领占位 / 协助与负载占位）；
-   * 当前轮次只**记录**（m.public.reconChoices，机制轮再消费：盟约概率、4/8/12/16 首领、全局增益/减益）。
-   * 全员提交齐 ⇒ 提前结束；计时耗尽 ⇒ 没交的按「空选择」处理（各占位机制轮的默认值）。AI 座位立刻交空选择。
+   * 之前的 60 s（config.timers.preRecon）。玩家在这一屏交 `g.reconChoice`（盟约倾向 / 试炼首领 / 协助与负载 /
+   * 自主禁用的盟约）；本局机制按它生效（4/8/12 首领、全局增益/减益、按玩家收窄的卡池）。
+   *
+   * **两段收尾**（业主 2026-10-26「选择完毕后先看队伍总览，点继续再进入」）：
+   *   * 全员提交齐（AI 立刻交空选择）⇒ 进入**总览**（`reconSummary`）：本阶段不结束，等每位在场真人交
+   *     `g.reconContinue`；齐了才 `finishPreRecon`。
+   *   * 计时耗尽 ⇒ 没交的按「空选择」处理，同时进入总览（`reconDeadline`），再给 15 s 兜底 —— 有人一直不点
+   *     也不会把这一局卡死。
    */
   enterPreRecon() {
     if (this.phase !== PHASE.BAND_DRAFT) return;
     this.phase = PHASE.PRE_RECON;
-    /** @type {Record<string, { major?: string[], minor?: string[], story?: string|null, bosses?: object|null, assist?: string|null, load?: string|null }>} */
+    /** @type {Record<string, { major?: string[], minor?: string[], story?: string|null, bosses?: object|null, assist?: string|null, load?: string|null, ban?: string|null }>} */
     this.reconChoices = {};
+    /** 全员交齐后的「队伍总览」：true 时阶段仍停在 PRE_RECON，等真人点继续。 */
+    this.reconSummary = false;
+    /** 已在总览上点过「继续」的座位（AI 由 enterReconSummary 直接记入）。 @type {Set<string>} */
+    this.reconContinues = new Set();
     for (const ps of this.order) if (ps.botControlled) this.reconChoices[ps.playerId] = {};
-    this.setDeadline(this.soloUntimed ? 0 : this.gd.timer('preRecon'), () => this.finishPreRecon());
+    this.setDeadline(this.soloUntimed ? 0 : this.gd.timer('preRecon'), () => this.reconDeadline());
     this.markPublic();
     this.flush(true);
     this.maybeEndPreRecon();
   }
 
+  /** 计时耗尽：先切到总览（没交的按空选择），再 15 s 兜底强制进入下一阶段。 */
+  reconDeadline() {
+    if (this.reconSummary) { this.finishPreRecon(); return; }
+    this.enterReconSummary();
+    this.later(15000, () => this.finishPreRecon());
+  }
+
   maybeEndPreRecon() {
-    if (this.phase !== PHASE.PRE_RECON || this._reconAdvanceTimer) return;
+    if (this.phase !== PHASE.PRE_RECON || this._reconAdvanceTimer || this.reconSummary) return;
     if (this.order.every((p) => p.isBot || p.left || this.reconChoices[p.playerId])) {
       this._reconAdvanceTimer = this.later(0, () => {
         this._reconAdvanceTimer = null;
-        if (this.phase === PHASE.PRE_RECON) this.finishPreRecon();
+        if (this.phase === PHASE.PRE_RECON) this.enterReconSummary();
       });
     }
+  }
+
+  /** 切到「队伍预重构总览」：选择锁死，等每位在场真人点「继续」（AI 自动算已确认）。 */
+  enterReconSummary() {
+    if (this.phase !== PHASE.PRE_RECON || this.reconSummary) return;
+    this.reconSummary = true;
+    for (const ps of this.order) if (ps.isBot) this.reconContinues.add(ps.playerId);
+    this.markPublic();
+    this.flush(true);
+    this.maybeFinishReconSummary();
+  }
+
+  /** 总览上点「继续」：记下这名真人；全齐 ⇒ 进入下一阶段。 */
+  reconContinue(ps) {
+    if (this.phase !== PHASE.PRE_RECON || !this.reconSummary) return fail(ERR.WRONG_PHASE);
+    if (!ps.alive) return fail(ERR.ELIMINATED);
+    if (this.reconContinues.has(ps.playerId)) return OK;
+    this.reconContinues.add(ps.playerId);
+    this.markPublic();
+    this.maybeFinishReconSummary();
+    return OK;
+  }
+
+  maybeFinishReconSummary() {
+    if (this.phase !== PHASE.PRE_RECON || !this.reconSummary) return;
+    const waiting = this.order.some((p) => p.alive && !p.left && !p.isBot && !this.reconContinues.has(p.playerId));
+    if (!waiting) this.finishPreRecon();
   }
 
   finishPreRecon() {
     if (this.phase !== PHASE.PRE_RECON) return;
     this.setDeadline(0);
+    this.reconSummary = false;
+    // 自主禁用（每名玩家自己禁的 1 个盟约）在阶段结束、第 1 回合开打之前生效：只收窄这名玩家自己的卡池
+    // （自选编队的库存与商店 / 奖励 / 内容抽卡），不动队友、也不改盟约本身。
+    this.applyReconSelfBans();
     this.enterBattleCheck();
   }
 
@@ -330,6 +377,8 @@ export class MatchPhases {
   reconChoice(ps, msg) {
     if (this.phase !== PHASE.PRE_RECON) return fail(ERR.WRONG_PHASE);
     if (!ps.alive) return fail(ERR.ELIMINATED);
+    // 总览已经亮起来 = 全员交齐了：选择锁死（总览展示的就是这一份），不再接受改选。
+    if (this.reconSummary) return fail(ERR.WRONG_PHASE);
     const cur = this.reconChoices[ps.playerId] || {};
     this.reconChoices[ps.playerId] = {
       major: msg.major !== undefined ? [...msg.major] : cur.major,
@@ -338,6 +387,7 @@ export class MatchPhases {
       bosses: msg.bosses !== undefined ? (msg.bosses ? { ...msg.bosses } : null) : cur.bosses,
       assist: msg.assist !== undefined ? msg.assist : cur.assist,
       load: msg.load !== undefined ? msg.load : cur.load,
+      ban: msg.ban !== undefined ? msg.ban : cur.ban,
     };
     this.markPublic();
     this.maybeEndPreRecon();

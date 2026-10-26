@@ -145,7 +145,7 @@
 import { GEO, ANIM } from '../../../shared/constants.js';
 import { fxForm } from '../../../shared/protocol.js';
 import { Camera, presetCamera, lerpCamera, easeInOutCubic, pickTile, normRect } from './projection.js';
-import { layoutOfStage, rectForKind } from './layout.js';
+import { layoutOfStage, rectForKind, mapSize } from './layout.js';
 import { SnapshotBuffer, frameTime } from './interp.js';
 import { TileField } from './tiles.js';
 import { UnitView, ItemView, DeviceView, FORMS, syncView } from './units.js';
@@ -154,7 +154,7 @@ import { OfficialFx } from './vfx/system.js';
 import { FxWiring } from './vfx/wiring.js';
 import { PluginFxPlayer } from './vfx/pluginPlayer.js';
 import { resolveOfficialFx } from './vfx/tier.js';
-import { createDragController, pieceTile, dragStandTile, boardGeo } from './drag.js';
+import { createDragController, pieceTile, handTileOf, dragStandTile, boardGeo } from './drag.js';
 import { backdropTextures, shadowTexture, refreshTierChips, refreshDownLabels, silhouetteTexture } from './textures.js';
 import { TILE_H, TIER_COLORS, COLORS } from './style.js';
 import { loadBoardArt } from './boardArt.js';
@@ -497,7 +497,9 @@ export async function createFieldView(host, options = {}) {
     if (!isDualLayout(layout())) return 'normal';
     return prepSideNow() === 'R' ? 'normalR' : 'normalL';
   };
-  const boardGeoNow = () => boardGeo(camLayout(), prepFieldNow());
+  const boardGeoNow = () => boardGeo(camLayout(), prepFieldNow(),
+    Number.isInteger(camOpts.area) && camOpts.area > 0 ? camOpts.area : 0,
+    Number.isInteger(camOpts.seat) ? camOpts.seat : (camOpts.side === 'R' ? 1 : 0));
   tiles.setView(bandFor('prep', layout()), camRect(), fieldRows('prep', layout()));
   // the real board art of the local client (optional): wait briefly so the first frame already uses it; a late
   // arrival swaps the atlas in place
@@ -733,6 +735,7 @@ export async function createFieldView(host, options = {}) {
     const vk = viewKind(kind, o, L); // (a 'prep' camera on the boss rows = the Final Assault prep)
     return presetCamera(k, { width: sz.width, height: sz.height, padding: o.padding || defaultPadding(k, sz) }, {
       rect, side: o.side, half: !!o.half, shop: o.shop, fit: !!o.fit, config: stageRec?.config || null,
+      margin: o.margin, headroom: o.headroom, zoom: o.zoom,
       hud: hudBands(vk, sz, { shop: o.shop !== false }), layout: L,
     });
   }
@@ -760,8 +763,8 @@ export async function createFieldView(host, options = {}) {
     // `camOpts.layout`（第 2… 块 boss 场地每人的布局）覆盖这张图的布局：棋盘/整备行/取景都落在自己那块矩形上。
     const Lv = camOpts.layout || L;
     const vk = viewKind(camKind, camOpts, L);
-    if (vk === 'prep') setPrepField(normalPrepField(camOpts.side === 'R' ? 'R' : 'L', Lv));
-    else if (vk === 'bossPrep') setPrepField(bossPrepField(camOpts.side === 'R' ? 'R' : 'L', Lv));
+    if (vk === 'prep') setPrepField(normalPrepField(camOpts.side === 'R' ? 'R' : 'L', Lv, camOpts.area, camOpts.seat));
+    else if (vk === 'bossPrep') setPrepField(bossPrepField(camOpts.side === 'R' ? 'R' : 'L', Lv, camOpts.area, camOpts.seat));
     const target = targetCamera(camKind, camOpts);
     const rest = restView(vk, Lv);
     const focus = camRect();
@@ -932,7 +935,10 @@ export async function createFieldView(host, options = {}) {
   const pieceTileNow = (p) => pieceTile(p, boardGeoNow());
   /** The tile under a canvas point in BOARD space (null off-grid; an impossible tile off the player's half). */
   function pickBoardTile(x, y) {
-    const t = pickTile(cam, x, y, heightAt, tiles.levels);
+    // 拾取窗口是**这张图自己的**（45×60），不是官方 19×21：官方窗口之外的格子会直接判 null —— 大图上整备区与
+    // 棋盘都落在 19 行之外，拾取/拖动因此整片失效（业主 2026-10-26「待部署区内的干员和装备没法选择拖动移动」）。
+    const [mRows, mCols] = mapSize(layout());
+    const t = pickTile(cam, x, y, heightAt, tiles.levels, mRows, mCols);
     if (!t || prepXf === IDENTITY) return t;
     const b = prepXf.toBoard(t.row, t.col);
     return b ? { ...t, row: b.row, col: b.col } : { row: -1, col: -1, x: t.x, y: t.y };
@@ -964,7 +970,7 @@ export async function createFieldView(host, options = {}) {
     const addList = (arr, area) => {
       if (!Array.isArray(arr)) return;
       arr.forEach((pc, i) => {
-        if (area === 'temp' && i >= GEO.TEMP_SIZE) return; // Hidden overflow waits for a visible slot.
+        if (area === 'temp' && i >= boardGeoNow().TEMP_SIZE) return; // Hidden overflow waits for a visible slot.
         if (!pc || typeof pc !== 'object' || !Number.isInteger(pc.uid)) return;
         if (area === 'board') {
           if (!Number.isInteger(pc.row) || !Number.isInteger(pc.col)) return;
@@ -1316,7 +1322,8 @@ export async function createFieldView(host, options = {}) {
 
   /** The display tile under a canvas point (raised tops first) and the point on its top (world x, y), or null. */
   function groundTile(x, y) {
-    const t = pickTile(cam, x, y, heightAt, tiles.levels);
+    const [mRows, mCols] = mapSize(layout());
+    const t = pickTile(cam, x, y, heightAt, tiles.levels, mRows, mCols);
     return t ? { row: t.row, col: t.col, x: t.x, y: t.y } : null;
   }
 
@@ -1388,7 +1395,10 @@ export async function createFieldView(host, options = {}) {
     const range = RANGE_GROUPS.has(key) || style === 'range';
     let t = tilesToDisp(IDENTITY, list);
     const G = boardGeoNow();
-    if (range) t = t.filter(([r]) => r !== G.HAND_ROW && r !== G.TEMP_ROW);
+    if (range) {
+      const benchRows = new Set([...(G.HAND_ROWS || [G.HAND_ROW]), G.TEMP_ROW]);
+      t = t.filter(([r]) => !benchRows.has(r));
+    }
     if (mode === 'prep' && prepXf !== IDENTITY) t = tilesToDisp(prepXf, t);
     tiles.setHighlights(t, style, key, { stripes: range && key !== 'rangeStand' && !board3d });
   }
@@ -1408,7 +1418,9 @@ export async function createFieldView(host, options = {}) {
       try { if (fn(piece, r, c, { area: 'board', row: r, col: c })) out.push([r, c]); } catch { /* illegal */ }
     }
     for (let i = 0; i < G.HAND_SIZE; i++) {
-      try { if (fn(piece, G.HAND_ROW, i, { area: 'hand', idx: i })) out.push([G.HAND_ROW, i]); } catch { /* illegal */ }
+      const h = handTileOf(G, i);
+      if (!h) continue;
+      try { if (fn(piece, h.row, h.col, { area: 'hand', idx: i })) out.push([h.row, h.col]); } catch { /* illegal */ }
     }
     return out;
   }
@@ -1443,7 +1455,8 @@ export async function createFieldView(host, options = {}) {
       const g = cam.unproject(p.x, p.y, 0);
       const hold = item ? 0 : DRAG_HOLD_TILES;
       const s0 = g ? cam.scaleAt(g.x, g.y, 0) : cam.scale;
-      const t = pickTile(cam, p.x, p.y + hold * s0, heightAt, tiles.levels);
+      const [mRows, mCols] = mapSize(layout());
+      const t = pickTile(cam, p.x, p.y + hold * s0, heightAt, tiles.levels, mRows, mCols);
       const z = t ? heightAt(t.row, t.col) : 0;
       const up = item ? z : z + (v.lift || 0) + (v.hover || 0);
       let w = cam.unproject(p.x, p.y + hold * s0, up);
@@ -1457,9 +1470,11 @@ export async function createFieldView(host, options = {}) {
     // the drop target (p.target, highlighted) is the tile under the pointer
     if (p.target && p.target.area !== 'temp') {
       const G = boardGeoNow();
-      const r = p.target.area === 'board' ? p.target.row : G.HAND_ROW;
-      const c = p.target.area === 'board' ? p.target.col : p.target.idx;
-      drawHighlight([[r, c]], p.legal ? 'target' : 'illegal', 'dragTarget');
+      const t = handTileOf(G, p.target.idx);
+      const r = p.target.area === 'board' ? p.target.row : (t ? t.row : -1);
+      const c = p.target.area === 'board' ? p.target.col : (t ? t.col : -1);
+      if (r >= 0 && c >= 0) drawHighlight([[r, c]], p.legal ? 'target' : 'illegal', 'dragTarget');
+      else clearHl('dragTarget');
     } else clearHl('dragTarget');
   }
 
@@ -1469,7 +1484,8 @@ export async function createFieldView(host, options = {}) {
     const t = p.target;
     if (t && (t.area === 'board' || t.area === 'hand')) {
       const G = boardGeoNow();
-      const row = t.area === 'board' ? t.row : G.HAND_ROW, col = t.area === 'board' ? t.col : t.idx;
+      const h = t.area === 'hand' ? handTileOf(G, t.idx) : null;
+      const row = t.area === 'board' ? t.row : (h ? h.row : G.HAND_ROW), col = t.area === 'board' ? t.col : (h ? h.col : 0);
       const w = boardWorld(row, col, t.area === 'hand');
       v._tween = { fx: v.x, fy: v.y, fz: v.z, tx: w.x, ty: w.y, tz: w.z, t: 0 };
       pending.set(dragState.key, { t: performance.now(), view: v, board: t.area === 'board' ? { row, col } : null });

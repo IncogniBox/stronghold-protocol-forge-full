@@ -89,7 +89,7 @@ import { itemKey } from './gamedata.js';
 // 装备位语义（第 7 段）：AI 选人 / 选装备的「还有没有空位」读这一局的策略（缺省档 ⇒ 官方那条算术逐字不变）。
 import { morphPairingOf } from '../../shared/morph.js';
 import { computeBonds } from './bondsMeta.js';
-import { isFlyKey } from './waves.js';
+import { isFlyKey, routeIndexIn, stageRoutesOf } from './waves.js';
 import { mitigate } from '../sim/damage.js';
 import { HOVER_KEYS } from '../sim/content/enemies.js';
 import { attackRangeGrid, loadoutRecord, resolveRecordLoadout } from '../../shared/loadoutRecord.js';
@@ -687,7 +687,9 @@ function bossWaveOf(m, ps) {
 export function fieldModel(m, ps = null) {
   const boss = m.wave ? null : bossWaveOf(m, ps);
   const wave = m.wave || (boss && boss.wave);
-  const cacheKey = `${m.round}|${m.stageId}|${wave ? wave.templateId : 'boss'}|${boss ? boss.side : ''}`;
+  // 普通带的半场（一张左右两半的图才有）：Bot 的路线模型也要按自己那半场选（与战场同一套规则）
+  const normalSide = !boss && typeof m.normalSideOf === 'function' ? (m.normalSideOf(ps) || 'L') : null;
+  const cacheKey = `${m.round}|${m.stageId}|${wave ? wave.templateId : 'boss'}|${boss ? boss.side : normalSide || ''}`;
   if (m._botPath && m._botPath.key === cacheKey) return m._botPath;
   const gd = ps?.gd || m.gd;
   const st = m.stage;
@@ -695,9 +697,13 @@ export function fieldModel(m, ps = null) {
   const midCol = L.mirrorCol / 2;   // 官方布局的左右分界列（10）
   const gpaths = (st && (st.groundPathsWithDevices || st.groundPaths)) || {};
   const routesOut = [];
+  // 地图自己画了路线：出怪按这一半场 + 移动方式重选一条（与 combat.js / views.js 同一个 routeIndexIn）；路线本身是
+  // **地图坐标**，Bot 的模型在棋盘坐标上，所以经这张图自己的映射换算回来。
+  const ownRoutes = !boss ? stageRoutesOf(gd, m.stageId) : null;
+  const botField = !boss && ownRoutes && typeof m.deployFieldOf === 'function' ? m.deployFieldOf(ps) : null;
   const toBoard = boss
     ? ([r, c]) => boardTileOf(boss.side === 'R' ? 'bossR' : 'bossL', r, c, L)
-    : (p) => p;
+    : botField ? ([r, c]) => boardTileOf(botField, r, c, L) : (p) => p;
   const pushRoute = (tilesRC, n, fly, hp, speed, dwell = 0) => {
     const own = tilesRC.map(toBoard).filter(([r, c]) => inRect(r, c)).map(([r, c]) => tileKey(r, c));
     if (own.length > 1) own.pop(); // the objective / last tile: an enemy there has already leaked
@@ -735,8 +741,11 @@ export function fieldModel(m, ps = null) {
       const hp = isLeader ? LEADER_HP : ((e && e.stats && e.stats.maxHp) || 1000) * ((s.mods && s.mods.hpMul) || 1);
       const spd = ((e && e.stats && e.stats.moveSpeed) || 1) * ((s.mods && s.mods.speedMul) || 1);
       const air = HOVER.has(s.enemyKey);
-      const key = `${s.routeIndex}|${isLeader ? 'boss' : ''}|${air ? 'air' : ''}`;
-      const a = per.get(key) || { ri: s.routeIndex, boss: isLeader, air, n: 0, hp: 0, spd: 0 };
+      const ri = ownRoutes
+        ? routeIndexIn(ownRoutes, isFlyKey(gd, s.enemyKey), normalSide, midCol, Number.isInteger(s.actionIndex) ? s.actionIndex : 0)
+        : s.routeIndex;
+      const key = `${ri}|${isLeader ? 'boss' : ''}|${air ? 'air' : ''}`;
+      const a = per.get(key) || { ri, boss: isLeader, air, n: 0, hp: 0, spd: 0 };
       a.n += isLeader ? LEADER_WEIGHT : n; a.hp += hp * n; a.spd += spd * n;
       per.set(key, a);
     }
@@ -1586,7 +1595,7 @@ function* buyLoopSteps(m, ps, { fillOnly = false, maxRefreshes = 0 } = {}) {
     const used = ps.hand.filter(Boolean).length;
     // [ASSUMED] Do not underfill the deploy cap merely to reserve a hand slot.
     // Product-policy tracking: https://github.com/sganggs/Stronghold-Protocol/issues/315
-    if (used >= gd.benchSize - 1 && ownedN > ps.deployCap) sellWeakestHand(m, ps, { keepFresh: true });
+    if (used >= (ps.handSize ?? gd.benchSize) - 1 && ownedN > ps.deployCap) sellWeakestHand(m, ps, { keepFresh: true });
     // a full hand refuses every purchase, the third copy of a held pair too (PlayerState.buy, PRTS 卫戍协议/帮助 §手牌区):
     // an affordable one sheds the weakest hand single first (like the shed above, never one of this prep)
     if (freeSlot(ps.hand) < 0 && ps.shop.slots.some((s) => s && !s.sold && s.kind === 'chess' && ps.priceOf(s) <= ps.funds && ps.completesChessMerge(s.id))) {

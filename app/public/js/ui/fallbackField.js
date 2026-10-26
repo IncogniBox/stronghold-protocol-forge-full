@@ -131,7 +131,9 @@ export function createFallbackView(host, opts = {}) {
     const cols = r.c1 - r.c0 + 1;
     const prep = st.mode === 'prep';
     const hasTemp = prep && Array.isArray(st.priv?.temp) && st.priv.temp.some(Boolean);
-    const rows = r.r1 - r.r0 + 1 + (prep ? 2.6 + (hasTemp ? 1.2 : 0) : 0); // + gap + hand (+ temp) rows
+    const bench = benchShape(geoNow());
+    // + gap + the hand's rows (+ temp row): 官方 1 行，45×60 重构战场 2 行 8 格 + 1 行临时。
+    const rows = r.r1 - r.r0 + 1 + (prep ? 0.6 + bench.rows * 1.12 + (hasTemp ? 1.3 : 0) : 0);
     // keep clear of the HUD: top bar + bond strip above, shop bar (prep) / switcher (combat) below
     const top0 = rem * 2.0;
     const bottom0 = h - rem * (prep ? 3.3 : 1.1);
@@ -146,8 +148,20 @@ export function createFallbackView(host, opts = {}) {
   }
 
   const tilePos = (L, row, col) => ({ x: (col - st.rect.c0) * L.tile, y: (st.rect.r1 - row) * L.tile });
-  const handPos = (L, idx) => ({ x: idx * L.tile, y: (L.rows + 0.6) * L.tile });
-  const tempPos = (L, idx) => ({ x: (GEO.TEMP_C0 + idx) * L.tile, y: (L.rows + 1.72) * L.tile });
+  /** 这条图的整备区分几行、每行几格（`drag.boardGeo`）：官方 1 行 × 10 格，45×60 重构战场 2 行 × 8 格。 */
+  const benchShape = (g) => {
+    const rows = Array.isArray(g?.HAND_ROWS) && g.HAND_ROWS.length ? g.HAND_ROWS.length : 1;
+    return { rows, cols: Number.isInteger(g?.HAND_COLS) && g.HAND_COLS > 0 ? g.HAND_COLS : (g?.HAND_SIZE || GEO.HAND_SIZE) };
+  };
+  const handPos = (L, idx, g = geoNow()) => {
+    const { rows, cols } = benchShape(g);
+    const r = Math.min(rows - 1, Math.floor(idx / cols));
+    return { x: (idx % cols) * L.tile, y: (L.rows + 0.6 + r * 1.12) * L.tile };
+  };
+  const tempPos = (L, idx, g = geoNow()) => {
+    const { rows } = benchShape(g);
+    return { x: idx * L.tile, y: (L.rows + 0.6 + rows * 1.12 + 0.5) * L.tile };
+  };
   /** 这张图棋盘的几何（整备行 / 临时整备行 / 棋盘矩形，棋盘坐标）：官方 = GEO 那一套，大图自己声明的那套。 */
   const geoNow = () => boardGeo(st.layout || layoutOf(st.stage), st.deployField || 'normal');
 
@@ -384,8 +398,9 @@ export function createFallbackView(host, opts = {}) {
         const pos = heldPos(p) || tilePos(L, p.row, p.col);
         pieces.push(html`<${Piece} key=${p.uid} p=${p} x=${pos.x} y=${pos.y} L=${L} area="board" />`);
       }
-      for (let i = 0; i < GEO.HAND_SIZE; i++) {
-        const pos = handPos(L, i);
+      const G = geoNow();
+      for (let i = 0; i < G.HAND_SIZE; i++) {
+        const pos = handPos(L, i, G);
         const hov = st.hoverTarget?.area === 'hand' && st.hoverTarget.idx === i ? dropState(st.hoverTarget) : null;
         hand.push(html`<div key=${`h${i}`} class=${cx('ff-slot', hov && `is-hover-${hov}`)} data-drop="hand" data-idx=${i}
           style=${`transform:translate(${pos.x}px,${pos.y}px);width:${L.tile}px;height:${L.tile}px`}><span class="num">${i + 1}</span></div>`);
@@ -394,8 +409,8 @@ export function createFallbackView(host, opts = {}) {
       }
       const temp = Array.isArray(st.priv.temp) ? st.priv.temp : [];
       if (temp.some(Boolean)) {
-        for (let i = 0; i < GEO.TEMP_SIZE; i++) {
-          const pos = tempPos(L, i);
+        for (let i = 0; i < G.TEMP_SIZE; i++) {
+          const pos = tempPos(L, i, G);
           hand.push(html`<div key=${`t${i}`} class="ff-slot ff-slot--temp" style=${`transform:translate(${pos.x}px,${pos.y}px);width:${L.tile}px;height:${L.tile}px`}></div>`);
           const p = temp[i];
           if (p) { const hp = heldPos(p) || pos; pieces.push(html`<${Piece} key=${p.uid} p=${p} x=${hp.x} y=${hp.y} L=${L} area="temp" />`); }
@@ -567,8 +582,12 @@ export function createFallbackView(host, opts = {}) {
       if (!br) return null;
       let p = null;
       const G = geoNow();
-      if (row === G.HAND_ROW && col >= 0 && col < GEO.HAND_SIZE && st.mode === 'prep') p = handPos(L, col);
-      else if (row === G.TEMP_ROW && col >= GEO.TEMP_C0 && col < GEO.TEMP_C0 + GEO.TEMP_SIZE && st.mode === 'prep') p = tempPos(L, col - GEO.TEMP_C0);
+      const rowsH = Array.isArray(G.HAND_ROWS) && G.HAND_ROWS.length ? G.HAND_ROWS : [G.HAND_ROW];
+      const c0 = Number.isInteger(G.HAND_C0) ? G.HAND_C0 : 0;
+      const { cols } = benchShape(G);
+      const ri = rowsH.indexOf(row);
+      if (st.mode === 'prep' && ri >= 0 && col >= c0 && col < c0 + cols) p = handPos(L, ri * cols + (col - c0), G);
+      else if (st.mode === 'prep' && row === G.TEMP_ROW && col >= G.TEMP_C0 && col < G.TEMP_C0 + G.TEMP_SIZE) p = tempPos(L, col - G.TEMP_C0, G);
       else if (row >= st.rect.r0 && row <= st.rect.r1 && col >= st.rect.c0 && col <= st.rect.c1) p = tilePos(L, row, col);
       if (!p) return null;
       const x0 = br.left + p.x, y0 = br.top + p.y, s = L.tile;

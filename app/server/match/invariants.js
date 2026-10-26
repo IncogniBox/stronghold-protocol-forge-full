@@ -29,7 +29,7 @@
 //            with one to three different cards
 //   match    phase known; teamLp / boss pool within range; combat fields match the alive players
 
-import { PHASE, BOND_LAYER_CAP } from '../../shared/constants.js';
+import { PHASE, BOND_LAYER_CAP, GEO } from '../../shared/constants.js';
 import { ruleOption } from '../../shared/plugins/rules.js';
 import { inField, FIELD, canPlace, placeClass, positionClass, parseKey } from './board.js';
 import { computeBonds } from './bondsMeta.js';
@@ -77,9 +77,12 @@ export function collectViolations(m, { limit = 25 } = {}) {
     if (!Number.isInteger(ps.pendingFunds) || ps.pendingFunds < 0) fail(`${id}: pendingFunds ${ps.pendingFunds}`);
     if (!Number.isFinite(ps.lp)) fail(`${id}: lp ${ps.lp}`);
     if (ps.alive && m.phase !== PHASE.SETTLE && ps.lp <= 0 && m.teamLp == null && m.round > 0 && ps.bandId) fail(`${id}: alive with lp ${ps.lp}`);
-    if (ps.hand.length !== gd.benchSize) fail(`${id}: hand has ${ps.hand.length} slots`);
-    if (ps.temp.length < gd.tempSize) fail(`${id}: temp has fewer than ${gd.tempSize} visible slots`);
-    if (ps.temp.length > gd.tempSize && ps.temp.some((x) => x == null)) fail(`${id}: overflow queue has an unfilled slot`);
+    // 整备区容量是**这一局**的（Match.benchSize：官方 10 / 5，声明了 layout.bench 的图 16 / 8）；gd 上那两个数是
+    // 官方缺省，只在拿不到 match 容量时兜底。
+    const bench = m.benchSize || { hand: gd.benchSize, temp: gd.tempSize || GEO.TEMP_SIZE };
+    if (ps.hand.length !== bench.hand) fail(`${id}: hand has ${ps.hand.length} slots`);
+    if (ps.temp.length < bench.temp) fail(`${id}: temp has fewer than ${bench.temp} visible slots`);
+    if (ps.temp.length > bench.temp && ps.temp.some((x) => x == null)) fail(`${id}: overflow queue has an unfilled slot`);
     // 临时整备区 = overflow only (PRTS 卫戍协议/帮助 §手牌区 "常规手牌区出现空位时自动移入", GitHub #82)
     if (ps.temp.some(Boolean) && ps.hand.some((x) => x == null)) fail(`${id}: a temp piece waits while a hand slot is free`);
     if (!(ps.shop.level >= 1 && ps.shop.level <= gd.maxShopLevel)) fail(`${id}: shop level ${ps.shop.level}`);
@@ -241,7 +244,27 @@ export function collectViolations(m, { limit = 25 } = {}) {
   }
 
   // shared pool accounting
-  if (!independent) {
+  const reconPairs = m.reconPools && m.reconPools.byKey && m.reconPools.byKey.size ? m.reconPools : null;
+  if (reconPairs) {
+    // 重构模拟：全房间共用的 `m.pool` 只是**只读目录**（拷贝从配对池扣），收发按「普通带同场的一对」守恒。
+    for (const [base, e] of m.pool.entries) {
+      if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`pool ${base}: balance ${e.left} cap ${e.cap}`);
+    }
+    for (const [key, { pool, players }] of reconPairs.byKey) {
+      const mine = new Map();
+      for (const pid of players) {
+        const h = heldOf.get(pid);
+        if (!h) continue;
+        for (const [base, n] of h) mine.set(base, (mine.get(base) || 0) + n);
+      }
+      for (const [base, e] of pool.entries) {
+        if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`recon pool ${key} ${base}: balance ${e.left} cap ${e.cap}`);
+        const h = mine.get(base) || 0;
+        if (e.left + h !== e.cap) fail(`recon pool ${key} ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
+      }
+      for (const [base, n] of mine) if (n !== 0 && !pool.has(base)) fail(`recon pool ${key}: non-pool chess ${base} holds ${n} copies`);
+    }
+  } else if (!independent) {
     for (const [base, e] of m.pool.entries) {
       if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`pool ${base}: balance ${e.left} cap ${e.cap}`);
       const h = held.get(base) || 0;

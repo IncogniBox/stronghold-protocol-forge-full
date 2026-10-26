@@ -215,7 +215,7 @@ import { mergeBehaviourDecls } from '../../shared/behaviour.js';
 // 往下交给 `GameData`（prep）、`battleOpts`（战斗）与 BattleSpec（客户端）。
 import { morphPairingOf } from '../../shared/morph.js';
 import { formView, isEliteForm } from '../../shared/formProjection.js';
-import { layoutOf } from '../../shared/layout.js';
+import { layoutOf, benchOf, isDualLayout } from '../../shared/layout.js';
 import { Battle } from '../sim/Battle.js';
 import { DataSource } from '../sim/simdata.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
@@ -245,6 +245,7 @@ import { MatchReports } from './match/reports.js';
 import { MatchUnite } from './match/unitePhase.js';
 import { MatchBoss } from './match/bossRounds.js';
 import { MatchReconTrials } from './match/reconTrials.js';
+import { MatchReconPools } from './match/reconPools.js';
 import { MatchSettle } from './match/settle.js';
 import { installTestTrace } from './testTrace.js';
 import { MatchTestCommands } from './match/testCommands.js';
@@ -284,6 +285,17 @@ function dataSourceFor(data, forms = null, elite = false) {
     byForm.set(key, ds);
   }
   return ds;
+}
+
+/**
+ * 一张图的整备区容量（`benchOf`）：官方图 10 / 5，声明了 `layout.bench` 的图按它自己的格子（45×60 重构战场 16 / 8）。
+ * 同一张图每个场地声明同宽，取普通带那一份。
+ * @param {object} layout
+ * @returns {{ hand: number, temp: number }}
+ */
+function benchSizesOf(layout) {
+  const b = benchOf(layout, isDualLayout(layout) ? 'normalL' : 'normal');
+  return { hand: b.handSize, temp: b.tempSize };
 }
 
 export class Match {
@@ -610,6 +622,15 @@ export class Match {
     /** The stage's own layout (shared/layout.js): its battle rects, pen band and mirror axis — official for 19×21. */
     this.layout = layoutOf(this.stage);
     /**
+     * 整备区容量（`benchOf`）：官方图 10 / 5；在 `layout.bench` 里声明了按地图格子摆板凳的图（45×60 重构战场）是
+     * 16 / 8。同一张图的每块场地声明同宽，取普通带那一份定容量；`PlayerState` 的 hand / temp 数组按它建。
+     * @type {{ hand: number, temp: number }}
+     */
+    this.benchSize = benchSizesOf(this.layout);
+    // 座位是在选出这张图**之前**建的（PlayerState 只认官方 10 / 5）：这里按本局的 `layout.bench` 把两个数组换成真容量。
+    // 此刻一局还没开始，两边都还是空数组；Stage override 也走这一条。
+    for (const ps of this.players.values()) ps.applyBenchSize?.(this.benchSize);
+    /**
      * 编辑器「▶ 试玩这张图」：让这一局**打指定的那张图**（业主 2026-10-08 的地图编辑器需求）。
      *
      * 为什么走环境变量而不是新的协议字段：试玩服务器是编辑器 spawn 的**一次性子进程**（editor/playtest.mjs，一个端口一个
@@ -626,7 +647,8 @@ export class Match {
       this.stageId = stageOverride;
       this.stage = this.gd.stage(stageOverride);
       this.layout = layoutOf(this.stage);
-      // 部署图是按当时那张图算出来的：换了图必须让它重算，否则试玩里能放的位置还是上一张图的
+      this.benchSize = benchSizesOf(this.layout);
+      for (const ps of this.players.values()) ps.applyBenchSize?.(this.benchSize);
       for (const ps of this.players.values()) ps.invalidateDeployMap?.();
       if (!this.stage.rounds || !Object.keys(this.stage.rounds).length) {
         this.log?.warn?.(`[match] stage override ${stageOverride}：这张图没有绑定任何出怪表，回合会退回模式模板的路线`);
@@ -659,6 +681,10 @@ export class Match {
     // 助战多一份拷贝走 SharedPool 的 support 选项；共享装备库存是另一个池，由 SharedItemPool 表达。
     this.pool = new SharedPool(this.gd, { banned: bans.banned, support: this.supportSupply });
     this.itemPool = new SharedItemPool(this.gd, () => this.order);
+    // 重构模拟：普通带同场的一对玩家共用一个棋子池（match/reconPools.js）。非重构对局一个对象都不建。
+    /** @type {{ byPlayer: Map<string, SharedPool>, byKey: Map<string, { pool: SharedPool, players: string[] }> }|null} */
+    this.reconPools = null;
+    this._initReconPools();
     // 自选编队 (0.2.0): each human's slotted DIY pieces get their own stock — none for one whose bonds are all off this
     // match (player/diy.js initDiyStock); no randomness is drawn here
     const off = new Set([...bans.drawn, ...bans.staticOff]);
@@ -759,7 +785,7 @@ export class Match {
 }
 
 // the method modules, in this order (a name defined twice is an error, never a silent override)
-for (const part of [MatchPlatform, MatchInfra, MatchMessaging, MatchViews, MatchWatch, MatchIntents, MatchPause, MatchPhases, MatchSetupVote, MatchSpDraft, MatchPrep, MatchCombat, MatchClientCombat, MatchRehearsal, MatchReports, MatchUnite, MatchBoss, MatchReconTrials, MatchSettle, MatchTestCommands, MatchOffers]) {
+for (const part of [MatchPlatform, MatchInfra, MatchMessaging, MatchViews, MatchWatch, MatchIntents, MatchPause, MatchPhases, MatchSetupVote, MatchSpDraft, MatchPrep, MatchCombat, MatchClientCombat, MatchRehearsal, MatchReports, MatchUnite, MatchBoss, MatchReconTrials, MatchReconPools, MatchSettle, MatchTestCommands, MatchOffers]) {
   for (const key of Reflect.ownKeys(part.prototype)) {
     if (key === 'constructor') continue;
     if (Object.prototype.hasOwnProperty.call(Match.prototype, key)) throw new Error(`Match.${String(key)} is defined twice`);

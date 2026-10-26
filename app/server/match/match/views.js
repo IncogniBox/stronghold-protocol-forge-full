@@ -9,10 +9,10 @@ import { TEST_PUBLIC_LOG } from '../../../shared/testMode.js';
 import { boardOrder, pieceDir, handRow, tempRow } from '../board.js';
 import { bondList, offBondCounts } from '../bondsMeta.js';
 import { cardView } from '../choices.js';
-import { bountySpawns, previewOf } from '../waves.js';
+import { bountySpawns, previewOf, stageRoutesOf, routeSpawn } from '../waves.js';
 import { timelineAt } from '../fields.js';
 import { bossFieldPlacement } from '../finalAssault.js';
-import { fieldTileOf as layoutFieldTile } from '../../../shared/layout.js';
+import { fieldTileOf as layoutFieldTile, benchOf, benchTileOf } from '../../../shared/layout.js';
 import { battleProgress } from '../../sim/spec.js';
 
 /** Milliseconds since the match started. A stamp before the start, or a bad stamp, is 0. The stored log keeps the epoch. */
@@ -138,6 +138,8 @@ export class MatchViews {
         fieldId: this.fieldOf(ps),
         status: this.statusOf(ps),
         autoplay: ps.autoplay,
+        // 重构模拟的房间队伍（1..teamCount）：只有这类对局带，其它模式的玩家条目逐字节不变。
+        ...(this.gd.isRecon ? { team: ps.team } : {}),
         // 干员皮肤 (docs/SKINS.md): PUBLIC on purpose — this is how a teammate sees your skin, and the reason the
         // renderer reads the skin off the unit rather than off the local player. Omitted when empty, which is the normal
         // case: the appearance comes from a cosmetic plugin each player switches on for themself, so most have none.
@@ -173,6 +175,10 @@ export class MatchViews {
         choices: this.phase === PHASE.PRE_RECON && this.reconChoices
           ? Object.fromEntries(Object.entries(this.reconChoices).map(([pid, c]) => [pid, { ...c }]))
           : null,
+        // 全员交齐后的「队伍总览」：阶段仍是 PRE_RECON，客户端据此播过场并展示总览；`continued` 是已点继续的座位。
+        ...(this.phase === PHASE.PRE_RECON && this.reconSummary
+          ? { summary: true, continued: [...this.reconContinues] }
+          : { summary: false, continued: [] }),
       };
     }
     if (this.phase === PHASE.SP_DRAFT && this.sp) {
@@ -333,10 +339,19 @@ export class MatchViews {
       return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side, mid: typeof this.bossAreaMidOf === 'function' ? this.bossAreaMidOf(ps) : this.layout.mirrorCol / 2 }), ...dev]);
     }
     if (!this.wave) return [];
-    const bounty = bountySpawns(this.gd, this.round, this.wave, ps.bounties, ps.playerId, { solo: this.isSolo });
+    // 地图自己画了路线：等待区只列**这一半场**的那一份，起点/空中标志也跟着那一侧的路线走
+    const stageRoutes = stageRoutesOf(this.gd, this.stageId);
+    const side = (typeof this.normalSideOf === 'function' ? this.normalSideOf(ps) : null) || 'L';
+    const mid = this.layout.mirrorCol / 2;
+    const base = stageRoutes
+      ? this.wave.spawns.map((s, i) => routeSpawn(this.gd, stageRoutes, s, {
+        side, mid, k: Number.isInteger(s.actionIndex) ? s.actionIndex : i, ownerPlayerId: ps.playerId,
+      }))
+      : this.wave.spawns;
+    const bounty = bountySpawns(this.gd, this.round, this.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side, mid });
     // 重构模拟的「试炼首领」（reconTrials.js）：这一回合追加的·重构首领也进预览（与战场同一份列表，见 combat.js _normalOpts）
     const trial = Array.isArray(this.reconTrialSpawns) ? this.reconTrialSpawns : [];
-    return previewOf([...this.wave.spawns, ...bounty, ...dev, ...trial]);
+    return previewOf([...base, ...bounty, ...dev, ...trial]);
   }
 
   /** A 自选 piece's pick (like the sim's UnitInfo.diy): a scout's card composes the operator from it (shared/diy.js). */
@@ -465,19 +480,22 @@ export class MatchViews {
         ...cultivationInfo(lo),
       });
     };
-    // 整备行 / 临时整备区行是**这张图自己**的（`board.js handRow` / `tempRow` 读地图的棋盘形状；官方就是 7 / 8），
-    // 而且看的是这个玩家现在部署的那个场（boss 回合的休整期是它的半场，见 Match.deployFieldOf）：一张把普通带
-    // 放大到 5×11 的图，它的整备行比官方低一行。
+    // 整备区 / 临时整备区是**这张图自己**的格子（`benchOf`：官方一行 10 格 / 一行 5 格；45×60 重构战场是 2 行 × 8 格
+    // + 8 格临时），而且看的是这个玩家现在部署的那个场（boss 回合的休整期是它的半场，见 Match.deployFieldOf）。
     const benchField = this.deployFieldOf(ps);
-    // 第 2… 块 boss 场地的整备行跟着**这位棋手自己的**矩形走（第 1 块 / 普通回合仍读地图自己的布局）
+    // 第 2… 块 boss 场地的整备区跟着**这位棋手自己的**矩形走（第 1 块 / 普通回合仍读地图自己的布局）
     const benchLayout = typeof this.deployLayoutOf === 'function' ? this.deployLayoutOf(ps) : this.layout;
-    const handRowNow = handRow(benchLayout, benchField);
-    const tempRowNow = tempRow(benchLayout, benchField);
+    const benchArea = typeof this.bossAreaOf === 'function' ? this.bossAreaOf(ps) : { index: 0, seat: 0 };
+    const bench = benchOf(benchLayout, benchField, benchArea.index, benchArea.seat);
     for (let i = 0; i < ps.hand.length; i++) {
-      if (ps.hand[i]) benchUnit(ps.hand[i], i, handRowNow, 'hand');
+      if (!ps.hand[i]) continue;
+      const t = benchTileOf(bench, 'hand', i);
+      if (t) benchUnit(ps.hand[i], t.col, t.row, 'hand');
     }
-    for (let i = 0; i < Math.min(ps.temp.length, GEO.TEMP_SIZE); i++) {
-      if (ps.temp[i]) benchUnit(ps.temp[i], GEO.TEMP_C0 + i, tempRowNow, 'temp');
+    for (let i = 0; i < Math.min(ps.temp.length, bench.tempSize); i++) {
+      if (!ps.temp[i]) continue;
+      const t = benchTileOf(bench, 'temp', i);
+      if (t) benchUnit(ps.temp[i], t.col, t.row, 'temp');
     }
     // `nextEnemies`: the scouted player's coming enemies — their preview pen shows on the scouting board too (research 09
     // §2.2 "Teammates"; render/app.js enterBattle({ prep: true, nextEnemies }))

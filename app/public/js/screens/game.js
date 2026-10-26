@@ -116,7 +116,7 @@ import { EquipReplaceDialog, replaceRequest, replaceIntent } from '../ui/equipRe
 import { pauseAvailable, isPaused, frozenNow } from '../ui/matchStatus.js';
 import { pieceTile, boardGeo } from '../render/drag.js';
 import { layoutOf, mapRectOf } from '../render/layout.js';
-import { bossAreaLayout } from '../../../shared/layout.js';
+import { bossAreaLayout, isOfficialLayout, isDualLayout } from '../../../shared/layout.js';
 import { FOLD_CAMERA_MS } from '../render/app/tune.js';
 import {
   phaseMode, phaseBanner, isCombatPhase, showDeadPill, isBossPhase, placementContext, canPlace, boardTargets, dropIntent,
@@ -368,6 +368,28 @@ function MatchScreen() {
   // the map's own window / rects (shared/layout.js): official 19×21 for an official stage, the map's own bands for a
   // big one — every rect / band / tile mapping below reads it (render/layout.js)
   const stageLayout = layoutOf(gd.stage(pub?.stageId));
+  // 非官方布局的图（45×60 重构战场）：**普通带的战斗**取景和休整期一样——看自己那半场，并整体推近 50%（`prepCamera`
+  // 的 `framed`，gameLogic/camera.js `zoom: 1.5`）。联防 / boss 的全景与左右半场保持原样（那里 1.5 倍会把两侧的门
+  // 裁出画面）。官方 19×21 的图不推近，逐字节不变。业主 2026-10-26「战斗时的摄像机视角是不是没有和休整期一样拉近 50%」。
+  const mapZoom = stageLayout && !isOfficialLayout(stageLayout) ? 1.5 : null;
+  const dualNormal = isDualLayout(stageLayout);
+  // 「左右两半」普通带的座位 → 半场（与服务器 Match.normalSideOf 同一条：存活玩家按座位两两一组，第 1 位 L、第 2 位 R）
+  const normalPairSide = (pid) => {
+    const ids = players.filter((p) => p && p.alive !== false && p.left !== true).map((p) => p.playerId);
+    const i = ids.indexOf(pid);
+    return i >= 0 && i % 2 === 1 ? 'R' : 'L';
+  };
+  // 一条半场的取景矩形（地图坐标）：横向用整备矩形那套左右边距（外侧留 2 列，门不会被裁），
+  // `prep` 为真时把板凳那几行也带上（看队友的休整期阵地）。
+  const normalHalfRect = (sd, prep = false) => {
+    const n = stageLayout.deployRects.normalLeft, p = stageLayout.battle.prep, nb = stageLayout.battle.normal;
+    const lo = Math.min(p.c0, n[2] - 2), hi = n[3];
+    const r0 = prep ? Math.min(p.r0, n[0] - 2) : nb.r0;
+    const r1 = prep ? Math.max(p.r1, n[1]) : nb.r1;
+    return sd === 'R'
+      ? { r0, r1, c0: stageLayout.mirrorCol - hi, c1: stageLayout.mirrorCol - lo }
+      : { r0, r1, c0: lo, c1: hi };
+  };
   // the field the own pieces are deployed on: the own board, or the player's half of the boss field in a boss round's
   // prep (user playtest #5 item 7: legality and the legal-tile highlights read THOSE tiles, like the server)
   const deployField = deployFieldOf(pub, myId, stageLayout);
@@ -621,9 +643,11 @@ function MatchScreen() {
       : sides && sides[myId] ? sides[myId] : members.length > 1 && members.indexOf(myId) === 1 ? 'R' : 'L';
     // local simulation (client-side combat) feeds a frame per animation frame: no network jitter buffer
     view.raw?.setLocalFeed?.({ on: !!field.local, speed: field.speed });
-    // a lone 联防 helper starts on its own half with the ‹ › pill on that half (全景 stays one press away)
+    // a lone 联防 helper starts on its own half with the ‹ › pill on that half (全景 stays one press away).
+    // 左右两半的普通带：战斗也从自己那半场开始（‹ › 仍可切到队友那半 / 全景）
     const helperHalf = field.prep ? null : loneHalf(field);
-    setLayer(helperHalf || 'ALL');
+    const normalStartLayer = cc && kind === 'normal' && !field.prep && dualNormal ? side : null;
+    setLayer(helperHalf || normalStartLayer || 'ALL');
     // a lone player's boss field (solo modes, the odd player of a co-op Final Assault: the `_s` templates route every
     // enemy to the left objective) is framed on its own half like the ‹ › half view; pairs start on 全景
     const lone = kind === 'boss' && members.length === 1;
@@ -632,9 +656,20 @@ function MatchScreen() {
     const areaLay = Number.isInteger(field.area) && field.area > 0
       ? bossAreaLayout(stageLayout, field.area, Number.isInteger(field.seat) ? field.seat : 0)
       : null;
-    setCam(kind, helperHalf ? layerCamera(field, helperHalf, side)
+    // 普通带的战斗：与休整期看同一条自己的半场，非官方布局的图上同样推近 50%。看队友的休整期阵地
+    // （`n:<pid>`，前往查看 / 观战）时看**他**那半场 —— 不再把左右两半整条空场地塞进一屏。
+    // 全景（联防 / boss）与官方图的机位都不动。
+    const watchedId = field.prep && typeof field.fieldId === 'string' && field.fieldId.startsWith('n:')
+      ? field.fieldId.slice(2) : null;
+    const watchedSide = watchedId && watchedId !== myId && dualNormal ? normalPairSide(watchedId) : null;
+    const scoutRect = watchedSide ? normalHalfRect(watchedSide, true) : null;
+    const ownHalfRect = kind === 'normal' && !field.prep && dualNormal && cc ? normalHalfRect(side) : null;
+    const fieldCam = helperHalf ? layerCamera(field, helperHalf, side)
       : lone ? { rect: field.rect, side, half: true, ...(areaLay ? { layout: areaLay, area: field.area } : {}) }
-        : { rect: field.rect, side, ...(field.prep ? { shop: false } : {}), ...(areaLay ? { layout: areaLay, area: field.area } : {}) });
+        : scoutRect ? { rect: scoutRect, side: watchedSide, ...(mapZoom ? { zoom: mapZoom } : {}) }
+          : ownHalfRect ? { rect: ownHalfRect, side, ...(mapZoom ? { zoom: mapZoom } : {}) }
+            : { rect: field.rect, side, ...(field.prep ? { shop: false } : {}), ...(areaLay ? { layout: areaLay, area: field.area } : {}) };
+    setCam(kind, fieldCam);
     audio.setFieldUnits(field.units);
     if (early && early.length) {
       // replay state-bearing events only (a burst of stale hit sparks / damage numbers would look wrong)
@@ -796,11 +831,19 @@ function MatchScreen() {
     if (next) setCam(next.kind, { ...next.opts, ms: FOLD_CAMERA_MS });
   }, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey]);
 
-  // 联防 / 最终攻势: the ‹ › pill moves the camera between the field's halves and 全景 (research 09 §3.1)
+  // 联防 / 最终攻势 / 左右两半的普通带: the ‹ › pill moves the camera between the field's halves and 全景
   useEffect(() => {
     if (!view || !field || !field.local || !isCombatPhase(phase)) return;
-    if (!cameraLayers(field, pub, myId).length) return;
+    if (!cameraLayers(field, pub, myId, stageLayout).length) return;
     const kind = field.kind === 'hidden' ? 'boss' : field.kind;
+    if (field.kind === 'normal' && dualNormal) {
+      // 普通带的两半：左/右半场用与休整期同一条半场矩形（+ 非官方图的 1.5 倍），全景是整条普通带
+      const sd = layer === 'L' || layer === 'R' ? layer : null;
+      setCam(kind, sd
+        ? { rect: normalHalfRect(sd, false), side: sd, ...(mapZoom ? { zoom: mapZoom } : {}) }
+        : { rect: field.rect, side: sidesOf(field)[myId] || 'L' });
+      return;
+    }
     setCam(kind, layerCamera(field, layer, sidesOf(field)[myId] || 'L'));
   }, [layer]);
 
@@ -814,11 +857,13 @@ function MatchScreen() {
     const A = whoAppliedRef.current;
     if (A.who === who && A.field === field) return;
     whoAppliedRef.current = { who, field };
-    const k = playerLayer(field, pub, myId, who.playerId);
+    const k = playerLayer(field, pub, myId, who.playerId, stageLayout);
     if (!k) return;
     setLayer(k);
     // the camera directly too: when the layer state already equals k the [layer] effect would not run
-    setCam(field.kind === 'hidden' ? 'boss' : field.kind, layerCamera(field, k, sidesOf(field)[myId] || 'L'));
+    setCam(field.kind === 'hidden' ? 'boss' : field.kind, field.kind === 'normal' && dualNormal && (k === 'L' || k === 'R')
+      ? { rect: normalHalfRect(k, false), side: k, ...(mapZoom ? { zoom: mapZoom } : {}) }
+      : layerCamera(field, k, sidesOf(field)[myId] || 'L'));
   }, [view, watchWho, field, phase]);
 
   // graceful degradation: without WebGL / the render engine the DOM view takes over — say so once per match
@@ -1601,7 +1646,7 @@ function MatchScreen() {
   // (an eliminated player auto-observes a teammate's normal field — research 09 "keep-watching" — without asking)
   const watchedFid = watchingOther ? watching : (cc && combat && !alive && battleState && battleState.watch && battleState.kind === 'normal' ? battleState.fieldId : null);
   // the ‹ › pill: on the 联防 / 最终攻势 field on screen — also one watched with 前往查看 (a leaker, an eliminated spectator)
-  const layers = cc && combat && field && field.local && (!watchingOther || field.fieldId === watching) ? cameraLayers(field, pub, myId) : [];
+  const layers = cc && combat && field && field.local && (!watchingOther || field.fieldId === watching) ? cameraLayers(field, pub, myId, stageLayout) : [];
   const progress = cc && phase === PHASE.COMBAT ? teammateProgress(pub, myId) : null;
   // the bond strip follows the player on screen (DESIGN §20.15, ui/watchBonds.js): a teammate's board / battle (前往查看,
   // an eliminated player's auto-observed field) → their bonds; a 联防 / 最终攻势 field → the player on the ‹ › half (全景:

@@ -27,21 +27,54 @@
 //   pieceDragEnd   { uid, piece, dropped, cancelled }
 
 import { GEO } from '../../../shared/constants.js';
-import { boardRectOf, handRowOf, tempRowOf } from './layout.js';
+import { boardRectOf, benchOf } from './layout.js';
+
+/** 手牌行的行号表（geo 没有 `HAND_ROWS` 时就是官方那一行）。 */
+const handRowsOf = (geo) => (Array.isArray(geo.HAND_ROWS) && geo.HAND_ROWS.length ? geo.HAND_ROWS : [geo.HAND_ROW]);
+/** 手牌每行几格、第一格在哪一列（geo 没有时就是官方 10 格 / 列 0）。 */
+const handSpanOf = (geo) => ({
+  cols: Number.isInteger(geo.HAND_COLS) && geo.HAND_COLS > 0
+    ? geo.HAND_COLS : (Number.isInteger(geo.HAND_SIZE) && geo.HAND_SIZE > 0 ? geo.HAND_SIZE : GEO.HAND_SIZE),
+  c0: Number.isInteger(geo.HAND_C0) ? geo.HAND_C0 : 0,
+});
+/** 整备区第 idx 格在棋盘坐标里的位置（先填第一行，再第二行）。 */
+export function handTileOf(geo, idx) {
+  if (!geo || !Number.isInteger(idx) || idx < 0) return null;
+  const rows = handRowsOf(geo);
+  const { cols, c0 } = handSpanOf(geo);
+  const row = rows[Math.floor(idx / cols)];
+  return Number.isInteger(row) ? { row, col: c0 + (idx % cols) } : null;
+}
+/** 整备区第 idx 格的协议目标（hand / temp）。 */
+export function benchSlotOf(geo, area, idx) {
+  const t = area === 'temp'
+    ? (Number.isInteger(idx) && idx >= 0 && idx < geo.TEMP_SIZE ? { row: geo.TEMP_ROW, col: geo.TEMP_C0 + idx } : null)
+    : handTileOf(geo, idx);
+  return t ? { area, idx, row: t.row, col: t.col } : null;
+}
 
 /**
  * A `GEO`-shaped view of **one map's board** (the hand / 临时整备区 rows and the board rect itself, in board
  * coordinates): the pointer layer works in these numbers, and a map that declares a bigger board (or moves its 整备行,
  * shared/layout.js `boardRectOf`) hands a different one in. Omitted / the official layout ⇒ today's `GEO` numbers
  * (hand row 7, temp row 8, board 9–12 × 2–10), so every official map keeps the historical behaviour.
+ *
+ * 整备区按这张图的 `layout.bench`（`benchOf`）：官方 = 一行 10 格 + 一行 5 格；45×60 重构战场 = 两行 8 格（16）+
+ * 一行 8 格临时。`area` / `seat` 是第几块 boss 场地与座位（第 1 块 / 普通回合为 0）。
  * @param {object|null|undefined} layout the map's own layout (`layoutOf(stage)`); omitted → the official one
- * @param {'normal'|'bossL'|'bossR'} [field] the deploy field the pieces are shown on (a boss prep uses the half's rows)
+ * @param {'normal'|'normalL'|'normalR'|'bossL'|'bossR'} [field] the deploy field the pieces are shown on
+ * @param {number} [area] the boss area index (0 = the first one)
+ * @param {number} [seat] the seat inside that boss area (0 / 1)
  */
-export function boardGeo(layout, field = 'normal') {
+export function boardGeo(layout, field = 'normal', area = 0, seat = 0) {
   const B = boardRectOf(layout, field);
+  const b = benchOf(layout, field, area, seat);
+  const hand = b.hand;
+  const temp = b.temp || { row: hand.rows[0] + 1, c0: GEO.TEMP_C0, size: 0 };
   return {
-    HAND_ROW: handRowOf(layout, field), HAND_SIZE: GEO.HAND_SIZE,
-    TEMP_ROW: tempRowOf(layout, field), TEMP_C0: GEO.TEMP_C0, TEMP_SIZE: GEO.TEMP_SIZE,
+    HAND_ROWS: [...hand.rows], HAND_C0: hand.c0, HAND_COLS: hand.cols, HAND_SIZE: hand.size,
+    HAND_ROW: hand.rows[0],
+    TEMP_ROW: temp.row, TEMP_C0: temp.c0, TEMP_SIZE: temp.size,
     FIELD: { r0: B.r0, r1: B.r1, c0: B.c0, c1: B.c1 },
   };
 }
@@ -49,8 +82,10 @@ export function boardGeo(layout, field = 'normal') {
 /** Where a piece currently sits, as a tile. `piece.area` 'board' uses row/col; 'hand'/'temp' use idx. */
 export function pieceTile(piece, geo = GEO) {
   if (!piece || typeof piece !== 'object') return null;
-  if (piece.area === 'hand' && Number.isInteger(piece.idx)) return { row: geo.HAND_ROW, col: piece.idx };
-  if (piece.area === 'temp' && Number.isInteger(piece.idx)) return { row: geo.TEMP_ROW, col: geo.TEMP_C0 + piece.idx };
+  if (piece.area === 'hand' && Number.isInteger(piece.idx)) return handTileOf(geo, piece.idx);
+  if (piece.area === 'temp' && Number.isInteger(piece.idx) && piece.idx < geo.TEMP_SIZE) {
+    return { row: geo.TEMP_ROW, col: geo.TEMP_C0 + piece.idx };
+  }
   if (Number.isInteger(piece.row) && Number.isInteger(piece.col)) return { row: piece.row, col: piece.col };
   return null;
 }
@@ -71,7 +106,11 @@ export function pieceSlot(piece) {
 export function tileSlot(tile, geo = GEO) {
   if (!tile || !Number.isInteger(tile.row) || !Number.isInteger(tile.col)) return null;
   const { row, col } = tile;
-  if (row === geo.HAND_ROW && col >= 0 && col < geo.HAND_SIZE) return { area: 'hand', idx: col };
+  const ri = handRowsOf(geo).indexOf(row);
+  if (ri >= 0) {
+    const { cols, c0 } = handSpanOf(geo);
+    if (col >= c0 && col < c0 + cols) return { area: 'hand', idx: ri * cols + (col - c0) };
+  }
   if (row === geo.TEMP_ROW && col >= geo.TEMP_C0 && col < geo.TEMP_C0 + geo.TEMP_SIZE) return { area: 'temp', idx: col - geo.TEMP_C0 };
   const F = geo.FIELD;
   if (row >= F.r0 && row <= F.r1 && col >= F.c0 && col <= F.c1) return { area: 'board', row, col };
@@ -111,16 +150,21 @@ export function dragStandTile(move, geo = GEO) {
   const t = move && move.legal === true ? move.target : null;
   if (!t) return null;
   if (t.area === 'board' && Number.isInteger(t.row) && Number.isInteger(t.col)) return { row: t.row, col: t.col, bench: false };
-  if (t.area === 'hand' && Number.isInteger(t.idx)) return { row: geo.HAND_ROW, col: t.idx, bench: true };
+  if (t.area === 'hand' && Number.isInteger(t.idx)) {
+    const h = handTileOf(geo, t.idx);
+    return h ? { row: h.row, col: h.col, bench: true } : null;
+  }
   return null;
 }
 
-/** Legality via the UI callback (board → (piece,row,col); hand → (piece, HAND_ROW, idx)). Throwing ⇒ illegal. */
+/** Legality via the UI callback (board → (piece,row,col); hand → (piece, hand row, hand col)). Throwing ⇒ illegal. */
 export function isLegal(canPlace, piece, slot, geo = GEO) {
   if (!slot || slot.area === 'temp' || slot.area === 'outside') return false;
   if (typeof canPlace !== 'function') return true;
-  const row = slot.area === 'board' ? slot.row : geo.HAND_ROW;
-  const col = slot.area === 'board' ? slot.col : slot.idx;
+  const h = slot.area === 'board' ? null : handTileOf(geo, slot.idx);
+  if (slot.area !== 'board' && !h) return false;
+  const row = slot.area === 'board' ? slot.row : h.row;
+  const col = slot.area === 'board' ? slot.col : h.col;
   try { return canPlace(piece, row, col, slot) !== false; } catch { return false; }
 }
 

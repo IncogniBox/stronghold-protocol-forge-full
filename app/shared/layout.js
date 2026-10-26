@@ -290,6 +290,65 @@ export function layoutForSize(size, seam = DEFAULT_SEAM, board = DEFAULT_BOARD, 
 export const OFFICIAL_LAYOUT = Object.freeze(layoutForSize(OFFICIAL_SIZE));
 
 /**
+ * `layout.bench` 的声明（**地图坐标**）→ 棋盘坐标的整备区几何（`benchOf` 读的那一套）。
+ *
+ * 一个场名一条 `{ hand: [[行, 列0, 列1], …], temp: [行, 列0, 列1] }`；每一行逐格走该场的 `boardTileOf`（右半场
+ * 镜像后按列升序重排）。声明得不自洽（越界、两行不等宽、镜像后列不连续、两行落到同一行）就**丢掉这一个场名** ——
+ * 调用方退回相对官方形状，而不是按坏数据摆一排格子。
+ * @param {object|null} raw @param {object} l 已洗好的布局（`deployRects` / `battle` / `size` 齐全）
+ */
+function normalizeBench(raw, l) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const [R, C] = l.size;
+  const trip = (x) => Array.isArray(x) && x.length === 3 && x.every(isInt)
+    && x[0] >= 0 && x[0] < R && x[1] >= 0 && x[2] < C && x[1] <= x[2];
+  const specOf = (v) => {
+    if (!v || typeof v !== 'object') return null;
+    const rows = Array.isArray(v.hand) ? v.hand : null;
+    if (!rows || !rows.length || !rows.every(trip)) return null;
+    return { rows, temp: trip(v.temp) ? v.temp : null };
+  };
+  const convert = (spec, field, area, seat) => {
+    const L = area > 0 ? bossAreaLayout(l, area, seat) : l;
+    const toBoard = (mr, mc) => boardTileOf(L, field, mr, mc);
+    let c0 = null, cols = null;
+    const handRows = [];
+    for (const [mr, mc0, mc1] of spec.rows) {
+      const cells = [];
+      for (let c = mc0; c <= mc1; c++) cells.push(toBoard(mr, c));
+      cells.sort((a, b) => a[1] - b[1]);
+      const lo = cells[0][1], hi = cells[cells.length - 1][1];
+      if (hi - lo !== cells.length - 1) return null;
+      if (handRows.includes(cells[0][0])) return null;
+      if (c0 === null) { c0 = lo; cols = cells.length; }
+      else if (lo !== c0 || cells.length !== cols) return null;
+      handRows.push(cells[0][0]);
+    }
+    let temp = null;
+    if (spec.temp) {
+      const cells = [];
+      for (let c = spec.temp[1]; c <= spec.temp[2]; c++) cells.push(toBoard(spec.temp[0], c));
+      cells.sort((a, b) => a[1] - b[1]);
+      if (cells[cells.length - 1][1] - cells[0][1] !== cells.length - 1) return null;
+      temp = { row: cells[0][0], c0: cells[0][1], size: cells.length };
+    }
+    return { hand: { rows: handRows, c0, cols, size: cols * handRows.length }, temp };
+  };
+  const out = {};
+  for (const key of Object.keys(raw)) {
+    const spec = specOf(raw[key]);
+    if (!spec) continue;
+    const m = /^bossA(\d+):(\d+)$/.exec(key);
+    const area = m ? Number(m[1]) - 1 : 0;
+    const seat = m ? Number(m[2]) : 0;
+    if (area < 0 || seat < 0) continue;
+    const b = convert(spec, area > 0 ? 'bossL' : key, area, seat);
+    if (b) out[key] = b;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
  * 把作者声明（或记录里存下的）布局洗成完整的一份：**缺的键从默认布局取，越界的矩形退回默认**。
  * 洗不出来的一律当作「没声明」，因为一个越界的分区不是「另一种设计」，而是坏数据。
  *
@@ -351,6 +410,9 @@ export function normalizeLayout(v, size) {
     const penR = toRectObj(v.penRight);
     out.penRight = penR && rectIn(penR, win) ? penR : base.penRight;
   }
+  // 整备区（16 / 8 这类按地图格子摆的板凳）：声明换到棋盘坐标；没有声明的图不写这个键（benchOf 退回相对官方形状）。
+  const bench = normalizeBench(v.bench, out);
+  if (bench) out.bench = bench;
   return out;
 }
 
@@ -418,6 +480,34 @@ export function bossAreaPrepRect(layout, i) {
   return { ...r };
 }
 
+/**
+ * 一块 boss 场地的两位棋手**各看自己那半场**时的整备取景矩形。只有这块场地的两条部署矩形是**左右并排**
+ * （行带相同、列分开）时才有值 —— 这时像普通带的两半一样分左 / 右：行带照这块场地的整备矩形整条带上
+ * （板凳那几行），列只留自己那半边（左半从整备矩形左缘到相接列，右半从相接列到右缘）。
+ * 两块矩形上下叠放（不是左右两半）时返回 null：调用方仍按整块场地取景。
+ * @param {object|null} layout @param {number} i 第几块 boss 场地（0 = 第 1 块）@param {number} k 座位 0 / 1
+ * @returns {{r0:number,r1:number,c0:number,c1:number}|null}
+ */
+export function bossAreaSeatPrepRect(layout, i, k = 0) {
+  const l = layout || OFFICIAL_LAYOUT;
+  const a = bossAreaDeployRect(l, i, 0);
+  const b = bossAreaDeployRect(l, i, 1);
+  if (!a || !b) return null;
+  // 左右并排：同一条行带、列确实分开；两条矩形完全一样 / 上下叠放都不算
+  if (a[0] !== b[0] || a[1] !== b[1]) return null;
+  if (a[2] === b[2] || a[3] === b[3]) return null;
+  const mine = k === 1 ? b : a, other = k === 1 ? a : b;
+  const leftSeat = mine[2] < other[2];
+  const area = i > 0 && Array.isArray(l.bossAreas) ? l.bossAreas[i] : null;
+  const battle = i > 0 && area && area.battle ? area.battle : l.battle.boss;
+  const prep = i > 0 && area && area.prep ? area.prep : (area && area.battle ? area.battle : l.battle.bossPrep);
+  return {
+    r0: Math.min(prep.r0, battle.r0, mine[0]), r1: Math.max(prep.r1, battle.r1, mine[1]),
+    c0: leftSeat ? Math.min(prep.c0, mine[2]) : mine[2],
+    c1: leftSeat ? mine[3] : Math.max(prep.c1, mine[3]),
+  };
+}
+
 /** 第 `i` 块 boss 场地的中列（`side` 分半 / 悬赏出怪的路线下标读它）。 */
 export function bossAreaMidCol(layout, i) {
   const b = bossAreaBattleRect(layout, i);
@@ -437,7 +527,12 @@ export function bossAreaLayout(layout, i, k = 0) {
   if (!Number.isInteger(i) || i <= 0) return l;
   const rect = bossAreaDeployRect(l, i, k);
   if (!rect) return l;
-  return bossRectLayout(l, rect, bossAreaBattleRect(l, i), bossAreaPrepRect(l, i));
+  const out = bossRectLayout(l, rect, bossAreaBattleRect(l, i), bossAreaPrepRect(l, i));
+  // 这块场地这位棋手的整备区：走到哪儿都按 `bossL` / `bossR` 读（与第 1 块场地同样的名字），棋盘/整备行/取景因此
+  // 不需要知道「第几块、哪个座位」。
+  const key = `bossA${i + 1}:${Number.isInteger(k) ? k : 0}`;
+  if (l.bench && l.bench[key]) out.bench = { ...l.bench, bossL: l.bench[key], bossR: l.bench[key] };
+  return out;
 }
 
 /**
@@ -525,10 +620,95 @@ export function boardRectOf(layout, field = 'normal') {
   };
 }
 
-/** 一张图的**整备行**（`hand` 那 10 格站的那一行）在棋盘坐标里是第几行：棋盘最下面那一行再往上两行。 */
-export const handRowOf = (layout, field = 'normal') => boardRectOf(layout, field).r0 - 2;
-/** **临时整备区**那一行（`temp` 的 5 个可见格）：整备行的上一行。 */
-export const tempRowOf = (layout, field = 'normal') => boardRectOf(layout, field).r0 - 1;
+/**
+ * 一张图**没有声明 `bench`** 时，整备行按这一带的整备矩形反推（`prep.r0` 就是最靠外的那一行板凳）：普通带读
+ * `battle.prep`，boss 半场读这块场地的 `battle.bossPrep`。缺省布局下两者都正好等于「棋盘下两行」，与从前逐字节
+ * 相同；一张把板凳画得离场地远一行的图（45×60 那张）也会跟着走。
+ */
+const implicitHandRowOf = (layout, field = 'normal') => {
+  const l = layout || OFFICIAL_LAYOUT;
+  const name = deployRectName(field, l);
+  const rect = deployRectOf(l, field);
+  const prep = name === 'normalLeft' || name === 'normalRight' || name === 'normal'
+    ? l.battle.prep
+    : (l.battle.bossPrep || l.battle.boss);
+  return GEO.FIELD.r1 - (rect[1] - prep.r0);
+};
+
+/**
+ * 一张图一块场地的**整备区声明**在棋盘坐标里的键：第 1 块 boss 场地用 `bossL` / `bossR`（与 `deployFieldOf`
+ * 同口径），第 2… 块用 `bossA<i+1>:<seat>`（与 `bossAreaDeployRectMap` 同名）。
+ */
+export const benchKeyOf = (field = 'normal', area = 0, seat = 0) => (
+  Number.isInteger(area) && area > 0 ? `bossA${area + 1}:${Number.isInteger(seat) ? seat : 0}` : (field || 'normal')
+);
+
+/** 未声明 bench 时的相对官方形状：一行 10 格手牌 + 下一行 5 格临时。 */
+function implicitBench(layout, field) {
+  const handRow = implicitHandRowOf(layout, field);
+  return {
+    hand: { rows: [handRow], c0: 0, cols: GEO.HAND_SIZE, size: GEO.HAND_SIZE },
+    temp: { row: handRow + 1, c0: GEO.TEMP_C0, size: GEO.TEMP_SIZE },
+    handSize: GEO.HAND_SIZE, tempSize: GEO.TEMP_SIZE,
+  };
+}
+
+/**
+ * 一块场地的整备区几何（**棋盘坐标**）：`hand` 是若干行、每行从 `c0` 起共 `cols` 格（`size` = 容量）；
+ * `temp` 是一行 `size` 格。地图在 `layout.bench` 里按地图坐标声明，`normalizeLayout` 已换算成这一形状；
+ * 没声明的图退回相对官方形状（一行 10 / 一行 5），所有既有大图行为不变。
+ * @param {object|null|undefined} layout @param {string} [field] @param {number} [area] 第几块 boss 场地（0 = 第 1 块）
+ * @param {number} [seat] 这块场地里的座位 0 / 1
+ */
+export function benchOf(layout, field = 'normal', area = 0, seat = 0) {
+  const l = layout || OFFICIAL_LAYOUT;
+  const key = benchKeyOf(field, area, seat);
+  const b = l.bench && typeof l.bench === 'object' ? l.bench[key] : null;
+  if (!b || !b.hand) return implicitBench(l, field);
+  const hand = b.hand;
+  const temp = b.temp || null;
+  return {
+    hand: { rows: [...hand.rows], c0: hand.c0, cols: hand.cols, size: hand.size },
+    temp: temp ? { ...temp } : null,
+    handSize: hand.size,
+    tempSize: temp ? temp.size : 0,
+  };
+}
+
+/**
+ * 整备区第 `idx` 格在棋盘坐标里的位置。手牌按「先填第一行、再第二行」；`area` 'temp' 是一行。
+ * @returns {{ row: number, col: number } | null}
+ */
+export function benchTileOf(bench, area, idx) {
+  if (!bench || !Number.isInteger(idx) || idx < 0) return null;
+  if (area === 'temp') {
+    const t = bench.temp;
+    return t && idx < t.size ? { row: t.row, col: t.c0 + idx } : null;
+  }
+  const h = bench.hand;
+  if (!h || !Number.isInteger(h.cols) || h.cols <= 0 || idx >= h.size) return null;
+  const row = h.rows[Math.floor(idx / h.cols)];
+  return Number.isInteger(row) ? { row, col: h.c0 + (idx % h.cols) } : null;
+}
+
+/**
+ * 整备区（含临时行）在棋盘坐标里最靠下的那一行 —— 这一行及以上都属于整备带，boss 场/模拟把它整段搬到场面一侧。
+ * 官方是 7（手牌行），临时行 8 在它之上；一张图把临时行画在手牌下方的（15×60 样板），这里就是临时行。
+ */
+export function benchBottomRow(layout, field = 'normal', area = 0, seat = 0) {
+  const b = benchOf(layout, field, area, seat);
+  const rows = [...b.hand.rows];
+  if (b.temp) rows.push(b.temp.row);
+  return Math.min(...rows);
+}
+
+/** 一张图的**整备行**（`hand` 第一格站的那一行）在棋盘坐标里是第几行。 */
+export const handRowOf = (layout, field = 'normal') => benchOf(layout, field).hand.rows[0];
+/** **临时整备区**那一行（`temp` 的可见格）：声明图按声明走，否则是整备行的上一行。 */
+export const tempRowOf = (layout, field = 'normal') => {
+  const b = benchOf(layout, field);
+  return b.temp ? b.temp.row : implicitHandRowOf(layout, field) + 1;
+};
 
 /**
  * 棋盘行 → 地图行：**部署矩形的第 r1 行就是棋盘第 12 行**（官方 normal [9,12] → 恒等；bossLeft [1,5] → 减 7）。

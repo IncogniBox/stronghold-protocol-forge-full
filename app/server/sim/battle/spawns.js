@@ -69,11 +69,17 @@ export class BattleSpawns {
     return this._defRoute;
   }
 
+  /**
+   * The player a tile belongs to on a shared field: the half it sits on, split at the field's own middle column
+   * (`layout.mirrorCol / 2` — official 10, the 45×60 重构战场 30). An enemy that leaks there is charged to that half's
+   * player (owner 2026-10-26「漏怪扣除的生命值也是根据自己半场来算」).
+   */
   _ownerForTile(tile) {
     if (!this.players.length) return null;
     if (this.players.length === 1 || !tile) return this.players[0].playerId;
     const c = Array.isArray(tile) ? tile[1] : tile.c;
-    const half = c >= 11 ? 'R' : 'L';
+    const mid = Number.isFinite(this.layout && this.layout.mirrorCol) ? this.layout.mirrorCol / 2 : 10;
+    const half = c > mid ? 'R' : 'L';
     return (this.players.find((p) => p.half === half) ?? this.players[0]).playerId;
   }
 

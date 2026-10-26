@@ -71,7 +71,7 @@ export function mergeTarget(priv, chessId, getChess = () => null) {
 /** Whether every hand slot is taken (the server refuses every purchase / reward pick then: HAND_FULL, GitHub #82). */
 export function handFull(priv) {
   const hand = Array.isArray(priv?.hand) ? priv.hand : [];
-  return hand.length >= GEO.HAND_SIZE && hand.every((p) => p != null);
+  return hand.length > 0 && hand.every((p) => p != null);
 }
 
 /**

@@ -477,7 +477,25 @@
 }
 
 /* ---- team panel ------------------------------------------------------------------------------------------- */
-.team { position: absolute; left: .22rem; top: 2.36rem; display: flex; flex-direction: column; gap: .14rem; pointer-events: none; }
+/* 人数多时**上下滑动**，不再越出屏幕（业主 2026-10-26「对局中右侧的玩家显示……做成可以上下滑动的样式，防止人数过多时
+   超出屏幕」）：
+     · 高度夹在顶栏下面与左下角控制条上面（2.36rem + 1.2rem），超出就滚，滚轮 / 触摸拖动都可以；
+     · 横向留出行右侧表情气泡（.team__bubble，1.08rem）的位置，气泡不会被滚动区裁掉；
+     · align-items:flex-start 让每一行仍按内容宽度排（否则拉伸到整列宽，气泡会跟着跑到列外）；
+     · 滚动条只在这一列内加一条细线，滚动到边界不会带动画面（overscroll-behavior）。 */
+.team {
+  position: absolute; left: .22rem; top: 2.36rem; display: flex; flex-direction: column; align-items: flex-start;
+  gap: .14rem; pointer-events: none;
+  box-sizing: border-box; width: 4.15rem; padding-right: .1rem;
+  max-height: calc(100vh - 3.56rem);
+  max-height: calc(100dvh - 3.56rem);
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain; scrollbar-gutter: stable;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .28) transparent;
+}
+.team::-webkit-scrollbar { width: .06rem; height: 0; }
+.team::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .28); }
+.team::-webkit-scrollbar-track { background: transparent; }
 .team__row { position: relative; display: flex; align-items: center; gap: .1rem; pointer-events: auto; }
 .team__btn {
   position: relative; padding: 0; background: none; border: 0;

@@ -93,9 +93,9 @@ export function watchedPlayer(who, watching) {
  * @param {any} field the field meta on screen @param {any} pub @param {string} myId @param {string|null} playerId
  * @returns {'L'|'R'|null}
  */
-export function playerLayer(field, pub, myId, playerId) {
+export function playerLayer(field, pub, myId, playerId, layout = null) {
   if (!isObj(field) || typeof playerId !== 'string' || !playerId) return null;
-  if (!cameraLayers(field, pub, myId).length) return null;
+  if (!cameraLayers(field, pub, myId, layout).length) return null;
   const side = sidesOf(field)[playerId];
   return side === 'L' || side === 'R' ? side : null;
 }

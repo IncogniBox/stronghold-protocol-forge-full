@@ -834,6 +834,7 @@ describe('prepCamera (research 09 §1.2: the Final Assault prep on the own half 
   test('第 2… 块 boss 场地的整备镜头用那块场地的整备矩形', () => {
     const layout = normalizeLayout({
       size: [45, 60],
+      deployRects: { bossLeft: [15, 19, 22, 30], bossRight: [15, 19, 30, 38] },
       battle: { boss: { r0: 14, r1: 20, c0: 21, c1: 39 }, bossPrep: { r0: 12, r1: 20, c0: 21, c1: 39 } },
       bossAreas: [
         { battle: { r0: 14, r1: 20, c0: 21, c1: 39 }, prep: { r0: 12, r1: 20, c0: 21, c1: 39 }, deploy: [[15, 19, 22, 30], [15, 19, 30, 38]] },
@@ -848,8 +849,29 @@ describe('prepCamera (research 09 §1.2: the Final Assault prep on the own half 
     assert.deepEqual(c.opts.rect, bossAreaPrepRect(layout, 1));
     assert.deepEqual(c.opts.rect, { r0: 10, r1: 22, c0: 1, c1: 17 });
     assert.deepEqual(c.opts.layout.battle.boss, { r0: 12, r1: 22, c0: 3, c1: 15 });
-    // 第 1 块仍是左右两个半场，返回形状不带 area（与历史一致）
-    assert.deepEqual(prepCamera(p, 'a', layout), { kind: 'bossPrep', opts: { side: 'L' } });
+    // 第 1 块也是左右并排的两半：每位棋手看自己那半（返回形状仍不带 area 键，取景矩形只到自己那半边；
+    // 自定义布局的取景框还带「整体推近」的 zoom）
+    assert.deepEqual(prepCamera(p, 'a', layout), { kind: 'bossPrep', opts: { side: 'L', rect: { r0: 12, r1: 20, c0: 21, c1: 30 }, zoom: 1.5 } });
+    assert.deepEqual(prepCamera(p, 'b', layout), { kind: 'bossPrep', opts: { side: 'R', rect: { r0: 12, r1: 20, c0: 30, c1: 39 }, zoom: 1.5 } });
+  });
+
+  // 左右并排的两半（普通带那套）与上下叠放的两块（第 2… 块场地可以是上下两条）分别怎么取景
+  test('左右并排的第 2… 块 boss 场地也各看自己那半，上下叠放的仍整块', () => {
+    const layout = normalizeLayout({
+      size: [45, 60],
+      bossAreas: [
+        { battle: { r0: 14, r1: 20, c0: 21, c1: 39 }, prep: { r0: 12, r1: 20, c0: 21, c1: 39 }, deploy: [[15, 19, 22, 30], [15, 19, 30, 38]] },
+        { battle: { r0: 2, r1: 10, c0: 22, c1: 38 }, prep: { r0: 0, r1: 10, c0: 22, c1: 38 }, deploy: [[3, 9, 23, 30], [3, 9, 30, 37]] },
+        { battle: { r0: 12, r1: 22, c0: 3, c1: 15 }, prep: { r0: 10, r1: 22, c0: 1, c1: 17 }, deploy: [[17, 21, 4, 14], [13, 17, 4, 14]] },
+      ],
+    }, [45, 60]);
+    const players = [pl('a', 0), pl('b', 1), pl('c', 2), pl('d', 3), pl('e', 4), pl('f', 5)];
+    const p = { ...pub(14, players), bossPairs: [['a', 'b'], ['c', 'd'], ['e', 'f']] };
+    const c = prepCamera(p, 'c', layout);
+    assert.equal(c.opts.area, 1);
+    assert.deepEqual(c.opts.rect, { r0: 0, r1: 10, c0: 22, c1: 30 }, '左半场：整备行带到板凳，列只到相接列');
+    assert.deepEqual(prepCamera(p, 'd', layout).opts.rect, { r0: 0, r1: 10, c0: 30, c1: 38 });
+    assert.deepEqual(prepCamera(p, 'e', layout).opts.rect, bossAreaPrepRect(layout, 2), '上下叠放的两半仍整块取景');
   });
 });
 

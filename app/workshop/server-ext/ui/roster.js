@@ -157,7 +157,12 @@ function Roster({ ctx }) {
   }, [ctx]);
 
   const seats = useMemo(() => {
-    const list = Array.isArray(state && state.seats) ? state.seats.map(seatOf) : [];
+    // **只列在座的成员**：`room.state.seats` 是按房间容量补齐的（20 席时 19 个空位），把空位也画成
+    // 「（未起名）· 未绑定」会让这块旁栏从一行涨到整个列表上限（2.6rem ≈ 260px），把房间屏的座位区挤矮
+    // —— 座位卡是 flex 列，立绘跟着被压小（业主反馈的「加 AI 后立绘缩小」就是这个）。
+    const list = Array.isArray(state && state.seats)
+      ? state.seats.map(seatOf).filter((s) => s && s.playerId)
+      : [];
     const watchers = Array.isArray(state && state.spectators)
       ? state.spectators.map((s, i) => ({ ...seatOf(s, i), spectator: true })) : [];
     return [...list.map((s) => ({ ...s, spectator: false })), ...watchers];

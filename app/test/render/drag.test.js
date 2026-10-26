@@ -24,6 +24,25 @@ describe('slots & targets', () => {
     assert.equal(tileSlot({ row: 9.5, col: 3 }), null);
   });
 
+  test('a 16 + 8 bench (2 rows × 8): idx maps across both rows, temp 8, rightmost tile', () => {
+    const geo = {
+      HAND_ROWS: [5, 6], HAND_C0: 3, HAND_COLS: 8, HAND_SIZE: 16, HAND_ROW: 5,
+      TEMP_ROW: 4, TEMP_C0: 3, TEMP_SIZE: 8,
+      FIELD: { r0: 8, r1: 12, c0: 2, c1: 12 },
+    };
+    assert.deepEqual(pieceTile({ area: 'hand', idx: 1 }, geo), { row: 5, col: 4 });
+    assert.deepEqual(pieceTile({ area: 'hand', idx: 7 }, geo), { row: 5, col: 10 });
+    assert.deepEqual(pieceTile({ area: 'hand', idx: 8 }, geo), { row: 6, col: 3 });
+    assert.deepEqual(pieceTile({ area: 'hand', idx: 15 }, geo), { row: 6, col: 10 }, 'the rightmost tile of the second row');
+    assert.deepEqual(tileSlot({ row: 6, col: 10 }, geo), { area: 'hand', idx: 15 });
+    assert.deepEqual(tileSlot({ row: 5, col: 3 }, geo), { area: 'hand', idx: 0 });
+    assert.deepEqual(tileSlot({ row: 4, col: 10 }, geo), { area: 'temp', idx: 7 });
+    assert.deepEqual(pieceTile({ area: 'temp', idx: 7 }, geo), { row: 4, col: 10 });
+    assert.equal(tileSlot({ row: 6, col: 11 }, geo), null, 'past the 8th column');
+    assert.equal(pieceTile({ area: 'hand', idx: 16 }, geo), null, 'past the 16th slot');
+    assert.deepEqual(dragStandTile({ target: { area: 'hand', idx: 8 }, legal: true }, geo), { row: 6, col: 3, bench: true });
+  });
+
   test('pieceSlot / pieceTile for hand, temp, board', () => {
     assert.deepEqual(pieceSlot({ uid: 1, area: 'hand', idx: 3 }), { area: 'hand', idx: 3 });
     assert.deepEqual(pieceTile({ uid: 1, area: 'hand', idx: 3 }), { row: GEO.HAND_ROW, col: 3 });

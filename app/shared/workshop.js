@@ -27,10 +27,10 @@
 // —— 一个轴表有两份实现，就是一个「哪个才算数」的问题。
 // 口径**数据**通道（DESIGN §28.51）把同一张轴表当**闭枚举**用：`variants` 内容文件的表名必须是这里的一个轴，
 // 生效与否由 `variantValue` / `mergeVariantDecls`（同一份「包 id 字典序小的赢」）裁决 —— 依然只有一份实现。
-import { parseVariantsDecl, isVariantAxis, VARIANT_AXIS_NAMES, variantValue, mergeVariantDecls } from './variants.js';
-// 行为开关层（DESIGN §28.43）：与口径**同一形状、不同一张表**，判据只有一份在 `shared/behaviour.js`。同样不在这里
+import { parseVariantsDecl, isVariantAxis, VARIANT_AXIS_NAMES, variantValue, mergeVariantDecls } from './variants.js';// 行为开关层（DESIGN §28.43）：与口径**同一形状、不同一张表**，判据只有一份在 `shared/behaviour.js`。同样不在这里
 // 重判一遍闭枚举 —— 这里只调它的解析器（`parseBehaviourDecl`）与**具名读取器**（`behaviourValue`）。那张表今天有
 // 5 格（`shopBias` / `prepLoadout` / `morphPairing` / `unequip` / `diyPoolOverlap`）。
+import { ensureReconModes } from './reconModes.js';
 import { parseBehaviourDecl, behaviourValue } from './behaviour.js';
 // 启用声明（DESIGN §28.50）：装好 ≠ 生效。判据只有一份在 `shared/enabled.js`（`parseEnabledDecl`）。
 import { parseEnabledDecl } from './enabled.js';
@@ -5033,6 +5033,9 @@ function linkWorkshopStages(data, report) {
   const added = Array.isArray(report.added.stages) ? report.added.stages : [];
   if (!added.length || !isPlainObj(data.stages) || !isPlainObj(data.config) || !isPlainObj(data.config.modes)) return;
   const modes = { ...data.config.modes };
+  // 重构模拟的 4 个模式是**运行时合成**的（shared/reconModes.js），config.modes 里本来没有这些键 ——
+  // 不先把它们补进这份副本，声明了 `mode_recon_*` 的地图就无处可挂。
+  ensureReconModes({ modes });
   let touched = false;
   for (const id of added) {
     const stage = data.stages[id];
@@ -5047,6 +5050,21 @@ function linkWorkshopStages(data, report) {
       touched = true;
       (report.linkedStages ||= []).push(`${id} -> ${modeId}`);
     }
+  }
+  // 重构模式的战场只认「声明了它」的地图：合成时从 mode_multi 继承来的官方地图不参与 —— 一套重构包只带一张图时，
+  // 这个模式就只会在那张图上开打。某个难度没有任何地图声明时保留继承来的池（不至于一场都开不了）。
+  for (const modeId of Object.keys(modes)) {
+    if (!/^mode_recon_/.test(modeId)) continue;
+    const declaredHere = added.filter((id) => {
+      const st = data.stages[id];
+      return !!st && Array.isArray(st.modes) && st.modes.includes(modeId);
+    });
+    if (!declaredHere.length) continue;
+    const mode = modes[modeId];
+    if (!isPlainObj(mode)) continue;
+    if (JSON.stringify(mode.stages) === JSON.stringify(declaredHere)) continue;
+    modes[modeId] = { ...mode, stages: declaredHere };
+    touched = true;
   }
   if (touched) data.config = { ...data.config, modes };
 }

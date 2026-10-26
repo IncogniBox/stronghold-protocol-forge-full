@@ -11,8 +11,17 @@
 5. **十名·重构首领**（`enemies.json` + `battle/main.mjs`）—— 官方首领的变体（第 4 回合：碎骨·重构 / 庞贝·重构 / W·重构 / 泥岩·重构 / 萨卡兹百夫长·重构；第 8 回合：大亚当·重构 / 自在·重构 / 杰斯顿·威廉姆斯·重构 / 锏·重构；第 12 回合：“复仇者”·重构），详见下面各节。
 6. **两条召唤物记录**（`enemy_ws_recon_bldbld` 凝血之刃 / `enemy_ws_recon_xia` 瑕）—— 记录与素材留在包内供普通版（`workshop/enemy-ext`）复用；宿主（血骑士 / “望”）的重构版已移除，本包代码不再召唤它们。
 7. **官方战斗特效接线**（`battle/main.mjs` 的 `castSkill()`）—— W 的 C4 开火时发 `['cast', id, slot]`（引擎 `content/enemies/helpers.js` castSlot 的包侧版本，display only），客户端据此打开那个技能的**官方特效窗口**（skillfx）。特效文件本体**不在这里**：28 个基座的官方 fx 精确闭包由 `workshop/enemy-ext`（`pack.json.fx.manifest`）携带，与本机提取合并（包优先）。
+8. **重构模拟的专属战场**（`stages.json` / `stage-specs/my_map.json`）：地图 id `my_map`，正式名称 **重构战场01·天镜阁**（45×60，主题 `skymirror`，四块 boss 场地：主 boss 场 + 左 / 右 / 下三块，每块两位棋手左右或上下分半）。它的 `modes` 声明 `mode_recon_funny|normal|hard|abyss` 四个重构模式；引擎的 `shared/workshop.js linkWorkshopStages` 会把声明了某个 `mode_recon_*` 的工坊地图挂进该模式的战场池，并**只保留这些声明过的地图**（合成时从 `mode_multi` 继承来的官方地图不再参与）—— 所以重构模拟目前只会在这一张图上开打。**整备区按地图自己的格子**（`layout.bench`，引擎 `shared/layout.js benchOf`）：普通带与四块 boss 场地的每一位棋手都是 **16 格整备区（2 行 × 8 格，地图上的 `a` 格）+ 8 格临时整备区（手牌两行外侧那一行 8 格）**；官方地图没有这份声明，仍是 10 / 5。**敌人的行动路线也按地图自己画的 8 条走**（`routes`：左 4 / 右 4，各 2 地面 + 2 空中；终点在左门 / 右门）：普通带双人同场时每个半场各一份出怪，等待区里看到的怪物只走自己那半场的路线、只攻自己那半场的门，漏怪也按半场记到那位玩家头上（`server/match/waves.js routeSpawn` / `combat.js _normalPairOpts` / `views.js nextEnemiesFor`）。
 
 选择本身留在服务端 `Match.reconChoices`（预重构阶段落的账）；元载荷用 `ctx.recon()` 读它，再物化成一条 `EffectRef` 交给战斗侧（`playerEffects`）。
+
+## 预重构的两条新口径（引擎侧，本包不参与）
+
+2026-10-26，业主在预重构里新增了两条**引擎级**规则；本包没有代码参与，只在这里记下口径，免得把引擎行为当成包的问题：
+
+- **自主禁用盟约**（`g.reconChoice.ban`，每名玩家至多 1 个）：判据与官方「本局禁用盟约」同一条 —— 一枚棋子身上**每一种盟约都被禁**（本局抽签禁用 ∪ 模式静态禁用 ∪ 自己禁的那一个）才从**这名玩家自己的抽卡**里消失。配对共享池里的拷贝、队友的抽卡、盟约本身的战斗效果都不动；自选编队的库存也在预重构结束时按同一条判据重算。实现：`server/match/match/reconPools.js` + `player/rules.js` 的 `mainPool()` 只读视图。
+- **同场配对共享卡池**：不再是全房间共用一个棋子池，而是**普通带同场的一对**（存活座位两两配对，与 `normalGroups` 同一条顺序）共用一个 `SharedPool`；配对在开局定下、整局不变。`m.pool` 退居为只读目录（审计 / 不变量仍读它）。
+- **队伍预重构总览**：全员交齐后阶段仍停在 `PRE_RECON`（`recon.summary`），客户端播过场并展示**本房间队伍**的选择总览；每位在场真人点「继续」（`g.reconContinue`）后全齐才进入下一阶段。计时耗尽也会先切总览，并留 15 s 兜底。
 
 ## 五名·重构首领
 

@@ -485,11 +485,16 @@ export function presetCamera(kind, viewport, options) {
   // a narrow rect (e.g. a solo boss half) keeps the normal optics; wide ones use the preset's wider lens
   const wide = rect.c1 - rect.c0 >= 14;
   const base = wide ? preset : CAMERA_PRESETS[k === 'prep' || k === 'bossPrep' ? 'prep' : 'normal'];
-  return fitCamera(rect, viewport, {
+  const cam = fitCamera(rect, viewport, {
     tilt: finite(opts.tilt, base.tilt), dist: finite(opts.dist, base.dist),
     margin: finite(opts.margin, preset.margin), headroom: finite(opts.headroom, preset.headroom),
     maxTilePx: opts.maxTilePx, minTilePx: opts.minTilePx, rows, cols,
   });
+  // 取景后再整体推近的倍率（`zoom > 1` 就是「拉近」）：缩放的是 `scale`（屏幕上的格宽），画面中心不动，
+  // 所以取景框边缘会被裁掉一部分 —— 调用方给多少就裁多少，本函数不替它做取舍。
+  const zoom = finite(opts.zoom, 1);
+  if (zoom > 0 && zoom !== 1) { cam.scale *= zoom; cam.update(); }
+  return cam;
 }
 
 /**

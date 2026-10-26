@@ -10,6 +10,7 @@
 //     followedScout).
 
 import { PHASE } from '../../../shared/constants.js';
+import { isDualLayout } from '../../../shared/layout.js';
 import { data } from '../data.js';
 import { t } from '../../../shared/i18n.js';
 
@@ -128,17 +129,26 @@ export function sidesOf(field) {
 }
 
 /**
- * The ‹ › camera layers of a 联防 / boss field: LEFT half, 全景, RIGHT half with captions "你自己" / "👁 name" /
- * "全景" / "无人在家". Empty for normal fields and single-player boss fields.
+ * The ‹ › camera layers of a 联防 / boss field, or of an ordinary field on a map whose ordinary band is a mirrored pair
+ * (「左右两半」: both players fight on ONE field, each on its own half — the switch is how you look at the teammate's
+ * half and at the whole field). Left half, 全景, right half with captions "你自己" / "👁 name" / "全景" / "无人在家".
+ * Empty for a single-band ordinary field, a single-player boss field, or a normal field whose layout is not declared
+ * (an official map, or a caller that did not pass the map's layout).
+ * @param {any} field m.public fields entry (or the local field meta)
+ * @param {any} pub m.public
+ * @param {string} myId
+ * @param {object|null} [layout] the map's own layout (shared/layout.js); omitted ⇒ no normal-field halves
  */
-export function cameraLayers(field, pub, myId) {
-  if (!isObj(field) || (field.kind !== 'unite' && field.kind !== 'boss' && field.kind !== 'hidden')) return [];
+export function cameraLayers(field, pub, myId, layout = null) {
+  if (!isObj(field)) return [];
+  const dualNormal = field.kind === 'normal' && !field.prep && isDualLayout(layout);
+  if (!dualNormal && field.kind !== 'unite' && field.kind !== 'boss' && field.kind !== 'hidden') return [];
   const sides = sidesOf(field);
   const at = (side) => Object.keys(sides).find((pid) => sides[pid] === side) || null;
   const label = (pid) => (!pid ? t('无人在家') : pid === myId ? t('你自己') : nameOf(pub, pid));
   const left = at('L');
   const right = at('R');
-  if ((field.kind === 'boss' || field.kind === 'hidden') && (!left || !right)) return [];
+  if ((field.kind === 'boss' || field.kind === 'hidden' || dualNormal) && (!left || !right)) return [];
   return [
     { key: 'L', label: label(left), self: left === myId, watch: !!left && left !== myId },
     { key: 'ALL', label: t('全景'), self: false, watch: false },

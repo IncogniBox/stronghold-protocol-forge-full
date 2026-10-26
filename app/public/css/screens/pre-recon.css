@@ -1,5 +1,5 @@
 /*
-   screens/pre-recon.css — PHASE.PRE_RECON 「预重构」（js/screens/preRecon.js，模式扩展-重构模拟 · 第一轮骨架）。
+   screens/pre-recon.css — PHASE.PRE_RECON 「预重构」（js/screens/preRecon.js，模式扩展-重构模拟 · 机制轮）。
    与策略选择屏同一语言：左侧状态列（draft-order 的 .dorder 模子）、中间三块内容（盟约倾向 / 试炼首领 / 重构走向）、
    右侧摘要与提交。冰蓝（--ice）是本模式的点缀色（大厅入口 .hub-entry--ice、房间选队条 .team-bar 同源）。
 */
@@ -32,6 +32,22 @@
 .prc-p__ai { margin-left: .06rem; font-size: calc(.11 * var(--t)); color: var(--text-dim); }
 .prc-p__box { margin-left: auto; color: var(--text-dim); }
 .prc-p.is-done .prc-p__box { color: var(--mint-400); }
+/* 队友已交选择的速览（`协助 数据重构 · 负载 装备负载`）：单行省略，点开看完整摘要。 */
+.prc-p__picks {
+  margin-top: .03rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ice);
+  font: inherit;
+  font-size: calc(.12 * var(--t));
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.prc-p__picks:hover { text-decoration: underline; }
 .prc__hint { margin: .06rem 0 0; font-size: calc(.13 * var(--t)); }
 
 /* ---- centre: 三块内容 --------------------------------------------------------------------------------- */
@@ -92,6 +108,10 @@
 .prc-trial-pick__icon { display: flex; align-items: center; justify-content: center; width: .54rem; height: .54rem; }
 .prc-trial-pick__icon img, .prc-trial-pick__icon .icon { width: 100%; height: 100%; object-fit: contain; }
 .prc-trial-pick__name { font-size: calc(.13 * var(--t)); text-align: center; overflow-wrap: anywhere; }
+/* 已选态：右上角一枚 ✓（描边之外再给一个记号，扫一眼就知道自己指定了哪一条候选）。 */
+.prc-trial-pick { position: relative; }
+.prc-trial-pick__tick { position: absolute; top: .05rem; right: .05rem; display: flex; width: .15rem; height: .15rem; color: var(--ice); }
+.prc-trial-pick__tick .icon { width: 100%; height: 100%; }
 
 .prc-opts__group + .prc-opts__group { margin-top: .12rem; }
 .prc-opts__ghead { display: flex; align-items: baseline; gap: .1rem; margin-bottom: .08rem; color: var(--text-md); }
@@ -112,6 +132,7 @@
 .prc-opt.is-on { border-color: var(--ice); box-shadow: inset 0 0 0 1px var(--ice), 0 0 .12rem var(--ice-a20); }
 .prc-opt.is-on .prc-opt__name { color: var(--ice); }
 .prc-opt__name { letter-spacing: .06em; }
+.prc-opt__tick { width: .15rem; height: .15rem; margin-right: .05rem; vertical-align: -.02rem; color: var(--ice); }
 .prc-opt__desc { font-size: calc(.13 * var(--t)); color: var(--text-lo); }
 
 /* ---- right: 摘要与提交 -------------------------------------------------------------------------------- */
@@ -119,10 +140,125 @@
 .prc-sum { margin: 0; display: flex; flex-direction: column; gap: .08rem; font-size: calc(.14 * var(--t)); }
 .prc-sum dt { color: var(--text-dim); font-size: calc(.12 * var(--t)); letter-spacing: .08em; }
 .prc-sum dd { margin: 0; color: var(--text-hi); }
+/* 效果预览：选中的协助 / 负载在名字下面把完整描述念一遍（换行按数据里的行断）。 */
+.prc-sum__desc { display: block; margin-top: .04rem; font-size: calc(.12 * var(--t)); line-height: 1.5; color: var(--text-lo); white-space: pre-line; }
 .prc__status { display: flex; align-items: center; gap: .06rem; margin: 0; font-size: calc(.14 * var(--t)); }
 .prc__status .icon { width: .16rem; height: .16rem; }
+/* 倒计时末段（≤10 s）：换成警示色，并把「未提交按不指定进入」说出来。 */
+.prc__status--urgent { color: var(--amber); }
+.prc__status--urgent .icon { color: var(--amber); }
+.prc-confirm__note { margin: 0 0 .1rem; font-size: calc(.14 * var(--t)); color: var(--text-lo); }
+.prc-confirm__warn { margin: 0 0 .1rem; font-size: calc(.14 * var(--t)); color: var(--amber); }
+
+/* ---- 自主禁用（每名博士至多 1 个盟约，只影响自己的卡牌池） ---- */
+.prc-bond__ban {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: .18rem;
+  height: .18rem;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, .72);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.prc-bond__ban .icon { width: 70%; height: 70%; }
+.prc-bond__ban:hover { border-color: var(--red); color: var(--red); }
+.prc-bond__ban.is-on { border-color: var(--red); color: var(--red); background: rgba(220, 40, 40, .18); }
+.prc-bond.is-banned .bond__core { box-shadow: 0 0 0 1px var(--red), 0 0 .14rem rgba(220, 60, 60, .55); }
+.prc-bond.is-banned .bond__name { color: var(--red); }
+
+/* ---- 过场：未选的内容淡出，选中的内容归位成「队伍预重构总览」 ---- */
+.pre-recon .prc__main { transition: opacity .35s ease, transform .45s ease; }
+.pre-recon.is-summary .prc__main { opacity: 0; transform: translateY(-.06rem) scale(.985); pointer-events: none; }
+.prc-overview {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: .16rem;
+  padding: .8rem .5rem .4rem;
+  background: linear-gradient(180deg, #050c0e, #071012);
+  animation: prc-ov-fade .4s ease both;
+}
+.prc-overview__head { display: flex; align-items: baseline; gap: .16rem; }
+.prc-overview__head h2 { margin: 0; font-size: calc(.3 * var(--t)); letter-spacing: .18em; color: var(--ice); }
+.prc-overview__team { margin-left: auto; color: var(--text-md); font-size: calc(.14 * var(--t)); }
+.prc-overview__cols { flex: 1 1 auto; min-height: 0; display: flex; align-items: flex-start; overflow: auto; }
+.prc-ov {
+  flex: 0 1 25%;
+  max-width: 6rem;
+  min-width: 2.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  padding: .08rem .16rem .12rem;
+  border-left: 1px solid var(--red);
+  animation: prc-ov-col .5s cubic-bezier(.2, .8, .2, 1) both;
+  animation-delay: calc(.15s + var(--i) * .1s);
+}
+.prc-ov:first-child { border-left: 0; }
+.prc-ov.is-self { outline: 1px solid var(--amber); outline-offset: .03rem; background: rgba(246, 163, 41, .05); }
+.prc-ov__head { display: flex; align-items: baseline; gap: .08rem; }
+.prc-ov__name { font-size: calc(.18 * var(--t)); }
+.prc-ov__team { font-size: calc(.12 * var(--t)); color: var(--text-dim); }
+.prc-ov__me { padding: 0 .06rem; border: 1px solid var(--amber); color: var(--amber); font-size: calc(.11 * var(--t)); }
+.prc-ov__ok { margin-left: auto; display: inline-flex; align-items: center; gap: .04rem; font-size: calc(.12 * var(--t)); color: var(--text-dim); }
+.prc-ov__ok.is-on { color: var(--mint-400); }
+.prc-ov__ok .icon { width: .14rem; height: .14rem; }
+.prc-ov__missing { margin: .1rem 0 0; font-size: calc(.13 * var(--t)); }
+.prc-ov__sec { border: 1px solid var(--ice-a20); padding: .08rem .1rem; background: rgba(0, 0, 0, .28); }
+.prc-ov__sec h4 { margin: 0 0 .06rem; font-size: calc(.12 * var(--t)); letter-spacing: .1em; color: var(--text-md); }
+.prc-ov__bonds { display: flex; flex-wrap: wrap; gap: .1rem .08rem; }
+.prc-ov__bond { position: relative; display: flex; flex-direction: column; align-items: center; gap: .02rem; }
+.prc-ov__bond small { font-size: calc(.1 * var(--t)); color: var(--text-dim); }
+/* 自主禁用：保留原画颜色，只叠一层红色玻璃 + 红环（业主的美术口径） */
+.prc-ov__bond.is-ban .bond__disc { position: relative; border-radius: 50%; box-shadow: 0 0 .18rem rgba(220, 60, 60, .8); }
+.prc-ov__bond.is-ban .bond__disc::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(220, 40, 40, .45) 0%, rgba(220, 40, 40, .28) 62%, rgba(220, 40, 40, 0) 76%);
+  pointer-events: none;
+}
+.prc-ov__bond.is-ban small { padding: 0 .05rem; border: 1px solid var(--red); color: var(--red); font-size: calc(.11 * var(--t)); }
+.prc-ov__none { font-size: calc(.12 * var(--t)); }
+.prc-ov__trials { display: flex; flex-direction: column; }
+.prc-ov__trial { display: flex; align-items: center; gap: .08rem; padding: .04rem 0; }
+.prc-ov__trial + .prc-ov__trial { border-top: 1px solid var(--line-2); }
+.prc-ov__round { color: var(--ice); font-size: calc(.12 * var(--t)); }
+.prc-ov__rand { font-size: calc(.12 * var(--t)); color: var(--text-dim); }
+.prc-ov__unit { display: inline-flex; align-items: center; gap: .05rem; }
+/* 橙线 = 同一格里的多个选择（业主）：一条候选里的第二位首领、协助与负载之间 */
+.prc-ov__unit + .prc-ov__unit { padding-left: .08rem; border-left: 1px solid var(--orange); }
+.prc-ov__uicon { display: inline-flex; width: .26rem; height: .26rem; }
+.prc-ov__uicon img, .prc-ov__uicon .icon { width: 100%; height: 100%; object-fit: contain; }
+.prc-ov__unit b { font-size: calc(.12 * var(--t)); }
+.prc-ov__picks { display: flex; flex-direction: column; }
+.prc-ov__pick { display: flex; flex-direction: column; gap: .02rem; padding: .04rem 0; }
+.prc-ov__pick + .prc-ov__pick { border-top: 1px solid var(--orange); }
+.prc-ov__plabel { font-size: calc(.11 * var(--t)); letter-spacing: .08em; color: var(--text-dim); }
+.prc-ov__pname { color: var(--ice); font-size: calc(.14 * var(--t)); }
+.prc-ov__pick.is-empty .prc-ov__pname { color: var(--text-dim); }
+.prc-ov__pdesc { font-size: calc(.11 * var(--t)); line-height: 1.45; color: var(--text-lo); white-space: pre-line; }
+.prc-overview__foot { display: flex; align-items: center; gap: .16rem; padding-top: .06rem; }
+.prc-overview__count { font-size: calc(.13 * var(--t)); }
+.prc-overview__wait { display: inline-flex; align-items: center; gap: .06rem; color: var(--text-lo); }
+@keyframes prc-ov-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes prc-ov-col { from { opacity: 0; transform: translateY(.12rem); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 1100px) {
   .prc__main { grid-template-columns: minmax(0, 1fr); overflow: auto; }
   .prc__side { height: auto; }
+  .prc-overview__cols { flex-direction: column; }
+  .prc-ov { border-left: 0; border-top: 1px solid var(--red); padding-left: .06rem; }
+  .prc-ov:first-child { border-top: 0; }
 }

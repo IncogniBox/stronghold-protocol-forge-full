@@ -60,7 +60,34 @@ export class PlayerRules {
    * statement.
    * @returns {SharedPool}
    */
-  mainPool() { return this.variantOn() ? this.pool() : this.m.pool; }
+  mainPool() {
+    const base = this._drawPool();
+    // 重构模拟的「自主禁用」：只收窄**这名玩家自己的抽取**（商店 / 晋升奖励 / 内容 rollChess）。配对共享池里的
+    // 拷贝一个都不动，队友照常买得到；这里给的是一个只读视图，`roll` 叠一条 filter，其余读写全走原池。
+    const banned = typeof this.m.reconSelfBannedChess === 'function' ? this.m.reconSelfBannedChess(this) : null;
+    if (!banned || !banned.size) return base;
+    if (this._banView && this._banViewBase === base && this._banViewBanned === banned) return this._banView;
+    const view = Object.create(base);
+    view.roll = (rng, opts = {}) => {
+      const filter = opts.filter;
+      return base.roll(rng, { ...opts, filter: (id, e) => !banned.has(id) && (!filter || filter(id, e)) });
+    };
+    this._banView = view;
+    this._banViewBase = base;
+    this._banViewBanned = banned;
+    return view;
+  }
+
+  /**
+   * The pool this player's copies are drawn from and accounted against, before the self-ban view:
+   * 重构模拟 = its normal-band pair's pool (`Match.reconPoolFor`), the 100-seat variant = its own, else `m.pool`.
+   * @returns {SharedPool}
+   */
+  _drawPool() {
+    const pair = typeof this.m.reconPoolFor === 'function' ? this.m.reconPoolFor(this) : null;
+    if (pair) return pair;
+    return this.variantOn() ? this.pool() : this.m.pool;
+  }
 
   /**
    * The copy accounting of base chess `baseId` for this player — the UNIQUE dispatch point (docs/PS100-MIGRATION.md
@@ -73,7 +100,7 @@ export class PlayerRules {
    */
   poolOf(baseId) {
     if (this.diyStock && this.diyStock.has(baseId)) return this.diyStock;
-    return this.variantOn() ? this.pool() : this.m.pool;
+    return this._drawPool();
   }
 
   /** This player's squad index (0..24 at 100 seats); -1 when the seat is out of range. */

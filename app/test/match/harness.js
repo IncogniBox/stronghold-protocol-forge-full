@@ -272,8 +272,10 @@ function legacyInvariants(m) {
   for (const ps of m.players.values()) {
     assert.ok(Number.isInteger(ps.funds) && ps.funds >= 0, `${ps.playerId} funds ${ps.funds}`);
     assert.ok(Number.isInteger(ps.pendingFunds) && ps.pendingFunds >= 0, `${ps.playerId} pending ${ps.pendingFunds}`);
-    assert.equal(ps.hand.length, GEO.HAND_SIZE);
-    assert.ok(ps.temp.length >= GEO.TEMP_SIZE, 'temp retains five visible slots and may have queued overflow');
+    // 整备区容量是**这一局**的（Match.benchSize：官方 10 / 5；声明了 layout.bench 的 45×60 重构战场 16 / 8）
+    const bench = m.benchSize || { hand: GEO.HAND_SIZE, temp: GEO.TEMP_SIZE };
+    assert.equal(ps.hand.length, bench.hand);
+    assert.ok(ps.temp.length >= bench.temp, 'temp retains its visible slots and may have queued overflow');
     assert.ok(ps.shop.level >= 1 && ps.shop.level <= m.gd.maxShopLevel);
     assert.ok(ps.shop.upgradePrice >= 0);
     assert.ok(ps.shop.freeRefreshes >= 0);
@@ -336,7 +338,27 @@ function legacyInvariants(m) {
       assert.equal(e.left + (diyHeld.get(base) || 0), e.cap, `${ps.playerId} 自选 stock ${base}: left ${e.left} + held ${diyHeld.get(base) || 0} != cap ${e.cap}`);
     }
   }
-  if (!independent) {
+  const reconPairs = m.reconPools && m.reconPools.byKey && m.reconPools.byKey.size ? m.reconPools : null;
+  if (reconPairs) {
+    // 重构模拟：`m.pool` 只是只读目录；收发按「普通带同场的一对」守恒（与 server/match/invariants.js 同一条）。
+    for (const [base, e] of pool.entries) {
+      assert.ok(Number.isInteger(e.left) && e.left <= e.cap, `pool ${base} balance ${e.left} cap ${e.cap}`);
+      assert.equal(e.left, e.cap, 'recon: no copy is ever taken from the canonical catalog');
+    }
+    for (const [key, { pool: pair, players }] of reconPairs.byKey) {
+      const mine = new Map();
+      for (const pid of players) {
+        const h = heldOf.get(pid);
+        if (!h) continue;
+        for (const [base, n] of h) mine.set(base, (mine.get(base) || 0) + n);
+      }
+      for (const [base, e] of pair.entries) {
+        assert.ok(Number.isInteger(e.left) && e.left <= e.cap, `recon pool ${key} ${base} balance ${e.left} cap ${e.cap}`);
+        assert.equal(e.left + (mine.get(base) || 0), e.cap, `recon pool ${key} accounting ${base}: left ${e.left} + held ${mine.get(base) || 0} != cap ${e.cap}`);
+      }
+      for (const [base, n] of mine) if (!pair.has(base)) assert.equal(n, 0, `recon pool ${key}: non-pool chess ${base} holds copies`);
+    }
+  } else if (!independent) {
     // the room-wide reading: every piece of every player shares ONE pool (the pre-existing check, unchanged)
     for (const [base, e] of pool.entries) {
       assert.ok(Number.isInteger(e.left) && e.left <= e.cap, `pool ${base} balance ${e.left} cap ${e.cap}`);

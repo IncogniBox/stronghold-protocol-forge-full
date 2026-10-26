@@ -6,7 +6,7 @@
 import { PHASE, GEO } from '../../../shared/constants.js';
 import { boardRectOf } from '../../../shared/layout.js';
 import { deriveSeed } from '../../sim/rng.js';
-import { withBounties, bountySpawns } from '../waves.js';
+import { withBounties, bountySpawns, stageRoutesOf, routeSpawn } from '../waves.js';
 import { planUnite } from '../unite.js';
 import { FieldRunner, DeadBattle } from '../fields.js';
 import { DELAYS } from './common.js';
@@ -63,8 +63,12 @@ export class MatchCombat {
     const wave = preview ? structuredClone(this.wave) : this.wave;
     if (preview) ps = previewPlayer(ps, board);
     const input = ps.battleInput({ side, colOffset });
+    // 地图自己画的路线：这一半场的敌人只走这一半场的那几条（起点/终点都在这张图自己身上，见 waves.js routeSpawn）
+    const stageRoutes = stageRoutesOf(this.gd, this.stageId);
+    const mid = this.layout.mirrorCol / 2;
     // the client's list: bounty units inserted among their host action's own units, which are re-timed around them
-    const spawns = withBounties(this.gd, this.round, wave, ps.bounties, ps.playerId).map((s) => ({ ...s, ownerPlayerId: ps.playerId }));
+    let spawns = withBounties(this.gd, this.round, wave, ps.bounties, ps.playerId, { side, mid })
+      .map((s) => ({ ...s, ownerPlayerId: ps.playerId }));
     // 开发者模式（「全量模拟」）：面板「添加至怪物预览区」追加的敌人 —— 与预览同一份列表（match/views.js
     // nextEnemiesFor），在 onBattleStart 之前插入，让这一回合的战斗真的带着它们出现。
     if (Array.isArray(this.devExtraEnemies) && this.devExtraEnemies.length) {
@@ -75,7 +79,12 @@ export class MatchCombat {
     if (Array.isArray(this.reconTrialSpawns) && this.reconTrialSpawns.length) {
       for (const s of this.reconTrialSpawns) spawns.push({ ...s, ownerPlayerId: ps.playerId });
     }
-    const ev = { input, kind: 'normal', round: this.round, spawns, ...(preview ? { preview: true } : {}) };
+    if (stageRoutes) {
+      spawns = spawns.map((s, i) => routeSpawn(this.gd, stageRoutes, s, {
+        side, mid, k: Number.isInteger(s.actionIndex) ? s.actionIndex : i, ownerPlayerId: s.ownerPlayerId ?? ps.playerId,
+      }));
+    }
+    const ev = { input, kind: 'normal', round: this.round, spawns, side, routes: wave.routes, mid, ...(preview ? { preview: true } : {}) };
     // Preview construction failures go to the rehearsal's discard path, never Match.dispatch's live error sink.
     if (preview) this.dispatcher.dispatch(ps, 'onBattleStart', ev);
     else this.dispatch(ps, 'onBattleStart', ev);
@@ -127,9 +136,22 @@ export class MatchCombat {
    */
   _normalPairOpts(group, { preview = false } = {}) {
     const wave = preview ? structuredClone(this.wave) : this.wave;
-    // the round's own units, one copy per field (a boss field's list); each player's bounties follow its own half
-    const spawns = (wave && Array.isArray(wave.spawns) ? wave.spawns : []).map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
+    // 地图自己画了路线时，**每个半场各一份**出怪：等待区（这一侧）里看到的怪物只走这一半场的那几条路线，
+    // 只攻这一半场的门；漏怪按 `ownerPlayerId`（找不到时按漏怪所在半场）记到那一位玩家头上。
+    const stageRoutes = stageRoutesOf(this.gd, this.stageId);
     const mid = this.layout.mirrorCol / 2;
+    const base = wave && Array.isArray(wave.spawns) ? wave.spawns : [];
+    const spawns = [];
+    if (stageRoutes) {
+      for (const { ps, side } of group) {
+        for (const [i, s] of base.entries()) {
+          const sp = routeSpawn(this.gd, stageRoutes, s, { side, mid, k: Number.isInteger(s.actionIndex) ? s.actionIndex : i, ownerPlayerId: ps.playerId });
+          spawns.push({ ...sp, mods: s.mods ? { ...s.mods } : undefined });
+        }
+      }
+    } else {
+      for (const s of base) spawns.push({ ...s, mods: s.mods ? { ...s.mods } : undefined });
+    }
     for (const { ps, side } of group) {
       for (const b of bountySpawns(this.gd, this.round, wave, ps.bounties, ps.playerId, { side, mid })) spawns.push(b);
     }
@@ -146,7 +168,7 @@ export class MatchCombat {
       const p = preview ? previewPlayer(ps, ps.board) : ps;
       const input = p.battleInput({ side, colOffset: j === 0 ? 0 : colOffset });
       // `side`: which half of the shared field this player is on (spawn-list edits for one player, like a boss field)
-      const ev = { input, kind: 'normal', round: this.round, spawns, side, ...(preview ? { preview: true } : {}) };
+      const ev = { input, kind: 'normal', round: this.round, spawns, side, routes: wave.routes, mid, ...(preview ? { preview: true } : {}) };
       if (preview) this.dispatcher.dispatch(p, 'onBattleStart', ev);
       else this.dispatch(p, 'onBattleStart', ev);
       return ev.input && typeof ev.input === 'object' ? ev.input : input;

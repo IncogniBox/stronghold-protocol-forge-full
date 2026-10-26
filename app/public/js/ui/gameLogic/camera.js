@@ -2,7 +2,7 @@
 
 import { PHASE } from '../../../../shared/constants.js';
 import { fieldTile as layoutFieldTile, boardTile as layoutBoardTile, mapRectOf } from '../../render/layout.js';
-import { OFFICIAL_LAYOUT, isDualLayout, bossAreaCount, bossAreaLayout, bossAreaPrepRect } from '../../../../shared/layout.js';
+import { OFFICIAL_LAYOUT, isDualLayout, isOfficialLayout, bossAreaCount, bossAreaLayout, bossAreaPrepRect, bossAreaSeatPrepRect } from '../../../../shared/layout.js';
 import { int, isObj } from './shared.js';
 
 /** Server-owned random pairs. Seat inference is only for an older server without the field. */
@@ -50,6 +50,9 @@ export function bossAreaOfPair(pub, myId, pair = prepPair(pub, myId), idx = pair
 export function prepCamera(pub, myId, layout = null) {
   const r = pub?.round;
   const bossRound = Number.isInteger(r) && r > 0 && (r === pub.bossRound || r === pub.hiddenRound);
+  // 自己那张棋盘的取景**再推近一截**：官方 19×21 用 configBlackBoard 的固定机位（这个值不参与），
+  // 只有按图自己的矩形 fit 出来的相机（自定义布局）读它 —— 取景框四周留白先按预设算，再把整体放大 1.5 倍。
+  const framed = layout && !isOfficialLayout(layout) ? { zoom: 1.5 } : null;
   if (bossRound) {
     const pair = prepPair(pub, myId);
     const idx = pair.indexOf(myId);
@@ -61,20 +64,25 @@ export function prepCamera(pub, myId, layout = null) {
       const index = raw < bossAreaCount(L) ? raw : 0;
       // 第 2… 块 boss 场地：每人一条自己的矩形（`bossAreaLayout`），整块区域一个取景 ⇒ side 恒 'L'、rect 是这块场地的
       // 整备矩形（地图声明的「boss 整备矩形」——它包含战斗矩形，比它多出整备行/整备列）；缺省同战斗矩形。
+      // 左右并排的两半（`bossAreaSeatPrepRect` 有值）⇒ 像普通带一样各看自己那半，伙伴的半场不在画面里。
       if (index > 0) {
+        const own = bossAreaSeatPrepRect(L, index, seat);
         return {
           kind: 'bossPrep',
-          opts: { side: 'L', rect: bossAreaPrepRect(L, index), layout: bossAreaLayout(L, index, seat), area: index },
+          opts: { side: 'L', rect: own || bossAreaPrepRect(L, index), layout: bossAreaLayout(L, index, seat), area: index, ...(framed || {}) },
         };
       }
-      // 第 1 块照旧是左右两个半场：返回形状与从前逐字节相同（不带 area 键）
-      return { kind: 'bossPrep', opts: { side: idx % 2 === 1 ? 'R' : 'L' } };
+      // 第 1 块：声明了多块 boss 场地、且这块场地也是左右并排的两半时，同样各看自己那半（返回形状仍不带 area 键）；
+      // 官方 19×21 那张（不声明 `bossAreas`）照旧整块 boss 场地一起看。
+      const own0 = Array.isArray(L.bossAreas) ? bossAreaSeatPrepRect(L, 0, idx % 2 === 1 ? 1 : 0) : null;
+      if (own0) return { kind: 'bossPrep', opts: { side: idx % 2 === 1 ? 'R' : 'L', rect: own0, ...(framed || {}) } };
+      return { kind: 'bossPrep', opts: { side: idx % 2 === 1 ? 'R' : 'L', ...(framed || {}) } };
     }
   }
   // 普通带的左右两半（shared/layout.js `isDualLayout`）：同一套按座位两两一组的配对，第 1 位 'R'（与服务器
   // Match.normalSideOf 同一条规则）。单块普通带的图恒 'L'，revert 到历史那条 `{ rect: battle.prep, side: 'L' }`。
   const side = ordinarySide(pub, myId, layout);
-  return { kind: 'prep', opts: { rect: ordinaryPrepRect(layout, side), side } };
+  return { kind: 'prep', opts: { rect: ordinaryPrepRect(layout, side), side, ...(framed || {}) } };
 }
 
 /** The seat-order pairing of a two-half ordinary band: the 1st alive player by seat → 'L', the 2nd → 'R' (per field). */
@@ -94,7 +102,10 @@ function ordinaryPrepRect(layout, side) {
   const L = layout || OFFICIAL_LAYOUT;
   if (!isDualLayout(L)) return mapRectOf(L, 'prep');
   const n = L.deployRects.normalLeft;
-  const own = { r0: n[0] - 2, r1: n[1], c0: n[2] - 2, c1: n[3] };
+  const p = L.battle.prep;
+  // 行带与靠外的列都按地图声明的整备矩形（`battle.prep`），不是写死的「棋盘下两行」——
+  // 一张把板凳画得离场地远一行的图，那两行板凳都要在画面里。相接列仍是自己那半的 `normalLeft.c1`。
+  const own = { r0: Math.min(p.r0, n[0] - 2), r1: Math.max(p.r1, n[1]), c0: Math.min(p.c0, n[2] - 2), c1: n[3] };
   return side === 'R' ? { ...own, c0: L.mirrorCol - own.c1, c1: L.mirrorCol - own.c0 } : own;
 }
 
@@ -254,24 +265,19 @@ export function deployLayoutOf(pub, myId, layout = null) {
   return cam.opts && cam.opts.layout ? cam.opts.layout : layout;
 }
 
-/** The deploy fields whose board is a HALF of a band — the boss halves, and a two-half map's ordinary halves. */
-const HALF_FIELDS = new Set(['bossL', 'bossR', 'normalL', 'normalR']);
-
 /**
  * The map tile [row, col] of board tile (r, c) on deploy field `field` (server/match/board.js fieldTile): the boss
  * prep's display transform (render/prepfield.js bossPrepField: the row shift the map's own boss rect gives, the right
- * half mirrored about its mirror column), and the same for a two-half ordinary band's halves. `layout` omitted keeps
- * meaning "the official 19×21 map" — the historical `r − 7` / `20 − c` — because
- * test/match/playtest5-deploy.test.js compares this against the server's own default.
+ * half mirrored about its mirror column), a two-half ordinary band's halves, and the ordinary band itself on a map
+ * whose board does not sit where the official one does (45×60: board rows 8–12 = map rows 34–38). `layout` omitted
+ * keeps meaning "the official 19×21 map" — the historical identity — because `layoutFieldTile` reproduces it there.
  */
 export function fieldTile(field, r, c, layout = null) {
-  if (!HALF_FIELDS.has(field)) return [r, c];
   return layoutFieldTile(field, r, c, layout || undefined);
 }
 
 /** The board tile of map tile (r, c) on deploy field `field` (server/match/board.js boardTileOf). */
 export function boardTileOf(field, r, c, layout = null) {
-  if (!HALF_FIELDS.has(field)) return [r, c];
   return layoutBoardTile(field, r, c, layout || undefined);
 }
 

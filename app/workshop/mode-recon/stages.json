@@ -1,10 +1,15 @@
 {
   "my_map": {
     "id": "my_map",
-    "name": "my_map",
+    "name": "重构战场01·天镜阁",
     "weight": 40,
     "active": true,
-    "modes": [],
+    "modes": [
+      "mode_recon_funny",
+      "mode_recon_normal",
+      "mode_recon_hard",
+      "mode_recon_abyss"
+    ],
     "size": [
       45,
       60
@@ -84,6 +89,18 @@
         "r1": 44,
         "c0": 33,
         "c1": 39
+      },
+      "bench": {
+        "normalL": { "hand": [[31, 21, 28], [32, 21, 28]], "temp": [30, 21, 28] },
+        "normalR": { "hand": [[31, 32, 39], [32, 32, 39]], "temp": [30, 32, 39] },
+        "bossL": { "hand": [[12, 22, 29], [13, 22, 29]], "temp": [11, 22, 29] },
+        "bossR": { "hand": [[12, 31, 38], [13, 31, 38]], "temp": [11, 31, 38] },
+        "bossA2:0": { "hand": [[10, 1, 8], [11, 1, 8]], "temp": [9, 1, 8] },
+        "bossA2:1": { "hand": [[10, 10, 17], [11, 10, 17]], "temp": [9, 10, 17] },
+        "bossA3:0": { "hand": [[10, 43, 50], [11, 43, 50]], "temp": [9, 43, 50] },
+        "bossA3:1": { "hand": [[10, 52, 59], [11, 52, 59]], "temp": [9, 52, 59] },
+        "bossA4:0": { "hand": [[0, 22, 29], [1, 22, 29]], "temp": [2, 22, 29] },
+        "bossA4:1": { "hand": [[0, 31, 38], [1, 31, 38]], "temp": [2, 31, 38] }
       },
       "bossAreas": [
         {
@@ -201,28 +218,28 @@
       ]
     },
     "rows": [
-      "ffffffffffffffffffffffaaaaaaaa-aaaaaaaafffffffffffffffffffff",
-      "ffffffffffffffffffffffaaaaaaaa-aaaaaaaafffffffffffffffffffff",
-      "ffffffffffffffffffffffXXXXXXXXXXXXXXXXXfffffffffffffffffffff",
-      "ffffffffffffffffffffffXErrrrr---rrrrrEXfffffffffffffffffffff",
-      "ffffffffffffffffffffffX-rrrrr---rrrrr-Xfffffffffffffffffffff",
-      "ffffffffffffffffffffffX-###rrr-rrr###-Xfffffffffffffffffffff",
-      "ffffffffffffffffffffffX-###rfffffr###-Xfffffffffffffffffffff",
-      "ffffffffffffffffffffffX-###rfffffr###-Xfffffffffffffffffffff",
-      "ffffffffffffffffffffffXXXXXXfffffXXXXXXfffffffffffffffffffff",
+      "ffffffffffffffffffffffaaaaaaaafaaaaaaaafffffffffffffffffffff",
+      "ffffffffffffffffffffffaaaaaaaafaaaaaaaafffffffffffffffffffff",
+      "ffffffffffffffffffffffXXXXXXXXfXXXXXXXXfffffffffffffffffffff",
+      "ffffffffffffffffffffffXErrrrrfffrrrrrEXfffffffffffffffffffff",
+      "ffffffffffffffffffffffXfrrrrrfffrrrrrfXfffffffffffffffffffff",
+      "ffffffffffffffffffffffXf###rrrfrrr###fXfffffffffffffffffffff",
+      "ffffffffffffffffffffffXf###rfffffr###fXfffffffffffffffffffff",
+      "ffffffffffffffffffffffXf###rfffffr###fXfffffffffffffffffffff",
+      "ffffffffffffffffffffffXfffffffffffffffXfffffffffffffffffffff",
       "ffffffffffffffffffffffXOfffffffffffffOXfffffffffffffffffffff",
-      "faaaaaaaa-aaaaaaaaffffXXXXXXXXXXXXXXXXXffffaaaaaaaa-aaaaaaaa",
-      "faaaaaaaa-aaaaaaaafffffffffffffffffffffffffaaaaaaaa-aaaaaaaa",
-      "fffXXXXXXXXXXXXXffffffaaaaaaaa-aaaaaaaaffffffXXXXXXXXXXXXXff",
-      "fffXErrr##----OXffffffaaaaaaaa-aaaaaaaaffffffXO----##rrrEXff",
-      "fffXX#rrr##---fXfffffXXXXXXXXXXXXXXXXXXXfffffXf---##rrr#XXff",
-      "fffXX##rrr##--fXfffffXEr###rrXXXrr###rEXfffffXf--##rrr##XXff",
-      "fffXX-##rrfffffXfffffXXr##rrrfffrrr##rXXfffffXfffffrr##-XXff",
-      "fffXX-----fffffXfffffXXrrrrrfffffrrrrrXXfffffXfffff-----XXff",
-      "fffXX-##rrfffffXfffffXXr##rrfffffrr##rXXfffffXfffffrr##-XXff",
-      "fffXX##rrr##--fXfffffXIr###rfffffr###rIXfffffXf--##rrr##XXff",
-      "fffXX#rrr##---fXfffffXXXXXXXXXXXXXXXXXXXfffffXf---##rrr#XXff",
-      "fffXErrr##----OXfffffffffffffffffffffffffffffXO----##rrrEXff",
+      "faaaaaaaafaaaaaaaaffffXXXXXXXXXXXXXXXXXffffaaaaaaaafaaaaaaaa",
+      "faaaaaaaafaaaaaaaafffffffffffffffffffffffffaaaaaaaafaaaaaaaa",
+      "fffXXXXXXXXXXXXXffffffaaaaaaaafaaaaaaaaffffffXXXXXXXXXXXXXff",
+      "fffXErrr##ffffOXffffffaaaaaaaafaaaaaaaaffffffXOffff##rrrEXff",
+      "fffXX#rrr##ffffXfffffXXXXXXXXXXXXXXXXXXXfffffXffff##rrr#XXff",
+      "fffXX##rrr##fffXfffffXEr###rrXXXrr###rEXfffffXfff##rrr##XXff",
+      "fffXXf##rrfffffXfffffXXr##rrrfffrrr##rXXfffffXfffffrr##fXXff",
+      "fffXXffffffffffXfffffXXrrrrrfffffrrrrrXXfffffXffffffffffXXff",
+      "fffXXf##rrfffffXfffffXXr##rrfffffrr##rXXfffffXfffffrr##fXXff",
+      "fffXX##rrr##fffXfffffXIr###rfffffr###rIXfffffXfff##rrr##XXff",
+      "fffXX#rrr##ffffXfffffXXXXXXXXXXXXXXXXXXXfffffXffff##rrr#XXff",
+      "fffXErrr##ffffOXfffffffffffffffffffffffffffffXOffff##rrrEXff",
       "fffXXXXXXXXXXXXXfffffffffffffffffffffffffffffXXXXXXXXXXXXXff",
       "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -234,12 +251,12 @@
       "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "fffffffffffffffffffffaaaaaaaafffaaaaaaaaffffffffffffffffffff",
       "fffffffffffffffffffffaaaaaaaafffaaaaaaaaffffffffffffffffffff",
-      "ffffffffffffffffffff---------------------fffffffffffffffffff",
-      "ffffffffffffffffffff-###rrrrr---rrrrr###-fffffffffffffffffff",
-      "ffffffffffffffffffff-#rrr##rrrSrrr##rrr#-fffffffffffffffffff",
-      "ffffffffffffffffffffErrr####-----####rrrEfffffffffffffffffff",
-      "ffffffffffffffffffff-#rrr##rrrSrrr##rrr#-fffffffffffffffffff",
-      "ffffffffffffffffffff-###rrrrr---rrrrr###-fffffffffffffffffff",
+      "ffffffffffffffffffffXXXXXXXXXXXXXXXXXXXXXfffffffffffffffffff",
+      "ffffffffffffffffffffX###rrrrrXXXrrrrr###Xfffffffffffffffffff",
+      "ffffffffffffffffffffX#rrr##rrrSrrr##rrr#Xfffffffffffffffffff",
+      "ffffffffffffffffffffErrr####XXXXX####rrrEfffffffffffffffffff",
+      "ffffffffffffffffffffX#rrr##rrrSrrr##rrr#Xfffffffffffffffffff",
+      "ffffffffffffffffffffX###rrrrrXXXrrrrr###Xfffffffffffffffffff",
       "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "fffffffffffffffffffffSfffffffffffffffffSffffffffffffffffffff",
@@ -419,6 +436,256 @@
     "special": {},
     "runes": [],
     "globalBuffs": [],
+    "routes": [
+      {
+        "motion": "WALK",
+        "start": [
+          37,
+          30
+        ],
+        "end": [
+          36,
+          20
+        ],
+        "checkpoints": [
+          [
+            37,
+            27
+          ],
+          [
+            38,
+            27
+          ],
+          [
+            38,
+            24
+          ],
+          [
+            37,
+            24
+          ],
+          [
+            36,
+            22
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          35,
+          30
+        ],
+        "end": [
+          36,
+          20
+        ],
+        "checkpoints": [
+          [
+            35,
+            27
+          ],
+          [
+            34,
+            27
+          ],
+          [
+            34,
+            24
+          ],
+          [
+            35,
+            24
+          ],
+          [
+            36,
+            22
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          35,
+          30
+        ],
+        "end": [
+          36,
+          20
+        ],
+        "checkpoints": [
+          [
+            37,
+            27
+          ],
+          [
+            38,
+            27
+          ],
+          [
+            38,
+            24
+          ],
+          [
+            35,
+            24
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          37,
+          30
+        ],
+        "end": [
+          36,
+          20
+        ],
+        "checkpoints": [
+          [
+            35,
+            27
+          ],
+          [
+            34,
+            27
+          ],
+          [
+            34,
+            24
+          ],
+          [
+            37,
+            24
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          37,
+          30
+        ],
+        "end": [
+          36,
+          40
+        ],
+        "checkpoints": [
+          [
+            37,
+            33
+          ],
+          [
+            38,
+            33
+          ],
+          [
+            38,
+            36
+          ],
+          [
+            37,
+            36
+          ],
+          [
+            36,
+            38
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          35,
+          30
+        ],
+        "end": [
+          36,
+          40
+        ],
+        "checkpoints": [
+          [
+            35,
+            33
+          ],
+          [
+            34,
+            33
+          ],
+          [
+            34,
+            36
+          ],
+          [
+            35,
+            36
+          ],
+          [
+            36,
+            38
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          37,
+          30
+        ],
+        "end": [
+          36,
+          40
+        ],
+        "checkpoints": [
+          [
+            35,
+            33
+          ],
+          [
+            34,
+            33
+          ],
+          [
+            34,
+            36
+          ],
+          [
+            37,
+            36
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          35,
+          30
+        ],
+        "end": [
+          36,
+          40
+        ],
+        "checkpoints": [
+          [
+            37,
+            33
+          ],
+          [
+            38,
+            33
+          ],
+          [
+            38,
+            36
+          ],
+          [
+            35,
+            36
+          ]
+        ]
+      }
+    ],
     "deployTiles": {
       "normalLeft": {
         "melee": [

@@ -302,6 +302,8 @@ export class MatchPlatform {
         this.finish({ victory: false, reason: 'abandoned' });
         return;
       }
+      // 队伍总览上有人永久退出：他不再需要点「继续」，剩下的人齐了就该进下一阶段。
+      if (this.phase === PHASE.PRE_RECON) this.maybeFinishReconSummary();
       this._quit(ps);
     });
   }

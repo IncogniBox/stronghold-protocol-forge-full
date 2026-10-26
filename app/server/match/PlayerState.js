@@ -152,6 +152,8 @@ export class PlayerState {
     this.gd = m.gd;
     this.playerId = seat.playerId;
     this.seat = seat.seat;
+    // 重构模拟的房间队伍（1..teamCount；赛前自由选队，队伍间对抗留给后续轮次）。其它模式座位不带这个键 ⇒ 1。
+    this.team = Number.isInteger(seat.team) && seat.team > 0 ? seat.team : 1;
     this.name = seat.name;
     this.isBot = !!seat.isBot;
     this.connected = this.isBot ? true : !!seat.connected;
@@ -225,6 +227,12 @@ export class PlayerState {
     this.hand = new Array(HAND_SIZE).fill(null);
     /** @type {Array<any>} */
     this.temp = new Array(TEMP_SIZE).fill(null);
+    /**
+     * 本局整备区容量（`Match.benchSize`，`applyBenchSize` 换）：官方 10 / 5，声明了 `layout.bench` 的图按它的格子
+     * （45×60 重构战场 16 / 8）。座位建在选图之前，所以先按官方建数组、再由 Match 换成真容量（那时还是空的）。
+     */
+    this.handSize = HAND_SIZE;
+    this.tempSize = TEMP_SIZE;
     /** preps of this player that ended so far (endPrep) = index of the current (or next) prep */
     this.prepsEnded = 0;
     /** @type {Map<number, number>} temp piece uid → index of the prep whose deadline resolves it (see tempDue) */
@@ -294,6 +302,22 @@ export class PlayerState {
     /** Match.scheduleBotPrep: the latest bot prep of this seat (older sliced rehearsals drop out) */
     this._botPrepToken = 0;
     this.bonds = computeBonds(this.gd, this);
+  }
+
+  /**
+   * 换成本局真正的整备区容量（`Match.benchSize`）：数组按容量重建。只在一局开始前（两边都还空着）调用；中途调用
+   * 会保住已经放上去的棋子不动 —— 换图不该让手里的棋子消失。
+   * @param {{ hand: number, temp: number }} size
+   */
+  applyBenchSize(size) {
+    if (!size || !Number.isInteger(size.hand) || !Number.isInteger(size.temp)) return;
+    if (size.hand === this.handSize && size.temp === this.tempSize) return;
+    const occupied = this.hand.some((p) => p != null) || this.temp.some((p) => p != null);
+    if (occupied) return;
+    this.handSize = size.hand;
+    this.tempSize = size.temp;
+    this.hand = new Array(size.hand).fill(null);
+    this.temp = new Array(size.temp).fill(null);
   }
 }
 

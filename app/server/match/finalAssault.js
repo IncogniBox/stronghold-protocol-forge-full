@@ -37,7 +37,7 @@
 
 import { BOSS_POOL_MIN_HP } from '../sim/constants.js';
 import { GEO } from '../../shared/constants.js';
-import { OFFICIAL_LAYOUT, stageRowOfBoard, stageColOfBoard, handRowOf } from '../../shared/layout.js';
+import { OFFICIAL_LAYOUT, stageRowOfBoard, stageColOfBoard, benchBottomRow } from '../../shared/layout.js';
 import { mirrorDir, normDir } from '../sim/dir.js';
 import { bossPoolShareOf } from './gamedata.js';
 
@@ -59,7 +59,7 @@ export function bossFieldPlacement(side, row, col, dir = 'RIGHT', layout = OFFIC
   const d = normDir(dir);
   // the 整备行 (and everything above it) is the boss field's own bench; the board rows below it are the band it fights in
   // (board row 12 = the boss rect's top row, `stageRowOfBoard`). Official: hand row 7 → boss row 0.
-  const r = row >= handRowOf(layout, 'bossL') ? stageRowOfBoard(layout, 'bossL', row) : row;
+  const r = row >= benchBottomRow(layout, 'bossL') ? stageRowOfBoard(layout, 'bossL', row) : row;
   return side === 'R'
     ? { row: r, col: stageColOfBoard(layout, 'bossR', col), dir: mirrorDir(d) }
     : { row: r, col: stageColOfBoard(layout, 'bossL', col), dir: d };

@@ -721,8 +721,9 @@ Reads: `playerId seat name round phase modeId difficulty isSolo isCoop data (fro
 board() hand() temp() piece(uid) pieceAt(row, col) pieceBonds(uid) garrisonsOf(uid) chessRecord(id) stats() roundStats()
 shopSlots() effect(id) recon()` (`piece(uid)` adds `area`, `holderUid`, `idx`; "身前一格" of (r, c) is (r, c + 1)),
 `recon()` = this match's **预重构** choice of this player (`Match.reconChoices[playerId]`:
-`{ major, minor, story, bosses, assist, load }`, every field optional — the shape of `shared/protocol.js`'s
-`g.reconChoice`), or `null` outside that phase / for a player who never submitted; it returns a copy, arrays included
+`{ major, minor, story, bosses, assist, load, ban }`, every field optional — the shape of `shared/protocol.js`'s
+`g.reconChoice`; `ban` is that player's 自主禁用盟约, which only narrows THAT player's card pool), or `null` outside
+that phase / for a player who never submitted; it returns a copy, arrays included
 (the mode that fills it is the engine's `mode_recon_*`, `shared/reconModes.js`),
 counters `counter(k) setCounter(k, v) incCounter(k, n)` (player scope, persistent; prefix keys with your module) and
 `pieceCounter(uid, k) incPieceCounter(uid, k, n)` (per piece, current round only: 0 in a new round and for a new piece —

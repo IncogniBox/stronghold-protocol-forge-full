@@ -25,8 +25,10 @@ export class MatchIntents {
       case 'g.bandSkip': return this.skipBand(ps);
       // the strategy highlighted in the draft screen (what a timed-out turn takes, timeoutBand)
       case 'g.bandFocus': return this.bandFocus(ps, msg.bandId ?? null);
-      // 预重构提交（模式扩展-重构模拟，PHASE.PRE_RECON）：盟约倾向 / 首领占位 / 协助与负载占位
+      // 预重构提交（模式扩展-重构模拟，PHASE.PRE_RECON）：盟约倾向 / 试炼首领 / 协助与负载 / 自主禁用
       case 'g.reconChoice': return this.reconChoice(ps, msg);
+      // 队伍预重构总览的「继续」（全员交齐后等每位真人确认）
+      case 'g.reconContinue': return this.reconContinue(ps);
       case 'g.reconTrain': return ps.reconTrain(msg);
       case 'g.reconTrainCancel': return ps.reconTrainCancel(msg);
       case 'g.buy': return ps.buy(msg.slot);

@@ -105,6 +105,16 @@ test('数据负载 / 盟约负载：敌人的基础攻防血 +25%、法抗 +25�
   const blown = bond.spawn(SLIME, { pos: { row: 10, col: 9 }, routeIndex: 0, mods: { speedMul: 0 } });
   assert.equal(blown.findBuff('recon:load').mods.hpPct, 0.1, '100 层 × 每层 0.1%');
   assert.ok(Math.abs(blown.maxHp / base.maxHp - 1.1) < 0.02, `盟约负载 100 层：生命上限 ×${blown.maxHp / base.maxHp}（期望 1.1）`);
+
+  // 三类各取「已激活且层数最高」的那一条，**求和**；未激活的同类不计数
+  const both = await deployed({ params: { load: 'recon_load_bond' }, bonds: {
+    yanShip: { count: 3, active: true, tier: 1, layers: 100 },     // 核心
+    swiftShip: { count: 2, active: true, tier: 1, layers: 50 },    // 附加
+    preciShip: { count: 3, active: false, tier: 1, layers: 999 },  // 未激活 ⇒ 不计数
+  } });
+  const blownBoth = both.spawn(SLIME, { pos: { row: 10, col: 9 }, routeIndex: 0, mods: { speedMul: 0 } });
+  assert.equal(blownBoth.findBuff('recon:load').mods.hpPct, 0.15, '(100 + 50) 层 × 每层 0.1%；未激活的 999 层不计');
+  assert.ok(Math.abs(blownBoth.maxHp / base.maxHp - 1.15) < 0.02, `核心 + 附加：生命上限 ×${blownBoth.maxHp / base.maxHp}（期望 1.15）`);
 });
 
 test('装备负载：未携带装备的干员伤害 -25%；装备阶级高于携带者的那件装备效果 -50%', async () => {

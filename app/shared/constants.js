@@ -166,8 +166,8 @@ export const MIN_SEATS = 2;
 /**
  * 重构模拟（模式扩展-重构模拟，room mode 'recon'）的房间形状——引擎只加不改：全部新键，缺省路径一个字不动。
  * 房间分 1–5 支队伍（自由选队，赛前阶段），每队最多 4 人；房间座位仍受本机 `SEAT_CAP`（缺省 20）约束。
- * 当前轮次的对战规则仍按全员合作 PVE 跑（共享池 / 共享 LP / 首领配对照旧）；`teams` 只是房间层元数据，
- * 队伍间对抗留给后续轮次。
+ * 当前轮次的对战规则仍按全员合作 PVE 跑（共享 LP / 首领配对照旧）；棋子池按**普通带同场的一对**共享
+ * （server/match/match/reconPools.js，业主 2026-10-26）；`teams` 只是房间层元数据，队伍间对抗留给后续轮次。
  */
 export const RECON = Object.freeze({ MIN_TEAMS: 1, MAX_TEAMS: 5, TEAM_SIZE: 4 });
 
@@ -286,6 +286,13 @@ export const GEO = Object.freeze({
 });
 
 export const AREA = Object.freeze({ BOARD: 'board', HAND: 'hand', TEMP: 'temp', OUTSIDE: 'outside' });
+
+/**
+ * 整备区容量的**协议层上限**（格子）：真正的大小由这一局地图的 `layout.bench` 决定（`benchOf`），官方图仍是 10 / 5，
+ * 45×60 重构战场是 16 / 8。`shared/protocol.js` 只做「离谱值直接 BAD_MSG」的粗界校验，越界与否由
+ * `PlayerState.move` 按本局 `hand.length` 判 —— 协议层不知道是哪张图。
+ */
+export const BENCH_SIZE_MAX = 24;
 
 export const PIECE_KIND = Object.freeze({ CHESS: 'chess', ITEM: 'item', TOKEN: 'token' });
 

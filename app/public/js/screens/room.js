@@ -739,20 +739,31 @@ export function RoomScreen() {
   const cardList = useMemo(() => cardOperators(data.list('chess')), [data.get('chess')]);
   const [myCard, setMyCard] = useState(() => { const v = loadPref(CARD_PREF, ''); return typeof v === 'string' ? v : ''; });
   const [picking, setPicking] = useState(false);
-  const portraits = useMemo(() => ({
+  const cardBase = useMemo(() => ({
     pool: cardList.filter((c) => (c.rarity ?? 0) >= 5).sort((a, b) => (a.charId < b.charId ? -1 : 1)),
-    byChar: new Map(cardList.map((c) => [c.charId, c])), m, myId: me.playerId, myCard,
-  }), [cardList, m, me.playerId, myCard]);
+    byChar: new Map(cardList.map((c) => [c.charId, c])), m, myId: me.playerId,
+  }), [cardList, m, me.playerId]);
+  // 本机存着的那一张必须能被**本房的数据**画出来。画不出来（换过工坊包、这张干员不在本房内容里）就当「默认」：
+  // 否则自己这一席画的是按 id 分的默认立绘，队友那一席画的却是服务器记着的旧 charId —— 同一席位两边永远不一样，
+  // 而且冒着一路发不出去的请求。
+  const shownCard = myCard && cardBase.byChar.has(myCard) ? myCard : '';
+  const portraits = useMemo(() => ({ ...cardBase, myCard: shownCard }), [cardBase, shownCard]);
   const pickCard = (charId) => {
     setMyCard(charId); savePref(CARD_PREF, charId); setPicking(false);
   };
   // tell the server (teammates see it) once it knows room.card; a refused id stays local
   const seatCard = room ? (roomFacts(room, me.playerId).mine?.card || '') : '';
+  const cardRefused = useRef('');
   useEffect(() => {
-    if (!CARD_SYNC || !room || conn.status !== 'online' || seatCard === (myCard || '')) return;
-    if (myCard && !portraits.byChar.has(myCard)) return;
-    net.request('room.card', { charId: myCard || '' }).catch(() => {});
-  }, [room?.code, myCard, seatCard, conn.status]);
+    // 干员数据还没到（`?room=` 直接进房时会这样）：这会儿判断不了「本房画不画得出来」，别急着把服务器那张清掉。
+    if (!CARD_SYNC || !room || !cardList.length || conn.status !== 'online' || seatCard === shownCard) return;
+    net.request('room.card', { charId: shownCard }).catch(() => {
+      // 旧服务器不认识 room.card（或拒绝了这一张）：不许静默 —— 队友看到的会是另一张，得说出来。
+      if (cardRefused.current === room.code) return;
+      cardRefused.current = room.code;
+      toast(t('这张立绘没能同步给队友：服务器未接受（旧版服务器请重开一次）'), 'warn');
+    });
+  }, [room?.code, shownCard, seatCard, conn.status, cardList.length]);
 
   // arrived through 搜寻队友 (match.found for this room): 搜寻成功 once
   useEffect(() => {
@@ -1028,7 +1039,7 @@ export function RoomScreen() {
       tags=${[{ key: 'mode', label: t('精确搜寻'), icon: html`<${Icon} name="search" />` },
         { key: 'diff', label: t(DIFFICULTY_NAMES[room.difficulty]), color: DIFFICULTY_COLORS[room.difficulty], icon: html`<${DifficultyIcon} difficulty=${room.difficulty} />` }]} />` : null}
     ${foundShown ? html`<${FoundPanel} class=${foundLeaving ? 'is-leaving' : ''} seats=${facts.seats.length} text=${t('同盟集结完毕')} />` : null}
-    ${picking ? html`<${CardPicker} current=${myCard} list=${cardList} m=${m} onPick=${pickCard} onClose=${() => setPicking(false)} />` : null}
+    ${picking ? html`<${CardPicker} current=${shownCard} list=${cardList} m=${m} onPick=${pickCard} onClose=${() => setPicking(false)} />` : null}
     ${protoShown ? html`<${RoomProtocol} room=${room} variant=${variant} busy=${busy} onClose=${() => setPicker(false)} onPick=${setDifficulty} leaving=${protoLeaving} />` : null}
   </div>`;
 }

@@ -226,13 +226,16 @@ export function placementContext({ priv, stage, editable, field = 'normal', getC
   for (const e of pieces.values()) if (e.area === 'board' && e.piece.kind === 'chess') deployed += 1;
   const count = Number.isInteger(priv?.deployCount) ? priv.deployCount : deployed;
   const ov = stageOverrides(priv, getEffect);
-  // the own normal board keeps the data's deploy tiles (with the terrain overrides folded in); the boss field of a
-  // boss round's prep is read from the legend + its devices under the same overrides (server deploy map, field)
+  // the own normal board keeps the data's deploy tiles (with the terrain overrides folded in); a half of the band —
+  // the boss halves, or a two-half map's ordinary halves `normalL` / `normalR` — is read from the legend + its devices
+  // under the same overrides (server deploy map, field)
   const L = layout || layoutOf(stage);
-  const deploy = field === 'bossL' || field === 'bossR'
+  const deploy = field !== 'normal'
     ? deploySets(stage, field, ov, L)
-    : deploySets(effectiveStage(stage, ov, L));
-  return { priv, pieces, boardAt, handAt, deploy, cap, count, field, editable: !!editable, getChess, getToken, getItem, backups, layout: L };
+    : deploySets(effectiveStage(stage, ov, L), 'normal', {}, L);
+  return { priv, pieces, boardAt, handAt, deploy, cap, count, field, editable: !!editable, getChess, getToken, getItem, backups, layout: L,
+    // 整备区容量是本局的（m.private.hand 数组长度：官方 10 / 45×60 重构战场 16）
+    handSize: Array.isArray(priv?.hand) ? priv.hand.length : GEO.HAND_SIZE };
 }
 
 /**
@@ -346,7 +349,7 @@ export function canPlace(ctx, uid, target) {
 
   if (target.area === 'hand') {
     const idx = target.idx;
-    if (!Number.isInteger(idx) || idx < 0 || idx >= GEO.HAND_SIZE) return no('BAD_TILE', t('无法放置在该位置'));
+    if (!Number.isInteger(idx) || idx < 0 || idx >= (ctx.handSize || GEO.HAND_SIZE)) return no('BAD_TILE', t('无法放置在该位置'));
     if (src.area === 'hand' && src.idx === idx) return no('ALREADY', t('位置未变化'));
     const occ = ctx.handAt.get(idx);
     if (!occ) return { ok: true, action: 'move' };
@@ -361,7 +364,7 @@ export function canPlace(ctx, uid, target) {
         return { ok: true, action: 'swap' };
       }
       // Withdrawal removes the operator's own summon stacks, freeing their hand slots too.
-      const free = [...Array(GEO.HAND_SIZE).keys()].some((i) => {
+      const free = [...Array(ctx.handSize || GEO.HAND_SIZE).keys()].some((i) => {
         const p = ctx.handAt.get(i)?.piece;
         return !p || (p.kind === 'token' && p.ownerUid === piece.uid);
       });

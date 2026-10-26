@@ -194,6 +194,9 @@ export function deriveStage(spec, opts = {}) {
     rows,
     tiles,
     devices,
+    // 作者画的敌人路线（地图坐标：出生点 → 防守点）。引擎在 `waves.js buildNormalWave` 里把它当作这一回合的路线表，
+    // 敌人的 routeIndex 按移动方式/半场重选（业主 2026-10-26「敌人的行动路径按照我在地图上画的 8 条路线来」）。
+    ...(Array.isArray(spec.routes) && spec.routes.length ? { routes: JSON.parse(JSON.stringify(spec.routes)) } : {}),
     mapChars: Array.isArray(spec.mapChars) ? spec.mapChars : [],
     special: isPlain(spec.special) ? spec.special : {},
     runes: Array.isArray(spec.runes) ? spec.runes : [],

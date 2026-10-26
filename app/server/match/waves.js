@@ -37,7 +37,7 @@
 
 import { createRng, deriveSeed } from '../sim/rng.js';
 import { PLUGIN_ACTION_UNITS } from '../../shared/plugins/limits.js';
-import { OFFICIAL_LAYOUT } from '../../shared/layout.js';
+import { OFFICIAL_LAYOUT, layoutOf } from '../../shared/layout.js';
 
 const ACLOON = 'enemy_9012_acloon';
 const DEFAULT_PLACEHOLDERS = Object.freeze({
@@ -431,11 +431,20 @@ export function buildNormalWave(gd, rng, factions, round, stageId = null) {
   const timeLimit = gd.combatTimeLimit(round);
   if (!tpl) return { templateId, spawns: [], routes: [], extraRoutes: [], timeLimit, overrides: {}, pick: null, entries: { ground: null, fly: null }, actions: [] };
   const pick = roundPick(gd, rng, factions, round);
-  const { spawns, actions } = templateSpawns(gd, tpl, round, pick);
+  const { spawns: raw, actions } = templateSpawns(gd, tpl, round, pick);
+  // 地图自己画的路线（业主 2026-10-26「敌人的行动路径按照我在地图上画的 8 条路线来」）：整张路线表换成地图的，
+  // 每条出怪按移动方式换到这张表里（同组第 k 条，让作者画的多条变体轮着走）。左右半场的选择留给各自战场
+  // （combat.js 按 side 再选一次）—— 这里只保证 routeIndex 不再指向模板的官方路线。
+  const own = stageRoutesOf(gd, stageId);
+  const routes = own ?? (Array.isArray(tpl.routes) ? tpl.routes : []);
+  const mid = own ? layoutOf(gd.stage(stageId)).mirrorCol / 2 : OFFICIAL_MID_COL;
+  const spawns = own
+    ? raw.map((s, i) => routeSpawn(gd, routes, s, { mid, k: Number.isInteger(s.actionIndex) ? s.actionIndex : i }))
+    : raw;
   return {
     templateId,
     spawns,
-    routes: Array.isArray(tpl.routes) ? tpl.routes : [],
+    routes,
     extraRoutes: Array.isArray(tpl.extraRoutes) ? tpl.extraRoutes : [],
     timeLimit,
     overrides: tpl.overrides && typeof tpl.overrides === 'object' ? tpl.overrides : {},
@@ -499,6 +508,69 @@ export function routeByMotion(routes, fly, side = null, mid = OFFICIAL_MID_COL) 
   }
   const i = routes.findIndex(ok);
   return i >= 0 ? i : 0;
+}
+
+/**
+ * 一条敌人路线属于哪个半场：按它的终点列落在 `mid` 的哪一侧。地图自己画的 8 条路线就是这样分成左右各 4 条的。
+ * @param {Array<object>} routes @param {number} i
+ */
+export function routeSideOf(routes, i, mid = OFFICIAL_MID_COL) {
+  const r = Array.isArray(routes) ? routes[i] : null;
+  if (!r || !Array.isArray(r.end)) return null;
+  return r.end[1] > mid ? 'R' : 'L';
+}
+
+/**
+ * 能承载「这种移动方式、这个半场」的敌人的路线下标，按表里的顺序（地图画的同半场同移动方式的多条路线都在里面，
+ * 调用方用 `k` 轮换使用它们）。半场一条都没有时退到「这种移动方式的全部路线」——目标不在两半上的图仍能出怪。
+ * @param {Array<object>} routes @param {boolean} fly @param {'L'|'R'|null} side @param {number} mid
+ * @returns {number[]}
+ */
+export function routeGroup(routes, fly, side = null, mid = OFFICIAL_MID_COL) {
+  const all = Array.isArray(routes) ? routes : [];
+  const motion = (r) => r && (fly ? r.motion === 'FLY' : r.motion !== 'FLY' && r.motion !== 'E_NUM');
+  const half = (r) => !(side === 'L' || side === 'R')
+    || (Array.isArray(r.end) && (side === 'R' ? r.end[1] > mid : r.end[1] < mid));
+  let list = all.map((r, i) => i).filter((i) => motion(all[i]) && half(all[i]));
+  if (!list.length) list = all.map((r, i) => i).filter((i) => motion(all[i]));
+  return list;
+}
+
+/**
+ * `routeGroup` 里第 `k` 条（取模轮换）的下标；一组都没有时退回 `routeByMotion`。
+ */
+export function routeIndexIn(routes, fly, side = null, mid = OFFICIAL_MID_COL, k = 0) {
+  const g = routeGroup(routes, fly, side, mid);
+  if (!g.length) return routeByMotion(routes, fly, side, mid);
+  return g[((k % g.length) + g.length) % g.length];
+}
+
+/**
+ * 把一条出怪放到**这张图的路线表**上：按它的移动方式与半场选一条（同组里的第 `k` 条，让作者画的几条变体轮着走），
+ * 预览（等待区的起点 / 是否空中）跟着那条路线走；`ownerPlayerId` 给定时一并写上——漏怪按它的主人/半场扣 LP。
+ *
+ * 官方图没有自己的路线表，`routes` 仍是模板那 3 条、`side` 传不传都一样（半场没有路线就退回同移动方式的第一条），
+ * 所以官方行为不变；真正改变行为的是「地图声明了 routes」的图（45×60 重构战场）。
+ * @param {{}} gd @param {Array<object>} routes @param {object} spawn
+ * @param {{ side?: 'L'|'R'|null, mid?: number, k?: number, ownerPlayerId?: string }} [o]
+ */
+export function routeSpawn(gd, routes, spawn, { side = null, mid = OFFICIAL_MID_COL, k = 0, ownerPlayerId } = {}) {
+  const owned = ownerPlayerId ? { ownerPlayerId } : {};
+  if (!spawn || !Array.isArray(routes) || !routes.length) return { ...spawn, ...owned };
+  const fly = isFlyKey(gd, spawn.enemyKey);
+  const routeIndex = routeIndexIn(routes, fly, side, mid, k);
+  return {
+    ...spawn,
+    ...owned,
+    routeIndex,
+    preview: previewInfo(gd, spawn.enemyKey, routes[routeIndex], false, undefined),
+  };
+}
+
+/** 这张图自己画的路线（地图坐标，与战场 rect 同一套坐标）；没画过的图返回 null（引擎用它时退回波次模板的路线）。 */
+export function stageRoutesOf(gd, stageId) {
+  const stage = stageId ? gd.stage(stageId) : null;
+  return stage && Array.isArray(stage.routes) && stage.routes.length ? stage.routes : null;
 }
 
 /**
