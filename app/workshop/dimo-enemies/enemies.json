@@ -9,7 +9,7 @@
     "descRaw": "以自身消亡为代价，把力量分给同族的字兵。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 4500,
+      "maxHp": 1500,
       "atk": 400,
       "def": 200,
       "res": 5,
@@ -66,8 +66,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10164_tjgxb",
     "spine": "enemy_10164_tjgxb",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 4115,
+    "be": 4115
   },
   "enemy_10164_tjgxb_2": {
     "key": "enemy_10164_tjgxb_2",
@@ -79,7 +79,7 @@
     "descRaw": "以自身消亡为代价，把力量分给同族的字兵。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 5400,
+      "maxHp": 2400,
       "atk": 500,
       "def": 250,
       "res": 5,
@@ -136,8 +136,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10164_tjgxb_2",
     "spine": "enemy_10164_tjgxb_2",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 5665,
+    "be": 5665
   },
   "enemy_10165_tjggb": {
     "key": "enemy_10165_tjggb",
@@ -149,7 +149,7 @@
     "descRaw": "连射三箭的墨中弓手。",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 7000,
+      "maxHp": 3000,
       "atk": 120,
       "def": 100,
       "res": 5,
@@ -206,8 +206,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10165_tjggb",
     "spine": "enemy_10165_tjggb",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 3915,
+    "be": 3915
   },
   "enemy_10165_tjggb_2": {
     "key": "enemy_10165_tjggb_2",
@@ -219,7 +219,7 @@
     "descRaw": "连射三箭的墨中弓手。",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 9000,
+      "maxHp": 3800,
       "atk": 210,
       "def": 150,
       "res": 5,
@@ -276,8 +276,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10165_tjggb_2",
     "spine": "enemy_10165_tjggb_2",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 5315,
+    "be": 5315
   },
   "enemy_10166_tjgdlb": {
     "key": "enemy_10166_tjgdlb",
@@ -289,7 +289,7 @@
     "descRaw": "以身作盾，替同族挡下伤害。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 16000,
+      "maxHp": 12000,
       "atk": 800,
       "def": 1300,
       "res": 5,
@@ -346,8 +346,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10166_tjgdlb",
     "spine": "enemy_10166_tjgdlb",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 19915,
+    "be": 19915
   },
   "enemy_10166_tjgdlb_2": {
     "key": "enemy_10166_tjgdlb_2",
@@ -359,7 +359,7 @@
     "descRaw": "以身作盾，替同族挡下伤害。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 20000,
+      "maxHp": 16000,
       "atk": 800,
       "def": 1550,
       "res": 5,
@@ -416,8 +416,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10166_tjgdlb_2",
     "spine": "enemy_10166_tjgdlb_2",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 24665,
+    "be": 24665
   },
   "enemy_10167_tjgsfj_2": {
     "key": "enemy_10167_tjgsfj_2",
@@ -429,7 +429,7 @@
     "descRaw": "执笔成兵，潮起兵至。",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 9600,
+      "maxHp": 8000,
       "atk": 300,
       "def": 100,
       "res": 40,
@@ -491,8 +491,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10167_tjgsfj_2",
     "spine": "enemy_10167_tjgsfj_2",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 9920,
+    "be": 9920
   },
   "enemy_10168_tjgly": {
     "key": "enemy_10168_tjgly",
@@ -504,7 +504,7 @@
     "descRaw": "潜行于墨色中的游鳞。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 35000,
+      "maxHp": 25000,
       "atk": 550,
       "def": 0,
       "res": 0,
@@ -566,8 +566,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10168_tjgly",
     "spine": "enemy_10168_tjgly",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 27750,
+    "be": 27750
   },
   "enemy_10168_tjgly_2": {
     "key": "enemy_10168_tjgly_2",
@@ -579,7 +579,7 @@
     "descRaw": "潜行于墨色中的游鳞。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 50000,
+      "maxHp": 32000,
       "atk": 650,
       "def": 0,
       "res": 0,
@@ -641,8 +641,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10168_tjgly_2",
     "spine": "enemy_10168_tjgly_2",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 35250,
+    "be": 35250
   },
   "enemy_10169_tjgtsz": {
     "key": "enemy_10169_tjgtsz",
@@ -654,7 +654,7 @@
     "descRaw": "掠过敌阵的窃墨之贼。",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 10000,
+      "maxHp": 5000,
       "atk": 450,
       "def": 450,
       "res": 20,
@@ -693,8 +693,8 @@
         "format": "NORMAL"
       },
       {
-        "text": "靠近我方干员后，偷取该干员25%的攻击力与25%的防御力（仅1次）",
-        "textRaw": "靠近我方干员后，偷取该干员25%的攻击力与25%的防御力（仅1次）",
+        "text": "靠近我方干员后，偷取该干员15%的攻击力与15%的防御力（仅1次）",
+        "textRaw": "靠近我方干员后，偷取该干员15%的攻击力与15%的防御力（仅1次）",
         "format": "NORMAL"
       }
     ],
@@ -716,8 +716,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10169_tjgtsz",
     "spine": "enemy_10169_tjgtsz",
-    "attrPower": 3000,
-    "be": 3000
+    "attrPower": 8660,
+    "be": 8660
   },
   "enemy_10169_tjgtsz_2": {
     "key": "enemy_10169_tjgtsz_2",
@@ -729,7 +729,7 @@
     "descRaw": "掠过敌阵的窃墨之贼。",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 12000,
+      "maxHp": 8000,
       "atk": 550,
       "def": 550,
       "res": 10,
@@ -768,8 +768,8 @@
         "format": "NORMAL"
       },
       {
-        "text": "靠近我方干员后，偷取该干员50%的攻击力与50%的防御力（仅1次）",
-        "textRaw": "靠近我方干员后，偷取该干员50%的攻击力与50%的防御力（仅1次）",
+        "text": "靠近我方干员后，偷取该干员30%的攻击力与30%的防御力（仅1次）",
+        "textRaw": "靠近我方干员后，偷取该干员30%的攻击力与30%的防御力（仅1次）",
         "format": "NORMAL"
       }
     ],
@@ -791,8 +791,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10169_tjgtsz_2",
     "spine": "enemy_10169_tjgtsz_2",
-    "attrPower": 3000,
-    "be": 3000
+    "attrPower": 12430,
+    "be": 12430
   },
   "enemy_10170_wangz": {
     "key": "enemy_10170_wangz",
@@ -804,7 +804,7 @@
     "descRaw": "被击碎时绽放的霜墨。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 9000,
+      "maxHp": 5000,
       "atk": 280,
       "def": 300,
       "res": 15,
@@ -861,8 +861,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10170_wangz",
     "spine": "enemy_10170_wangz",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 7345,
+    "be": 7345
   },
   "enemy_10058_cjfrog": {
     "key": "enemy_10058_cjfrog",
@@ -941,8 +941,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10058_cjfrog",
     "spine": "enemy_10058_cjfrog",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 23160,
+    "be": 23160
   },
   "enemy_10058_cjfrog_2": {
     "key": "enemy_10058_cjfrog_2",
@@ -1021,8 +1021,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10058_cjfrog_2",
     "spine": "enemy_10058_cjfrog_2",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 31060,
+    "be": 31060
   },
   "enemy_10052_cjshld": {
     "key": "enemy_10052_cjshld",
@@ -1034,7 +1034,7 @@
     "descRaw": "更容易受到攻击。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 5000,
+      "maxHp": 28000,
       "atk": 550,
       "def": 4000,
       "res": 90,
@@ -1085,8 +1085,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10052_cjshld",
     "spine": "enemy_10052_cjshld",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 43020,
+    "be": 43020
   },
   "enemy_10052_cjshld_2": {
     "key": "enemy_10052_cjshld_2",
@@ -1098,7 +1098,7 @@
     "descRaw": "更容易受到攻击。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 7500,
+      "maxHp": 34000,
       "atk": 800,
       "def": 4000,
       "res": 90,
@@ -1149,8 +1149,8 @@
     "seasonOverride": null,
     "iconId": "enemy_10052_cjshld_2",
     "spine": "enemy_10052_cjshld_2",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 50270,
+    "be": 50270
   },
   "enemy_10054_cjhot_2": {
     "key": "enemy_10054_cjhot_2",
@@ -1162,7 +1162,7 @@
     "descRaw": "持续对周围造成法术伤害和灼燃损伤，免疫停顿",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 20000,
+      "maxHp": 15000,
       "atk": 200,
       "def": 325,
       "res": 60,
@@ -1219,7 +1219,87 @@
     "seasonOverride": null,
     "iconId": "enemy_10054_cjhot_2",
     "spine": "enemy_10054_cjhot_2",
-    "attrPower": 6620,
-    "be": 6620
+    "attrPower": 17155,
+    "be": 17155
+  },
+  "enemy_10054_cjhot": {
+    "key": "enemy_10054_cjhot",
+    "name": "鼎沸",
+    "level": 0,
+    "rank": "ELITE",
+    "handbookIndex": "OR9",
+    "desc": "持续对周围造成法术伤害和灼燃损伤，免疫停顿",
+    "descRaw": "持续对周围造成<@eb.key>法术伤害</>和<@eb.key>灼燃损伤</>，免疫<@eb.key>停顿</>",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 10000,
+      "atk": 140,
+      "def": 250,
+      "res": 60,
+      "moveSpeed": 0.8,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 1.6,
+      "rawRangeRadius": 1.6,
+      "blockCnt": 1,
+      "massLevel": 3,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "持续对周围造成法术伤害和灼燃损伤",
+        "textRaw": "持续对周围造成法术伤害和<$ba.dt.burning>灼燃损伤</>",
+        "format": "NORMAL"
+      },
+      {
+        "text": "免疫停顿",
+        "textRaw": "免疫<$ba.sluggish>停顿</>",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "aoe.atk_scale": 1,
+        "aoe.ep_damage_ratio": 0.4
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [
+      "animated"
+    ],
+    "be": 11630,
+    "beFactor": 1,
+    "attrPower": 11630,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_10054_cjhot",
+    "spine": "enemy_10054_cjhot"
   }
 }

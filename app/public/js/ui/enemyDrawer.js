@@ -30,7 +30,11 @@ function EnemiesTab({ pub, priv, onEnemy }) {
   const types = factionTypes(pub?.factions);
   const f = data.get('factions')?.types || {};
   const total = rows.reduce((s, r) => s + r.count, 0);
-  const boss = pub?.bossId ? data.lookup('bosses', pub.bossId) : null;
+  // 重构模拟的·重构首领不在 `bosses` 表里（记录在工坊包里）⇒ 按敌人记录兜底，否则领袖那一行整块不画
+  const bossId = pub?.bossId || null;
+  const bossRec = bossId ? data.lookup('bosses', bossId) : null;
+  const reconRec = !bossRec && bossId && pub?.recon ? data.lookup('enemies', bossId) : null;
+  const boss = bossRec || (reconRec ? { enemyKey: bossId, name: reconRec.name || bossId } : null);
   return html`<div class="edrawer__body">
     <div class="edrawer__sum">
       <span>${tParts('第 {r} 回合 · 即将迎击 {n} 名敌人', { r: html`<b class="num">${pub?.round ?? '-'}</b>`, n: html`<b class="num t-orange">${total}</b>`, count: total })}</span>

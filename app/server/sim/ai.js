@@ -742,6 +742,7 @@ function advanceRoute(b, e, dt, R, standing = false) {
   while (budget > 1e-9 && guard-- > 0 && e.alive) { // loop-cap: route guard
     const leg = R.legs[R.legIdx];
     if (!leg) {
+      if (R.loop) { R.legIdx = 0; R.pts = null; R.ptIdx = 0; continue; }
       if (!portalPickup(b, e)) { b.leak(e); return; }
       continue;
     }
@@ -797,6 +798,8 @@ function advanceRoute(b, e, dt, R, standing = false) {
     budget = dist / speed;
     if (R.pts && R.ptIdx >= R.pts.length) {
       if (leg.final) {
+        // 闭环巡逻线（起点 = 终点，自绘地图的 boss 场地）：走完一圈回到起点并不算漏怪，从头再走一圈
+        if (R.loop) { R.legIdx = 0; R.pts = null; R.ptIdx = 0; continue; }
         if (!portalPickup(b, e)) { b.leak(e); return; }
       }
       R.legIdx++;

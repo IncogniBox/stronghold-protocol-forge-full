@@ -308,7 +308,7 @@ export function RewardCards({ offer, priv, editable, onPick, onDetail, onLater, 
  *   stripped from every carrier this match — not drawn on the cards at all
  */
 export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onCollapse, onBuy, onLevel, onRefresh, onFreeze, onDetail, onDetailClose, onRefuse, barRef,
-  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, removedBonds = null }) {
+  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, removedBonds = null, train = null }) {
   const shop = priv?.shop || {};
   const slots = Array.isArray(shop.slots) ? shop.slots : [];
   const chessSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => !s || s.kind !== 'item');
@@ -363,8 +363,12 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
 
   const hk = { refresh: hotkeyLabelOf('refresh'), freeze: hotkeyLabelOf('freeze') }; // the player's keys (设置 → 快捷键)
   return html`<section class=${cx('shopbar', frozen && 'is-frozen', !editable && 'is-locked', showReward && 'has-reward', armed && 'has-armed')} ref=${barRef} aria-label=${t('调度中心')}>
-    <div class="shopbar__tools">
+    <div class=${cx('shopbar__tools', train && 'is-train')}>
       <span class="shopbar__remain">${t('剩余可放置角色：')}<b class=${cx('num', remaining === 0 && 't-orange')}>${remaining}</b></span>
+      ${train ? html`<button type="button" class=${cx('toolbtn', 'toolbtn--train', train.done && 'is-on')} onClick=${train.onClick}
+        title=${train.done ? t('本回合已特训：可更换或取消') : t('重构协议·特训')} aria-label=${t('重构协议·特训')}>
+        <span class="toolbtn__mask" aria-hidden="true"></span><span>${t('特训')}</span>
+      </button>` : null}
       <button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${!!frzReason} onClick=${onFreeze}
         title=${frzReason || (frozen ? t('解冻商店 · {key}', { key: hk.freeze }) : t('冻结商店（下回合保留） · {key}', { key: hk.freeze }))}>
         <${Img} src=${uiUrl(data.get('assets'), frozen ? 'shopPanel/frozen_icon2' : 'shopPanel/frozen_icon')} class="toolbtn__img" fallback=${html`<${Icon} name="snow" />`} />

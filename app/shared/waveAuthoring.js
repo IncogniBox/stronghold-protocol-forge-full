@@ -199,8 +199,10 @@ export function validateWave(rec, opts = {}) {
   else if (!usedBy.length) warn('usedBy', 'UNUSED', 'no mode and round spawns this wave, so it will never appear in a match');
   else usedBy.forEach((u, i) => {
     if (!isPlain(u) || typeof u.modeId !== 'string' || !u.modeId) err(`usedBy[${i}]`, 'BAD_ENTRY', 'usedBy entries need a modeId');
-    else if (Number.isInteger(u.round) && (u.round < 1 || u.round > ROUNDS_PER_MODE)) {
-      err(`usedBy[${i}].round`, 'BAD_ROUND', `round ${u.round} is outside 1..${ROUNDS_PER_MODE}`);
+    // 重构模拟是 21 回合制（shared/reconModes.js 的 RECON_HIDDEN_ROUND），官方模式仍是 15。
+    const maxRound = /^mode_recon_/.test(u.modeId) ? 21 : ROUNDS_PER_MODE;
+    if (Number.isInteger(u.round) && (u.round < 1 || u.round > maxRound)) {
+      err(`usedBy[${i}].round`, 'BAD_ROUND', `round ${u.round} is outside 1..${maxRound}`);
     } else if (!Number.isInteger(u.round)) err(`usedBy[${i}].round`, 'BAD_ROUND', 'round must be an integer');
   });
   return out;

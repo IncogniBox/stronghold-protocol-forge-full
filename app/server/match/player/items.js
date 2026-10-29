@@ -1,6 +1,7 @@
 // server/match/player/items.js — PlayerState methods: items — g.equip (max 2, a 3rd replaces the one the player picks;
 // consume-on-equip items), g.art (Arts on a tile, rotated by the facing), g.destroy (hand / temp items; equipped
-// ones are locked) and g.unequip (DESIGN §36.15, only when the room's unequip rule is allow).
+// ones are locked) and g.unequip (DESIGN §36.15, when the room's unequip rule is allow or this player's own effects
+// carry an `unequip: true` grant — the per-player channel a pack uses for 「只有选了装备重构的人能拆」).
 // Installed on PlayerState.prototype by server/match/PlayerState.js (a method container: never instantiated; `this` is
 // the player state).
 
@@ -26,6 +27,20 @@ export function unequipAllowed(rules, decl = null) {
   if (Array.isArray(rules)) { decl = rules; rules = null; }
   if (ruleOption(rules, 'unequip') === 'allow') return true;
   return decl ? behaviourValue(decl, 'unequip') === 'allow' : false;
+}
+
+/**
+ * 玩家级拆卸许可：这名玩家身上的某条持久 EffectRef 自己声明了 `unequip: true`。
+ *
+ * 为什么需要它：房间规则（`unequip: "allow"`）是**整间房**的 —— 而「只有选了装备重构的人能拆装备」是**一个人**
+ * 的规则。内容层用 `ctx.addEffect({ id, hidden: true, battle: false, unequip: true })` 发/撤这条 ref（重构模拟的
+ * `workshop/mode-recon/meta/main.mjs` 就是唯一的使用者），引擎只认这个字段，不认识任何具体选项 id。
+ * `hidden` 只挡住它在效果列表里的显示，`battle: false` 让它不进 `PlayerBattleInput` —— 两条都是内容层自己的写法。
+ * @param {{ effects?: any[] }} ps
+ * @returns {boolean}
+ */
+export function playerUnequipAllowed(ps) {
+  return Array.isArray(ps?.effects) && ps.effects.some((e) => e && e.unequip === true);
 }
 
 export class PlayerItems {
@@ -120,8 +135,7 @@ export class PlayerItems {
    * the replaced item is destroyed.
    */
   /** The room's equip-slot policy. Official returns the shared frozen singleton, so the numbers stay today's. */
-  _slotPolicy() {
-    // 房间规则（上游 0.3.1）优先；没声明时退到我们自有的模块层 behaviour.morphPairing。
+  _slotPolicy() {    // 房间规则（上游 0.3.1）优先；没声明时退到我们自有的模块层 behaviour.morphPairing。
     // 两条来源都归一成**一份声明**，交给 `matchSlotPolicy`（这一格唯一的对局入口）——
     // 服务端四处读取点与不变量因此读的是同一个对象，不会各算一套。
     const rule = ruleOption(this.m?.rules, 'morphPairing');
@@ -143,6 +157,23 @@ export class PlayerItems {
     };
   }
 
+  /**
+   * 重构模拟·维多利亚 6 名：这名干员可携带的装备数 **+1**（只对该盟约成员、只在这一局）。
+   *
+   * 判据不是「tier ≥ 2」（官方维多利亚 6 人也是 tier 2）而是**记录里有没有 `bb.recon`** —— 那个键只由
+   * `workshop/mode-recon/bonds.json` 的覆盖记录写进，所以官方房间这一行恒为 0。
+   * @param {{ id?: string }} piece 目标棋子
+   * @returns {number}
+   */
+  _victoriaExtraSlot(piece) {
+    const rec = this.gd && typeof this.gd.bond === 'function' ? this.gd.bond('victoriaShip') : null;
+    if (!rec || !rec.bb || !rec.bb.recon) return 0;
+    const st = this.bonds && this.bonds.victoriaShip;
+    if (!st || !st.active || Number(st.tier) < 2) return 0;
+    const c = this.gd && typeof this.gd.chess === 'function' ? this.gd.chess(piece && piece.id) : null;
+    return Array.isArray(c && c.bonds) && c.bonds.includes('victoriaShip') ? 1 : 0;
+  }
+
   _attach(target, item, replaceUid = null) {
     target.items = target.items || [];
     const policy = this._slotPolicy();
@@ -151,7 +182,7 @@ export class PlayerItems {
     // 把**这一件**也算进去，所以满格的携带者仍能装下装置。A plus morph does not occupy a slot, so this while does
     // not run for it. Official occupies() is always true and slotsUsed is items.length, so the comparison and the
     // splice index stay today's.
-    while (policy.occupies(rec) && policy.slotsUsed(target.items) >= this.gd.equipCapacity(target.items, item)) { // loop-cap: splices one item each pass
+    while (policy.occupies(rec) && policy.slotsUsed(target.items) >= this.gd.equipCapacity(target.items, item) + this._victoriaExtraSlot(target)) { // loop-cap: splices one item each pass
       const i = policy.replacedIndex(target.items, replaceUid);
       const [old] = target.items.splice(i >= 0 ? i : 0, 1);
       replaceUid = null;
@@ -171,7 +202,7 @@ export class PlayerItems {
     // A plus morph does not replace anyone. Official occupies() is always true.
     if (incoming && !policy.occupies(incoming)) return null;
     // 同上：`equipCapacity` 把**这一件**算进去（源石辅助仪的 +2/+4 —— 装置自身能把格位撑开）。
-    if (policy.slotsUsed(target.items) < this.gd.equipCapacity(target.items, incoming)) return null;
+    if (policy.slotsUsed(target.items) < this.gd.equipCapacity(target.items, incoming) + this._victoriaExtraSlot(target)) return null;
     const idx = policy.replacedIndex(target.items, replaceUid);
     const [piece] = target.items.splice(idx >= 0 ? idx : 0, 1);
     return { piece, idx: idx >= 0 ? idx : 0 };
@@ -272,12 +303,13 @@ export class PlayerItems {
    * 哪一个都不贴切（不是 `onDestroy`、不是 `onEquip`），今天也没有任何包需要被通知。将来真有需要，另立一刀并
    * 按 `META` 契约面扩展。
    *
-   * 判据只有一份（`unequipAllowed`，`shared/modSurface.js` 的 `items` 锚）：房间规则（`m.rules`，上游 0.3.1）
-   * 与模块层 `behaviour`（本仓的包声明）两处来源都读它。
+   * 判据：房间规则（`m.rules`，上游 0.3.1）与模块层 `behaviour`（本仓的包声明）两处来源由 `unequipAllowed` 读；
+   * **再加上**玩家级的那一条（`playerUnequipAllowed`：这名玩家身上的 EffectRef 声明了 `unequip: true`）——
+   * 于是「只有选了装备重构的博士能拆」这种**一个人的规则**不必把整间房都打开。
    */
   unequip(itemUid) {
     const g = this._gate(); if (g) return g;
-    if (!unequipAllowed(this.m?.rules, this.m?.behaviour)) return fail(ERR.BAD_TARGET, 'equipped items are locked');
+    if (!unequipAllowed(this.m?.rules, this.m?.behaviour) && !playerUnequipAllowed(this)) return fail(ERR.BAD_TARGET, 'equipped items are locked');
     const loc = this.find(itemUid);
     if (!loc || loc.piece.kind !== 'item') return fail(ERR.BAD_TARGET);
     if (loc.area !== 'equipped') return fail(ERR.BAD_TARGET, 'not equipped on an operator');

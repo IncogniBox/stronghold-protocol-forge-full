@@ -80,7 +80,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from '../../vendor/
 import { PHASE, GEO } from '../../../shared/constants.js';
 import { ruleOption } from '../../../shared/plugins/rules.js';
 import { RECON_TRAINING_ROUNDS } from '../../../shared/reconModes.js';
-import { ReconTrainButton, ReconTrainModal } from '../ui/reconTrain.js';
+import { ReconTrainModal } from '../ui/reconTrain.js';
 import { html, Spinner, PhaseBanner, ResultDialog, Icon, Button, confirmDialog, closeAllDialogs, useTicker } from '../ui/components.js';
 import { useGameData, GIcon } from '../ui/gameComponents.js';
 import { useFieldView } from '../ui/fieldHost.js';
@@ -97,7 +97,7 @@ import { ChoiceOverlay, spMarks } from '../ui/choiceOverlay.js';
 import { EnemyDrawer } from '../ui/enemyDrawer.js';
 import { Ticker } from '../ui/ticker.js';
 import { EmoteWheel } from '../ui/emotes.js';
-import { EffectsList } from '../ui/effectsList.js';
+import { EffectsList, ReconProtocolList } from '../ui/effectsList.js';
 import { CombatHud } from '../ui/combatHud.js';
 import { SettingsModal, settingsStore, useSettings } from '../ui/settings.js';
 import { CombatMetricsPanel } from '../ui/combatMetrics.js';
@@ -107,7 +107,7 @@ import { DevPanel } from '../ui/devPanel.js';
 import { ExitModal, AwayOverlay, awayStore } from '../ui/matchChrome.js';
 import { RoundPopup, PhasePopup, phasePopupOf, roundsToBoss, preloadPopupArt } from '../ui/matchPopups.js';
 import { openGuide } from '../ui/guide.js';
-import { actions, onRefreshBusy } from '../ui/gameActions.js';
+import { actions, onRefreshBusy, setUnequipSelfAllowed } from '../ui/gameActions.js';
 import { FacingWheel, holdPiece, setPieceDir, syncPieceDirs, showRange, useTileScreen } from '../ui/facingWheel.js';
 import { Underframe, underframeRect, TempRowNotice, warmPlateMasks } from '../ui/underframe.js';
 import { StandInTags } from './game/standInTags.js';
@@ -132,7 +132,7 @@ import { LoadoutButton } from './loadout.js';
 import { BriefingScreen } from './briefing.js';
 import { BandDraftScreen } from './bandDraft.js';
 // 预重构（模式扩展-重构模拟，PHASE.PRE_RECON 的一屏）
-import { PreReconScreen } from './preRecon.js';
+import { PreReconScreen, reconProtocolRows } from './preRecon.js';
 import { ResultScreen } from './settle.js';
 import { ProtocolBoot, preloadBootArt, bootArtReady, BOOT_LEAVE_MS } from '../ui/protocolBoot.js';
 import { net } from '../net.js';
@@ -304,8 +304,9 @@ function MatchScreen() {
   const scoutBandOwner = scoutPid ? (players.find((p) => p.playerId === scoutPid)?.name || null) : null;
   const personalChoice = !spectator && alive ? normalizePersonalChoice(pub, priv, myId) : null;
   const hasPersonalChoice = !!personalChoice;
-  // 重构协议·特训（shared/reconModes.js）：重构对局（pub.recon 的整局标记）且当前休整期是特训回合时，顶栏出现
-  // 特训按钮 —— 本回合已交过（priv.reconTraining 命中）画成已完成并禁点（改主意可重交覆盖，弹窗里预选旧值）。
+  // 重构协议·特训（shared/reconModes.js）：重构对局（pub.recon 的整局标记）且当前休整期是特训回合时，调度中心的
+  // 工具行出现特训按钮（`ui/shopBar.js` 的 `train` 槽，紧挨冻结 / 刷新）—— 本回合已交过（priv.reconTraining 命中）
+  // 画成已完成并禁点（改主意可重交覆盖，弹窗里预选旧值）。
   // 「全量模拟」（开发者试验场，pub.dev，业主 2026-10-22）：**每个 PREP 回合都出按钮、不限特训回合表**，方便测试。
   const isReconRoom = /^mode_recon_/.test(pub?.modeId || '');
   const isDevRoom = !!pub?.dev;
@@ -313,7 +314,29 @@ function MatchScreen() {
   const trainDone = !!trainRound && (priv?.reconTraining || []).some((t) => t.round === trainRound);
   const roomRules = useStore((s) => s.room?.content?.rules ?? null);
   const morphMode = ruleOption(roomRules, 'morphPairing');
-  const unequipAllow = ruleOption(roomRules, 'unequip') === 'allow';
+  // 重构模拟的装备重构（`recon_assist_equip`）：**只有选了它的博士**能拆装备 —— 房间规则那一格不打开，
+  // 服务端按玩家级 EffectRef（`effects[].unequip`）放行，客户端按自己的 `pub.recon.choices` 画按钮。
+  const reconEquip = pub?.recon?.choices?.[myId]?.assist === 'recon_assist_equip';
+  const unequipAllow = ruleOption(roomRules, 'unequip') === 'allow' || reconEquip;
+  // 详情卡的「卸下」按钮与那句「配发后无法取下」读的是 `gameActions.unequipAllowed()`（房间规则由 roomMods 写），
+  // 这里把个人的那一半也写进去；离开对局 / 改选别的协助时撤掉。
+  useEffect(() => {
+    setUnequipSelfAllowed(reconEquip);
+    return () => setUnequipSelfAllowed(false);
+  }, [reconEquip]);
+  // 重构盟约（`bonds.json` 的 `recon_<id>` 记录）：只在这一局把官方 id 别名过去 —— 数值、文案、图标外的名字
+  // 全部落在 data 层，局内所有读点（盟约条 / 详情 / 商店 / 客户端战斗）自动一致；离开对局清掉。
+  useEffect(() => {
+    if (!isReconRoom || !gd.ready) return;
+    const raw = data.getRaw('bonds');
+    if (!raw) return;
+    const map = {};
+    for (const id of Object.keys(raw)) {
+      if (id.startsWith('recon_') && raw[id.slice('recon_'.length)]) map[id.slice('recon_'.length)] = id;
+    }
+    if (Object.keys(map).length) data.setBondAlias(map);
+    return () => data.setBondAlias(null);
+  }, [isReconRoom, gd.ready]);
   const prepLoadoutOpen = ruleOption(roomRules, 'prepLoadout') === 'prep';
   const hasOffers = !!pub?.offers?.length;
   const editable = !offerBlocksPrep(pub?.offers) && phase === PHASE.PREP && !!priv && alive && !priv.ready && !watchingOther && !hasPersonalChoice;
@@ -368,10 +391,10 @@ function MatchScreen() {
   // the map's own window / rects (shared/layout.js): official 19×21 for an official stage, the map's own bands for a
   // big one — every rect / band / tile mapping below reads it (render/layout.js)
   const stageLayout = layoutOf(gd.stage(pub?.stageId));
-  // 非官方布局的图（45×60 重构战场）：**普通带的战斗**取景和休整期一样——看自己那半场，并整体推近 50%（`prepCamera`
-  // 的 `framed`，gameLogic/camera.js `zoom: 1.5`）。联防 / boss 的全景与左右半场保持原样（那里 1.5 倍会把两侧的门
-  // 裁出画面）。官方 19×21 的图不推近，逐字节不变。业主 2026-10-26「战斗时的摄像机视角是不是没有和休整期一样拉近 50%」。
-  const mapZoom = stageLayout && !isOfficialLayout(stageLayout) ? 1.5 : null;
+  // 非官方布局的图（45×60 重构战场）：**普通带的战斗**取景和休整期一样——看自己那半场，并整体推近 20%（`prepCamera`
+  // 的 `framed`，gameLogic/camera.js `zoom: 1.2`）。联防 / boss 的全景与左右半场保持原样（那里 1.2 倍会把两侧的门
+  // 裁出画面）。官方 19×21 的图不推近，逐字节不变。业主 2026-10-29：此前的 1.5（拉近 50%）太近，改为拉远 20%（1.2）。
+  const mapZoom = stageLayout && !isOfficialLayout(stageLayout) ? 1.2 : null;
   const dualNormal = isDualLayout(stageLayout);
   // 「左右两半」普通带的座位 → 半场（与服务器 Match.normalSideOf 同一条：存活玩家按座位两两一组，第 1 位 L、第 2 位 R）
   const normalPairSide = (pid) => {
@@ -407,7 +430,7 @@ function MatchScreen() {
   const placeCtx = useMemo(() => placementContext({
     priv, stage: gd.stage(pub?.stageId), editable, field: deployField, layout: deployLayout,
     getChess: (id) => { const c = gd.chess(id); return ownDiyRecord(c, priv, { chess: data.get('chess'), backups: data.get('backups') }) || c; },
-    getToken: gd.token, getItem: gd.item, getEffect: gd.effect, backups: gd.backups, morphMode,
+    getToken: gd.token, getItem: gd.item, getEffect: gd.effect, backups: gd.backups, morphMode, reconMode: isReconRoom,
   }), [priv, pub?.stageId, editable, gd.ready, deployField, deployLayout, data.locale(), morphMode]);
   live.current = { pub, priv, field, view, editable, hasPersonalChoice, placeCtx, watching, watchWho, watchingOther, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused };
 
@@ -422,7 +445,7 @@ function MatchScreen() {
   // setCam when the key changes — with kind:side alone, R15's prep matched R14's recorded key, early-returned,
   // and the prep board stayed on whatever camera the intermission had left (the normal field) until the battle
   // started (owner report, 2026-10-19: 隐秘核心休整期画回普通场地、开战才回 boss 场地).
-  const prepCamKey = `${pub?.round ?? 0}:${prepCam.kind}:${prepCam.opts.side}:${prepCam.opts.area ?? 0}`;
+  const prepCamKey = `${pub?.round ?? 0}:${prepCam.kind}:${prepCam.opts.side}:${prepCam.opts.area ?? 0}:${prepCam.opts.seat ?? 0}`;
   const prepCamSeen = useRef(prepCamKey);                // the prep camera last requested
   const camRef = useRef({ kind: 'prep', opts: { rect: { ...GEO.NORMAL_RECT }, side: 'L' } });
   // the previous frame applied the deploy zoom, so turning 设置「部署时收起商店」 off mid-drag can give it back.
@@ -830,6 +853,16 @@ function MatchScreen() {
     // the fold zoom and the restore fly with the short FOLD_CAMERA_MS, not a generic camera flight
     if (next) setCam(next.kind, { ...next.opts, ms: FOLD_CAMERA_MS });
   }, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey]);
+
+  // 休整期自己那张棋盘必须始终是 `prepCamera(pub)` 算出来的那一张（boss 回合 = bossPrep）。
+  // 业主 2026-10-26：boss 回合休整期**精锐化干员**后场地会掉回普通场地、开战才回来。相机只在那几个
+  // effect 的 key 变化时重发，任何一次「误发的普通 prep 相机」都不会被纠正，于是整段休整期停在普通场地。
+  // 这里只做一件事：当前相机 kind 与 prepCamera 的结论不一致时，按结论重发一次（战斗 / 观战队友 / 看敌人时不碰）。
+  useEffect(() => {
+    if (!view || viewModeRef.current !== 'prep' || !showPrep || pen || watchingOther) return;
+    const want = prepCameraFor(pub, myId, shopFolded, stageLayout);
+    if (camRef.current?.kind !== want.kind) setCam(want.kind, { ...want.opts, ms: FOLD_CAMERA_MS });
+  }, [view, pub, priv, showPrep, pen, watchingOther, shopFolded, stageLayout, myId]);
 
   // 联防 / 最终攻势 / 左右两半的普通带: the ‹ › pill moves the camera between the field's halves and 全景
   useEffect(() => {
@@ -1799,7 +1832,8 @@ function MatchScreen() {
         self=${Number.isFinite(priv?.lp) ? { lp: priv.lp, pending: liveLpNow.pending, unite: liveLpNow.unite, left: liveLpNow.left } : null}
         observe=${cc ? { canObserve: (p) => observeTarget(p, pub, myId, { observing: watchingOther, ownDone: localDone }), observing: watchingOther, onBack: backHome } : null} />
 
-      <div class="gm__effects"><${EffectsList} effects=${watchingOther && field ? (field.effects ?? null) : priv?.effects} /></div>
+      <div class="gm__effects"><${EffectsList} effects=${watchingOther && field ? (field.effects ?? null) : priv?.effects} />
+        <${ReconProtocolList} rows=${reconProtocolRows(pub?.recon?.choices, watchingOther ? watchedP?.playerId ?? myId : myId)} /></div>
 
       ${watchingOther && !combat ? html`<div class="gm__watching" role="status">
         <${GIcon} name="eye" /><span>${tParts('正在查看 {name} 的阵地（只读）', { name: html`<b>${watchedName}</b>` })}</span>
@@ -1809,6 +1843,7 @@ function MatchScreen() {
       ${showShop ? html`<${ShopBar} priv=${priv} editable=${editable} collapsed=${barCollapsed} refreshBusy=${refreshBusy} onCollapse=${setCollapsed}
         barRef=${barRef} offBonds=${offBonds} removedBonds=${removedBonds}
         onBuy=${buy} onLevel=${() => actions.levelUp()} onRefresh=${() => actions.refresh()} onFreeze=${() => actions.freeze()}
+        train=${trainRound && priv && !priv.ready && !spectator ? { done: trainDone, onClick: () => setTrainOpen(true) } : null}
         onDetail=${(id, kind, hint) => setDetail({ kind: kind === 'item' ? 'item' : 'chess', id, hint: hint || null, tap: ++cardTap.current })}
         onDetailClose=${() => setDetail((d) => (d?.kind === 'chess' || d?.kind === 'item' ? null : d))}
         onRefuse=${(reason) => { toast(reason, 'warn'); audio.sfx('error', { volume: 0.5 }); }}
@@ -1843,8 +1878,6 @@ function MatchScreen() {
           }}><${Icon} name="signal" /></button>` : null}
         ${prepLoadoutOpen && phase === PHASE.PREP && priv && !priv.ready && !spectator
           ? html`<${LoadoutButton} from="prep" size="sm" />` : null}
-        ${trainRound && priv && !priv.ready && !spectator
-          ? html`<${ReconTrainButton} done=${trainDone} onClick=${() => setTrainOpen(true)} />` : null}
         <${BattleMusicButton} />
         <button type="button" class="gm__gear" aria-label=${t('设置')} title=${t('设置')} onClick=${() => setSettingsOpen(true)}><${GIcon} name="gear" /></button>
         <button type="button" class="gm__gear gm__guide" aria-label=${t('玩法说明')} title=${t('玩法说明')} onClick=${() => openGuide(0)}><${Icon} name="book" /></button>
@@ -1863,6 +1896,8 @@ function MatchScreen() {
       ${resolved ? html`<${DetailPanel} detail=${resolved} snapHp=${snapHp} onClose=${() => { setDetail(null); setSel(null); }}
         bonds=${detailBonds} offBonds=${offBonds} removedBonds=${removedBonds} loadout=${detailLoadout} ops=${priv?.ops ?? null} side=${dSide} shopOpen=${shopOpen} live=${liveStats} voice=${true}
         morphMode=${morphMode} unequipAllowed=${unequipAllow}
+        equipBonus=${isReconRoom && (detailBonds || []).some((b) => b && b.bondId === 'victoriaShip' && b.tier >= 2) ? 1 : 0}
+        equipModeBonus=${isReconRoom ? 1 : 0}
         onBond=${(id) => openBond(id, detailOwner, 'detail')}
         onUnequip=${editable && unequipAllow ? (itemUid) => actions.unequip(itemUid) : null} />` : null}
 

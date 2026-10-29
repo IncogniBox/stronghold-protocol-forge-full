@@ -14,7 +14,8 @@
 //   * the **wave-B read helpers** the official installers use (`reached`, `onLayers`, `onUnitDamaged`, `isEnemyTarget`,
 //     `ownTag`, `bondBb`, `byUnit`, `fireGain`, `garrisonIdsOf`, `bp`, `isProc`, `procTags`, `memberOf`,
 //     `addShieldLayer`, `ids`, `bondOrder`, `chessOnBoard`, `metaBonds`, `frontPiece`) and the **stat reading** a pack
-//     needs to scale an item's effect (`itemStatMods`, items/battle.js — the same numbers `installItem` applies).
+//     needs to scale an item's effect (`itemStatMods`, and `setItemEffectScale` — the engine's own「缩放一件装备」channel,
+//     which re-installs the item with every numeric blackboard value multiplied, so triggered effects scale too).
 //
 // This module is a **leaf**: it re-exports from those sibling modules and imports nothing that imports it, so there is
 // no cycle. It is reached through the two-end whitelist (`shared/kitImports.js`, `@battle/mod.js`): the server rewrites
@@ -28,7 +29,7 @@ export * from './index.js';
 // registration surface (a mod's bond / trait / item / token)
 export { registerBondInstaller, reached, onLayers, onUnitDamaged, isEnemyTarget, ownTag, bondBb } from '../bonds/core.js';
 export { registerGarrisonInstaller, registerGarrisonReader, byUnit, fireGain, garrisonIdsOf } from '../garrisons/battle.js';
-export { registerItemBehaviour, bp, isProc, procTags, memberOf, addShieldLayer, itemStatMods } from '../items/battle.js';
+export { registerItemBehaviour, bp, isProc, procTags, memberOf, addShieldLayer, itemStatMods, setItemEffectScale } from '../items/battle.js';
 
 // prep-side / data helpers a mod reads (bondOrder / chessOnBoard / ids / metaBonds / frontPiece)
 export { ids, bondOrder, chessOnBoard } from '../garrisons/meta.js';

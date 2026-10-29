@@ -45,10 +45,81 @@ export class FxSim {
   }
 
   /**
+   * 赤刃明霄陈 S3 的龙剑气官方视觉（extracted `chen3_skill_03_trail_01`: the white blade light with the red dragon,
+   * the projectile `projectile_chr_chen3_s3`'s main effect). The sim's chen3Wave events (one every 0.12 s, one stream
+   * per caster id) drive one persistent looping instance per wave: it spawns at the first event, and its track
+   * re-anchors it each frame to the wave's latest position and heading — a slight extrapolation at the wave's speed
+   * (1.5 tiles/s, op-chen3.js) covers the gap between events. Half a second without an event (the wave died, the
+   * skill ended, the caster left) stops it. The procedural 'qi' streak still draws underneath — with official
+   * effects off it is the whole visual.
+   */
+  _qiOfficial(at, ex) {
+    const ofx = this.ctx.ofx;
+    if (!ofx || !ofx.active) return;
+    const id = ex.id ?? '?';
+    let st = this._qiTrails?.get(id);
+    if (!st) (this._qiTrails ||= new Map()).set(id, st = { handle: null, pos: [at.x, at.y], z: at.z, yaw: 0, t: this.time });
+    st.pos[0] = at.x; st.pos[1] = at.y; st.z = at.z;
+    st.t = this.time;
+    const dr = num(ex.dr, 0), dc = num(ex.dc, 0);
+    if (dr || dc) st.yaw = Math.atan2(dr, dc);
+    // The official prefab's frame is the Unity battle frame (mounts.js unitPoint): x = col − 10, y = row − 9,
+    // z = −height. The sim's (x, y, z) tiles convert exactly the same way before they reach ofx.
+    const toUnity = (px, py, pz) => [px - 10, py - 9, -pz];
+    if (!st.handle || !st.handle.alive) {
+      st.handle = ofx.spawn('chen3_skill_03_trail_01', { pos: toUnity(at.x, at.y, at.z + 0.35), yaw: st.yaw, groundZ: -at.z }, {
+        important: true,
+        track: (fx) => {
+          if (this.time - st.t > 0.5) { st.handle?.stop(); st.handle = null; return; }
+          const lead = Math.min(0.12, Math.max(0, this.time - st.t)) * 1.5;
+          const [wx, wy, wz] = toUnity(st.pos[0] + Math.cos(st.yaw) * lead, st.pos[1] + Math.sin(st.yaw) * lead, st.z + 0.35);
+          fx.anchor[0] = wx; fx.anchor[1] = wy; fx.anchor[2] = wz;
+          fx.yaw = st.yaw;
+        },
+      });
+    }
+  }
+
+  /**
+   * 战斗逻辑**按名字点名**的一枚官方 prefab（`extra.key`）在 (x, y) 起一枚，撑满 `holdS` 战斗秒（`extra.holdS`）。
+   *
+   * 这是包 / 战斗模块播官方画面的唯一通道（`kinds.js` 的 `official`）：客户端此前没有任何「按 key 起一枚 prefab」
+   * 的 sim-fx 入口，官方的全屏效果只能靠引擎自己写死的 key（`_qiOfficial` 那种）。同一个 `(id, key)` 只起一枚 ——
+   * 事件再来时只把窗口往后推（重放 / 追帧不会叠出第二份）；窗口走完由 `track` 收掉（战斗结束 `ofx.clear()` 也一样
+   * 会收）。官方特效关着 / 本机与包都没有这枚 prefab 时**什么都不画**并返回 false：调用方自己的程序化 fx 才是那时
+   * 的画面（例如黑蛇的火雨还有每轮的火团）。
+   * @returns {boolean} 是否真的起了官方实例
+   */
+  _officialFx(at, ex, hold) {
+    const ofx = this.ctx.ofx;
+    const key = String(ex.key ?? ex.fx ?? '').toLowerCase();
+    if (!ofx || !ofx.active || !key || !ofx.lib || typeof ofx.lib.has !== 'function' || !ofx.lib.has(key)) return false;
+    const id = `${ex.id ?? '?'}|${key}`;
+    const map = this._officialScr || (this._officialScr = new Map());
+    let st = map.get(id);
+    if (!st) map.set(id, st = { h: null, until: 0 });
+    st.until = this.time + Math.max(0.2, hold);
+    if (!st.h || !st.h.alive) {
+      // Unity 战斗坐标（mounts.js unitPoint）：x = col − 10, y = row − 9, z = −height（与 _qiOfficial 同一条换算）。
+      // 官方那族 `effects/screen.ab` 的 prefab 内部 TRS 自带「抬高约 9.8 格 + 俯 30° 面向战斗相机」的一层
+      // （screen_bsnake 的 `static_offset`），所以它们**起在战场中心**（`fx('official')` 的 x/y），别丢到世界原点：
+      // 那样整片火会飘到战场右上方、上半幅全在屏幕外。
+      st.h = ofx.spawn(key, { pos: [at.x - 10, at.y - 9, -(at.z || 0)], groundZ: -(at.z || 0) }, {
+        loop: true,
+        important: true,
+        track: () => { if (this.time >= st.until) { st.h?.stop(); st.h = null; } },
+      });
+    }
+    return !!st.h;
+  }
+
+  /**
    * b.ev 'fx': every kind the sim / content emits has a visual (FX_KINDS archetypes: blast, shell, zone, telegraph,
    * heal, sp, shield, shatter, summon, vanish, blink, move, wave, mark, reticle, buff, lift, sleep, crit, dodge,
-   * counter, dp, coin, crate, down, beam, bolt, strike, volley, pillar, lp, chill, element, flame, qi), except kinds whose
-   * archetype is 'none' (hitCap: a leader hit cancelled by 限伤 draws nothing); unknown kinds get a generic sparkle. `extra` keys used: id (anchor unit — or the shooter of a `pt` kind), r | radius, dur | duration,
+   * counter, dp, coin, crate, down, beam, bolt, strike, volley, pillar, lp, chill, element, flame, qi, official), except
+   * kinds whose archetype is 'none' (hitCap: a leader hit cancelled by 限伤 draws nothing); unknown kinds get a generic
+   * sparkle. `extra` keys used: id (anchor unit — or the shooter of a `pt` kind), r | radius, dur | duration,
+   * key + holdS (an 'official' prefab's name and its window, battle s),
    * t (shell flight, game s), src / from / to / target / targets (unit ids), fx, fy / fromX, fromY / tx, ty (positions),
    * element, n, scale, kind, tiles, hold ('lock': the reticle waits while the shooter's skill runs), dr / dc (a
    * direction in tiles: 'qi' points its blade that way).
@@ -185,8 +256,10 @@ export class FxSim {
       }
       // a travelling blade (赤刃明霄陈 S3's 龙剑气): a short trail from where it was to where it is, plus a crescent head
       // turned the way it moves — the sim sends one of these every 0.12 s, and the trail outlives that gap so the
-      // events join into one sweeping wave. A procedural stand-in (the official effect is a particle prefab this client
-      // does not extract). Trail, head and heading share one height; the head is projected after streak(), which
+      // events join into one sweeping wave. The procedural streak + crescent stay as the base layer (the whole visual
+      // when official effects are off); with them on, the extracted official prefab (chen3_skill_03_trail_01: the
+      // white blade light with the red dragon) rides the same events — _qiOfficial below. Trail, head and heading
+      // share one height; the head is projected after streak(), which
       // reuses this._p / this._q (projected before it, the head was drawn at the trail's start, one event behind)
       case 'qi': {
         const z = at.z + 0.35;
@@ -202,6 +275,7 @@ export class FxSim {
         }
         this.particle('slash', hx, hy, { tint: col, life: 0.3, s0: hs / 128 * 1.3, s1: hs / 128 * 2.0, a0: 0.9, a1: 0, rot });
         this.particle('glow', hx, hy, { tint: col, life: 0.26, s0: hs / 128 * 0.8, s1: hs / 128 * 1.5, a0: 0.55, a1: 0 });
+        this._qiOfficial(at, ex);
         break;
       }
       case 'wave': {
@@ -243,6 +317,10 @@ export class FxSim {
         this.particle('glow', p.x, p.y, { tint: col, life: 0.35, s0: s / 128 * 0.6, s1: s / 128 * 1.1, a0: 0.6, a1: 0 });
         break;
       }
+      // a battle-logic-named official prefab (`extra.key`): the effects layer starts one instance and holds it for
+      // `extra.holdS` battle seconds (kinds.js 'official'). Nothing is drawn without the official layer / the prefab —
+      // the caller sends its own procedural fx as the fallback.
+      case 'official': this._officialFx(at, ex, num(ex.holdS, spec.dur ?? 6)); break;
       case 'lift': {
         const g = cam.project(at.x, at.y, at.z);
         this.ring(at.x, at.y, at.z, 0.2, 0.8, col, 0.5);

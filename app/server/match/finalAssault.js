@@ -108,11 +108,55 @@ export class SharedBossPool {
     /** playerId → damage dealt to this pool (this boss round only; the BOSS_HIT tickers' share) */
     this.byPlayer = new Map();
     this.onHit = onHit;
+    /** 多阶段首领：这条池要被打空的**次数**（默认 1 = 官方口径，行为逐字节不变）。见 `setLives` / `takePhase`。 */
+    this.lives = 1;
+    this.livesLeft = 1;
+    /** 已经完成过的阶段数（0 = 第一阶段）。 */
+    this.phase = 0;
+    /** 池被夹在 1 血、正等一个阶段推进（只有多阶段池会置位）。 */
+    this.phaseReady = false;
+  }
+
+  /**
+   * 声明这条池的**寿命数**（包侧在首领落场时调；同一个首领的每块战场都会调一次，取最大值）。`n = 1` 即官方口径。
+   * 寿命 > 1 时，`damage` 在中间阶段**不允许把池打到 0**（夹在 1），阶段推进由 `takePhase` 原子完成 ——
+   * 于是包侧的阶段脚本可以在「池被清空」那一刻接管（不在 `kill` 钩子里，那条路对挂池的单位不成立）。
+   */
+  setLives(n) {
+    const v = Math.floor(Number(n));
+    if (!Number.isFinite(v) || v < 1) return this.lives;
+    if (v > this.lives) { this.lives = v; this.livesLeft = Math.max(1, v - this.phase); }
+    return this.lives;
+  }
+
+  /**
+   * 推进一个阶段（原子：多块战场同时调只会有一个成功）：池回填到 `ratio × maxHp`，返回新的 `phase`；
+   * 不满足条件（不是多阶段池 / 池还没被清空 / 已经是最后一条命）时返回 null。
+   */
+  takePhase(ratio = 1) {
+    if (this.livesLeft <= 1 || !this.phaseReady || this.hp > 1 + 1e-9) return null;
+    this.phaseReady = false;
+    this.livesLeft -= 1;
+    this.phase += 1;
+    const r = Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 1;
+    this.hp = Math.max(1, Math.min(this.maxHp, this.maxHp * r));
+    return this.phase;
   }
 
   damage(playerId, amount) {
     const a = Number(amount);
     if (!Number.isFinite(a) || a <= 0 || this.hp <= 0) return 0;
+    // 中间阶段：池最多扣到 1（留一口气给阶段脚本），并把「该推进阶段了」置位
+    if (this.livesLeft > 1) {
+      const dealt = Math.min(a, Math.max(0, this.hp - 1));
+      this.hp -= dealt;
+      if (this.hp <= 1 + 1e-9) this.phaseReady = true;
+      if (playerId != null) this.byPlayer.set(playerId, (this.byPlayer.get(playerId) || 0) + dealt);
+      if (this.onHit) {
+        try { this.onHit(playerId, dealt); } catch { /* reported by the caller */ }
+      }
+      return dealt;
+    }
     const dealt = this.hp - a < BOSS_POOL_MIN_HP ? this.hp : a;
     this.hp -= dealt; // exactly 0 when the rest is taken (x − x): no float dust
     if (playerId != null) this.byPlayer.set(playerId, (this.byPlayer.get(playerId) || 0) + dealt);

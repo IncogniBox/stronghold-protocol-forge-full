@@ -13,6 +13,7 @@ import { pairPlayers, bossPoolHp, SharedBossPool, CreditPool, hiddenEligible, BO
 import { FieldRunner, HeadlessPacer, syntheticResult, BOSS_SILENCE_MS, CATCHUP_TICKS_PER_INTERVAL } from '../fields.js';
 import { FLOW_TICKER_PRIORITY, BOSS_CLOCK_MS, DELAYS } from './common.js';
 import { bossAreaBattleRect, bossAreaDeployRect, bossAreaMidCol } from '../../../shared/layout.js';
+import { ReconChannel, ChannelBossPool } from './reconChannel.js';
 
 /** b.pool broadcasts at most this often (ms). */
 const POOL_MIN_GAP_MS = 250;
@@ -56,7 +57,20 @@ export class MatchBoss {
   _bossPoolHp(bossId, aliveCount) {
     const ov = this._devBossOverride(bossId);
     const n = ov ? ov.stats.maxHp : NaN;
-    return Number.isFinite(n) && n > 0 ? Math.max(1, Math.round(n)) : bossPoolHp(this.gd, bossId, aliveCount);
+    if (Number.isFinite(n) && n > 0) return Math.max(1, Math.round(n));
+    // 重构首领：`_planBossWaves` 把 bossId 换成了工坊包的记录 key，而 `bosses` 表里没有它们 ⇒ 官方 `bossPoolHp`
+    // 会回退到 500000（§5.2）。血量的权威来源是**包记录自己的 `stats.maxHp`**（业主给的 250 万 / 500 万 / 2500 万…），
+    // 人数份额与调参沿用现行规则（不另设计一条人数曲线）。
+    if (this.gd.isRecon) {
+      const rec = this.gd.enemy(bossId);
+      const base = rec && rec.stats && Number.isFinite(rec.stats.maxHp) && rec.stats.maxHp > 0 ? rec.stats.maxHp : null;
+      if (base != null) {
+        const tune = typeof this.gd.bossHpMul === 'function' ? this.gd.bossHpMul(bossId) : 1;
+        const share = typeof this.gd.bossPoolShare === 'function' ? this.gd.bossPoolShare(aliveCount) : 1;
+        return Math.max(1, Math.round(base * share * tune));
+      }
+    }
+    return bossPoolHp(this.gd, bossId, aliveCount);
   }
 
   /** 这一场首领战的 `enemyOverrides`：波次模板自带的 + 面板给这只首领填的（键 = 该首领的 `enemyKey`）。 */
@@ -78,29 +92,81 @@ export class MatchBoss {
     // the pool's own per-player tally, one pool per boss round. stats.bossDamage (the result's 领袖伤害) adds up both
     // rounds, so it would credit the Final Assault's damage to the hidden leader ("隐藏boss还没打就出了50%播报").
     const hitSteps = new Map();
-    const pool = new SharedBossPool(this._bossPoolHp(bossId, alive.length), {
-      onHit: (pid, dmg) => {
-        const ps = this.players.get(pid);
-        if (!ps) return;
-        ps.stats.bossDamage += dmg;
-        const share = (pool.byPlayer.get(pid) || 0) / pool.maxHp;
-        const done = hitSteps.get(pid) || 0;
-        let reached = done;
-        BOSS_HIT_STEPS.forEach((s, i) => { if (share >= s) reached = Math.max(reached, i + 1); });
-        if (reached > done) {
-          hitSteps.set(pid, reached);
-          this.tickerFor('BOSS_HIT', [ps.name], { playerId: pid, param: String(BOSS_HIT_STEPS[reached - 1]) });
-        }
-      },
-    });
+    const onHit = (pid, dmg) => {
+      const ps = this.players.get(pid);
+      if (!ps) return;
+      ps.stats.bossDamage += dmg;
+      const cur = this.bossPool;
+      if (!cur) return;
+      const share = (cur.byPlayer.get(pid) || 0) / cur.maxHp;
+      const done = hitSteps.get(pid) || 0;
+      let reached = done;
+      BOSS_HIT_STEPS.forEach((s, i) => { if (share >= s) reached = Math.max(reached, i + 1); });
+      if (reached > done) {
+        hitSteps.set(pid, reached);
+        this.tickerFor('BOSS_HIT', [ps.name], { playerId: pid, param: String(BOSS_HIT_STEPS[reached - 1]) });
+      }
+    };
+    const pool = new SharedBossPool(this._bossPoolHp(bossId, alive.length), { onHit });
     this.bossPool = pool;
     const groups = pairPlayers(alive, createRng(deriveSeed(this.seed, 'boss-pairs')), this.bossPairs);
     this.bossPairs = groups.map(g => g.map(p => p.playerId));
     const reuse = this.bossWaves && this.bossWaves.length === groups.length && this.bossWaves.every((w, i) => w.players.join() === groups[i].map((p) => p.playerId).join());
+    // 跨战斗共享状态通道：R21 的 AMa-10 三只（共享血量 / 伤害转移 / 终始倒下）与岁四部位（「四部位同时放技能」）。
+    // 只在 **server-run** 时开账：clientCombat 的战场在浏览器里，这个对象过不去（包侧会回落到单战场近似）。
+    this.reconChannel = null;
+    this.shpArea1Pool = null;
+    const reconGroupId = this.gd.isRecon && this.round === this.gd.hiddenRound
+      ? this.reconTrialBossFor(this.round) : null;
+    const reconAreas = Object.fromEntries(groups.flatMap((g, i) => g.map((p) => [p.playerId, i])));
+    if (reconGroupId === 'enemy_ws_recon_ama_group' && !this.clientCombat) {
+      const ama = this.gd.enemy('enemy_ws_recon_muama');
+      const core = this.gd.enemy('enemy_ws_recon_musnake');
+      this.reconChannel = new ReconChannel({
+        areas: reconAreas,
+        pools: {
+          ama: { maxHp: (ama && ama.stats && ama.stats.maxHp) || 10000000 },
+          core: { maxHp: (core && core.stats && core.stats.maxHp) || 15000000 },
+        },
+      });
+    } else if (reconGroupId === 'enemy_ws_recon_sui_group' && !this.clientCombat) {
+      // 岁组：四部位各守一块场地，但都是 `tag: 'boss'` ⇒ 共用同一条 `this.bossPool`（共享生命由引擎给）。
+      // 这里只需要一条**事件**通道（不开池）：柱折维绝时让另外三块场地的部位一起放技能。
+      this.reconChannel = new ReconChannel({ areas: reconAreas });
+    } else if (reconGroupId === 'enemy_ws_recon_shp_group') {
+      // 洛伦茨组（业主 2026-10-29）：区域1 的首领是**源阶方**（自己一条 22000000 的池），区域2/3/4 各一整对；
+      // 多个区域的洛伦茨**共享血量并相互叠加**（每只 3000000）⇒ 池上限 = 3000000 × 洛伦茨只数。
+      // clientCombat 里跨战斗池传不过去，但数字仍按叠加后的总数给（浏览器各块战场各自的池从 b.pool 起算）。
+      const rec = this.gd.enemy('enemy_ws_recon_shophm');
+      const base = rec && rec.stats && Number(rec.stats.maxHp) > 0 ? rec.stats.maxHp : 3000000;
+      const area1 = this.gd.enemy('enemy_ws_recon_shorbb');
+      const area1Hp = area1 && area1.stats && Number(area1.stats.maxHp) > 0 ? area1.stats.maxHp : 22000000;
+      const n = Math.max(1, groups.length - 1);
+      this.shpArea1Pool = new SharedBossPool(area1Hp);
+      if (!this.clientCombat) {
+        this.reconChannel = new ReconChannel({ areas: reconAreas, pools: { shp: { maxHp: base * n } } });
+        this.shpPool = new ChannelBossPool(this.reconChannel, 'shp', { onHit });
+        this.bossPool = this.shpPool;
+      } else {
+        this.bossPool = new SharedBossPool(base * n);
+      }
+    }
+    // AMa 组：普通共享池换成**通道池的适配器** —— 每块战场守的那只按区域取池（区域1 = 终始的 `core`，其余 = `ama`），
+    // 引擎那一次扣血直接落到通道池上，包侧不再重复扣；完成条件与 HUD 以 `core`（终始倒下会让另外两只退场）为准。
+    this.amaPool = null;
+    if (reconGroupId === 'enemy_ws_recon_ama_group' && this.reconChannel) {
+      this.amaPool = new ChannelBossPool(this.reconChannel, 'ama', { onHit });
+      this.bossPool = new ChannelBossPool(this.reconChannel, 'core', { onHit });
+    }
     this.fields = groups.map((g, i) => {
       const solo = this.isSolo || g.length === 1;
-      const wave = hidden ? (reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo }, this.stageId))
-        : this.reconBossWaveFor(this.round, reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo }, this.stageId));
+      // 重构模拟的 R20 / R21：**两条路径都要替换首领本体**（业主 2026-10-29「隐秘核心的 boss 也没有替换」）——
+      // 先前只有最终攻势这一条调用 `reconBossWaveFor`，隐秘核心整段跳过了它（多 key 组的区域分场也因此失效）。
+      const wave = this.reconBossWaveFor(
+        this.round,
+        reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo, areaIndex: i }, this.stageId),
+        i,
+      );
       // one spawn list per field, shared by the field's players' onBattleStart handlers (edit it in place)
       const spawns = wave.spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
       // bounties with battles left (a multi-round card lasts MULTI_ROUND_BOUNTY_BATTLES) follow their player into the
@@ -137,13 +203,19 @@ export class MatchBoss {
         players: inputs,
         spawns: this._sanitizeSpawns(spawns),
         routes: wave.routes,
-        sharedBoss: this.bossPool,
+        // AMa 组：每块战场守的那只按区域切池（区域1 = 终始的 core；区域2/3 = AMa-10 / 异构体共用的 ama），
+        // 引擎这一次扣血直接落到通道池上 ⇒ 与包侧的通道记账不再各扣一次（交接 §5.5）。
+        // 洛伦茨组：区域1 的源阶方吃自己那条 22000000 的池，其余区域吃洛伦茨的叠加池。
+        sharedBoss: this.amaPool
+          ? (i === 0 ? this.bossPool : this.amaPool)
+          : (this.shpArea1Pool && i === 0 ? this.shpArea1Pool : this.bossPool),
         // the round's enemy effects for the leaders' mid-fight summons (server/sim/content/bosses.js summonMods)
         flags: { layerGainsEnabled: false, ...this.gd.dp, enemyScale: this.gd.enemyScale(this.round) },
         fieldId,
         enemyOverrides: this._bossEnemyOverrides(wave.overrides, bossId),
         waveId: wave.templateId,
         bossId,
+        ...(this.reconChannel ? { reconChannel: this.reconChannel } : {}),
       };
       if (this.clientCombat) return { fieldId, kind: hidden ? 'hidden' : 'boss', players: g.map((p) => p.playerId), opts: bopts, battle: null, live: true };
       const battle = this.newBattle(bopts);
@@ -190,7 +262,13 @@ export class MatchBoss {
 
   _startFinalClient(hidden) {
     const pool = this.bossPool;
-    const recs = this.fields.map((x) => this._ccField({ fieldId: x.fieldId, kind: x.kind, players: x.players, opts: x.opts, boss: { poolHp: pool.hp, poolMax: pool.maxHp } }));
+    // 每个战场自己的首领池数字：洛伦茨组的区域1 是源阶方那条 22000000 的池（浏览器按它建 LocalBossPool）。
+    const recs = this.fields.map((x) => {
+      const sb = x.opts && x.opts.sharedBoss;
+      const own = sb && Number.isFinite(sb.maxHp) && sb.maxHp > 0
+        ? { poolHp: Number.isFinite(sb.hp) ? sb.hp : sb.maxHp, poolMax: sb.maxHp } : null;
+      return this._ccField({ fieldId: x.fieldId, kind: x.kind, players: x.players, opts: x.opts, boss: own ?? { poolHp: pool.hp, poolMax: pool.maxHp } });
+    });
     this._finalEnding = null;
     this._bossStartAt = this.sched.now();
     this.watchers.clear();

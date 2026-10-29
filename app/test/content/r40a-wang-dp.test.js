@@ -27,7 +27,8 @@ test('望: seven 棋子 stay seven, and another operator redeploys once they sto
   const mate = h.unit(50);
   mate.base.respawnTime = 3;
   mate.base.cost = 6;
-  const stones = () => h.b.allyUnits.filter((a) => a.defId === STONE);
+  // 棋子 = 真正占格的 token；跟子是 `noTile` 的装饰 token（不占格、不进入 `_occ`，业主 2026-10-29）
+  const stones = () => h.b.allyUnits.filter((a) => a.defId === STONE && !a.noTile);
   assert.equal(stones().length, 7);
   h.b.kill(mate, null);
   assert.ok(Number.isFinite(mate.respawnAt) && mate.respawnAt < 5, 'her redeploy timer starts');

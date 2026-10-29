@@ -216,6 +216,8 @@ import { mergeBehaviourDecls } from '../../shared/behaviour.js';
 import { morphPairingOf } from '../../shared/morph.js';
 import { formView, isEliteForm } from '../../shared/formProjection.js';
 import { layoutOf, benchOf, isDualLayout } from '../../shared/layout.js';
+// 重构模拟的盟约别名（`recon_<id>` → 官方 id）：与 `Battle.dataObjectOf` 共用同一份口径（见 `shared/reconModes.js`）。
+import { isReconModeId, reconBondAlias } from '../../shared/reconModes.js';
 import { Battle } from '../sim/Battle.js';
 import { DataSource } from '../sim/simdata.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
@@ -396,6 +398,17 @@ export class Match {
      */
     this.eliteForm = isEliteForm(variantValue(this.variants, 'form'));
     this.formView = formView(this.data && this.data.chess, this.eliteForm, { tokens: this.data && this.data.tokens });
+    // 重构模拟的盟约覆盖（`workshop/mode-recon/bonds.json` 的 `recon_<id>` 记录）：**只在这一局**把官方 id 换成
+    // 重构那一份 —— 数据、战斗、客户端读的是同一份 id（因此不需要第二套读取点），其它模式 / 官方对局一个字节不动。
+    // 战斗侧那一份（浏览器 / 复算）由 `Battle.dataObjectOf` 用同一个函数再叠一次，见 `shared/reconModes.js reconBondData`。
+    this.reconBondAlias = null;
+    if (isReconModeId(this.modeId)) {
+      const aliased = reconBondAlias(this.data && this.data.bonds);
+      if (aliased) {
+        this.reconBondAlias = aliased.alias;
+        this.data = { ...this.data, bonds: aliased.bonds };
+      }
+    }
     this.gd = new GameData(this.data, this.modeId, {
       ...(this.seatCap ? { seatCap: this.seatCap } : {}),
       // 本局的口径（DESIGN §28.39）。空数组 = 没有包声明口径 ⇒ `GameData` 一个字节都不动。

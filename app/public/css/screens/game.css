@@ -585,6 +585,15 @@
 .effect--band { border-color: var(--mint-800); }
 .effect--team { border-color: rgba(78, 216, 175, .6); }
 .effect__n { position: absolute; right: -.05rem; bottom: -.05rem; min-width: .2rem; font-size: .12rem; line-height: 1.4; text-align: center; background: var(--gold); color: #1d1400; padding: 0 .03rem; }
+/* 重构协议（重构模拟的协助 / 负载）：EFFECTS 列下面的同尺寸瓦片，分离出一段间距 */
+.effects--recon { margin-top: .14rem; }
+.recon-eff {
+  width: .5rem; height: .5rem; display: grid; place-items: center;
+  background: rgba(8, 11, 10, .85); border: 1px solid var(--mint-800);
+}
+.recon-eff .icon { width: .28rem; height: .28rem; color: var(--mint-500); }
+.recon-eff--load { border-color: rgba(255, 84, 84, .55); }
+.recon-eff--load .icon { color: var(--red-premium); }
 .efftip { display: flex; flex-direction: column; gap: .04rem; max-width: 3.6rem; }
 .efftip b { font-size: .17rem; color: var(--mint-400); }
 .efftip__kind { font-size: .12rem; color: var(--text-dim); }

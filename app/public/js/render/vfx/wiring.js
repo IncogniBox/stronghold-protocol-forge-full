@@ -980,6 +980,9 @@ export class FxWiring {
     // on each target), and it counts as one attack [ASSUMED: the same frame = the same attack]
     const again = this.castFrame.get(id) === this.skills.frame;
     const nth = Math.max(0, (this.attackN.get(id) || 0) - (again ? 1 : 0));
+    // 单次释放类教官（异客 S3 的雷暴这类）：这一发攻击在目标处再播一遍它的官方行（技能本体没有攻击行，
+    // sim 侧每发攻击触发一次，见 SkillFx.mentorOnceAt）
+    if (!again && tgt) this.skills.mentorOnceAt(src, tgt);
     const set = this._attackSet(u, this.mode(u, src), src, tgt, kind, nth);
     // 特训学员：教官技能换了攻击模式时，把那份 mode 的攻击行（施放 / 范围 / 命中 / 弹道）叠在学员这次攻击上——
     // 技能本体只是 buff 的教官（新约能天使 S3 → mode S3）此前只剩 buff 行，命中爆炸自然整段缺失。

@@ -30,8 +30,9 @@ import { PHASE, GEO } from '../../../shared/constants.js';
 import { deriveSeed } from '../../sim/rng.js';
 import { uniteBattleOpts, uniteSurvivors, combineUniteResults } from '../unite.js';
 import { takeUnhandled, planRelayBySquad, relayPlanFor, squadStrength } from '../unite100.mjs';
-import { FieldRunner, timelineAt, uniteBillBounds } from '../fields.js';
-import { uniteLeft } from '../../sim/spec.js';
+import { FieldRunner, timelineAt, uniteBillBounds, HeadlessJob, validateClientResult } from '../fields.js';
+import { uniteLeft, compactResult } from '../../sim/spec.js';
+import { testSlice } from '../testTrace.js';
 import { FLOW_TICKER_PRIORITY, DELAYS } from './common.js';
 import { msg } from '../../../shared/i18n.js';
 import { onStartUnite } from '../botEmotes.js';
@@ -334,7 +335,7 @@ export class MatchUnite {
     if (this.phase !== PHASE.UNITE) return;
     if (Array.isArray(this.unitePlans) && this.unitePlans.length) { this._finishUniteVariantClient(); return; }
     const f = this.fields[0];
-    const res = f.result;
+    const res = this._settledUniteResult(f);
     this._collectSimErrors(f, res);
     this._stopClientCombat();
     f.live = false;
@@ -344,12 +345,46 @@ export class MatchUnite {
     this.later(this.scaled(DELAYS.COMBAT_END), () => this.settle(plan, res));
   }
 
+  /**
+   * 这一场联防结算用的战果。客户端跑的战斗已经过 `validateClientResult`，但它的**存活漏怪**可能在最后一步丢了
+   * （例如结果被服务端的复算 / 兜底替换，或客户端那一份模块与本局的内容不同）：终局前最后一次 `b.progress.left`
+   * 还有剩余、结果却一个漏怪都没有时，**服务端按同一份 spec 复算一次**（确定性，正常情况两者逐字节相同）并以复算
+   * 结果为结算依据 —— 这一回合的 LP 不能靠猜，也不能因为客户端少报就白送。
+   * 服务端自己跑出来的战果已经是权威，原样返回。
+   * @param {object} f the cc unite field
+   * @returns {object} its result
+   */
+  _settledUniteResult(f) {
+    const res = f && f.result;
+    if (!res || res.synthetic || f.resultSource === 'server') return res;
+    const survivors = uniteSurvivors(this.unitePlan || { leakers: [], notReentered: new Map() }, res);
+    let n = 0;
+    for (const v of survivors.values()) n += v;
+    if (n > 0) return res;
+    const left = (f.progress && f.progress.left) || null;
+    // 有实时计数：它还有剩余才算「结果少报了」；一次 b.progress 都没收到（计数不可用）时同样不能拿 0 当结论
+    if (left && !Object.values(left).some((v) => Number(v) > 0)) return res;
+    try {
+      const job = new HeadlessJob(this._specBattle(f.spec), { players: f.players });
+      job.run(Infinity, undefined, testSlice(this));
+      const run = job.output();
+      const mine = validateClientResult(f.spec, compactResult(run.result), { gd: this.gd });
+      const out = mine.ok ? mine.result : run.result;
+      this.log?.warn?.(`[match ${this.roomCode}] ${f.fieldId} R${this.round}: the client's 联防 result bills no survivor while its own \`left\` had ${JSON.stringify(left)} — settling on the server's re-simulation`);
+      return out;
+    } catch (e) {
+      this.reportError('unite settle re-simulation', e);
+      return res;
+    }
+  }
+
   /** All squad fields are done (clientCombat calls this once every cc field has finished): see _laterUniteRoundEnd. */
   _finishUniteVariantClient() {
     const list = this.unitePlans.slice();
     const results = this.fields.map((f) => {
-      this._collectSimErrors(f, f.result);
-      return f.result;
+      const r = this._settledUniteResult(f);
+      this._collectSimErrors(f, r);
+      return r;
     });
     this._stopClientCombat();
     for (const f of this.fields) f.live = false;

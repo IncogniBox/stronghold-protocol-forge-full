@@ -30,8 +30,10 @@ import { genericKit, genericTalents } from './generic.js';
 import { EXTENSIONS, installExtensions } from './extensions.js';
 import { compileDsl } from './dsl/compile.js';
 import { validateSkillSpec, matchesSchema, MODS_SCHEMA } from '../../../shared/plugins/skillSpec.js';
-import { withUnitLoadouts } from '../simdata.js';
+import { withUnitLoadouts, mentorLoadoutOf } from '../simdata.js';
 import { isPotential } from '../../../shared/potential.js';
+import { COLS } from '../constants.js';
+import { bodyOnTile } from '../body.js';
 
 // Content files are loaded with guarded dynamic imports: a module that fails to load (syntax error, throwing
 // top-level code, missing file) is logged and replaced by an empty module instead of breaking the server.
@@ -192,6 +194,11 @@ const isMulMod = (k) => /Mul$/.test(k);
  */
 const SHADOW_EXCLUDED_MODS = new Set(['batPct', 'aspd', 'rangeExtend']);
 
+/** 「单次释放类」教官技能：本体没有 attack / mods / targeting，效果全在一次 `onStart` 里生成（异客 S3 的雷暴这类）。 */
+function isSingleCastSpec(spec) {
+  return !!spec && typeof spec.onStart === 'function' && !spec.attack && !spec.mods && !spec.targeting;
+}
+
 /** 把教官 spec 的回调链在学员自己的后面（先学员后教官），缺哪个用哪个。 */
 function chainFns(a, b) {
   if (typeof a === 'function' && typeof b === 'function') return (ctx) => { a(ctx); b(ctx); };
@@ -200,14 +207,18 @@ function chainFns(a, b) {
 
 /**
  * 影子技能合并（重构协议·特训，叠加式；业主 2026-10-27 定稿）：学员自己的 SkillSpec 为基，教官选定技能的
- * **效果**叠上去，四种「学员技能 × 教官技能」组合统一落到同一条语义 —— **学员每一次攻击（弹药类技能 = 每一发
- * 弹药）额外附带 1 次教官技能的攻击效果**：
+ * **效果**叠上去，四种「学员技能 × 教官技能」组合统一落到同一条语义 —— **学员造成的每一次伤害都同步 1 次教官
+ * 技能的攻击效果**（业主 2026-10-29：多段攻击按段数触发，例如一次攻击 4 段伤害 ⇒ 4 次教官效果；弹药类技能 =
+ * 每一发弹药各自的段数）。从前是「每一次攻击 +1 次」，多段攻击只叠一次：
  *   - mods：数值叠加（×Mul 键乘算、其余加算），但 `batPct` / `aspd`（攻击间隔）与 `rangeExtend`（攻击范围）**不并**
  *     —— 这三样永远是学员自己的（owner 2026-10-27）；`targeting.rangeGrid` / `noRangeExtend` 同样不并（如下）；
- *   - attack：**连击数 +1**（一次额外应用；不再把教官的多段数整个并进来）、倍率乘算、splash 取大、onHit 链式；
+ *   - attack：**连击数 = 学员自己的段数 × (1 + 教官的段数)**（每段伤害后面各跟一整套教官攻击；教官 1 段时就是
+ *     从前的 ×2，3 段（赤刃明霄陈 S3）时 ×4 —— 教官改掉的「每次普攻的攻击次数」一起继承）、倍率乘算、
+ *     splash 取大、onHit 链式；学员自己没有 attack 行时，教官那一套直接作为它的攻击（段数照教官的）；
  *     `noAttack` 不带过来（影子不替学员停手）；dmgType / projectile 学员自己的优先；
  *   - targeting：**攻击范围永远是学员自己的** —— 影子的 rangeGrid / rangeExtend / noRangeExtend 一律不带，
- *     只把 maxTargets（纯「效果」维度，不吃范围）取大并入；
+ *     只把 maxTargets（纯「效果」维度，不吃范围；逻各斯 S3 的 `attack@max_target` 这类「攻击目标选择数量」）
+ *     取大并入；
  *   - onStart / onEnd / onTick / onAttack 链式；counter 学员自己的优先，没有才用教官的；
  *   - kind / duration / ammo / SP / 触发规则 / 攻击间隔 全部是学员自己的 —— 教官的效果随学员这一次施放激活、
  *     随学员技能结束而结束（一次 cast，一份 duration）。
@@ -225,12 +236,34 @@ function mergeShadowSpec(own, shadow) {
   const flags = { ...(own.flags ?? {}), ...(shadow.flags ?? {}) };
   if (Object.keys(flags).length) out.flags = flags;
   const oa = own.attack, sa = shadow.attack;
+  // 教官攻击的**次数**（赤刃明霄陈 S3 的 `_additionalTimes` 3、弹药类 kit 的 `times`）：学员每一段伤害后面跟的是
+  // **一整套**教官攻击，段数即教官自己的段数；由 `hitsFn` 现算的（克洛丝2 2 / 4 段、缄默德 S1）按学员这次的攻击再算一次。
+  const mHits = Math.max(1, Math.floor(Number(sa?.hits) || 1));
   if (sa && !oa) {
-    const atk = { ...sa, hits: 1 };
+    // 学员自己的技能没有 attack 行：教官那一套就是它的攻击——段数 / maxTargets 等效果照教官的（不再压成 1 段）
+    const atk = { ...sa };
+    if (typeof sa.hitsFn !== 'function') atk.hits = mHits;
     delete atk.noAttack;
     if (Object.keys(atk).length) out.attack = atk;
   } else if (sa && oa) {
-    const atk = { ...oa, hits: (oa.hits ?? 1) + 1 };  // 一次额外应用（业主 2026-10-27：不是把教官的连击数整个加进来）
+    // 每次伤害同步一次教官效果（业主 2026-10-29）：学员自己的每一段伤害后面都跟一整套教官攻击，段数 =
+    // **学员自己的段数 × (1 + 教官的段数)**。教官 1 段（大多数技能）⇒ 学员 2 段 = 4 段（与从前一致）；
+    // 教官 3 段（陈3 S3）⇒ 学员 2 段 = 8 段——教官改掉的「每次普攻的攻击次数」也一起继承。
+    const atk = { ...oa };
+    const ownHits = Math.max(1, Math.floor(Number(oa.hits) || 1));
+    atk.hits = ownHits * (1 + mHits);
+    if (typeof oa.hitsFn === 'function') {                  // 段数由 kit 现算的（如克洛丝 2 / 4 段）：同样按 (1 + 教官段数) 乘
+      const ohf = oa.hitsFn;
+      const mhf = typeof sa.hitsFn === 'function' ? sa.hitsFn : null;
+      atk.hitsFn = (b, u, info) => {
+        const o = Math.max(1, Math.floor(Number(ohf(b, u, info)) || 1));
+        const m = mhf ? Math.max(1, Math.floor(Number(mhf(b, u, info)) || 1)) : mHits;
+        return o * (1 + m);
+      };
+    } else if (typeof sa.hitsFn === 'function') {           // 只有教官现算段数：学员的固定段数 × (1 + 教官那一段数)
+      const mhf = sa.hitsFn;
+      atk.hitsFn = (b, u, info) => ownHits * (1 + Math.max(1, Math.floor(Number(mhf(b, u, info)) || 1)));
+    }
     if (typeof sa.atkScale === 'number') atk.atkScale = (oa.atkScale ?? 1) * sa.atkScale;
     if (typeof sa.healScale === 'number') atk.healScale = (oa.healScale ?? 1) * sa.healScale;
     if (typeof sa.splashRadius === 'number') atk.splashRadius = Math.max(oa.splashRadius ?? 0, sa.splashRadius);
@@ -238,6 +271,10 @@ function mergeShadowSpec(own, shadow) {
     if (typeof sa.dmgMul === 'number') atk.dmgMul = (oa.dmgMul ?? 1) * sa.dmgMul;
     if (sa.dmgType && !oa.dmgType) atk.dmgType = sa.dmgType;
     if (typeof sa.onHit === 'function') atk.onHit = chainFns(oa.onHit, sa.onHit);
+    // 攻击命中的「附带效果」也一起继承（业主 2026-10-29）：维什戴尔 S3 的爆炸（余震 / 好礼）挂在 `afterHit` 上，
+    // 逐命中回调（附着残影这类）挂在 `onEachHit` 上 —— 从前只在 attack 的数值字段里取，这两样整段没继承。
+    if (typeof sa.afterHit === 'function') atk.afterHit = chainFns(oa.afterHit, sa.afterHit);
+    if (typeof sa.onEachHit === 'function') atk.onEachHit = chainFns(oa.onEachHit, sa.onEachHit);
     out.attack = atk;
   }
   // targeting：攻击范围永远是学员自己的（业主 2026-10-27）——影子的 rangeGrid / rangeExtend / noRangeExtend
@@ -247,60 +284,322 @@ function mergeShadowSpec(own, shadow) {
     if (shadow.targeting.maxTargets != null) tg.maxTargets = Math.max(tg.maxTargets ?? 0, Math.floor(shadow.targeting.maxTargets));
     if (Object.keys(tg).length) out.targeting = tg;
   }
+  // 单次释放类（异客 S3 的雷暴这类）：效果只在 `onStart` 里生成一次，学员继承后改成**每次攻击各触发 1 次**
+  // （业主 2026-10-29：与弹药类相似），不再只在施放时触发；浮游单元的每次命中由 `installMentorApply` 走同一条。
+  const singleCast = isSingleCastSpec(shadow);
   for (const name of ['onStart', 'onEnd', 'onTick', 'onAttack']) {
+    if (singleCast && name === 'onStart') continue;
     const fn = chainFns(own[name], shadow[name]);
     if (fn) out[name] = fn;
   }
+  if (singleCast) out.onAttack = chainFns(out.onAttack, (ctx) => runMentorOnce(ctx.battle, ctx.unit, shadow, (ctx.targets && ctx.targets[0]) || null));
   if (!own.counter && shadow.counter) out.counter = shadow.counter;
   return out;
 }
 
 /**
- * 特训学员的 kit 后处理（重构协议·特训，叠加式）：学员自己的 kit 为基（自己的技能 / 特质 / 天赋 / install 照常），
- * 教官那份 kit（`def.traineeMentor` → battle.data.getChess(教官的 chessId, 教官选定 loadout)）的
- *   - 选定技能 spec —— 作为「影子技能」并进学员自己的 spec（mergeShadowSpec；学员没有 spec 时不造：影子只随
- *     学员自己的施放激活）；
- *   - talents installers —— 追加到 kit.talents（教官的天赋独立结算）；
- *   - install —— 链在学员 kit.install 之后（教官特质的逐单位行为）；
- *   - trait —— profile 覆盖对象并入（学员自己的键优先）。
- * 教官 def 查无 / kit 构造抛错 ⇒ 按原样返回（战斗叠加这一层不生效，学员的 def 级组成照旧）。教官的 kit 解析顺序：
- * `battle.opts.kits`（测试 / 沙盒注入，对教官同样生效）→ 内建注册表 KITS → generic 回退（黑板推导的 spec +
- * 它能精确应用的数值天赋——影子技能不能只属于有 kit 的教官）。
+ * 教官的 def 与 kit（`def.traineeMentor` → battle.data.getChess(教官的 chessId, 教官选定 loadout)）。
+ * 教官 def 查无 / 与 `own` 同一条 / kit 构造抛错 ⇒ null（调用方按原样返回，叠加这一层不生效）。
+ * 解析顺序：`battle.opts.kits`（测试 / 沙盒注入，对教官同样生效）→ 内建注册表 KITS → generic 回退（黑板推导的
+ * spec + 它能精确应用的数值天赋——影子技能不能只属于有 kit 的教官）。
+ * @returns {{ mdef: object, mk: object }|null}
  */
-function applyTraineeMentor(battle, kit, def) {
-  const tm = def.traineeMentor;
-  if (!tm || !battle?.data || typeof battle.data.getChess !== 'function') return kit;
+function mentorKitOf(battle, tm, own) {
+  if (!tm || !battle?.data || typeof battle.data.getChess !== 'function') return null;
   // 教官是甄选干员（自选槽位件）时按它的 pick 解析（getDiy——否则查到的是空槽位记录）；是补位时按补位 def
-  // （替补干员的身体 / 技能 / 特质）；diy 与 loadout 都缺省 ＝教官自己的默认 def（getChess(id, null) 的既有语义）
-  const mLo = tm.diy && typeof tm.diy === 'object' ? { diy: tm.diy }
-    : tm.loadout && tm.loadout.standIn === true ? { standIn: true }
-    : tm.loadout && typeof tm.loadout === 'object' ? { skillIndex: tm.loadout.skillIndex ?? null, moduleId: tm.loadout.moduleId ?? null } : null;
+  // （替补干员的身体 / 技能 / 特质）；diy 与 loadout 都缺省 ＝教官自己的默认 def（getChess(id, null) 的既有语义）。
+  // 与战斗层 `Battle._tokenDef`（特训学员的召唤物按教官解析）共用同一份映射：simdata `mentorLoadoutOf`。
+  const mLo = mentorLoadoutOf(tm);
   let mdef;
-  try { mdef = battle.data.getChess(tm.chessId, mLo ?? null); } catch { return kit; }
-  if (!mdef || mdef === def) return kit;
-  let mk;
+  try { mdef = battle.data.getChess(tm.chessId, mLo ?? null); } catch { return null; }
+  if (!mdef || mdef === own) return null;
   try {
     const injected = battle.opts && battle.opts.kits;
     const f = (injected && typeof kitOf(mdef, injected) === 'function' ? kitOf(mdef, injected) : null)
       ?? (typeof kitOf(mdef, KITS) === 'function' ? kitOf(mdef, KITS) : null);
     const mbb = mdef.skill?.bb ?? {};
     const mraw = mdef.raw ?? mdef;
-    mk = f ? selectSkillSpec(f(mbb, mraw, mdef), mbb, mraw, mdef) : fallbackKit(mbb, mraw, mdef);
+    const mk = f ? selectSkillSpec(f(mbb, mraw, mdef), mbb, mraw, mdef) : fallbackKit(mbb, mraw, mdef);
+    return mk ? { mdef, mk } : null;
   } catch (e) {
     battle._handlerError?.(`traineeMentor:${tm.chessId}`, null, e);
-    return kit;
+    return null;
   }
-  if (!mk) return kit;
+}
+
+/**
+ * 教官 installer（talents）与特质 install 链在学员自己的之后 —— 两处（本体 / 召唤物）共用的那一段。
+ * `mentorSkillId`（本体才有）：教官 kit 的 `install` 常按 `unit.skill.id` 分支（赤刃明霄陈 S3 的剑气 tick
+ * 只在 `skchr_chen3_3` 上注册）—— 学员自己的技能 id 不同，直接跑会把教官技能**整段行为**漏掉（业主 2026-10-29：
+ * 学员继承的技能效果不完整、没有技能描述里的那道剑气）。这里在跑教官 `install` 的**那一瞬**把 `unit.skill.id`
+ * 临时换成教官选定的技能 id，装完立即还原：钩子注册上去，运行期仍读学员自己的技能（active / activations）。
+ */
+function chainMentorInstallers(kit, mk, { trait = false, mentorSkillId = null } = {}) {
   const out = { ...kit };
   const mt = (mk.talents ?? []).filter((x) => x && typeof x.install === 'function');
   if (mt.length) out.talents = [...(kit.talents ?? []), ...mt];
-  if (mk.trait && typeof mk.trait === 'object') out.trait = { ...mk.trait, ...(kit.trait ?? {}) };
+  if (trait && mk.trait && typeof mk.trait === 'object') out.trait = { ...mk.trait, ...(kit.trait ?? {}) };
   const ownI = typeof kit.install === 'function' ? kit.install : null;
-  const mI = typeof mk.install === 'function' ? mk.install : null;
+  const rawI = typeof mk.install === 'function' ? mk.install : null;
+  const mI = rawI ? (b, u) => {
+    const sk = u && u.skill;
+    if (!sk || !mentorSkillId || sk.id === mentorSkillId) { rawI(b, u); return; }
+    const was = sk.id;
+    try { sk.id = mentorSkillId; rawI(b, u); } finally { sk.id = was; }
+  } : null;
   if (ownI && mI) out.install = (b, u) => { ownI(b, u); mI(b, u); };
   else if (mI) out.install = mI;
-  if (kit.skill && mk.skill) out.skill = mergeShadowSpec(kit.skill, mk.skill);
   return out;
+}
+
+/**
+ * 「每一次伤害同步一次教官攻击」的漏点（业主 2026-10-29）：学员 kit **自己直接结算**的伤害（浮游单元的每一次命中、
+ * 技能 DoT 的 tick 这类不经过 `resolveHit` 的实例）吃不到影子 `attack.hits` 的翻倍 —— 这里给它们补一次 `apply`
+ * 的应用（攻击型教官：一整套「ATK × 教官攻击倍率」的伤害 + 教官的 `afterHit` / `onEachHit` / `onHit`；单次释放型
+ * 教官：那一次技能效果本身，见 `mentorSingleCastApply`）。
+ * 学员自己那一次攻击的伤害（`isAttack` / `isSplash` / 带 `attackId` 三者任一）已被影子段数与溅射覆盖，跳过；
+ * 杀死的递归由 `unit.mem.mentorApplying` 与 `isSplash` 挡住（教官的余震都是溅射实例）。
+ */
+function installMentorApply(battle, unit, apply, onceType = false) {
+  if (typeof apply !== 'function') return;
+  const mine = (d) => Array.isArray(d.tags) && d.tags.includes('mentorApply');
+  battle.on('damaged', (ctx) => {
+    const d = ctx && ctx.dmg;
+    if (!d || ctx.source !== unit || !unit.alive || ctx.target?.side !== 'enemy') return;
+    if (!unit.skill || !unit.skill.active || unit.mem.mentorApplying) return;
+    if (d.sourceless || d.isSplash || d.attackId || mine(d)) return;
+    // 自建实体的「每一发」也要触发（业主 2026-10-29：丰川祥子的赞乐音符是包侧自建实体，`isAttack` 但没有 attackId）——
+    // 引擎那一次攻击结算的实例一定带 attackId（`++b.attackSeq`），已经被段数 / 溅射覆盖；带 `isSkill` 的 isAttack
+    // 是教官自己技能里的结算（异客的雷暴劈雷这类），跳过以免自己触发自己。
+    if (d.isAttack && d.isSkill) return;
+    // 单次释放类教官只认「攻击性质」的实例（业主 2026-10-29：学员继承后**只在攻击时触发**，不是每秒）——
+    // 技能 DoT 之类的 `isSkill` 伤害（荒芜拉普兰德 S3 每秒的范围伤害）不再触发它。
+    if (onceType && d.isSkill) return;
+    unit.mem.mentorApplying = true;
+    try {
+      const safe = (fn, what) => (typeof battle._safe === 'function' ? battle._safe(fn, what, unit) : fn());
+      safe(() => apply(battle, unit, ctx.target), 'mentor.apply');
+    } finally {
+      unit.mem.mentorApplying = false;
+    }
+  }, { owner: unit });
+}
+
+/** 攻击型教官的一次应用（`installMentorApply` 的 apply）：`hits` 段 ATK × 教官攻击倍率 + 教官的命中附带效果。 */
+function mentorAttackApply(sa) {
+  return (battle, unit, t) => {
+    const type = typeof sa.dmgType === 'string' && sa.dmgType !== 'heal' && sa.dmgType !== 'none' ? sa.dmgType : 'phys';
+    const scale = Number(sa.atkScale ?? 1);
+    const mHits = Math.max(1, Math.floor(Number(sa.hits) || 1));
+    let dealt = 0;
+    for (let i = 0; i < mHits && t.alive && scale > 0; i++) { // loop-cap: 教官的段数（kit 的 hits）
+      dealt += battle.dealDamage(unit, t, { amount: unit.s.atk * scale, type, isSkill: true, tags: [...(sa.tags || []), 'mentorApply'] });
+    }
+    const hc = { dealt, x: t.x, y: t.y, isSkill: true };
+    if (typeof sa.onEachHit === 'function') {
+      const fn = sa.onEachHit;
+      fn({ battle, unit, skill: unit.skill, bb: unit.skill.bb, target: t, dealt, kind: 'main', isSplash: false, isChain: false, main: t, attackId: 0, isSkill: true });
+    }
+    if (typeof sa.afterHit === 'function') sa.afterHit(battle, unit, t, hc);
+    if (typeof sa.onHit === 'function') sa.onHit({ battle, unit, skill: unit.skill, bb: unit.skill.bb, target: t, dealt, x: t.x, y: t.y });
+  };
+}
+
+/** 单次释放类教官在学员身上的**内置冷却**（秒，业主 2026-10-29）：同一次攻击的多段、音符连发、攻击与伤害同帧
+ *  这些情形只算一次。 */
+const MENTOR_ONCE_CD = 0.2;
+
+/**
+ * 「单次释放类」教官技能的一次应用（业主 2026-10-29）：技能本体没有 attack / mods / targeting，效果全在一次
+ * `onStart` 里生成（异客 S3 辉煌裂片的雷暴区域就是这一种）—— 学员每次攻击 / 浮游单元每次命中各触发 1 次
+ * （0.2 s 内置 CD）。
+ * 触发时可以带一个 `target`（浮游单元在全场打到的敌人）：那一刻把 unit 的攻击范围临时换成**目标所在的那一格**，
+ * 教官技能里的「在攻击范围内挑一个敌人」就落在这个目标上 —— 否则范围外的命中（荒芜拉普兰德 S3 的浮游单元）会因为
+ * 学员自己范围内没有敌人而整个不触发（业主 2026-10-29）。
+ */
+function runMentorOnce(battle, unit, mspec, target) {
+  const skill = unit && unit.skill;
+  if (!skill || !mspec || typeof mspec.onStart !== 'function') return;
+  const now = battle.time;
+  if (Number.isFinite(unit.mem.mentorOnceAt) && now - unit.mem.mentorOnceAt < MENTOR_ONCE_CD - 1e-9) return;
+  unit.mem.mentorOnceAt = now;
+  const tile = target && target.alive ? Math.round(target.y) * COLS + Math.round(target.x) : null;
+  const saveKeys = unit.rangeKeys, saveSet = unit.rangeKeySet;
+  if (tile != null) {
+    const set = new Set([tile]);
+    unit.rangeKeys = [tile];
+    unit.rangeKeySet = set;
+  }
+  try {
+    mspec.onStart({ battle, unit, skill, bb: skill.bb, target: target || null });
+  } finally {
+    if (tile != null) { unit.rangeKeys = saveKeys; unit.rangeKeySet = saveSet; }
+  }
+}
+
+/** `installMentorApply` 的 apply：单次释放类教官的一次应用（`runMentorOnce`，含 0.2 s CD）。 */
+function mentorSingleCastApply(mspec) {
+  return (battle, unit, target) => runMentorOnce(battle, unit, mspec, target);
+}
+
+/**
+ * 教官技能声明的召唤物（data `overrideTokenKey`）：望 S1/S2/S3 的棋子、令 S1/S2/S3 的墨魂这类「会部署召唤物」的技能。
+ * 技能记录没声明 ⇒ null（夕 S3 这类 token 来自天赋、且 kit 自己就按每次攻击召唤，不套这一层以免叠出两枚）。
+ */
+function mentorSummonTokenId(mdef) {
+  const raw = mdef?.raw ?? mdef ?? null;
+  for (const s of [raw?.skill, mdef?.skill]) {
+    if (!s || typeof s !== 'object') continue;
+    const id = s.overrideTokenKey ?? s.tokenKey;
+    if (typeof id === 'string' && id) return id;
+  }
+  return null;
+}
+
+/** 召唤物落点的一格分类（与望 S3 / content/tokens.js 同一条顺序）：0 不可部署地面 / 1 可部署地面 / 2 高台；null 不能放。 */
+function summonTileClass(battle, r, c) {
+  if (!battle.grid.inRect(r, c)) return null;
+  const t = battle.grid.tile(r, c);
+  if (!t) return null;
+  if (t.build === 'NONE') return t.height === 'LOW' && t.pass === 'ALL' ? 0 : null;
+  if (t.height === 'LOW' && (t.build === 'ALL' || t.build === 'MELEE')) return 1;
+  if (t.build === 'RANGED' || t.build === 'ALL') return 2;
+  return null;
+}
+
+/**
+ * 特训学员的召唤物落点（业主 2026-10-29）：**攻击目标所在格**优先；那一格不能用时，以它为中心向外按技能自己的顺序
+ * 就近挑（有敌人的格 > 不可部署地面 > 可部署地面 > 高台）。没有目标（消耗弹药触发）时以学员所在格为中心找。
+ * 只避开自家单位 / 倒地干员 / 障碍 / 预留格（敌人所在格可以：夕 S3 的召唤就落在被攻击的敌人脚下）。
+ * @returns {[number, number]|null}
+ */
+function traineeSummonTile(battle, unit, target) {
+  const tr = target ? Math.round(target.y) : unit.tileR;
+  const tc = target ? Math.round(target.x) : unit.tileC;
+  const ok = (r, c) => battle.grid.inRect(r, c) && summonTileClass(battle, r, c) != null
+    && !battle.unitAt(r, c) && !battle.downOn(r, c) && !battle.grid.isObstacle(r, c) && !battle.isReservedTile(r, c);
+  if (ok(tr, tc)) return [tr, tc];
+  const cands = [];
+  for (let rad = 1; rad <= 3; rad++) {   // loop-cap: 最多向外 3 格
+    for (let dr = -rad; dr <= rad; dr++) {
+      for (let dc = -rad; dc <= rad; dc++) {
+        if (Math.max(Math.abs(dr), Math.abs(dc)) !== rad) continue;
+        const r = tr + dr, c = tc + dc;
+        if (!ok(r, c)) continue;
+        cands.push({
+          r, c, cls: summonTileClass(battle, r, c), d: rad, k: r * COLS + c,
+          foe: battle.enemies.some((e) => e.alive && !e.hidden && bodyOnTile(e, r, c)) ? 0 : 1,
+        });
+      }
+    }
+  }
+  cands.sort((a, b) => a.foe - b.foe || a.cls - b.cls || a.d - b.d || a.k - b.k);
+  return cands.length ? [cands[0].r, cands[0].c] : null;
+}
+
+/**
+ * 特训学员的「召唤物」层（业主 2026-10-29）：教官技能声明了召唤物（`overrideTokenKey`）时，学员在**自己的技能期间**
+ * 每次攻击 / 每次消耗弹药都在目标格（不可用时按技能顺序就近）部署一枚，技能结束（含弹药打空）时它们同步退场。
+ * 这条层不读教官技能的弹药与库存，也不受它的部署数量限制（per-owner `deployLimit` 只约束内建 tokens 的 kit）；
+ * 更不占对局的可部署干员数量上限（battle 的 spawnToken 本来就不碰 match 的 deployCount）。
+ * 同一次攻击若同时消耗弹药（弹药技能），`attack` 与 `ammoUsed` 在同一 `battle.time` —— 只算一枚。
+ * `onSummon(battle, unit, token)`：教官 kit 的 `tokenSummon` 钩子（有就调）—— 让这枚 summon 也吃那个技能自己的
+ * 效果（望 S3：登记成她的一片棋子，照 tick 扫描触发伤害与特效）。
+ */
+function installTraineeSummons(battle, unit, tokenId, onSummon = null) {
+  if (!tokenId) return;
+  const spawned = () => (Array.isArray(unit.mem.traineeSummons) ? unit.mem.traineeSummons : (unit.mem.traineeSummons = []));
+  const clear = () => {
+    for (const t of spawned()) if (t && t.alive) battle.retreat(t, { reason: 'expired', permanent: true });
+    unit.mem.traineeSummons = [];
+  };
+  const on = () => !!(unit.alive && unit.skill && unit.skill.active);
+  let at = -Infinity;
+  const deploy = (target) => {
+    if (!on()) return;
+    // 教官 kit 自己就在**目标格**召唤了这一枚（夕 S3 的「每次攻击召唤 / 刷新一只」这类）⇒ 这一发不重复叠：
+    // 只认不是这一层放下的同 id token（本层放下的会占住目标格，落点会自动让到旁边，照旧是「每次攻击各一枚」）
+    const mine = spawned();
+    const tr = target ? Math.round(target.y) : unit.tileR;
+    const tc = target ? Math.round(target.x) : unit.tileC;
+    const foreign = battle.allyUnits.some((t) => t && t.alive && t.kind === 'token' && t.defId === tokenId
+      && t.ownerUnit === unit && t.tileR === tr && t.tileC === tc && !mine.includes(t));
+    if (foreign) return;
+    const tile = traineeSummonTile(battle, unit, target);
+    if (!tile) return;
+    const t = battle.spawnToken(unit, tokenId, tile[0], tile[1], { anySource: true });
+    if (!t) return;
+    mine.push(t);
+    if (typeof onSummon === 'function') {
+      try { onSummon(battle, unit, t); } catch (e) { battle._handlerError?.('traineeSummon', t, e); }
+    }
+  };
+  battle.on('attack', (c) => {
+    if (c.attacker !== unit || !on()) return;
+    if (battle.time <= at + 1e-9) return;
+    at = battle.time;
+    deploy((c.targets || []).find((x) => x && x.side === 'enemy') || null);
+  }, { owner: unit });
+  battle.on('ammoUsed', (c) => {
+    if (c.unit !== unit || !on()) return;
+    if (battle.time <= at + 1e-9) return;
+    at = battle.time;
+    deploy(null);
+  }, { owner: unit });
+  battle.on('skillEnd', (c) => { if (c.unit === unit) clear(); }, { owner: unit });
+  battle.on('death', (c) => { if (c.unit === unit) clear(); }, { owner: unit });
+}
+
+/**
+ * 特训学员的 kit 后处理（重构协议·特训，叠加式）：学员自己的 kit 为基（自己的技能 / 特质 / 天赋 / install 照常），
+ * 教官那份 kit（`def.traineeMentor` → mentorKitOf）的
+ *   - 选定技能 spec —— 作为「影子技能」并进学员自己的 spec（mergeShadowSpec；学员没有 spec 时不造：影子只随
+ *     学员自己的施放激活）；
+ *   - talents installers —— 追加到 kit.talents（教官的天赋独立结算）；
+ *   - install —— 链在学员 kit.install 之后（教官特质的逐单位行为）；
+ *   - trait —— profile 覆盖对象并入（学员自己的键优先）。
+ * 教官 def 查无 / kit 构造抛错 ⇒ 按原样返回（战斗叠加这一层不生效，学员的 def 级组成照旧）。
+ */
+function applyTraineeMentor(battle, kit, def) {
+  const found = mentorKitOf(battle, def?.traineeMentor, def);
+  if (!found) return kit;
+  const { mdef, mk } = found;
+  const out = chainMentorInstallers(kit, mk, { trait: true, mentorSkillId: mdef.skill?.id ?? mk.skill?.id ?? null });
+  if (kit.skill && mk.skill) {
+    out.skill = mergeShadowSpec(kit.skill, mk.skill);
+    // 教官那一次「技能效果」对学员 kit 自己结算的伤害（浮游单元命中这类）也要各触发 1 次（installMentorApply）：
+    // 攻击型教官 = 一整套攻击；单次释放型教官（异客 S3 的雷暴这类）= 那一次 onStart 的效果本身。
+    const apply = isSingleCastSpec(mk.skill) ? mentorSingleCastApply(mk.skill)
+      : mk.skill.attack ? mentorAttackApply(mk.skill.attack) : null;
+    if (apply) {
+      const prev = out.install;
+      const once = isSingleCastSpec(mk.skill);
+      out.install = (b, u) => { if (prev) prev(b, u); installMentorApply(b, u, apply, once); };
+    }
+  }
+  // 教官的技能会部署召唤物（data `overrideTokenKey`：望 S3 的棋子 / 令 S3 的墨魂这类）：学员在技能期间每次攻击 /
+  // 每次消耗弹药各部署一枚，技能结束（含弹药打空）时一起退场；无视教官技能的弹药与部署数量限制、不占可部署上限。
+  const summonId = mentorSummonTokenId(mdef);
+  if (summonId && out.skill) {
+    const prev = out.install;
+    const onSummon = typeof mk.tokenSummon === 'function' ? mk.tokenSummon : null;
+    out.install = (b, u) => { if (prev) prev(b, u); installTraineeSummons(b, u, summonId, onSummon); };
+  }
+  return out;
+}
+
+/**
+ * 特训学员的**召唤物**（业主 2026-10-29）：学员召唤的 token 也吃教官的天赋 / 特质 installer —— 只对「主人是
+ * 特训学员」的 token 生效；token 自己的 kit（技能 / 特性）保持原样，教官的**影子技能不并**（召唤物没有学员
+ * 那一次施放，影子只随学员自己的技能激活）。教官查无 / 构造失败 ⇒ 原样返回。
+ * @param {import('../Battle.js').Battle} battle @param {object} unit the token @param {object} kit its own kit
+ */
+export function attachMentorToSummon(battle, unit, kit) {
+  const tm = unit && unit.kind === 'token' && unit.ownerUnit ? unit.ownerUnit.def?.traineeMentor : null;
+  if (!tm) return kit;
+  const found = mentorKitOf(battle, tm, unit.def);
+  if (!found) return kit;
+  return chainMentorInstallers(kit, found.mk);
 }
 
 /** Resolve the Kit of an ally unit. Never throws (falls back to the generic kit). */

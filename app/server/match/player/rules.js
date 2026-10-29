@@ -62,19 +62,26 @@ export class PlayerRules {
    */
   mainPool() {
     const base = this._drawPool();
-    // 重构模拟的「自主禁用」：只收窄**这名玩家自己的抽取**（商店 / 晋升奖励 / 内容 rollChess）。配对共享池里的
-    // 拷贝一个都不动，队友照常买得到；这里给的是一个只读视图，`roll` 叠一条 filter，其余读写全走原池。
+    // 重构模拟的两条按玩家规则（同一层、同一处）：①「自主禁用」只收窄**这名玩家自己的抽取**（商店 / 晋升奖励 /
+    // 内容 rollChess）；②「盟约倾向」按所选盟约给干员加权（`Match.reconBondLeanWeights`，组内概率总和恒为 1）。
+    // 配对共享池里的拷贝一个都不动，队友照常买得到；这里给的是一个只读视图，`roll` 叠一层过滤 / 权重，其余读写全走原池。
+    // 两条都不成立时（官方对局 / 没交选择）返回的仍是原池对象本身，抽卡逐字节不变。
     const banned = typeof this.m.reconSelfBannedChess === 'function' ? this.m.reconSelfBannedChess(this) : null;
-    if (!banned || !banned.size) return base;
-    if (this._banView && this._banViewBase === base && this._banViewBanned === banned) return this._banView;
+    const lean = typeof this.m.reconBondLeanWeights === 'function' ? this.m.reconBondLeanWeights(this) : null;
+    if ((!banned || !banned.size) && !lean) return base;
+    if (this._banView && this._banViewBase === base && this._banViewBanned === banned && this._banViewLean === lean) return this._banView;
     const view = Object.create(base);
     view.roll = (rng, opts = {}) => {
       const filter = opts.filter;
-      return base.roll(rng, { ...opts, filter: (id, e) => !banned.has(id) && (!filter || filter(id, e)) });
+      const out = { ...opts };
+      if (banned && banned.size) out.filter = (id, e) => !banned.has(id) && (!filter || filter(id, e));
+      if (lean) out.weight = (id) => lean.get(id) ?? 1;
+      return base.roll(rng, out);
     };
     this._banView = view;
     this._banViewBase = base;
     this._banViewBanned = banned;
+    this._banViewLean = lean;
     return view;
   }
 

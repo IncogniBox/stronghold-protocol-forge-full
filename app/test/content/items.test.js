@@ -1101,14 +1101,14 @@ test('突变细胞: a DEPLOYED carrier leaves the field — the new operator is 
   assert.ok(handIds(ps, 'item').includes(A('5_08')), 'the cell back in the hand');
 });
 
-test('人事部文档: deploy cap becomes 9 (a second copy adds nothing)', () => {
+test('人事部文档: deploy cap +1 per copy (8 → 9 → 10; 业主 2026-10-29 改成相对 +1)', () => {
   const { m, ps, equip } = setup();
   const t = give(m, ps, plain((c) => c.tier === 1)[0], 'hand');
   assert.equal(ps.deployCap, 8);
   assert.deepEqual(equip(giveItem(m, ps, A('6_08')), t), OK);
   assert.equal(ps.deployCap, 9);
   assert.deepEqual(equip(giveItem(m, ps, A('6_08')), t), OK);
-  assert.equal(ps.deployCap, 9);
+  assert.equal(ps.deployCap, 10, '第二件再 +1（相对值，不再被 9 那个绝对值卡住）');
   cover(A('6_08'), B('6_08'));
 });
 

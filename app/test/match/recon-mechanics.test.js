@@ -20,9 +20,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { makeMatch, give, giveItem, chessOfTier, legalTileFor } from './harness.js';
 import { makeCtx, MetaRegistry } from '../../server/match/effectsMeta.js';
 import { tileKey } from '../../server/match/board.js';
+import { ERR } from '../../shared/constants.js';
 import { registerMeta, RECON_RULES } from '../../workshop/mode-recon/meta/main.mjs';
 
 const A_BOND = RECON_RULES.ASSIST_BOND;   // 'recon_assist_bond'
@@ -59,6 +63,24 @@ function equipOnHand(m, ps, itemId, chessId) {
   assert.ok(holder.items.includes(item), '装备应已挂上');
   return { holder, item };
 }
+
+// ---------------------------------------------------------------------------------------------
+// 0'. 盟约覆盖的作用域：`recon_<id>` 记录只在重构对局里替换官方 id
+
+test('重构对局把 recon_<id> 别名到官方盟约 id；普通对局仍是官方记录', () => {
+  const recon = makeMatch({ mode: 'solo', modeId: 'mode_recon_abyss', humans: 1, seed: 2, fake: true }).m;
+  const yan = recon.gd.bond('yanShip');
+  assert.equal(yan.bondId, 'yanShip', '对外仍是官方 id（成员 / 层数 / 图标都按它 join）');
+  assert.equal(yan.name, '炎·重构', '内容来自包里那一份');
+  assert.ok(yan.bb && yan.bb.recon, '重构标记在（引擎据此走变体）');
+  assert.equal(recon.gd.bondIds.includes('recon_yanShip'), false, '备选记录不当成一条可抽盟约');
+  recon.dispose();
+
+  const plain = makeMatch({ mode: 'solo', humans: 1, seed: 2, fake: true }).m;
+  assert.equal(plain.gd.bond('yanShip').bondId, 'yanShip', '普通对局逐字不变');
+  assert.equal(plain.gd.bond('yanShip').bb.recon, undefined);
+  plain.dispose();
+});
 
 // ---------------------------------------------------------------------------------------------
 // 1. ctx.recon()
@@ -340,6 +362,42 @@ test('盟约重构（假 ctx）: 三类（核心 / 附加 / 故事集）各 +10 
   ctx.recon = () => ({ assist: A_BOND });
   h.onPrepEnd(ctx);
   assert.deepEqual(calls.map((c) => c[0]), ['coreHigh', 'addonHigh'], '没有已激活盟约的一类不加层');
+});
+
+// ---------------------------------------------------------------------------------------------
+// 7'. 装备重构的**玩家级拆卸许可**（`effects[].unequip`，引擎 `playerUnequipAllowed`）
+
+test('装备重构：只有交了这一项的玩家能拆已装备的装备；改选别的协助后下一回合撤掉', () => {
+  const { m, ps } = setup();
+  const { holder, item } = equipOnHand(m, ps, EQUIP3, chessOfTier(1)[0]);
+
+  // 房间规则是缺省档（这一局没有 `unequip: "allow"`），没交选择 ⇒ 与官方同一句
+  assert.deepEqual(m.handle('p_0', { t: 'g.unequip', itemUid: item.uid }),
+    { error: ERR.BAD_TARGET, detail: 'equipped items are locked' }, '缺省档照旧挡住');
+
+  m.reconChoices = { p_0: { assist: A_EQUIP } };
+  m.dispatch(ps, 'onRoundStart', { round: m.round });
+  const ref = ps.effects.find((e) => e.id === RECON_RULES.UNEQUIP_EFFECT_ID);
+  assert.ok(ref, '回合开始发出玩家级拆卸许可');
+  assert.equal(ref.unequip, true, '引擎认的那个字段');
+  assert.equal(ref.hidden, true, '不进效果列表');
+  assert.equal(ref.battle, false, '不进 PlayerBattleInput');
+  assert.deepEqual(m.handle('p_0', { t: 'g.unequip', itemUid: item.uid }), { ok: true }, '选了装备重构 ⇒ 拆得下');
+  assert.equal(ps.hand.some((x) => x && x.uid === item.uid), true, '装备回到了手牌');
+
+  // 改选别的协助 → 下一回合撤掉许可；同一件重新装上后拆不动（同一句锁）
+  m.reconChoices.p_0 = { assist: A_BOND };
+  m.dispatch(ps, 'onRoundStart', { round: m.round });
+  assert.equal(ps.effects.some((e) => e.unequip === true), false, '许可被撤掉');
+  assert.deepEqual(m.handle('p_0', { t: 'g.equip', itemUid: item.uid, targetUid: holder.uid }), { ok: true }, '重新装上');
+  assert.deepEqual(m.handle('p_0', { t: 'g.unequip', itemUid: item.uid }),
+    { error: ERR.BAD_TARGET, detail: 'equipped items are locked' }, '撤掉许可后又锁住了');
+  m.dispose();
+});
+
+test('装备重构：整间房不打开 `unequip` 规则（pack.json 不再声明 behaviour）', () => {
+  const pack = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../workshop/mode-recon/pack.json'), 'utf8'));
+  assert.equal(pack.behaviour, undefined, '房间级那一格必须是缺省（否则所有人都能拆）');
 });
 
 // ---------------------------------------------------------------------------------------------

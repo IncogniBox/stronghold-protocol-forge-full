@@ -68,6 +68,25 @@ test('battleIds: unique within a match, valid protocol ids (≤ 64 chars) even f
   h.m.dispose();
 });
 
+test('a PAIRED normal field (two humans on a dual-layout map) has a protocol-legal battleId: `n:p_0+p_1`, and `+` is not an id character', () => {
+  const prev = process.env.SP_STAGE;
+  process.env.SP_STAGE = 'my_map';
+  try {
+    const h = makeMatch({ mode: 'recon', modeId: 'mode_recon_abyss', difficulty: 'FUNNY', humans: 2, bots: 0, seed: 77, fake: true, clientCombat: true, clients: false }).start();
+    const m = h.m;
+    assert.ok(h.drive(() => m.phase === PHASE.COMBAT));
+    const f = m.fields.find((x) => x.fieldId === 'n:p_0+p_1');
+    assert.ok(f, 'the two humans fight one paired field');
+    assert.ok(!f.battleId.includes('+'), f.battleId);
+    assert.equal(validateC2S({ t: 'b.progress', battleId: f.battleId, gt: 0, killed: 0, total: 0 }), null, f.battleId);
+    assert.equal(validateC2S({ t: 'b.result', battleId: f.battleId, result: fakeResult(m, f.spec) }), null, f.battleId);
+    assert.ok(f.battleId.startsWith(`${(77).toString(36)}.1.`), f.battleId);
+    m.dispose();
+  } finally {
+    if (prev === undefined) delete process.env.SP_STAGE; else process.env.SP_STAGE = prev;
+  }
+});
+
 // ---- duplicate b.result -------------------------------------------------------------------------------------------
 
 test('a duplicate b.result (a re-send after a lost reply) is accepted idempotently: ok, nothing changes', () => {

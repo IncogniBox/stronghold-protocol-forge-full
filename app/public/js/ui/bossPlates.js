@@ -129,8 +129,14 @@ const NODE_Y = 202;
 
 /** A leader's portrait (the enemy icon of bosses.json's enemyKey), or null. */
 export function bossIconOf(bossId) {
+  const assets = data.get('assets');
   const b = bossId ? getBoss(bossId) : null;
-  return b?.enemyKey ? enemyIconUrl(data.get('assets'), b.enemyKey) : null;
+  if (b?.enemyKey) return enemyIconUrl(assets, b.enemyKey);
+  // 重构模拟的「·重构」首领不在这张 `bosses` 表里（记录在工坊包 `mode-recon` 的 enemies.json）：
+  // `pub.bossId` / `pub.hiddenBossId` 被换成那个 enemy key 之后，头像直接按敌人记录取（业主 2026-10-29
+  //「都没有在场上显示 boss」—— 领袖画板此前因为查不到 boss 记录而整块没有头像）。
+  if (bossId && data.lookup('enemies', bossId)) return enemyIconUrl(assets, bossId);
+  return null;
 }
 
 function Art({ k, class: cls }) {

@@ -138,6 +138,33 @@ export function indexAudio(audioData) {
   return { bank, bgm, unitBanks, skillBanks, mixOf, poolOf };
 }
 
+/**
+ * The banks of one skill: `ON_SKILL_START` / `ON_SKILL_FINISH` / `ON_SKILL_SPECIAL_POINT`, the exact id first and then
+ * the skill's sub-keyed banks.
+ *
+ * Why a second lookup: a bank is named `battle.<EVENT>.<skillId>[.<sub>…]`, and some skills carry a sub-key — 予愿's S3
+ * spawns a moving projectile, so its activation bank is
+ * `battle.ON_SKILL_START.skchr_aglna2_3.move_like_projectile.skill_start`. indexAudio keys `skillBanks` by the whole
+ * remainder, so `skillBanks.get('skchr_aglna2_3')` found nothing and S3 fell back to the generic b_char_atkboost
+ * (and an operator whose only bank is sub-keyed ended up with no skill sound at all).
+ * [ASSUMED] Sub-keyed banks are read in name order and the first event of each kind wins: nothing in the tables says
+ * which of two sub-keys a skill with both casts.
+ * @param {Map<string, Map<string, string[]>>|undefined} skillBanks indexAudio().skillBanks
+ * @param {string|null|undefined} skillId
+ * @returns {Map<string, string[]>|null} the skill's event → paths banks, or null when it has none
+ */
+export function skillBanksOf(skillBanks, skillId) {
+  if (!skillBanks || typeof skillId !== 'string' || !skillId) return null;
+  const exact = skillBanks.get(skillId);
+  const prefix = skillId + '.';
+  const keys = [...skillBanks.keys()].filter((k) => k.startsWith(prefix)).sort();
+  if (!exact && !keys.length) return null;
+  if (!keys.length) return exact;
+  const out = new Map(exact ? [...exact] : []);
+  for (const k of keys) for (const [ev, paths] of skillBanks.get(k)) if (!out.has(ev)) out.set(ev, paths);
+  return out;
+}
+
 /** Sort key for ability sub-keys: plain first, then numeric suffixes ascending. */
 function abilityOrder(a, b) {
   const na = a.split('.').length; const nb = b.split('.').length;

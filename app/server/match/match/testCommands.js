@@ -42,7 +42,7 @@
 //   * bond count sets the ordinary extra-member bonus (0..99), allowing activation without
 //     pieces. computeBonds still decides the tier; a mode-disabled bond is refused.
 
-import { ERR, PHASE, layerGainRoom } from '../../../shared/constants.js';
+import { ERR, PHASE, layerGainRoom, bondLayerCap } from '../../../shared/constants.js';
 import { parseTestArgs, isTestCommand, TEST_LOG_CAP, TEST_RATE_COUNT, TEST_RATE_WINDOW_MS } from '../../../shared/testMode.js';
 import { OK, fail } from './common.js';
 
@@ -362,7 +362,7 @@ export class MatchTestCommands {
       return OK;
     }
     const delta = layers - cur;
-    if (layerGainRoom(cur, delta) !== delta) return fail(ERR.BAD_TARGET);
+    if (layerGainRoom(cur, delta, bondLayerCap(this.gd.modeId)) !== delta) return fail(ERR.BAD_TARGET);
     const add = ps.addLayers(id, delta, { reason: 'test' });
     if (add !== delta) return fail(ERR.BAD_TARGET);
     return OK;

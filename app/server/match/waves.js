@@ -37,7 +37,7 @@
 
 import { createRng, deriveSeed } from '../sim/rng.js';
 import { PLUGIN_ACTION_UNITS } from '../../shared/plugins/limits.js';
-import { OFFICIAL_LAYOUT, layoutOf } from '../../shared/layout.js';
+import { OFFICIAL_LAYOUT, layoutOf, bossAreaBattleRect } from '../../shared/layout.js';
 
 const ACLOON = 'enemy_9012_acloon';
 const DEFAULT_PLACEHOLDERS = Object.freeze({
@@ -73,6 +73,22 @@ export function roundHalfEven(x) {
 
 const gen = (gd) => (gd.factions.generation && typeof gd.factions.generation === 'object' ? gd.factions.generation : {});
 const intOr = (v, d) => (Number.isInteger(v) && v > 0 ? v : d);
+
+/**
+ * 模式级阵营排程（重构模拟的 `factionSetup`；官方模式没有这个键 ⇒ null，官方抽取逐字节不变）。
+ * 形状见 `shared/reconModes.js` 的 `RECON_FACTION_SETUP`。
+ */
+const factionSetup = (gd) => (gd.mode && typeof gd.mode === 'object' && gd.mode.factionSetup && typeof gd.mode.factionSetup === 'object' ? gd.mode.factionSetup : null);
+
+/** 这个随机类型在本局的合并数据里至少有一条可用的敌人记录（包缺席的 DIMO 不算可用）。 */
+function typeUsable(gd, type) {
+  const types = gd.factions.types && typeof gd.factions.types === 'object' ? gd.factions.types : {};
+  const t = types[type];
+  if (!t) return false;
+  if (Array.isArray(t.pool) && t.pool.some((k) => typeof k === 'string' && gd.enemy(k))) return true;
+  const entries = gd.factions.entries && typeof gd.factions.entries === 'object' ? gd.factions.entries : {};
+  return Object.values(entries).some((e) => e && e.type === type && typeof e.key === 'string' && gd.enemy(e.key));
+}
 
 /** Official movement class of an enemy key (randomEnemyAttributeDict.isFlyEnemy, else its motion). */
 export function isFlyKey(gd, key) {
@@ -157,25 +173,85 @@ export function pickRoundEntry(gd, rng, type, round) {
   return { round, type: e.type, key: e.key, normal: pickKey(e.N), elite: pickKey(e.E), fly: typeof e.fly === 'boolean' ? e.fly : isFlyKey(gd, e.key), firstHalf: half };
 }
 
-/** Round type schedule: each chosen type × its slot count, filled with SPECIAL to maxLevelCnt, shuffled. */
+/**
+ * Round type schedule: each chosen type × its slot count, filled with SPECIAL to the schedule length, shuffled.
+ *
+ * 官方：长度 = `generation.maxLevelCnt`（15）。重构模拟（`gd.mode.factionSetup`）把长度拉到 21，并把涤墨钉在固定回合
+ * （`fixedRounds`）、另两个类型按 `typeCounts` 占位，其余填 `SPECIAL`。没有 `factionSetup` 时这段代码与从前逐字节
+ * 相同（同一数组、同一次 `shuffle`）。
+ */
 export function makeTypeSchedule(gd, rng, factions) {
   const g = gen(gd);
-  const max = Math.min(256, Math.max(0, intOr(g.maxLevelCnt, 15))); // loop-cap: schedule length [ASSUMED] DESIGN §34.5
+  const fs = factionSetup(gd);
+  const max = Math.min(256, Math.max(0, intOr(fs && fs.rounds, intOr(g.maxLevelCnt, 15)))); // loop-cap: schedule length [ASSUMED] DESIGN §34.5
   const fill = typeof g.fillType === 'string' ? g.fillType : (typeof g.alwaysIncludedType === 'string' ? g.alwaysIncludedType : 'SPECIAL');
   const types = gd.factions.types && typeof gd.factions.types === 'object' ? gd.factions.types : {};
-  const slots = [];
-  for (const t of factions) {
-    const n = intOr(types[t]?.count, 3);
-    for (let i = 0; i < n && slots.length < max; i++) slots.push(t);
+  const fixed = fs && fs.fixedRounds && typeof fs.fixedRounds === 'object' ? fs.fixedRounds : null;
+  const slots = new Array(max).fill(null);
+  const pinned = {};
+  if (fixed) {
+    for (const [type, list] of Object.entries(fixed)) {
+      if (!Array.isArray(list) || !factions.includes(type)) continue;
+      for (const r of list) {
+        if (Number.isInteger(r) && r >= 1 && r <= max && slots[r - 1] === null) { slots[r - 1] = type; pinned[type] = (pinned[type] || 0) + 1; }
+      }
+    }
   }
-  while (slots.length < max) slots.push(fill); // loop-cap: schedule length
-  rng.shuffle(slots);
+  const pinnedCount = Object.values(pinned).reduce((s, n) => s + n, 0);
+  const rest = [];
+  for (const t of factions) {
+    const want = intOr(fs && fs.typeCounts && fs.typeCounts[t], intOr(types[t]?.count, 3));
+    const n = Math.max(0, want - (pinned[t] || 0));
+    for (let i = 0; i < n; i++) rest.push(t);
+  }
+  while (rest.length < max - pinnedCount) rest.push(fill); // official: type tokens + SPECIAL fill, exactly as before
+  if (rest.length > max - pinnedCount) rest.length = max - pinnedCount; // loop-cap: schedule length
+  rng.shuffle(rest);
+  for (let i = 0, k = 0; i < max; i++) if (slots[i] === null) slots[i] = k < rest.length ? rest[k++] : fill;
   return slots;
 }
 
 function scheduleRng(rng) {
   const seed = typeof rng.state === 'function' ? deriveSeed(rng.state(), 'waves:schedule') : Math.floor(rng() * 4294967296);
   return createRng(seed);
+}
+
+/**
+ * 重构模拟的涤墨两档池（`phase` = 'base' | 'reinforced'）：
+ *   * `base` —— R1–R10，键名**不带** `_2`（操戈 / 挽弓 / 拔山 / 浪里玄条 / 霜劫 / 旺财 / “果腹” / 云中墨贼）；
+ *   * `reinforced` —— R11 起，键名**以** `_2` 结尾（操戈·凌 / 挽弓·鸣 / 拔山·盖 / 挟潮·来 / 浪里玄条·锈 / 云中墨贼·蚀 /
+ *     招财 / “饱食” / 飘香）。
+ * 每档再按 `NORMAL` 地面 / `ELITE` 地面 / 飞行拆成三个池；源键必须在本局数据里真的有敌人记录（包缺席时为空）。
+ * @returns {{ normal: string[], elite: string[], fly: string[] }}
+ */
+function dimoPools(gd, phase) {
+  const types = gd.factions.types && typeof gd.factions.types === 'object' ? gd.factions.types : {};
+  const source = types.DIMO && Array.isArray(types.DIMO.pool) ? types.DIMO.pool : [];
+  const out = { normal: [], elite: [], fly: [] };
+  for (const key of source.slice().sort()) {
+    if (typeof key !== 'string' || !gd.enemy(key) || gd.inactiveEnemies.has(key)) continue;
+    if ((phase === 'reinforced') !== key.endsWith('_2')) continue;
+    if (isFlyKey(gd, key)) { out.fly.push(key); continue; }
+    (gd.enemy(key).rank === 'NORMAL' ? out.normal : out.elite).push(key);
+  }
+  return out;
+}
+
+/**
+ * 一个涤墨回合的 pick。**出怪不在这里**：6 个涤墨回合的模板（`workshop/mode-recon/waves.json` 的 `recon_rNN`）
+ * 直接写涤墨键与数量（业主 2026-10-29 的固定表），所以 `key/normal/elite` 只给 `entriesView`（敌方情报）用，
+ * 模板里没有占位符就不会被替换。
+ */
+function dimoPick(gd, r) {
+  const pool = dimoPools(gd, r <= 10 ? 'base' : 'reinforced');
+  const ground = [...pool.normal, ...pool.elite];
+  if (!ground.length && !pool.fly.length) return null;
+  const rep = ground[0] ?? pool.fly[0];
+  return {
+    round: r, type: 'DIMO', key: rep,
+    normal: pool.normal[0] ?? rep, elite: pool.elite[0] ?? rep,
+    fly: false, firstHalf: r <= firstHalfMax(gd),
+  };
 }
 
 /**
@@ -198,21 +274,29 @@ export function setupMatchWaves(gd, rng) {
   const types = gd.factions.types && typeof gd.factions.types === 'object' ? gd.factions.types : {};
   const n = Number.isInteger(gen(gd).specialEnemyNum) ? gen(gd).specialEnemyNum : 3;
   const random = Object.values(types).filter((t) => t && t.involveRandom).map((t) => t.type).sort();
-  const shuffled = random.slice();
+  // 模式级必选类型（重构模拟的 DIMO）：只有「在随机池里、且本局数据里真的可用」才强制。
+  const fs = factionSetup(gd);
+  const forced = (Array.isArray(fs && fs.forceTypes) ? fs.forceTypes : []).filter((t) => random.includes(t) && typeUsable(gd, t));
+  const shuffled = random.filter((t) => !forced.includes(t));
   rng.shuffle(shuffled);
-  const chosen = shuffled.slice(0, Math.min(n, shuffled.length));
+  const chosen = [...forced, ...shuffled].slice(0, Math.min(n, random.length));
   const factions = chosen.slice().sort((a, b) => (types[a]?.sortId ?? 9) - (types[b]?.sortId ?? 9));
   // bosses
   const bw = gd.bossWeights(false);
   const bossId = bw.length ? weightedPick(rng, bw) : null;
   const hw = gd.bossWeights(true);
   const hiddenBossId = hw.length && gd.hiddenRound ? weightedPick(rng, hw) : null;
-  // the 15-round schedule and picks (own rng stream derived from the setup rng's state: the draws above and whatever
+  // the round schedule and picks (own rng stream derived from the setup rng's state: the draws above and whatever
   // the caller draws next from `rng` are unchanged)
   const srng = scheduleRng(rng);
   const typeSlots = makeTypeSchedule(gd, srng, chosen);
+  // 涤墨：只有重构模拟（带 factionSetup）才用 dimoPick；官方模式里 DIMO 只是一个普通随机类型，逐字节不变。
+  const reconDimo = !!factionSetup(gd);
   const picks = [null];
-  for (let r = 1; r <= typeSlots.length; r++) picks.push(pickRoundEntry(gd, srng, typeSlots[r - 1], r));
+  for (let r = 1; r <= typeSlots.length; r++) {
+    const p = reconDimo && typeSlots[r - 1] === 'DIMO' ? dimoPick(gd, r) : null;
+    picks.push(p ?? pickRoundEntry(gd, srng, typeSlots[r - 1], r));
+  }
   Object.defineProperty(factions, 'schedule', { value: Object.freeze({ typeSlots: typeSlots.slice(), picks }), enumerable: false });
   return { stageId, factions, bossId, hiddenBossId, typeSlots, picks };
 }
@@ -282,7 +366,7 @@ export function gateOf(start, leader) {
 
 const isLeaderTemplate = (tpl) => !!tpl && (tpl.kind === 'boss' || tpl.kind === 'hidden');
 
-function previewInfo(gd, key, route, boss = false, leader = undefined) {
+export function previewInfo(gd, key, route, boss = false, leader = undefined) {
   const e = gd.enemy(key);
   const start = route && Array.isArray(route.start) ? route.start.slice(0, 2) : null;
   return { gate: gateOf(start, leader), start, fly: isFlyKey(gd, key), elite: !!(e && e.rank && e.rank !== 'NORMAL'), boss };
@@ -426,7 +510,9 @@ export function stageBossIdsFor(gd, round) {
 
 export function buildNormalWave(gd, rng, factions, round, stageId = null) {
   const rc = gd.roundCfg(round);
-  const templateId = stageTemplateId(gd, stageId, round) ?? (rc && typeof rc.template === 'string' ? rc.template : null);
+  let templateId = stageTemplateId(gd, stageId, round) ?? (rc && typeof rc.template === 'string' ? rc.template : null);
+  // 重构模拟：包被停用 / 被删时，回合条目带着官方基底模板的 id，退回它而不是空场（官方回合没有这个键）。
+  if (templateId && !gd.wave(templateId) && rc && typeof rc.templateFallback === 'string') templateId = rc.templateFallback;
   const tpl = templateId ? gd.wave(templateId) : null;
   const timeLimit = gd.combatTimeLimit(round);
   if (!tpl) return { templateId, spawns: [], routes: [], extraRoutes: [], timeLimit, overrides: {}, pick: null, entries: { ground: null, fly: null }, actions: [] };
@@ -456,9 +542,12 @@ export function buildNormalWave(gd, rng, factions, round, stageId = null) {
 
 /**
  * Boss / hidden round template for one boss field; escorts follow the pick of the round's own slot.
- * @param {{ bossId: string, solo: boolean }} opts solo → `_s` template (lone player or solo mode)
+ *
+ * `areaIndex`（第几块 boss 场地）：地图给这块场地画了路线时，**首领与部位**改走地图自己的路线（起点 = 首领中心、
+ * 终点回起点），护送小怪仍走模板路线 —— 于是首领站/巡在自己的场地上，不会顺着官方那条路走错门。
+ * @param {{ bossId: string, solo: boolean, areaIndex?: number }} opts solo → `_s` template (lone player or solo mode)
  */
-export function buildBossWave(gd, rng, factions, round, { bossId, solo }, stageId = null) {
+export function buildBossWave(gd, rng, factions, round, { bossId, solo, areaIndex = 0 }, stageId = null) {
   const rc = gd.roundCfg(round);
   const map = rc && rc.bossTemplates && typeof rc.bossTemplates === 'object' ? rc.bossTemplates : {};
   let templateId = stageBossTemplateId(gd, stageId, round, bossId) || (typeof map[bossId] === 'string' ? map[bossId] : null);
@@ -474,11 +563,31 @@ export function buildBossWave(gd, rng, factions, round, { bossId, solo }, stageI
   const tpl = templateId ? gd.wave(templateId) : null;
   if (!tpl) return { templateId, spawns: [], routes: [], extraRoutes: [], timeLimit: Infinity, overrides: {}, pick: null, entries: { ground: null, fly: null }, actions: [] };
   const pick = roundPick(gd, rng, factions, round);
-  const { spawns, actions } = templateSpawns(gd, tpl, round, pick);
+  const { spawns: raw, actions } = templateSpawns(gd, tpl, round, pick);
+  // 首领与部位换到地图自己的 boss 路线（两条轮流）；护送小怪保持模板路线（它们要沿那条路走去防守点）
+  const arena = stageBossRoutesOf(gd, stageId, areaIndex);
+  const leaderTpl = isLeaderTemplate(tpl);
+  // 地图给这块场地画了自己的路线时，模板里那几条**官方 19×21** 路线在 45×60 的图上落在场地外（sim 会把越界的
+  // 坐标夹回战场边缘 ⇒ 护送小怪贴着边界蹭）。这里把模板路线**按比例缩放**进这块场地的战斗矩形 —— 护送小怪与悬赏
+  // 敌人因此也沿地图上的路线走（业主 2026-10-29「战斗场地敌人行走路线没有跟着地图来」）。
+  const arenaRect = arena.length ? bossAreaBattleRect(layoutOf(gd.stage(stageId)), areaIndex) : null;
+  const routes = arenaRect && Array.isArray(tpl.routes)
+    ? tpl.routes.map((r) => scaleRoute(r, OFFICIAL_LAYOUT.battle.boss, arenaRect))
+    : (Array.isArray(tpl.routes) ? tpl.routes : []);
+  const spawns = arena.length
+    ? raw.map((s, i) => {
+      if (s.tag === 'boss' || s.tag === 'part') {
+        const route = arena[i % arena.length];
+        return { ...s, route, preview: previewInfo(gd, s.enemyKey, route, s.tag === 'boss', leaderTpl) };
+      }
+      const route = routes[Number.isInteger(s.routeIndex) ? s.routeIndex : 0] ?? routes[0] ?? null;
+      return route ? { ...s, preview: previewInfo(gd, s.enemyKey, route, false, leaderTpl) } : s;
+    })
+    : raw;
   return {
     templateId,
     spawns,
-    routes: Array.isArray(tpl.routes) ? tpl.routes : [],
+    routes,
     extraRoutes: Array.isArray(tpl.extraRoutes) ? tpl.extraRoutes : [],
     timeLimit: Infinity,
     overrides: tpl.overrides && typeof tpl.overrides === 'object' ? tpl.overrides : {},
@@ -567,10 +676,144 @@ export function routeSpawn(gd, routes, spawn, { side = null, mid = OFFICIAL_MID_
   };
 }
 
-/** 这张图自己画的路线（地图坐标，与战场 rect 同一套坐标）；没画过的图返回 null（引擎用它时退回波次模板的路线）。 */
+/**
+ * 这张图的 boss 场地区域（含第 1 块 = `layout.battle.boss`）：`[{ i, rect }]`。
+ * 业主 2026-10-29 给四块 boss 区域各画了两条路线，起点落在这些矩形里 —— 用矩形把它们和普通回合的路线区分开。
+ */
+function bossAreaRects(layout) {
+  const l = layout || OFFICIAL_LAYOUT;
+  const out = [{ i: 0, rect: bossAreaBattleRect(l, 0) }];
+  const areas = Array.isArray(l.bossAreas) ? l.bossAreas : [];
+  for (let i = 1; i < areas.length; i++) out.push({ i, rect: bossAreaBattleRect(l, i) });
+  return out;
+}
+
+const startInside = (rect, p) => !!rect && Array.isArray(p)
+  && Number.isFinite(p[0]) && Number.isFinite(p[1])
+  && p[0] >= rect.r0 && p[0] <= rect.r1 && p[1] >= rect.c0 && p[1] <= rect.c1;
+
+/** 这条路线是不是某个 boss 区域的（起点落在该区域的战斗矩形里）。 */
+function isBossArenaRoute(layout, route) {
+  const p = route && route.start;
+  return bossAreaRects(layout).some(({ rect }) => startInside(rect, p));
+}
+
+/** 这张图自己画的路线（**不含** boss 区域那几条：那些只给首领用，见 `stageBossRoutesOf`）。 */
 export function stageRoutesOf(gd, stageId) {
   const stage = stageId ? gd.stage(stageId) : null;
-  return stage && Array.isArray(stage.routes) && stage.routes.length ? stage.routes : null;
+  const all = stage && Array.isArray(stage.routes) && stage.routes.length ? stage.routes : null;
+  if (!all) return null;
+  const layout = layoutOf(stage);
+  const keep = all.filter((r) => !isBossArenaRoute(layout, r));
+  return keep.length ? keep : null;
+}
+
+/** 这张图给**这一块** boss 场地画的路线：`stage.routes` 里起点落在该区域战斗矩形内的那些（闭环，起点 = 首领站位）。 */
+export function stageBossRoutesOf(gd, stageId, areaIndex = 0) {
+  const stage = stageId ? gd.stage(stageId) : null;
+  const all = stage && Array.isArray(stage.routes) ? stage.routes : [];
+  if (!all.length) return [];
+  const rect = bossAreaBattleRect(layoutOf(stage), areaIndex);
+  return all.filter((r) => startInside(rect, r && r.start));
+}
+
+/**
+ * 把模板里的一条路线**按比例**缩放进一块场地的矩形（`from` → `to`）：给自绘地图的 boss 场地的护送小怪用。
+ * 模板路线是官方 19×21 板上画的，直接用在 45×60 图上会落在场地外；sim 的 `compileRoute` 会把越界坐标夹回边缘，
+ * 敌人于是贴着边界蹭。缩放后起点 / 终点 / 检查点（含 steps 的 `p` / `pos`）都落在 `to` 里。
+ * @param {any} route @param {{r0:number,r1:number,c0:number,c1:number}} from @param {{r0:number,r1:number,c0:number,c1:number}} to
+ */
+export function scaleRoute(route, from, to) {
+  if (!route || typeof route !== 'object' || !from || !to) return route;
+  const sr = (from.r1 - from.r0) || 1;
+  const sc = (from.c1 - from.c0) || 1;
+  const tr = to.r1 - to.r0;
+  const tc = to.c1 - to.c0;
+  const at = (v) => !Array.isArray(v) || typeof v[0] !== 'number' || typeof v[1] !== 'number' ? v
+    : [Math.round(to.r0 + ((v[0] - from.r0) / sr) * tr), Math.round(to.c0 + ((v[1] - from.c0) / sc) * tc), ...v.slice(2)];
+  const cp = (v) => {
+    if (!Array.isArray(v)) return v && typeof v === 'object' ? { ...v, pos: at(v.pos ?? v.position) } : v;
+    if (typeof v[0] === 'number') return at(v);
+    // [type, r, c, t]（官方少数路线是这个形状）
+    const p = at(v.slice(1, 3));
+    return Array.isArray(p) && p.length === 2 ? [v[0], p[0], p[1], ...v.slice(3)] : v;
+  };
+  const out = { ...route };
+  out.start = at(route.start);
+  out.end = at(route.end);
+  if (Array.isArray(route.checkpoints)) out.checkpoints = route.checkpoints.map(cp);
+  if (Array.isArray(route.steps)) out.steps = route.steps.map((s) => (s && typeof s === 'object'
+    ? { ...s, p: at(s.p), pos: at(s.pos) }
+    : s));
+  return out;
+}
+
+
+/**
+ * 自绘地图上的联防出怪路线（业主 2026-10-27）：
+ *   * 单人承接者（站在左半场）：所有漏怪只走**自己这一半的两条地面路线**，按 spawn 顺序轮换；飞行敌人也走地面路线。
+ *   * 两位承接者：第一段走**右半场（率先迎敌那位）上方**的那条地面路线，到右半保护目标**不结算**；敌人保留当前状态
+ *     （同一个单位）从**下方的敌方入口**（第二段的起点）重新入场，走**左半场下方**的那条地面路线，到左半保护目标
+ *     才产生漏怪（LP 仍记在漏怪者头上）。
+ * 「上 / 下」按路线**起点行**判（行 0 = 最底，起点行大 = 上方），不写死下标。
+ * @returns {null | { routes: object[], pick: (k: number) => { routeIndex: number, route?: object } }}
+ *   null = 这张图没有自己的路线表（官方图 / 该半场取不到路线）⇒ 调用方保持旧行为（模板自带路线）。
+ */
+export function uniteRoutePlan(gd, stageId, helperCount) {
+  const routes = stageRoutesOf(gd, stageId);
+  if (!routes || !routes.length) return null;
+  const mid = layoutOf(gd.stage(stageId)).mirrorCol / 2;
+  const rowOf = (r) => (Array.isArray(r && r.start) ? Number(r.start[0]) : NaN);
+  // 半场的地面路线；该半场没有地面路线时退到该半场任意路线（仍按起点行判上下）
+  const groundOf = (side) => {
+    const g = routeGroup(routes, false, side, mid);
+    const ids = g.length ? g : routeGroup(routes, true, side, mid);
+    return ids.map((i) => ({ i, r: routes[i] })).filter((x) => Number.isFinite(rowOf(x.r)));
+  };
+  if (helperCount > 1) {
+    const right = groundOf('R').sort((a, b) => rowOf(b.r) - rowOf(a.r));
+    const left = groundOf('L').sort((a, b) => rowOf(a.r) - rowOf(b.r));
+    const first = right[0];
+    const second = left[0];
+    if (!first || !second) return null;
+    const route = reentryRouteOf(first.r, second.r);
+    return { routes, pick: () => ({ routeIndex: first.i, route }) };
+  }
+  const own = groundOf('L');   // 单人承接者站左半场（unite.js 的 colOffset 0）
+  if (!own.length) return null;
+  return { routes, pick: (k) => ({ routeIndex: own[((k % own.length) + own.length) % own.length].i }) };
+}
+
+/**
+ * 双人联防的一条两段路线：第一段（右上半场地面）→ 右目标 → 消失 → 从第二段的起点（下方敌方入口）出现 →
+ * 第二段（左下地面）→ 结束（左目标，final leg 落地时才 leak）。敌人是同一个单位，HP / buff / mods 一路保留。
+ */
+function reentryRouteOf(first, second) {
+  const steps = [];
+  // checkpoints 在地图数据里可能是 [r,c] 数组或带类型的数组/对象；`steps` 只认对象形状，所以统一转一次
+  const asStep = (cp) => {
+    if (Array.isArray(cp)) {
+      if (typeof cp[0] === 'number') return { t: 'MOVE', p: [cp[0], cp[1]], time: 0 };
+      const [type, r, c, t] = cp;
+      return { t: String(type ?? 'MOVE').toUpperCase(), p: [r, c], time: Number.isFinite(t) ? t : 0 };
+    }
+    if (cp && typeof cp === 'object') {
+      const pos = cp.pos ?? cp.position ?? [cp.row, cp.col];
+      return { t: String(cp.type ?? cp.t ?? 'MOVE').toUpperCase(), p: [pos[0], pos[1]], time: Number(cp.time ?? 0) || 0 };
+    }
+    return null;
+  };
+  for (const cp of (first && first.checkpoints) || []) { const s = asStep(cp); if (s) steps.push(s); }
+  if (Array.isArray(first && first.end)) steps.push({ t: 'MOVE', p: first.end.slice(0, 2) });
+  steps.push({ t: 'DISAPPEAR' });
+  if (Array.isArray(second && second.start)) steps.push({ t: 'APPEAR', p: second.start.slice(0, 2) });
+  for (const cp of (second && second.checkpoints) || []) { const s = asStep(cp); if (s) steps.push(s); }
+  return {
+    motion: 'WALK',
+    start: Array.isArray(first.start) ? first.start.slice(0, 2) : null,
+    end: Array.isArray(second.end) ? second.end.slice(0, 2) : null,
+    steps,
+  };
 }
 
 /**
@@ -751,15 +994,22 @@ export function previewOf(spawns) {
  * player, first-leak order); with W = count·interval of the host action and M = the largest owner group,
  * step = min(max(W / M, 0.05·W), MAX_ACTION_INTERVAL_FOR_UID 5 s), and unit i of the k-th owner spawns at
  * preDelay + k·ACTION_INTERVAL_FOR_UID (0.5 s) + i·step.
+ * 自绘地图（stage.routes，`opts.stageId`）：路线不取模板的，改由 `uniteRoutePlan` 决定 —— 单人只走承接者半场的
+ * 两条地面路线；双人走一条两段路线（右上地面 → 右目标 → 左下入口重新入场 → 左下地面 → 左目标才漏怪）。
+ * 时间（t0 / window / step / owner 偏移）与官方分支完全一致，只换路线。
  * @param {Array<{ enemyKey: string, mods: object|null, sourcePlayerId: string, bounty?: object|null, isToken?: boolean }>} leaked
  * @param {number} helperCount 1 | 2
+ * @param {number} timeLimit
+ * @param {{ stageId?: string|null }} [opts] `stageId`：这张图自己画了路线时，联防按 `uniteRoutePlan` 的规则走
  * @returns {{ templateId: string|null, spawns: object[], routes: object[] }}
  */
-export function buildUniteWave(gd, leaked, helperCount, timeLimit) { // eslint-disable-line no-unused-vars
+export function buildUniteWave(gd, leaked, helperCount, timeLimit, opts = {}) { // eslint-disable-line no-unused-vars
   const templates = gd.unite.templates;
   const templateId = templates[String(helperCount)] || templates[helperCount] || null;
   const tpl = templateId ? gd.wave(templateId) : null;
-  const routes = tpl && Array.isArray(tpl.routes) ? tpl.routes : [];
+  // 自绘地图的联防路线（业主 2026-10-27；见 uniteRoutePlan）；官方图 plan = null ⇒ 下面逐语句与从前相同
+  const plan = opts && opts.stageId ? uniteRoutePlan(gd, opts.stageId, helperCount) : null;
+  const routes = plan ? plan.routes : (tpl && Array.isArray(tpl.routes) ? tpl.routes : []);
   const ts = gd.factions.templateSlots || {};
   const list = tpl && Array.isArray(tpl.spawns) ? tpl.spawns : [];
   const isSpawn = (s) => s && !(s.action && String(s.action).toUpperCase() !== 'SPAWN');
@@ -783,6 +1033,7 @@ export function buildUniteWave(gd, leaked, helperCount, timeLimit) { // eslint-d
     owners.get(owner).push(l);
   }
   const spawns = [];
+  let seq = 0;   // 自绘地图：第几条出怪（单人按它轮换两条地面路线）
   for (const [idx, owners] of groups) {
     const a = idx >= 0 ? list[idx] : null;
     const t0 = a ? Math.max(0, Number(a.time) || 0) : 3;
@@ -796,10 +1047,14 @@ export function buildUniteWave(gd, leaked, helperCount, timeLimit) { // eslint-d
     for (const units of owners.values()) {
       const start = t0 + k * UNITE_OWNER_STEP;
       units.forEach((l, i) => {
+        // 自绘地图：每条出怪按计划换路线（双人还带一条两段路线：右上半场 → 右目标 → 左下入口 → 左下地面 → 左目标）
+        const own = plan ? plan.pick(seq++) : null;
+        const ri = own ? own.routeIndex : routeIndex;
         const spec = {
-          time: start + i * step, enemyKey: l.enemyKey, routeIndex, count: 1, interval: 0,
+          time: start + i * step, enemyKey: l.enemyKey, routeIndex: ri, count: 1, interval: 0,
           mods: l.mods ? { ...l.mods } : { slot: classOf(gd, l.enemyKey) }, sourcePlayerId: l.sourcePlayerId,
-          preview: previewInfo(gd, l.enemyKey, routes[routeIndex]),
+          preview: previewInfo(gd, l.enemyKey, routes[ri]),
+          ...(own && own.route ? { route: own.route } : {}),
         };
         if (idx >= 0) spec.actionIndex = idx;
         if (l.bounty && l.bounty.coins > 0) spec.bounty = { coins: l.bounty.coins, ownerPlayerId: l.bounty.ownerPlayerId ?? l.sourcePlayerId };

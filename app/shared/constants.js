@@ -323,15 +323,32 @@ export const SKILL_SUMMON_START_DEPLOY = true;
 export const BOND_LAYER_CAP = 999;
 
 /**
+ * 重构模拟的盟约叠加层数上限（业主 2026-10-29：2000 层）。只服务 `mode_recon_*`，官方模式仍是 999。
+ */
+export const RECON_BOND_LAYER_CAP = 2000;
+
+/**
+ * 这个模式下一枚盟约的层数上限：重构模拟 2000，其余（含未知 / 缺省）`BOND_LAYER_CAP`。
+ * @param {string|null|undefined} modeId
+ * @returns {number}
+ */
+export function bondLayerCap(modeId) {
+  return typeof modeId === 'string' && modeId.startsWith('mode_recon_') ? RECON_BOND_LAYER_CAP : BOND_LAYER_CAP;
+}
+
+/**
  * The layers a gain of `n` actually adds to a bond holding `before` under BOND_LAYER_CAP: min(n, cap − before), never
  * negative (a count already at or over the cap gains 0 and is never lowered); 0 for a non-positive / non-finite `n`
  * except +Infinity (= "the room left").
+ * @param {number} before @param {number} n @param {number} [cap] 缺省 = 官方 `BOND_LAYER_CAP`（重构模拟传 `bondLayerCap(modeId)`）
  */
-export function layerGainRoom(before, n) {
+export function layerGainRoom(before, n, cap = BOND_LAYER_CAP) {
   if (!(n > 0)) return 0;
-  const cap = BOND_LAYER_CAP > 0 ? BOND_LAYER_CAP : Infinity;
+  const c = cap === Infinity || (Number.isFinite(cap) && cap > 0)
+    ? cap
+    : (BOND_LAYER_CAP > 0 ? BOND_LAYER_CAP : Infinity);
   const b = Number.isFinite(before) && before > 0 ? before : 0;
-  return Math.max(0, Math.min(n, cap - b));
+  return Math.max(0, Math.min(n, c - b));
 }
 
 /**

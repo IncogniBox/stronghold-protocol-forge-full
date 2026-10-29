@@ -93,12 +93,19 @@ export class PlayerViews {
       bandId: this.bandId,
       ready: this.ready,
       canReady: this.alive && this.tempEmpty && !this.personalChoice && this.m.phase === PHASE.PREP,
-      personalChoice: this.personalChoice ? {
-        id: this.personalChoice.id,
-        round: this.personalChoice.round,
-        sourceItemId: this.personalChoice.sourceItemId,
-        cards: this.personalChoice.cards.map((c) => bountyCard(this.gd, c)),
-      } : null,
+      personalChoice: this.personalChoice ? (this.personalChoice.kind === 'recon'
+        ? {
+          id: this.personalChoice.id,
+          round: this.personalChoice.round,
+          kind: 'recon',
+          cards: this.personalChoice.cards.map((c) => ({ kind: 'tactic', id: c.id, name: c.name || c.id, desc: c.desc || '' })),
+        }
+        : {
+          id: this.personalChoice.id,
+          round: this.personalChoice.round,
+          sourceItemId: this.personalChoice.sourceItemId,
+          cards: this.personalChoice.cards.map((c) => bountyCard(this.gd, c)),
+        }) : null,
       shop: {
         level: this.shop.level,
         maxLevel: this.gd.maxShopLevel,

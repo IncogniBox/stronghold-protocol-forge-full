@@ -51,8 +51,9 @@ export function prepCamera(pub, myId, layout = null) {
   const r = pub?.round;
   const bossRound = Number.isInteger(r) && r > 0 && (r === pub.bossRound || r === pub.hiddenRound);
   // 自己那张棋盘的取景**再推近一截**：官方 19×21 用 configBlackBoard 的固定机位（这个值不参与），
-  // 只有按图自己的矩形 fit 出来的相机（自定义布局）读它 —— 取景框四周留白先按预设算，再把整体放大 1.5 倍。
-  const framed = layout && !isOfficialLayout(layout) ? { zoom: 1.5 } : null;
+  // 只有按图自己的矩形 fit 出来的相机（自定义布局）读它 —— 取景框四周留白先按预设算，再把整体放大 1.2 倍
+  // （业主 2026-10-29：此前的 1.5 拉近 50% 太近，改为把视角拉远 20%）。
+  const framed = layout && !isOfficialLayout(layout) ? { zoom: 1.2 } : null;
   if (bossRound) {
     const pair = prepPair(pub, myId);
     const idx = pair.indexOf(myId);
@@ -69,7 +70,10 @@ export function prepCamera(pub, myId, layout = null) {
         const own = bossAreaSeatPrepRect(L, index, seat);
         return {
           kind: 'bossPrep',
-          opts: { side: 'L', rect: own || bossAreaPrepRect(L, index), layout: bossAreaLayout(L, index, seat), area: index, ...(framed || {}) },
+          // ⚠️ `seat` 必须一起带出去：第 2… 块 boss 场地的整备区是按座位声明的（`bossA{n}:0` / `:1`，
+          // 两位棋手在场地的上下两半）。客户端 `boardGeoNow` / `bossPrepField` 用 `area` + `seat` 选整备格；
+          // 不传 seat 时恒按 0 ⇒ 半场 1 的那位看到 / 用的是**另一位（旧位置）**的整备格（业主 2026-10-29）。
+          opts: { side: 'L', rect: own || bossAreaPrepRect(L, index), layout: bossAreaLayout(L, index, seat), area: index, seat, ...(framed || {}) },
         };
       }
       // 第 1 块：声明了多块 boss 场地、且这块场地也是左右并排的两半时，同样各看自己那半（返回形状仍不带 area 键）；

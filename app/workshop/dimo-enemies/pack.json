@@ -1,7 +1,7 @@
 {
   "id": "dimo-enemies",
   "name": "特训敌人·涤墨",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "author": "Ark workshop",
   "license": "CC0-1.0（数据参考 PRTS 明日方舟 Wiki；美术素材版权归 Hypergryph / Yostar，仅限已持有游戏本体的玩家本地使用）",
   "description": "把危机合约「涤墨作战」（大炎·墨染书阁）系列的 18 个敌人加进本作，并作为一个全新的战术特训类型「特训敌人·涤墨」参与战局生成。",
@@ -9,6 +9,9 @@
   "content": [
     "enemies",
     "factions"
+  ],
+  "overrides": [
+    "enemies:enemy_10054_cjhot"
   ],
   "art": {
     "enemies": {

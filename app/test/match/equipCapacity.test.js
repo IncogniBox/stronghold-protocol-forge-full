@@ -6,6 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { equipCapacity, slotCapOf, DEFAULT_EQUIP_PER_CHESS } from '../../shared/equipSlots.js';
+import { BOND_LAYER_CAP, RECON_BOND_LAYER_CAP, bondLayerCap, layerGainRoom } from '../../shared/constants.js';
 import { GameData } from '../../server/match/gamedata.js';
 
 const ITEMS = {
@@ -18,6 +19,23 @@ const ITEMS = {
 const gd = new GameData({ items: ITEMS, config: {} }, 'mode_multi_hard');
 const piece = (id) => ({ id, uid: id });
 const cap = (items, extra = null) => gd.equipCapacity(items.map(piece), extra);
+
+test('重构模拟：每名干员的装备格 +1（官方 2 → 3，与 slot_cap 叠加）；官方对局不变', () => {
+  const recon = new GameData({ items: ITEMS, config: {} }, 'mode_recon_abyss');
+  assert.equal(recon.equipCapacity([]), 3, '重构对局的基础装备格 = 3');
+  assert.equal(recon.equipCapacity([piece('device_a')]), 5, '3 + 源石辅助仪 2');
+  assert.equal(recon.equipCapacity([piece('plain_a')], piece('device_b')), 7, '含正落下的那一件（3 + 0 + 4）');
+  assert.equal(gd.equipCapacity([]), 2, '官方对局仍是 2 格');
+});
+
+test('重构模拟的盟约层数上限是 2000（官方 999）', () => {
+  assert.equal(bondLayerCap('mode_recon_abyss'), RECON_BOND_LAYER_CAP);
+  assert.equal(RECON_BOND_LAYER_CAP, 2000);
+  assert.equal(bondLayerCap('mode_multi_abyss'), BOND_LAYER_CAP);
+  assert.equal(bondLayerCap(null), BOND_LAYER_CAP);
+  assert.equal(layerGainRoom(1500, 600, RECON_BOND_LAYER_CAP), 500, '到 2000 为止');
+  assert.equal(layerGainRoom(1500, 600), 0, '官方 999 早已到顶');
+});
 
 test('slotCapOf: only a positive finite slot_cap counts', () => {
   assert.equal(slotCapOf(ITEMS.device_a), 2);

@@ -13,6 +13,7 @@
 //   richTextPlain(src)            → string (markup stripped, newlines kept)
 //   rtClassName(cls)              → CSS class for an official style id ('ba.vup' → 'rt-vup')
 //   formatBondEffect(bond, layers)→ bond `effectDescRaw` with its `{i:fmt}` placeholders resolved
+//   formatBondDesc(bond, layers)  → bond `descRaw` with the same placeholders resolved (报告 / 局内「盟约效果」)
 //   formatPlaceholder(value, fmt) → '15%' / '3' for the official number formats ('0%', '0.0%', '0', '0.0')
 //   fillPlaceholders(src, values) → replace `{i:fmt}` / `{i}` by values[i] (unknown indexes kept)
 
@@ -212,7 +213,29 @@ export function itemDescText(item, layers = null) {
  */
 export function formatBondEffect(bond, layers = 0) {
   if (!bond || typeof bond !== 'object') return '';
-  const src = bond.effectDescRaw || bond.effectDesc || '';
+  return fillPlaceholders(bond.effectDescRaw || bond.effectDesc || '', ...bondValues(bond, layers));
+}
+
+/**
+ * 盟约的**效果说明**（`descRaw`，报告里那一段 / 局内「盟约效果」）里同一套 `{i:fmt}` 占位符的取值。
+ * 与 `formatBondEffect` 共用一张表：描金文字里写的数（`+{0:0%}`）与战斗里真正用的那个数同源 ——
+ * 重构模拟的八条核心盟约就是这么把「每层 +1%」印成实时值的（层数 0 = 报告里的基础档）。
+ * @param {any} bond bonds.json record
+ * @param {number} [layers]
+ * @returns {string} rich text (markup kept)
+ */
+export function formatBondDesc(bond, layers = 0) {
+  if (!bond || typeof bond !== 'object') return '';
+  return fillPlaceholders(bond.descRaw || bond.desc || '', ...bondValues(bond, layers));
+}
+
+/**
+ * `effectDescParams` → `[values, formats]`（两个填值函数共用）。
+ * @param {any} bond bonds.json record
+ * @param {number} layers
+ * @returns {[Array<number>, string[]]}
+ */
+function bondValues(bond, layers) {
   const params = Array.isArray(bond.effectDescParams) ? bond.effectDescParams : [];
   const bb = bond.bb && typeof bond.bb === 'object' ? bond.bb : {};
   const L = Number.isFinite(Number(layers)) ? Math.max(0, Number(layers)) : 0;
@@ -239,5 +262,5 @@ export function formatBondEffect(bond, layers = 0) {
     values[p.index] = value;
     formats[p.index] = p.format || '0';
   }
-  return fillPlaceholders(src, values, formats);
+  return [values, formats];
 }

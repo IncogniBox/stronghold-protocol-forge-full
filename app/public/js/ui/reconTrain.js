@@ -9,6 +9,8 @@ import { html, Button, Icon, MicroLabel } from './components.js';
 import { Img } from './gameComponents.js';
 import { chessAvatarUrl } from './assetUrls.js';
 import { act } from './gameActions.js';
+import { ownDiyRecord } from './gameLogic.js';
+import { data } from '../data.js';
 import { t } from '../../../shared/i18n.js';
 
 /** 弹窗里一枚可选的干员瓦片（选中态按角着色：教官金 / 学员青）。 */
@@ -35,7 +37,14 @@ export function ReconTrainModal({ m, pub, priv, gd, round, busy, onClose }) {
     ...((priv?.temp || []).filter((p) => p && p.kind === 'chess')),
     ...((priv?.hand || []).filter((p) => p && p.kind === 'chess')),
   ];
-  const recOf = (p) => gd.chess(p.id);
+  // 甄选干员（自选槽位件）的棋子记录是**空槽位**（没有名字 / 头像）：按本人挑选的干员组出那份记录再显示——
+  // 与详情卡 / 手牌同一条链（gameLogic 的 ownDiyRecord），否则弹窗里只剩「甄选干员」+ 警告图标。
+  const dd = { chess: data.get('chess'), backups: data.get('backups') };
+  const recOf = (p) => {
+    const rec = p ? gd.chess(p.id) : null;
+    if (rec && rec.isDiy) return ownDiyRecord(rec, priv, dd) || rec;
+    return rec;
+  };
   const pickMentor = (uid) => { setMentorUid(uid === mentorUid ? null : uid); };
   const pickTrainee = (uid) => { setTraineeUid(uid === traineeUid ? null : uid); };
   const ready = mentorUid != null && traineeUid != null && mentorUid !== traineeUid;
@@ -77,9 +86,5 @@ export function ReconTrainModal({ m, pub, priv, gd, round, busy, onClose }) {
   </div>`;
 }
 
-/** 休整期顶栏的「特训」按钮（done = 本回合已交过：仍可点开——弹窗里能更换或取消）。 */
-export function ReconTrainButton({ done, onClick }) {
-  return html`<button type="button" class="gm__gear gm__train ${done ? 'is-done' : ''}" aria-label=${t('重构协议·特训')}
-    title=${done ? t('本回合已特训：可更换或取消') : t('重构协议·特训')}
-    onClick=${onClick}><${Icon} name="book" /></button>`;
-}
+// 按钮本体在调度中心的工具行（ui/shopBar.js 的 `train` 槽：`toolbtn--train`，荧光青的「特训」，紧挨冻结 / 刷新），
+// 这里只留选人弹窗（本回合已交过仍可点开 —— 弹窗里能更换或取消）。

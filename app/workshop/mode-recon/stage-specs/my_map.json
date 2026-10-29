@@ -3,9 +3,6 @@
   "name": "重构战场01·天镜阁",
   "weight": 40,
   "modes": [
-    "mode_recon_funny",
-    "mode_recon_normal",
-    "mode_recon_hard",
     "mode_recon_abyss"
   ],
   "rows": [
@@ -42,12 +39,12 @@
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "fffffffffffffffffffffaaaaaaaafffaaaaaaaaffffffffffffffffffff",
     "fffffffffffffffffffffaaaaaaaafffaaaaaaaaffffffffffffffffffff",
-    "ffffffffffffffffffffXXXXXXXXXXXXXXXXXXXXXfffffffffffffffffff",
-    "ffffffffffffffffffffX###rrrrrXXXrrrrr###Xfffffffffffffffffff",
-    "ffffffffffffffffffffX#rrr##rrrSrrr##rrr#Xfffffffffffffffffff",
+    "fffffffffffffffffffffXXXXXXXXXXXXXXXXXXXffffffffffffffffffff",
+    "fffffffffffffffffffff###rrrrrXXXrrrrr###ffffffffffffffffffff",
+    "fffffffffffffffffffff#rrr##rrrSrrr##rrr#ffffffffffffffffffff",
     "ffffffffffffffffffffErrr####XXXXX####rrrEfffffffffffffffffff",
-    "ffffffffffffffffffffX#rrr##rrrSrrr##rrr#Xfffffffffffffffffff",
-    "ffffffffffffffffffffX###rrrrrXXXrrrrr###Xfffffffffffffffffff",
+    "fffffffffffffffffffff#rrr##rrrSrrr##rrr#ffffffffffffffffffff",
+    "fffffffffffffffffffff###rrrrrXXXrrrrr###ffffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "fffffffffffffffffffffSfffffffffffffffffSffffffffffffffffffff",
@@ -295,6 +292,18 @@
         "c1": 39
       }
     },
+    "bench": {
+      "normalL": { "hand": [[31, 21, 28], [32, 21, 28]], "temp": [30, 21, 28] },
+      "normalR": { "hand": [[31, 32, 39], [32, 32, 39]], "temp": [30, 32, 39] },
+      "bossL": { "hand": [[12, 22, 29], [13, 22, 29]], "temp": [11, 22, 29] },
+      "bossR": { "hand": [[12, 31, 38], [13, 31, 38]], "temp": [11, 31, 38] },
+      "bossA2:0": { "hand": [[10, 1, 8], [11, 1, 8]], "temp": [9, 1, 8] },
+      "bossA2:1": { "hand": [[10, 10, 17], [11, 10, 17]], "temp": [9, 10, 17] },
+      "bossA3:0": { "hand": [[10, 43, 50], [11, 43, 50]], "temp": [9, 43, 50] },
+      "bossA3:1": { "hand": [[10, 52, 59], [11, 52, 59]], "temp": [9, 52, 59] },
+      "bossA4:0": { "hand": [[0, 22, 29], [1, 22, 29]], "temp": [2, 22, 29] },
+      "bossA4:1": { "hand": [[0, 31, 38], [1, 31, 38]], "temp": [2, 31, 38] }
+    },
     "pen": {
       "r0": 40,
       "r1": 44,
@@ -307,18 +316,6 @@
       "r1": 44,
       "c0": 33,
       "c1": 39
-    },
-    "bench": {
-      "normalL": { "hand": [[31, 21, 28], [32, 21, 28]], "temp": [30, 21, 28] },
-      "normalR": { "hand": [[31, 32, 39], [32, 32, 39]], "temp": [30, 32, 39] },
-      "bossL": { "hand": [[12, 22, 29], [13, 22, 29]], "temp": [11, 22, 29] },
-      "bossR": { "hand": [[12, 31, 38], [13, 31, 38]], "temp": [11, 31, 38] },
-      "bossA2:0": { "hand": [[10, 1, 8], [11, 1, 8]], "temp": [9, 1, 8] },
-      "bossA2:1": { "hand": [[10, 10, 17], [11, 10, 17]], "temp": [9, 10, 17] },
-      "bossA3:0": { "hand": [[10, 43, 50], [11, 43, 50]], "temp": [9, 43, 50] },
-      "bossA3:1": { "hand": [[10, 52, 59], [11, 52, 59]], "temp": [9, 52, 59] },
-      "bossA4:0": { "hand": [[0, 22, 29], [1, 22, 29]], "temp": [2, 22, 29] },
-      "bossA4:1": { "hand": [[0, 31, 38], [1, 31, 38]], "temp": [2, 31, 38] }
     },
     "bossAreas": [
       {
@@ -683,6 +680,318 @@
           36
         ]
       ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        19,
+        30
+      ],
+      "end": [
+        19,
+        30
+      ],
+      "checkpoints": [
+        [
+          18,
+          27
+        ],
+        [
+          17,
+          25
+        ],
+        [
+          17,
+          23
+        ],
+        [
+          17,
+          25
+        ],
+        [
+          17,
+          25
+        ],
+        [
+          17,
+          25
+        ],
+        [
+          17,
+          25
+        ],
+        [
+          17,
+          25
+        ],
+        [
+          16,
+          27
+        ],
+        [
+          17,
+          30
+        ]
+      ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        19,
+        30
+      ],
+      "end": [
+        19,
+        30
+      ],
+      "checkpoints": [
+        [
+          18,
+          33
+        ],
+        [
+          17,
+          35
+        ],
+        [
+          17,
+          37
+        ],
+        [
+          17,
+          35
+        ],
+        [
+          16,
+          33
+        ],
+        [
+          17,
+          30
+        ]
+      ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        17,
+        12
+      ],
+      "end": [
+        17,
+        12
+      ],
+      "checkpoints": [
+        [
+          18,
+          11
+        ],
+        [
+          18,
+          9
+        ],
+        [
+          20,
+          8
+        ],
+        [
+          21,
+          6
+        ],
+        [
+          19,
+          7
+        ],
+        [
+          18,
+          9
+        ],
+        [
+          17,
+          10
+        ]
+      ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        17,
+        12
+      ],
+      "end": [
+        17,
+        12
+      ],
+      "checkpoints": [
+        [
+          16,
+          11
+        ],
+        [
+          16,
+          9
+        ],
+        [
+          14,
+          8
+        ],
+        [
+          13,
+          6
+        ],
+        [
+          15,
+          7
+        ],
+        [
+          16,
+          9
+        ],
+        [
+          17,
+          10
+        ]
+      ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        17,
+        48
+      ],
+      "end": [
+        17,
+        48
+      ],
+      "checkpoints": [
+        [
+          18,
+          49
+        ],
+        [
+          18,
+          51
+        ],
+        [
+          20,
+          52
+        ],
+        [
+          21,
+          54
+        ],
+        [
+          19,
+          53
+        ],
+        [
+          18,
+          51
+        ],
+        [
+          17,
+          50
+        ]
+      ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        17,
+        48
+      ],
+      "end": [
+        17,
+        48
+      ],
+      "checkpoints": [
+        [
+          16,
+          49
+        ],
+        [
+          16,
+          51
+        ],
+        [
+          14,
+          52
+        ],
+        [
+          13,
+          54
+        ],
+        [
+          15,
+          53
+        ],
+        [
+          16,
+          51
+        ],
+        [
+          17,
+          50
+        ]
+      ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        7,
+        30
+      ],
+      "end": [
+        7,
+        30
+      ],
+      "checkpoints": [
+        [
+          6,
+          27
+        ],
+        [
+          5,
+          29
+        ],
+        [
+          4,
+          25
+        ],
+        [
+          3,
+          26
+        ]
+      ]
+    },
+    {
+      "motion": "WALK",
+      "start": [
+        7,
+        30
+      ],
+      "end": [
+        7,
+        30
+      ],
+      "checkpoints": [
+        [
+          6,
+          33
+        ],
+        [
+          5,
+          31
+        ],
+        [
+          4,
+          35
+        ],
+        [
+          3,
+          34
+        ]
+      ]
     }
   ],
   "theme": "skymirror",
@@ -858,132 +1167,6 @@
       "r": 31,
       "c": 30,
       "v": "prop_141"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 34,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 33,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 30,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 29,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 31,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 32,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 36,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 35,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 28,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 27,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 25,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 24,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 26,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 22,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 21,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 23,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 20,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 37,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 38,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 39,
-      "v": "prop_110"
-    },
-    {
-      "kind": "prop",
-      "r": 39,
-      "c": 40,
-      "v": "prop_110"
     },
     {
       "kind": "prop",
@@ -6677,6 +6860,111 @@
       "r": 5,
       "c": 30,
       "v": "prop_5"
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 24
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 20
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 21
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 22
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 23
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 25
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 26
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 27
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 28
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 29
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 30
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 32
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 31
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 33
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 35
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 34
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 37
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 38
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 36
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 40
+    },
+    {
+      "kind": "block",
+      "r": 39,
+      "c": 39
     }
   ],
   "_meta": {
@@ -6685,7 +6973,7 @@
     "author": "mode-recon mod",
     "pack": "mode-recon",
     "created": "2026-10-20T01:42:30.410Z",
-    "modified": "2026-10-25T22:18:40.936Z",
+    "modified": "2026-10-28T19:32:23.298Z",
     "copyright": {
       "zh": "本 Option 的著作权归创建它的作者本人所有。创作者可自由分享、分发自己的 Option，并可通过其获得合理回报。",
       "en": "This Option is the property of the author who created it. Creators may freely share and distribute their own Options and may reasonably profit from them."

@@ -4,7 +4,7 @@
 // Installed on PlayerState.prototype by server/match/PlayerState.js (a method container: never instantiated; `this` is
 // the player state).
 
-import { ERR, PHASE, layerGainRoom } from '../../../shared/constants.js';
+import { ERR, PHASE, layerGainRoom, bondLayerCap } from '../../../shared/constants.js';
 import { behaviourIsDefault } from '../../../shared/behaviour.js';
 import { ruleOption } from '../../../shared/plugins/rules.js';
 import { freeSlot } from '../board.js';
@@ -67,7 +67,8 @@ export class PlayerEconomy {
     if (!this.gd.bond(bondId) || !Number.isFinite(n) || n <= 0) return 0;
     if (requireActive && !(this.bonds[bondId] && this.bonds[bondId].active)) return 0;
     const before = this.layers[bondId] || 0;
-    const add = layerGainRoom(before, Math.floor(n));
+    // 层数上限按本局模式：重构模拟 2000，官方 999
+    const add = layerGainRoom(before, Math.floor(n), bondLayerCap(this.m && this.m.gd && this.m.gd.modeId));
     if (add <= 0) return 0;
     this.layers[bondId] = before + add;
     this.recompute();

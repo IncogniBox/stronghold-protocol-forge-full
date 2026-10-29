@@ -656,6 +656,17 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
     addPendingFunds: (n) => { const v = finiteInt(n); if (v > 0) { ps.pendingFunds += v; ps.dirty(); } return v > 0 ? v : 0; },
     spendFunds: (n) => { const v = finiteInt(n); if (!ps.spend(v)) return false; ps._afterSpend(v, 'effect'); return true; },
     grantFreeRefresh: (n = 1) => { const v = finiteInt(n); if (v > 0) { ps.shop.freeRefreshes += v; ps.dirty(); } return ps.shop.freeRefreshes; },
+    /**
+     * 玩家生命值（重构决策·复苏F 这类内容规则）：加减并立刻广播；不会低于 0（变 0 仍走引擎的淘汰流程，
+     * 那一步不在这里复制）。
+     */
+    addLp: (n) => {
+      const v = finiteInt(n);
+      if (!v) return ps.lp;
+      ps.lp = Math.max(0, ps.lp + v);
+      ps.dirty();
+      return ps.lp;
+    },
 
     // ---- prices (onPrice only; the same as writing ev.price)
     modifyPrice: (delta) => { if (hook === 'onPrice' && ev && Number.isFinite(delta)) ev.price = Math.max(0, (Number(ev.price) || 0) + delta); return ev ? ev.price : null; },
@@ -842,6 +853,8 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
     // ---- bounties / choices
     addBounty: (card) => m.addBounty(ps, card),
     offerBountyChoice: (cards, sourceItemId) => m.offerBountyChoice(ps, cards, sourceItemId),
+    /** 重构模拟的「重构决策」：给这名玩家一次私密的 3 选 1（`Match.offerReconDecision`，PREP 内）。 */
+    offerReconDecision: (cards) => m.offerReconDecision(ps, cards),
 
     // ---- messaging
     // a string or a shared/i18n.js msg(msgid, params)

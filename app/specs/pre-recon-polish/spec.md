@@ -34,7 +34,7 @@
 | `recon_assist_equip` | 每回合前 3 次销毁装备，补 1 件 ≥ 该阶级的随机装备；干员装备可拆卸 | `meta` `destroyAssist`（`ASSIST_DESTROYS_PER_ROUND = 3`，`rollItem({ minTier })`）；拆卸 = `pack.json` 的 `behaviour: unequip: "allow"` | 一致；**已知口径**：`unequip` 是**包级**开关，无法按人/按选项开启 —— 装了本包的重构房间都能拆卸（README 已有记） |
 | `recon_assist_data` | 我方场上干员基础攻/防/生命上限 +25%、法术抗性 +25 点 | `battle` `applyAlly`（`directMods({atk,def,hp: .25}, {resFlat: 25})`，`passiveBuff` 同键替换） | 一致（`recon-battle.test.js` 数值断言 100→125 / 50→62.5 / 1000→1250 / res 0→25） |
 | `recon_load_bond` | 三类里最高层已激活盟约**每层**使敌人生命上限 +0.1% | `battle` `enemyModsOf` = `(core+addon+story) × 0.001`（`topLayersByKind` 同 meta 口径） | 一致；**缺测试**：「三类求和」与「未激活不计」→ 本次补 |
-| `recon_load_equip` | 未携带装备伤害 −25%；装备阶级高于携带者时该装备效果 −50%、3 回合后自动销毁（源石辅助仪 / 变形同构体免自动销毁） | `battle` `BARE_DAMAGE_MUL = 0.75` + `halfNegated(itemStatMods)`；`meta` `syncLoadDoom` 记 `round + 3` 后 `destroyItem`；豁免 `chess_item_6_13_e` / `chess_item_6_09_e` | 一致（−50% 只算属性半边，触发类不缩 —— README「已知口径」已写） |
+| `recon_load_equip` | 未携带装备伤害 −25%；装备阶级高于携带者时该装备效果 −50%、3 回合后自动销毁（源石辅助仪 / 变形同构体免自动销毁） | `battle` `BARE_DAMAGE_MUL = 0.75` + `S.setItemEffectScale(..., 0.5)`（引擎按缩放后的记录重装该装备，属性与触发类一起缩）；`meta` `syncLoadDoom` 记 `round + 3` 后 `destroyItem`；豁免 `chess_item_6_13_e` / `chess_item_6_09_e` | 一致（−50% 覆盖属性与触发类 —— README「已知口径」已写） |
 | `recon_load_data` | 敌方基础攻/防/生命上限 +25%、法术抗性 +25 点 | `battle` `enemyModsOf`（`atkPct/defPct/hpPct .25`、`resFlat 25`） | 一致（已测） |
 
 ### 2.3 界面现状

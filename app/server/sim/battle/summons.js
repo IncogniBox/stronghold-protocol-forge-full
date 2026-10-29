@@ -41,6 +41,9 @@ export class BattleSummons {
    * skill, a summon that skill does not produce (producesToken) is refused unless `opts.anySource`: hand-authored kit
    * install hooks are written for the default skill and run under every skill (琳琅诗怀雅 S1/S3 would drop 香槟炸弹);
    * under the default skill the kit stays the authority.
+   * `opts.noTile` (装饰性召唤物，望的跟子这类「不占格、不可选中」的投射物，业主 2026-10-29）：单位照常生成
+   * （`spawn` 事件 → 客户端画出模型），但**不写 `_occ`**、也不被已占格拒绝 —— 部署、寻路、`unitAt` 都当它不存在，
+   * 与官方「跟子不占格」一致；它自己也不攻击、不可选中（由传入的 kit 决定）。
    */
   spawnToken(owner, tokenId, row, col, opts = {}) {
     const ownerUnit = owner && typeof owner === 'object' ? owner : null;
@@ -54,9 +57,10 @@ export class BattleSummons {
     }
     if (!Number.isInteger(row) || !Number.isInteger(col) || !this.grid.inRect(row, col)) return null;
     const occ = this._occ[row * COLS + col];
-    if (occ && occ.alive && !opts.force) return null;
+    if (!opts.noTile && occ && occ.alive && !opts.force) return null;
     const dir = opts.dir != null ? normDir(opts.dir) : opts.facing != null ? normDir(opts.facing) : ownerUnit ? ownerUnit.dir : ps ? ps.dir : 'RIGHT';
     const u = this._makeAlly(ps, def, 'token', row, col, { ownerUnit, dir });
+    if (opts.noTile) u.noTile = true;
     if (opts.stats) for (const [k, v] of Object.entries(opts.stats)) if (Number.isFinite(v)) u.base[k] = v;
     this._setupUnit(u, opts.kit ?? null);
     if (opts.untargetable) this.addBuff(u, { key: 'trait:untargetable', flags: { untargetable: true }, persist: true, allowDead: true });

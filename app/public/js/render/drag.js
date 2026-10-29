@@ -45,6 +45,11 @@ export function handTileOf(geo, idx) {
   const row = rows[Math.floor(idx / cols)];
   return Number.isInteger(row) ? { row, col: c0 + (idx % cols) } : null;
 }
+/** 临时整备区第 idx 格在棋盘坐标里的位置（一行 `TEMP_SIZE` 格；装备落在这里也能配给上面的干员）。 */
+export function tempTileOf(geo, idx) {
+  if (!geo || !Number.isInteger(idx) || idx < 0 || idx >= (geo.TEMP_SIZE || 0)) return null;
+  return { row: geo.TEMP_ROW, col: geo.TEMP_C0 + idx };
+}
 /** 整备区第 idx 格的协议目标（hand / temp）。 */
 export function benchSlotOf(geo, area, idx) {
   const t = area === 'temp'
@@ -133,7 +138,6 @@ export function resolveDrop(p) {
   }
   const slot = tileSlot(tile, p.geo || GEO);
   if (!slot) return { kind: 'cancel', reason: 'notTarget' };
-  if (slot.area === 'temp') return { kind: 'cancel', reason: 'temp' };
   if (sameSlot(slot, from) && slot.area !== 'board') return { kind: 'cancel', reason: 'same' };
   if (!isLegal(p.canPlace, piece, slot)) return { kind: 'cancel', reason: 'illegal' };
   return { kind: 'drop', target: slot };
@@ -157,11 +161,13 @@ export function dragStandTile(move, geo = GEO) {
   return null;
 }
 
-/** Legality via the UI callback (board → (piece,row,col); hand → (piece, hand row, hand col)). Throwing ⇒ illegal. */
+/** Legality via the UI callback (board → (piece,row,col); hand / temp → (piece, that tile's coords)). Throwing ⇒ illegal. */
 export function isLegal(canPlace, piece, slot, geo = GEO) {
-  if (!slot || slot.area === 'temp' || slot.area === 'outside') return false;
+  if (!slot || slot.area === 'outside') return false;
   if (typeof canPlace !== 'function') return true;
-  const h = slot.area === 'board' ? null : handTileOf(geo, slot.idx);
+  const h = slot.area === 'board' ? null
+    : slot.area === 'temp' ? tempTileOf(geo, slot.idx)
+      : handTileOf(geo, slot.idx);
   if (slot.area !== 'board' && !h) return false;
   const row = slot.area === 'board' ? slot.row : h.row;
   const col = slot.area === 'board' ? slot.col : h.col;
@@ -231,7 +237,8 @@ export function createDragController(hooks) {
     const tile = tileAt(e.x, e.y);
     const over = overCanvas(e.clientX, e.clientY);
     const slot = over && tile ? tileSlot(tile, geoNow()) : null;
-    const legal = !!slot && slot.area !== 'temp' && (slot.area === 'board' || !sameSlot(slot, st.from)) && isLegal(canPlace, st.piece, slot, geoNow());
+    // 临时整备区也能收装备（落点是上面的干员，`canPlace` 会按 target 判）；非装备在那里仍是非法
+    const legal = !!slot && (slot.area === 'board' || !sameSlot(slot, st.from)) && isLegal(canPlace, st.piece, slot, geoNow());
     setHoverTile(over ? tile : null);
     emit('pieceDragMove', { uid: st.piece.uid, piece: st.piece, x: e.x, y: e.y, clientX: e.clientX, clientY: e.clientY, target: slot, legal });
   }

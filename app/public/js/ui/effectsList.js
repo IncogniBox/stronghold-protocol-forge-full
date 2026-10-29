@@ -9,7 +9,7 @@ import { data } from '../data.js';
 import { t, tName, N_ } from '../../../shared/i18n.js';
 import { sentText } from './lang.js';
 
-const KIND = { band: N_('策略'), choice: N_('机变'), team: N_('团队增益'), item: N_('道具'), garrison: N_('特质') };
+const KIND = { band: N_('策略'), choice: N_('机变'), recon: N_('重构决策'), team: N_('团队增益'), item: N_('道具'), garrison: N_('特质') };
 
 /**
  * A 悬赏's counter line in the current language: the battles its enemies still come for (server/match/player/views.js
@@ -41,6 +41,27 @@ export function effectDesc(e) {
     }
   }
   return desc;
+}
+
+/**
+ * 这名玩家本局选定的**重构协助 / 熔芯负载**（重构模拟）：跟在 EFFECTS 列下面，与局内效果同一套瓦片 + Tooltip 画法。
+ * 行来自 screens/preRecon.js 的 `reconProtocolRows`（表与判定都在那边，这里只画）。
+ * @param {{ rows: { id: string, key: string, kind: string, name: string, desc: string }[] }} props
+ */
+export function ReconProtocolList({ rows }) {
+  const list = (Array.isArray(rows) ? rows : []).filter((r) => r && (r.name || r.desc));
+  if (!list.length) return null;
+  return html`<div class="effects effects--recon" aria-label=${t('重构协议')}>
+    <${MicroLabel}>RECON</${MicroLabel}>
+    ${list.map((r, i) => html`<${Tooltip} key=${r.id ?? i} placement="bottom" text=${html`<div class="efftip">
+        <b>${r.name}</b><span class="efftip__kind">${r.kind}</span>
+        <${RichText} as="p" text=${r.desc} />
+      </div>`}>
+      <span class=${`recon-eff recon-eff--${r.key || 'assist'}`}>
+        <${GIcon} name=${r.key === 'load' ? 'skull' : 'dp'} />
+      </span>
+    <//>`)}
+  </div>`;
 }
 
 /** @param {{ effects: any[] }} props */

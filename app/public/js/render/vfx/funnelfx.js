@@ -363,6 +363,10 @@ export class FunnelFx {
       if (p.body) U.attachN = Math.max(U.attachN, Math.min(m.funnels.length, p.n - 1));
       const g = f.hits[0] || [];
       for (const key of g) if (this.w.playOn(key, v, { flipFrom: U.v || undefined, fxOwner: U.v || undefined })) drew = true;
+      // 特训：附着的浮游单元这一次命中**不**另调 `mentorFunnelHit` —— 它和本体同属一次攻击，而 `FxWiring.damage` 的
+      // `_landed` 已经按「这一发的第几次伤害」播了合并后的命中组（学员自己的 + 教官的），再补一次会重播同一枚
+      // （2026-10-29：先补的 `mentorFunnelHit` 让每次单元命中播两次）。远程单元 / 释放的单元没有这份记录，
+      // 才由 `_remoteHit` / `_pulse` 自己叠（见那两处）。
       const o = U.out.get(`${p.mode}|${f.i}`);
       if (o) o.until = Math.max(o.until, this.w.ofx.time + LUNGE_S);
       else if (m.idle && k < this._count(U, m)) this._leave(U, p.mode, f, this.w.ofx.time + LUNGE_S);
@@ -422,6 +426,8 @@ export class FunnelFx {
       const h = this.w.playOn(key, tgt, { flipFrom: v, loop: true, important: true, track, fxOwner: U.v || undefined });
       if (h) { drew = true; o.hit = h; }
     }
+    // 特训：浮游单元（远程 / 释放的单元）的这次命中同样叠教官的命中行（业主 2026-10-29）
+    if (this.w.skills?.mentorFunnelHit(U.v, tgt, 0)) drew = true;
     return drew || g.some((k) => this._has(k, tgt));
   }
 
@@ -595,6 +601,8 @@ export class FunnelFx {
     if (best) {
       if (best.phase === 'chase') { best.phase = 'lock'; this._marks(best, best.t); }
       for (const key of best.unit?.hits?.[0] || []) this.w.playOn(key, best.t, { flipFrom: U.v || undefined, fxOwner: U.v || undefined });
+      // 特训：释放的浮游单元（荒芜拉普兰德 S3 这类）每次命中同样叠教官的命中行（业主 2026-10-29）
+      this.w.skills?.mentorFunnelHit(U.v, best.t, 0);
       return U.s3.drawable;
     }
     // a free unit's pulse (the sim's place, once a second): the nearest one drifts halfway there

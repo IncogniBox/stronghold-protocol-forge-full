@@ -348,7 +348,8 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
     const s = m.sp;
     if (m.phase === PHASE.SP_DRAFT && s) check('sp draft', () => {
       const alive = m.alivePlayers().map((p) => p.playerId);
-      const want = m.isSolo ? 3 : 6;
+      // 重构模拟最多 20 人：6 人以上一人一张（choices.js generateDraft 的 players 口径）
+      const want = m.isSolo ? 3 : Math.max(6, alive.length);
       if (s.cards.length > want) fail(`${s.cards.length} 机变 cards (max ${want})`);
       if (s.order.length !== alive.length) fail(`机变 order ${s.order.length} for ${alive.length} alive`);
       for (const pid of alive) {

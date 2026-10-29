@@ -38,8 +38,8 @@ function store({ image = true, spine = false, imageDelay = 0 } = {}) {
   };
 }
 
-function view(info, opts = {}, assets = store()) {
-  const ctx = fakeViewCtx(fake.P, { assets, cam: cam });
+function view(info, opts = {}, assets = store(), ctxExtra = {}) {
+  const ctx = fakeViewCtx(fake.P, { assets, cam: cam, ...ctxExtra });
   return new UnitView(ctx, { id: 1, side: 'ally', kind: 'chess', defId: 'char_x', tier: 3, x: 5, y: 12, maxHp: 1000, ...info }, opts);
 }
 
@@ -112,6 +112,25 @@ describe('fallback portraits (avatar diamonds)', () => {
     assert.equal(diamonds().length - before, 1);
     assert.notEqual(v.fallback.texture, T.diamondTexture('token_10058_sbell2_icetgt', null, 0x9fe6ff), 'its own (ice) glyph, not the procedural one');
     assert.equal(v.fallback.texture, T.diamondTexture('token_10058_sbell2_icetgt', null, 0x9fe6ff, { ice: true }));
+  });
+
+  test('官方特效已经画出样子的召唤物：引擎的兜底图标让位；官方特效关掉后图标回来（只对召唤物）', async () => {
+    const before = diamonds().length;
+    let official = true;
+    const v = view({ kind: 'token', defId: 'token_10071_aglna2_agairp', avatar: 'token_10071_aglna2_agairp' }, {},
+      store({ image: false }), { officialLook: () => official });
+    await tick(); await tick();
+    for (let i = 0; i < 3; i++) v.update(1 / 60, cam(), i / 60);
+    assert.equal(v.fallback.visible, false, '官方那一层就是它的样子 ⇒ 不画图标');
+    assert.equal(diamonds().length - before, 0, '连兜底画布都不建');
+    official = false;   // 设置「官方特效」关掉 / 2D 板 / 没装 key
+    for (let i = 3; i < 6; i++) v.update(1 / 60, cam(), i / 60);
+    assert.equal(v.fallback.visible, true, '没有官方层 ⇒ 图标照旧');
+    assert.notEqual(v.fallback.texture, fake.P.Texture.EMPTY, '兜底图标回来了');
+    // 干员不受这条影响（官方特效只替召唤物的「本体」，不替干员的头像）
+    const op = view({ defId: 'char_a', avatar: 'char_a' }, {}, store({ image: false }), { officialLook: () => true });
+    for (let i = 0; i < 3; i++) op.update(1 / 60, cam(), i / 60);
+    assert.equal(op.fallback.visible, true, '干员仍是兜底头像');
   });
 
   test('a slow avatar shows the placeholder meanwhile, then the picture', async () => {

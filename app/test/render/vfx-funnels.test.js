@@ -32,6 +32,7 @@ const PREFABS = {
   i_hl1: P({ spawn: 2, looping: true }), i_hl2: P({ spawn: 2, looping: true }), i_hr1: P({ spawn: 2, looping: true }), i_hr2: P({ spawn: 2, looping: true }),
   i_cast: P({ follow: 5 }), i_trail: P({ looping: true }), i_fhit: P({ spawn: 2 }),
   d_drone: P({ follow: 5, looping: true }), d_trail: P({ looping: true }), d_trail2: P({ looping: true }),
+  m_hit: P({ spawn: 2 }),
   late_tok: P({ follow: 6, spawn: 0, looping: true }), late_fx: P({ spawn: 0 }),
 };
 
@@ -117,6 +118,13 @@ function makeIndex() {
           abilities: [{ class: 'MultiRangedAttack', projectileKey: 'p_dbody', mount: 'MUZZLE' }, { node: 'Funnel_s2', class: 'MultiFunnelNormalAttack', projectileKey: 'p_dfun2', mount: 'SPECIAL_2' }] } },
       },
       enemy_905_dummy: { kind: 'enemy', modes: [{ name: 'Default', attack: null, combat: null }], skills: {} },
+      // 特训的教官（自增益、只改普攻：特效全在攻击的命中行里，逻各斯 S3 这类）
+      char_906_mentor: {
+        kind: 'char', skin: 'char_906_mentor',
+        modes: [{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }],
+        skills: { skchr_mentor_1: { rootClass: 'CastSkill', mode: null,
+          uses: [{ role: 'hit', ability: 'MeleeAttack', list: 'combat', keys: ['m_hit'], from: 'Attack._hit', directionType: 0, oneshot: 1 }] } },
+      },
     },
     projectiles: {
       p_body: flightP('w_body_trail', ['w_body_hit']),
@@ -166,6 +174,7 @@ const RECS = {
   char_902_uav: { charId: 'char_902_uav', skills: [{ index: 1, skillId: 'skchr_uav_2', bb: { 'attack@cnt': 0 }, duration: 40 }] },
   char_903_ice: { charId: 'char_903_ice', skills: [{ index: 1, skillId: 'skchr_ice_2', bb: { 'attack@cnt': 1 }, duration: 25 }] },
   char_904_dro: { charId: 'char_904_dro', skills: [{ index: 1, skillId: 'skchr_dro_2', bb: { atk_scale: 1.6, ct: 3 }, duration: 0 }] },
+  char_906_mentor: { charId: 'char_906_mentor', skills: [{ index: 0, skillId: 'skchr_mentor_1', bb: {}, duration: 10 }] },
 };
 
 /**
@@ -469,6 +478,34 @@ describe('the floating units in a battle (funnelfx.js)', () => {
     s.flags = SKILL; w.skill(s, true); frame(20);
     ofx.time += 0.5; frame();
     assert.equal(live('w_trail'), 2, '1 + attack@cnt units');
+  });
+
+  test('特训：学员的浮游单元每次命中都叠教官的攻击命中行（附着的无人机与释放的无人机两条路径）', async () => {
+    const { w, view, frame, count } = await setup();
+    // 附着的未释放无人机（S1：本体一击 + 跟着的单元）
+    const a = view(1, 'char_901_wolf', { skill: 1 });
+    a.info.reconMentor = { defId: 'char_906_mentor', spine: 'char_906_mentor', skillIndex: 0 };
+    const t = view(2, 'enemy_905_dummy', { x: 5.45, y: 5 });
+    w.deploy(a); frame();
+    a.flags = SKILL; w.skill(a, true); frame();
+    w.attack(a, t, 'drone', 1, false);
+    w.damage(t, 'arts', null, 1.05);   // 本体那一击：学员自己的命中组 + 教官的攻击命中行
+    assert.equal(count('m_hit'), 1, '本体命中照常叠教官的攻击命中行（每次伤害一次）');
+    w.damage(t, 'arts', null, 1.05);   // 单元 1 的命中
+    assert.equal(count('m_hit'), 2, '附着的浮游单元命中时同样叠上教官的攻击命中行');
+    // 释放的分散单元（荒芜拉普兰德 S3 这类：'drones' → 'droneLock' → 每次 'drone' 的命中）
+    const v = view(3, 'char_901_wolf', { skill: 2 });
+    v.info.reconMentor = { defId: 'char_906_mentor', spine: 'char_906_mentor', skillIndex: 0 };
+    const e = view(9, 'enemy_905_dummy', { x: 8, y: 5 });
+    w.deploy(v); frame();
+    v.flags = SKILL; w.skill(v, true);
+    assert.equal(w.simFx('drones', 5, 5, { id: 3, n: 1 }), true);
+    frame(40);
+    assert.equal(w.simFx('droneLock', 8, 5, { id: 9, src: 3 }), true);
+    frame(90);
+    const before = count('m_hit');
+    assert.equal(w.simFx('drone', 8, 5, { id: 3 }), true);
+    assert.equal(count('m_hit'), before + 1, '释放的浮游单元（_pulse）命中也叠教官的命中行');
   });
 
   test('the old look without the effects: nothing official, the kit fx keep their procedural draw', async () => {

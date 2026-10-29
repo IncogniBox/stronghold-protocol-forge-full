@@ -1145,6 +1145,25 @@ describe('the running skill\'s own attack / impact sound (sfx.units[id].attacks 
     } finally { restore(); }
   });
 
+  test('特训：学员施放时教官技能的发动音也响（两把独立的节流键，不被学员那一声吃掉）', async () => {
+    const trainee = manifest.audio.sfx.units[LEIZI2];
+    const mentor = manifest.audio.sfx.units[CHEN3];
+    assert.ok(trainee.skills['2'] && mentor.skills['2'] && trainee.skills['2'] !== mentor.skills['2'],
+      '前提：两个 S3 槽都有各自的发动音');
+    const { a, urls, settle, restore } = await rig([
+      { id: 1, side: 'ally', kind: 'chess', spine: LEIZI2, skillIndex: 2, reconMentor: { spine: CHEN3, skillIndex: 2 } },
+    ]);
+    try {
+      fresh(a);
+      a.handleBattleEvents([['skill', 1, 1]]);
+      await settle();
+      assert.equal(askedCount(urls, trainee.skills['2']), 1, '学员自己的技能发动音');
+      // 两把键：`unit()` 的节流键是 `${unitId}:skill`。教官那一层一度与学员共用这一把，后一声必然落在 160 ms 的
+      // 单位冷却里被丢掉——业主「学员继承教官的技能缺少了教官的音效」。
+      assert.equal(askedCount(urls, mentor.skills['2']), 1, '教官技能的发动音叠上');
+    } finally { restore(); }
+  });
+
   test('特训：技能结束后 10 s 礼炮窗口内每一发 bombard 都叠教官命中音（窗口外不叠）', async () => {
     const mentor = manifest.audio.sfx.units[CHEN3];
     assert.ok(mentor.hits['2'], '前提：教官技能有自己的命中音');

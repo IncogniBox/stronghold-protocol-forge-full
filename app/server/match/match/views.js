@@ -167,12 +167,18 @@ export class MatchViews {
         turnSeconds: d.untimed ? 0 : this.bandTurnMs() / 1000, untimed: !!d.untimed,
       };
     }
-    // 预重构（模式扩展-重构模拟，PHASE.PRE_RECON）：各座位已交的选择（没交的座位不在表里 ⇒ 客户端画「待提交」）。
-    // 重构模拟的**整局标记**：其余阶段也带 `recon`（choices 为 null）——特训按钮（screens/game.js）等客户端读点
-    // 靠它判「这是重构对局」。官方对局连这个键都不写，公开视图字节不变。
+    // 预重构（模式扩展-重构模拟）：各座位已交的选择（没交的座位不在表里 ⇒ 客户端画「待提交」）。
+    // 重构模拟的**整局标记**：其余阶段也带 `recon` —— 特训按钮、局内的策略效果展示（screens/game.js）等读点靠它判
+    // 「这是重构对局」。官方对局连这个键都不写，公开视图字节不变。
     if (this.gd.isRecon) {
+      // 最终攻势（第 20 回合）实际出战的「·重构」首领 key：简报页左上角的首领卡按它画 —— 原版首领不进重构模拟
+      // （bossId 仍是官方那一条，只用于共享血量池 / 模板；那只官方的本体被 reconBossWaveFor 换掉了）。
+      const reconBossKey = typeof this.reconBossSpawnKeyFor === 'function' ? this.reconBossSpawnKeyFor(this.gd.bossRound) : null;
       v.recon = {
-        choices: this.phase === PHASE.PRE_RECON && this.reconChoices
+        ...(reconBossKey ? { bossKey: reconBossKey } : {}),
+        // 整局都带：预重构交上来的选择（局内的「策略效果」展示读自己的那一份，screens/game.js）。
+        // PRE_RECON 之外的阶段以前是 null；现在与阶段无关 —— 只是公开视图多了这张表，官方对局仍逐字节不变。
+        choices: this.reconChoices
           ? Object.fromEntries(Object.entries(this.reconChoices).map(([pid, c]) => [pid, { ...c }]))
           : null,
         // 全员交齐后的「队伍总览」：阶段仍是 PRE_RECON，客户端据此播过场并展示总览；`continued` 是已点继续的座位。

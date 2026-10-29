@@ -240,6 +240,24 @@ export function loadoutKey(lo) {
   return lo && !lo.isDefault ? `|s${lo.skillIndex}|m${lo.moduleId ?? ''}${lo.potentialIsDefault === false ? `|p${lo.potential}` : ''}` : '';
 }
 
+/**
+ * 特训教官的 loadout：`def.traineeMentor` → `getChess(教官, 它)` 的第二个参数。教官是甄选干员（自选槽位件）时带它的
+ * pick（`{ diy }`）、是补位时 `{ standIn: true }`、否则是它自己的技能 / 模组读数；缺省 ⇒ null（按教官的默认 def）。
+ *
+ * 两处都要同一份：content 层解析教官的 def / kit（`mentorKitOf`），战斗层解析**教官技能召唤物**的 def
+ * （`Battle._tokenDef` — 望的棋子必须按教官的技能槽取 `bySkill` 变体；拿学员自己的 loadout 解析只会得到该 token 记录的
+ * 默认那一条，即永远「取势」）。
+ * @param {{ chessId?: string, loadout?: object|null, diy?: object|null }|null} tm a def's `traineeMentor`
+ * @returns {{ diy: object }|{ standIn: true }|{ skillIndex: number|null, moduleId: string|null }|null}
+ */
+export function mentorLoadoutOf(tm) {
+  if (!tm || typeof tm !== 'object') return null;
+  if (tm.diy && typeof tm.diy === 'object') return { diy: tm.diy };
+  if (tm.loadout && tm.loadout.standIn === true) return { standIn: true };
+  if (tm.loadout && typeof tm.loadout === 'object') return { skillIndex: tm.loadout.skillIndex ?? null, moduleId: tm.loadout.moduleId ?? null };
+  return null;
+}
+
 /** Build an immunity Set from an object `{stun:true,…}` or an array `['stun', 'feared']`. */
 export function immuneSet(v, extra = null) {
   const out = new Set();
@@ -716,7 +734,9 @@ export class DataSource {
    * 「特训学员」def（重构模拟，shared/reconModes.js）—— **叠加式**（业主 2026-10-27 口径）：学员自己的 def 为基
    * （自己的选定技能 / 模组 / 特质 / 天赋 / kit 派发键 charId / raw，全部照旧），教官只提供这几样：
    *   1. 攻 / 防 / 生命上限 = **学员自己的 + 教官的 ×ratio**（RECON_TRAINEE_STAT_RATIO = 0.5）——其余数值（费用 /
-   *      阻挡 / 攻击间隔 / 再部署 / 射程）全是学员自己的；
+   *      阻挡 / 攻击间隔 / 再部署 / 射程）全是学员自己的；**链式**（业主 2026-10-29）：教官自己也是学员时
+   *      `traineeOf.chain` 带它的教官那条，教官的三围换成它的**组成三围** ⇒ A + B×0.5 + C×0.25（逐层递减，
+   *      见 `_chainStats`；只有数值沿链传，盟约 / 特质 / 天赋 / 技能仍取直接教官自己的）；
    *   2. `bonds` = 学员自己的 ∪ 教官的 ∪ 教官特质授予的（`raw.trait.grantsBonds`）—— unitBonds 读 def.bonds，
    *      学员因此承受教官盟约的效果（教官还在场上、激活计数不重复）；
    *   2b. `raw.garrisonIds` = 学员自己的 ∪ 教官的 —— 战斗中类特质（若叶睦「受伤增加盟约层数」等 IN_BATTLE
@@ -740,7 +760,13 @@ export class DataSource {
     // 补位 def 解析（替补干员的身体 / 技能 / 模组 / 特效 / 音效，业主 2026-10-23）。
     const mQuery = to.diy && typeof to.diy === 'object' ? { diy: to.diy } : mStandIn ? { standIn: true } : mLo;
     const ratio = Number.isFinite(to.ratio) && to.ratio > 0 ? to.ratio : RECON_TRAINEE_STAT_RATIO;
-    const key = `${id}|trainee|${to.chessId}|${mStandIn ? 'standIn|' : ''}${mLo ? `s${mLo.skillIndex}|m${mLo.moduleId ?? ''}` : ''}${to.diy ? `|d${to.diy.charId}|${to.diy.skillIndex}|${to.diy.uniEquipId ?? ''}` : ''}|${loadout.skillIndex ?? ''}|${loadout.moduleId ?? ''}|p${loadout.potential ?? ''}|r${ratio}`;
+    // 链式特训（业主 2026-10-29）：教官自己也是学员时，`to.chain` 是**它的**教官那条——只用来算教官的组成三围
+    // （逐层 ×ratio 递减：A + B×0.5 + C×0.25）；教官的盟约 / 特质 / 天赋 / 影子技能仍取教官自己的，不向 A 传。
+    const chain = to.chain && typeof to.chain === 'object' && typeof to.chain.chessId === 'string' ? to.chain : null;
+    const chainSig = (c, d = 0) => (d < 8 && c && typeof c === 'object' && typeof c.chessId === 'string'
+      ? `|c${c.chessId}${c.loadout && c.loadout.standIn ? '|si' : ''}${c.loadout && Number.isInteger(c.loadout.skillIndex) ? `|s${c.loadout.skillIndex}` : ''}${c.loadout && c.loadout.moduleId ? `|m${c.loadout.moduleId}` : ''}${c.diy ? `|d${c.diy.charId}|${c.diy.skillIndex}|${c.diy.uniEquipId ?? ''}` : ''}${chainSig(c.chain, d + 1)}`
+      : '');
+    const key = `${id}|trainee|${to.chessId}|${mStandIn ? 'standIn|' : ''}${mLo ? `s${mLo.skillIndex}|m${mLo.moduleId ?? ''}` : ''}${to.diy ? `|d${to.diy.charId}|${to.diy.skillIndex}|${to.diy.uniEquipId ?? ''}` : ''}|${loadout.skillIndex ?? ''}|${loadout.moduleId ?? ''}|p${loadout.potential ?? ''}|r${ratio}${chainSig(chain)}`;
     if (this._chess.has(key)) return this._chess.get(key);
     const ownLo = { skillIndex: loadout.skillIndex ?? null, moduleId: loadout.moduleId ?? null, potential: loadout.potential ?? null };
     const own = this.getChess(id, ownLo);
@@ -748,6 +774,7 @@ export class DataSource {
     const mentor = this.getChess(to.chessId, mQuery ?? null);
     let d = own;
     if (own && mentor) {
+      const mStats = this._chainStats(mentor, chain);
       const mg = Array.isArray(mentor.raw?.trait?.grantsBonds) ? mentor.raw.trait.grantsBonds : [];
       const bonds = [];
       for (const b of [...(own.bonds ?? []), ...(mentor.bonds ?? []), ...mg]) {
@@ -764,18 +791,48 @@ export class DataSource {
         ...own,
         stats: {
           ...own.stats,
-          atk: Math.round(own.stats.atk + mentor.stats.atk * ratio),
-          def: Math.round(own.stats.def + mentor.stats.def * ratio),
-          maxHp: Math.round(own.stats.maxHp + mentor.stats.maxHp * ratio),
+          atk: Math.round(own.stats.atk + mStats.atk * ratio),
+          def: Math.round(own.stats.def + mStats.def * ratio),
+          maxHp: Math.round(own.stats.maxHp + mStats.maxHp * ratio),
         },
         raw: garrisonIds.length ? { ...own.raw, garrisonIds } : own.raw,
         bonds,
-        loadout: { ...(own.loadout ?? {}), isDefault: true, traineeOf: { chessId: to.chessId, loadout: mStandIn ? { standIn: true } : mLo, diy: to.diy ?? null } },
-        traineeMentor: { chessId: to.chessId, loadout: mStandIn ? { standIn: true } : mLo, diy: to.diy ?? null },
+        loadout: { ...(own.loadout ?? {}), isDefault: true, traineeOf: { chessId: to.chessId, loadout: mStandIn ? { standIn: true } : mLo, diy: to.diy ?? null, ...(chain ? { chain } : null) } },
+        traineeMentor: { chessId: to.chessId, loadout: mStandIn ? { standIn: true } : mLo, diy: to.diy ?? null, ...(chain ? { chain } : null) },
       });
     }
     this._chess.set(key, d);
     return d;
+  }
+
+  /**
+   * 链式特训的三围组成（业主 2026-10-29）：`base` 是这一层的**自己的** def（教官 B；下一层是 B 的教官 C），
+   * `chain` 是它的教官那条（`{ chessId, loadout | diy, ratio, chain? }`）。返回逐层递减的三围：
+   * `base.stats + <下一层组成三围> × base 那条的 ratio`，即 A + B×0.5 + C×0.25 + …。只取数值——盟约 / 特质 /
+   * 天赋 / 技能都不沿链传。环（同一 chessId 重复出现）与超过 8 层 ⇒ 停在该层。
+   * @param {{ id: string, stats: object }} base
+   * @param {object|null} chain @param {Set<string>} [seen]
+   */
+  _chainStats(base, chain, seen = new Set()) {
+    const st = base && base.stats;
+    if (!st || !chain || typeof chain !== 'object' || typeof chain.chessId !== 'string') return st;
+    const cid = chain.chessId;
+    if (seen.has(cid) || seen.size >= 8 || cid === base.id) return st;
+    const cStandIn = !!(chain.loadout && chain.loadout.standIn === true);
+    const cLo = !cStandIn && chain.loadout && typeof chain.loadout === 'object'
+      ? { skillIndex: chain.loadout.skillIndex ?? null, moduleId: chain.loadout.moduleId ?? null } : null;
+    const cQuery = chain.diy && typeof chain.diy === 'object' ? { diy: chain.diy } : cStandIn ? { standIn: true } : cLo;
+    const cdef = this.getChess(cid, cQuery ?? null);
+    if (!cdef) return st;
+    const cs = this._chainStats(cdef, chain.chain, new Set([...seen, cid]));
+    if (!cs) return st;
+    const r = Number.isFinite(chain.ratio) && chain.ratio > 0 ? chain.ratio : RECON_TRAINEE_STAT_RATIO;
+    return {
+      ...st,
+      atk: Math.round(st.atk + cs.atk * r),
+      def: Math.round(st.def + cs.def * r),
+      maxHp: Math.round(st.maxHp + cs.maxHp * r),
+    };
   }
   getEnemy(key) {
     if (this._enemy.has(key)) return this._enemy.get(key);

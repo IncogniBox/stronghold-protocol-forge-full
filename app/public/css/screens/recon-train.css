@@ -1,6 +1,17 @@
-/* 重构协议·特训（ui/reconTrain.js）：休整期顶栏按钮的完成态与选人弹窗。配色走主题的 teal / gold 两族，
-   与预重构（pre-recon.css）同一套观感；弹窗遮罩与 ChoiceOverlay 同层级的观感，但不挡战斗。 */
-.gm__train.is-done { opacity: .45; }
+/* 重构协议·特训（ui/reconTrain.js）：选人弹窗。配色走主题的 teal / gold 两族，与预重构（pre-recon.css）同一套观感；
+   弹窗遮罩与 ChoiceOverlay 同层级的观感，但不挡战斗。
+   入口按钮在调度中心的工具行（ui/shopBar.js 的 `train` 槽，紧挨冻结 / 刷新）：荧光青（--mint-400），图标是
+   `public/icons/recon-train.png` 的白色线稿，按蒙版取 currentColor（与大厅的重构入口同一条画法）。 */
+.toolbtn--train { --tb: var(--mint-400); }
+.toolbtn--train .toolbtn__mask {
+  display: block; width: .34rem; height: .34rem; background: currentColor;
+  -webkit-mask: url('/icons/recon-train.png') center / contain no-repeat;
+  mask: url('/icons/recon-train.png') center / contain no-repeat;
+  filter: drop-shadow(0 0 .08rem rgba(89, 244, 202, .75));
+}
+.toolbtn--train:hover:not(:disabled) { box-shadow: 0 0 .22rem rgba(89, 244, 202, .55); }
+.toolbtn--train.is-on { background: var(--mint-400); color: #04140f; box-shadow: 0 0 .2rem rgba(89, 244, 202, .6); }
+.toolbtn--train.is-on .toolbtn__mask { filter: none; }
 
 /* 详情卡上的「特训学员」徽标（detailPanel.js ChessDetail，与 dtag-standin / dtag-diy 同一排） */
 .dtag-train {

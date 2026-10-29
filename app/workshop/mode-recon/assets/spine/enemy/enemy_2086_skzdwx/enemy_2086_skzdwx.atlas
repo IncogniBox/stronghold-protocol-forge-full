@@ -1,0 +1,12 @@
+enemy_2086_skzdwx.png
+size: 124,123
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+body
+  rotate: false
+  xy: 0, 0
+  size: 124, 123
+  orig: 124, 123
+  offset: 0, 0
+  index: -1

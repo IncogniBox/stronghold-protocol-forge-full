@@ -13,10 +13,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DATA, makeMatch } from './harness.js';
 import { PHASE } from '../../shared/constants.js';
+import { RECON_ASSIST_IDS, RECON_LOAD_IDS } from '../../shared/reconModes.js';
 
-/** 一局重构模拟（room mode 'recon' ⇒ mode_recon_normal）。 */
+/** 一局重构模拟（room mode 'recon' ⇒ mode_recon_abyss）。 */
 function reconMatch(o = {}) {
-  return makeMatch({ mode: 'recon', modeId: 'mode_recon_normal', seed: 7, fake: true, data: DATA, ...o });
+  return makeMatch({ mode: 'recon', modeId: 'mode_recon_abyss', seed: 7, fake: true, data: DATA, ...o });
 }
 
 /** 从 INFO_CHECK 推进到 PRE_RECON（策略默认选 band_bldsk）。 */
@@ -173,3 +174,79 @@ test('公开视图：玩家带 team；总览期间 recon.summary / continued 可
   assert.deepEqual(pub.recon.continued, []);
   m.dispose();
 });
+
+// ---- 重构协助 / 熔芯负载：没人选就随机补 1 个（业主 2026-10-29） ------------------------------------------------
+
+test('协助 / 负载没选 ⇒ 进入总览时各随机补 1 个（六个合法 id 之一）；已选的保留，公开视图看到补选后的值', () => {
+  const h = toPreRecon(reconMatch({ humans: 2 }));
+  const m = h.m;
+  assert.deepEqual(m.handle('p_0', { t: 'g.reconChoice', assist: 'recon_assist_equip' }), { ok: true }, 'p_0 只选了协助');
+  assert.deepEqual(m.handle('p_1', { t: 'g.reconChoice' }), { ok: true }, 'p_1 交空选择');
+  h.run(() => m.reconSummary === true);
+  assert.equal(m.reconSummary, true);
+
+  const c0 = m.reconChoices.p_0;
+  const c1 = m.reconChoices.p_1;
+  assert.equal(c0.assist, 'recon_assist_equip', '已经选了（合法）的协助保留，不被随机覆盖');
+  assert.ok(RECON_LOAD_IDS.includes(c0.load), `只缺负载 ⇒ 随机补一个（抽到 ${c0.load}）`);
+  assert.ok(RECON_ASSIST_IDS.includes(c1.assist), `空选择 ⇒ 协助随机补（抽到 ${c1.assist}）`);
+  assert.ok(RECON_LOAD_IDS.includes(c1.load), `空选择 ⇒ 负载随机补（抽到 ${c1.load}）`);
+
+  // 公开视图 = 补选后的那一份（局内的「策略效果」两行与装备拆卸开关读的就是它）
+  const pub = h.publicState();
+  assert.equal(pub.recon.choices.p_0.assist, 'recon_assist_equip');
+  assert.equal(pub.recon.choices.p_0.load, c0.load);
+  assert.equal(pub.recon.choices.p_1.assist, c1.assist);
+  assert.equal(pub.recon.choices.p_1.load, c1.load);
+
+  // 补选落账之后再进下一阶段，值不再变
+  m.handle('p_0', { t: 'g.reconContinue' });
+  m.handle('p_1', { t: 'g.reconContinue' });
+  assert.notEqual(m.phase, PHASE.PRE_RECON);
+  assert.equal(m.reconChoices.p_0.assist, 'recon_assist_equip');
+  assert.equal(m.reconChoices.p_0.load, c0.load);
+  m.dispose();
+});
+
+test('超时没人交 ⇒ 照样进总览，两个字段都随机补齐（不因缺席而空着）', () => {
+  const h = toPreRecon(reconMatch({ humans: 2 }));
+  const m = h.m;
+  m.reconDeadline();
+  assert.equal(m.reconSummary, true, '超时先切到总览');
+  for (const pid of ['p_0', 'p_1']) {
+    const c = m.reconChoices[pid];
+    assert.ok(RECON_ASSIST_IDS.includes(c.assist), `${pid} 协助补齐`);
+    assert.ok(RECON_LOAD_IDS.includes(c.load), `${pid} 负载补齐`);
+  }
+  m.dispose();
+});
+
+test('补选确定性：同一 seed + 同一座位恒得同一个（重放一致）；非法 id 当没选', () => {
+  /** 一局 1 人重构：交 `choice`（可空），等总览亮起后返回补选后的那一份（另附第二次总览后的值验幂等）。 */
+  const fill = (seed, choice = {}) => {
+    const h = toPreRecon(reconMatch({ humans: 1, seed }));
+    const m = h.m;
+    assert.deepEqual(m.handle('p_0', { t: 'g.reconChoice', ...choice }), { ok: true });
+    h.run(() => m.reconSummary === true);
+    const out = { ...m.reconChoices.p_0 };
+    m.reconDeadline(); // 总览超时兜底：再走一次 finishPreRecon（补选幂等）
+    assert.deepEqual({ assist: m.reconChoices.p_0.assist, load: m.reconChoices.p_0.load }, { assist: out.assist, load: out.load }, '补选幂等');
+    m.dispose();
+    return out;
+  };
+  const a = fill(31);
+  assert.deepEqual(fill(31), a, '同一 seed 两次开局的补选逐字相同');
+  assert.deepEqual(fill(31, { assist: 'nope', load: 'nope' }), a, '交的 id 不在六个合法值里 ⇒ 当没选，抽到同一个');
+});
+
+test('官方对局：fillReconChoices 一个字节都不动（reconChoices 仍是 null，公开视图没有 recon）', () => {
+  const h = makeMatch({ mode: 'coop', humans: 2, seed: 7, fake: true });
+  const m = h.m;
+  h.start();
+  assert.equal(m.reconChoices, null, '非重构对局连这张表都不建');
+  m.fillReconChoices();
+  assert.equal(m.reconChoices, null, '调用之后仍是 null');
+  assert.equal(h.publicState().recon, undefined, '公开视图里没有 recon 这一格');
+  m.dispose();
+});
+

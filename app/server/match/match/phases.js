@@ -9,6 +9,7 @@ import { msg } from '../../../shared/i18n.js';
 import { buildNormalWave, buildBossWave } from '../waves.js';
 import { pairPlayers } from '../finalAssault.js';
 import { createRng, deriveSeed } from '../../sim/rng.js';
+import { RECON_ASSIST_IDS, RECON_LOAD_IDS } from '../../../shared/reconModes.js';
 import { botPickBand } from '../bot.js';
 import { OK, fail, DELAYS, BAND_TURN_SECONDS } from './common.js';
 
@@ -337,6 +338,8 @@ export class MatchPhases {
   enterReconSummary() {
     if (this.phase !== PHASE.PRE_RECON || this.reconSummary) return;
     this.reconSummary = true;
+    // 没选协助 / 负载的座位在总览亮起时补选（总览展示的就是这一局实际生效的那一份）
+    this.fillReconChoices();
     for (const ps of this.order) if (ps.isBot) this.reconContinues.add(ps.playerId);
     this.markPublic();
     this.flush(true);
@@ -364,10 +367,33 @@ export class MatchPhases {
     if (this.phase !== PHASE.PRE_RECON) return;
     this.setDeadline(0);
     this.reconSummary = false;
+    // 兜底（幂等）：总览上没补过（例如直接结束）的座位在这里补上协助 / 负载
+    this.fillReconChoices();
     // 自主禁用（每名玩家自己禁的 1 个盟约）在阶段结束、第 1 回合开打之前生效：只收窄这名玩家自己的卡池
     // （自选编队的库存与商店 / 奖励 / 内容抽卡），不动队友、也不改盟约本身。
     this.applyReconSelfBans();
     this.enterBattleCheck();
+  }
+
+  /**
+   * 「重构协助 / 熔芯负载」没人选时的随机补选（业主 2026-10-29）：每个座位这两个字段**各**缺一个（含交的是
+   * 六个合法 id 之外的值）就抽一个补上，已经选了合法 id 的保留。落账点：`enterReconSummary`（总览展示的就是
+   * 这一局实际生效的那一份）与 `finishPreRecon`（幂等兜底）。
+   *
+   * 随机数来自**独占**的一口流 —— `deriveSeed(this.seed, 'recon-seat:<playerId>:<assist|load>')`，与试炼首领抽签
+   * （reconTrials.js 的 'recon-trial'）同一条纪律：不碰别的流、同一 seed + 同一座位恒得同一个（重放一致），也不
+   * 受座位顺序影响（每人一口流）。非重构对局（`reconChoices` 仍是 null）一个字节都不动。
+   */
+  fillReconChoices() {
+    if (!this.gd.isRecon || !this.reconChoices || typeof this.reconChoices !== 'object') return;
+    for (const ps of this.order) {
+      const cur = this.reconChoices[ps.playerId];
+      const own = cur && typeof cur === 'object' ? cur : {};
+      const draw = (ids, field) => createRng(deriveSeed(this.seed, `recon-seat:${ps.playerId}:${field}`)).pick(ids);
+      const assist = RECON_ASSIST_IDS.includes(own.assist) ? own.assist : draw(RECON_ASSIST_IDS, 'assist');
+      const load = RECON_LOAD_IDS.includes(own.load) ? own.load : draw(RECON_LOAD_IDS, 'load');
+      this.reconChoices[ps.playerId] = { ...own, assist, load };
+    }
   }
 
   /**
@@ -536,17 +562,24 @@ export class MatchPhases {
     // 开发者面板强制的首领回合：本回合号在官方表里没有首领模板，取**官方首领回合**那一套（模板 / 波次 / 血量）
     const wr = this.devBossRound === r ? this.gd.bossRound : r;
     const bossId = r === this.gd.hiddenRound && r !== this.gd.bossRound ? this.hiddenBossId : this.bossId;
-    // 重构模拟的 R20 预选：波次仍按通常抽到的首领取模板，只把首领本体的 spawn 换成「·重构」
-    const reconKey = this.gd.isRecon && r === this.gd.bossRound ? this.reconBossSpawnKeyFor(r) : null;
+    // 重构模拟的 R20 / R21 预选：波次仍按通常抽到的首领取模板，只把首领本体的 spawn 换成「·重构」
+    const reconKey = this.gd.isRecon && (r === this.gd.bossRound || r === this.gd.hiddenRound) ? this.reconBossSpawnKeyFor(r) : null;
     // Pairing uses an independent seeded draw, consuming no shop, wave, draft or battle randomness.
     const groups = pairPlayers(this.alivePlayers(), createRng(deriveSeed(this.seed, 'boss-pairs')), this.bossPairs);
     this.bossPairs = groups.map(g => g.map(p => p.playerId));
-    this.bossWaves = groups.map((g) => ({
+    this.bossWaves = groups.map((g, gi) => ({
       players: g.map((p) => p.playerId),
-      wave: this.reconBossWaveFor(r, buildBossWave(this.gd, this.rngWaves, this.factions, wr, { bossId, solo: this.isSolo || g.length === 1 }, this.stageId)),
+      wave: this.reconBossWaveFor(
+        r,
+        buildBossWave(this.gd, this.rngWaves, this.factions, wr, { bossId, solo: this.isSolo || g.length === 1, areaIndex: gi }, this.stageId),
+        gi,
+      ),
     }));
-    // 首领战自身的 id（HUD / 血池）也切到候选那一只：pack 记录不在 bosses 表里时按 500000 的池子兜底
-    if (reconKey) this.bossId = reconKey;
+    // 首领战自身的 id（HUD / 血池）也切到候选的那一只：pack 记录不在 bosses 表里时按 500000 的池子兜底
+    if (reconKey) {
+      if (r === this.gd.hiddenRound && r !== this.gd.bossRound) this.hiddenBossId = reconKey;
+      else this.bossId = reconKey;
+    }
   }
 
   /**

@@ -54,6 +54,8 @@ import { remainingDistance } from './ai.js';
 import { toDataSource, normalizeRoute, normalizeStage } from './simdata.js';
 import { installContent } from './content/index.js';
 import { withGameData, withMorphPairing } from './content/support/index.js';
+// 重构模拟的盟约别名（`recon_<官方 id>` → 官方 id；服务端复算、浏览器战斗、试玩与重放共用这一份口径）
+import { reconBondData } from '../../shared/reconModes.js';
 import { BattlePlayers } from './battle/players.js';
 import { BattleLifecycle } from './battle/lifecycle.js';
 import { BattleHooks } from './battle/hooks.js';
@@ -76,13 +78,18 @@ const DEFAULT_RECTS = { normal: GEO.NORMAL_RECT, unite: GEO.UNITE_RECT, boss: GE
 /**
  * The whole data object behind `Battle opts.data` (W-B): a DataSource / loadout view carries it as `source`, a raw data
  * object IS it, and anything else (undefined, a stub) means "the process data" — `null` in the data scope.
+ *
+ * 重构模拟（`mode_recon_*`）：这一场读的盟约表换成包里 `recon_<id>` 的那一份（`shared/reconModes.js reconBondData`）。
+ * **必须落在这里**：生产默认是浏览器跑战斗（`clientCombat`），准备期 `Match` 那份别名到不了浏览器，而这里正是
+ * 服务端复算、浏览器、试玩与重放共用的唯一入口（业主 2026-10-27「重构后的效果没有生效，还是原本的效果」）。
  * @param {any} data
+ * @param {string|null} [modeId]
  * @returns {object|null}
  */
-function dataObjectOf(data) {
+function dataObjectOf(data, modeId = null) {
   if (!data || typeof data !== 'object') return null;
-  if (data.source && typeof data.source === 'object') return data.source;
-  return typeof data.getChess === 'function' ? null : data;
+  const src = data.source && typeof data.source === 'object' ? data.source : (typeof data.getChess === 'function' ? null : data);
+  return (src && reconBondData(src, modeId)) || src;
 }
 
 export class Battle {
@@ -90,7 +97,7 @@ export class Battle {
     // 对局自己的数据作用域（W-B, DESIGN §28.16）：构造期与每一步都是同步的，而 content/support 的记录读取走
     // `gameData()` —— 不套这一层，一个只声明了部分包的房间仍会读到进程级那份（装了全部包）的盟约 / 道具 / 策略。
     // 行为开关 `morphPairing`（DESIGN §28.43.1）走**同一条作用域纪律**：`unitBonds` 读它，所以构造期与每一步都要压上。
-    withGameData(dataObjectOf(opts.data), () => withMorphPairing(opts.morphPairing, () => this._init(opts)));
+    withGameData(dataObjectOf(opts.data, opts.modeId), () => withMorphPairing(opts.morphPairing, () => this._init(opts)));
   }
 
   _init(opts = {}) {
@@ -289,7 +296,7 @@ for (const name of ['start', 'step', 'runToEnd', 'forceEnd', 'result']) {
   Object.defineProperty(Battle.prototype, name, {
     ...desc,
     value: function scopedEntry(...args) {
-      return withGameData(dataObjectOf(this.data), () => withMorphPairing(this.opts?.morphPairing, () => inner.apply(this, args)));
+      return withGameData(dataObjectOf(this.data, this.opts?.modeId), () => withMorphPairing(this.opts?.morphPairing, () => inner.apply(this, args)));
     },
   });
 }

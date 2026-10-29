@@ -195,7 +195,7 @@ export function ChoiceView({ pub, sp, myId, solo, personal = false, busyIdx = nu
   // the official header (the event's 悬赏决策, video 9:59): 「悬赏决策 |」 with the description and the timing line stacked
   // beside the bar; on the right the player deciding (name over 正在决策…, an hourglass) or 当前轮到你决策, then the
   // countdown. The pick order lives on the team panel (✓ / ••• on the portraits, ui/teamPanel.js spMarks).
-  return html`<div class=${cx('spov', armed != null && 'has-armed', personal && 'spov--personal')} role="dialog" aria-label=${personal ? t('教鞭选择') : t('机变阶段')} onPointerDown=${onDown}>
+  return html`<div class=${cx('spov', armed != null && 'has-armed', personal && 'spov--personal')} role="dialog" aria-label=${personal ? (sp.family === 'recon' ? t('重构决策') : t('教鞭选择')) : t('机变阶段')} onPointerDown=${onDown}>
     <div class="spov__veil" aria-hidden="true"></div>
     <div class="spov__inner">
       <header class="spov__head">
@@ -205,7 +205,7 @@ export function ChoiceView({ pub, sp, myId, solo, personal = false, busyIdx = nu
           <p class="spov__sub">${timed ? (personal ? t('休整期结束时未选择将自动选定') : t('倒计时结束后仍未选定将自动分配')) : t('选择一项（无时间限制）')}${mine == null && myTurn ? t(' · 点击卡牌选中，再次点击确认') : ''}</p>
         </div>
         <div class="spov__turn">
-          ${personal ? html`<span class="spov__turntxt is-mine">${t('从候选中选择一项战术特训')}</span>`
+          ${personal ? html`<span class="spov__turntxt is-mine">${sp.family === 'recon' ? t('从候选中选择一项重构决策') : t('从候选中选择一项战术特训')}</span>`
             : mine != null ? html`<span class="spov__turntxt is-done"><${Icon} name="check" />${t('已完成选择')}</span>`
             : myTurn ? html`<span class="spov__turntxt is-mine">${t('当前轮到你决策')}</span>`
             : html`<span class="spov__turntxt is-other"><span class="spov__tw"><b>${turnName}</b><small>${t('正在决策…')}</small></span><${Icon} name="hourglass" /></span>`}
@@ -214,7 +214,7 @@ export function ChoiceView({ pub, sp, myId, solo, personal = false, busyIdx = nu
           ${timed ? html`<${Countdown} deadline=${pub?.deadline} total=${total ?? undefined} size="md" />` : null}
         </div>
       </header>
-      <div class=${cx('spov__grid', sp.cards.length <= 3 && 'spov__grid--3')}>
+      <div class=${cx('spov__grid', sp.cards.length <= 3 && 'spov__grid--3', sp.cards.length > 6 && 'spov__grid--many')}>
         ${sp.cards.map((card) => {
           const r = resolveSpCard(card, sp.family);
           const taker = card.takenBy ? players.get(card.takenBy) : null;

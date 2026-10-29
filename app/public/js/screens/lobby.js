@@ -118,8 +118,9 @@ export function stageNote(stages) {
 }
 
 /**
- * 重构模拟的模式图标（引擎自带的 `public/icons/recon.png`，与工坊包 mode-recon 的盟约【重构】用的是同一张图）。
- * 放在引擎里而不是包里：大厅入口是引擎 UI，包缺席（本模式与包是两回事 —— 见 shared/reconModes.js）时也要能画出来。
+ * 重构模拟的模式图标（引擎自带的 `public/icons/recon.png`）：入口按蒙版取色（`--ice`），所以素材只需要一张
+ * 透明底的白色线稿。放在引擎里而不是包里：大厅入口是引擎 UI，包缺席（本模式与包是两回事 —— 见 shared/reconModes.js）
+ * 时也要能画出来。
  */
 const RECON_ICON = '/icons/recon.png';
 
@@ -150,7 +151,7 @@ const MODE_CARDS = [
     // 1–4 支队伍（自由选队，每队 ≤5）。入口与「全量模拟」同一条 devAllowed 门控（仅本地端可见）。
     id: 'recon', name: N_('重构模拟'), en: 'RECON SIMULATION', iconSrc: RECON_ICON,
     desc: N_('策略选择之后进入「预重构」：定下盟约倾向与整局的重构走向，然后在 20 回合的模拟里迎接新的首领。'),
-    points: [N_('1–20 名博士 · 可分 1–4 支队伍'), N_('20 回合制 · 重构协议（机制开发中）')],
+    points: [N_('1–20 名博士 · 可分 1–4 支队伍'), N_('20 回合制 · 终极难度 · 重构协议')],
   },
 ];
 
@@ -186,10 +187,15 @@ export function lobbySimulationPreference() {
 }
 
 function preferredDifficulty(simulation) {
+  // 重构模拟只有终极难度（业主 2026-10-27：其余三档整体移除）
+  if (simulation === 'recon') return RECON_DIFFICULTY_UI;
   const key = simulation === 'firepower' ? 'lobby.firepowerDifficulty' : 'lobby.difficulty';
   const d = loadPref(key, 'FUNNY');
   return DIFFICULTIES.includes(d) ? d : 'FUNNY';
 }
+
+/** 重构模拟固定难度（`shared/reconModes.js` 的 `RECON_DIFFICULTY = 'abyss'` 在界面上的拼写）。 */
+const RECON_DIFFICULTY_UI = 'ABYSS';
 
 /** Keep the explanation tied to the shared balance configuration. */
 export function firepowerFeatures(variant = 'blitz') {
@@ -825,7 +831,7 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
             <span class="pcard__desc">${t('开发者试验场：跳过「确认本局信息」与「选择策略」，直接进入测试场景。')}</span>
             <span class="pcard__effects"><span>${t('测试各种数据与环境')}</span><span>${t('直接进入自定义场景')}</span></span>
             <span class="pcard__stamp" aria-hidden="true"><${StampRing} /><span class="pcard__tick"><${Icon} name="check" /></span><span class="pcard__ok">${t('已选定')}</span></span>
-          </button>` : DIFFICULTIES.map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
+          </button>` : (roomMode === 'recon' ? ['ABYSS'] : DIFFICULTIES).map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
             matchmaking=${matchmaking} random=${random} variant=${variant} />`)}
         </div>
         <div class="proto-foot">
@@ -1210,8 +1216,10 @@ export function LobbyScreen() {
     if (m === 'full' && !devAllowed) return;
     // 「重构模拟」与「全量模拟」同一条 devAllowed 门控（本地实验模式；公网服务器上一个字都不画）。
     if (m === 'recon' && !devAllowed) return;
+    // 重构模拟只有终极难度：不继承「标准/险境/绝境」留下的偏好（那些难度已经不存在了）
+    if (m === 'recon') setDifficulty(RECON_DIFFICULTY_UI);
     // Normal modes share their difficulty; firepower remembers its own explicitly chosen difficulty.
-    if ((m === 'firepower') !== randomMode) setDifficulty(preferredDifficulty(m));
+    else if ((m === 'firepower') !== randomMode) setDifficulty(preferredDifficulty(m));
     setSimulation(m);
     savePref('lobby.simulation', m);
     savePref('lobby.mode', m === 'solo' ? 'solo' : 'coop');

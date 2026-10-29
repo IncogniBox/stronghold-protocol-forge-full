@@ -33,6 +33,8 @@ import { act } from '../ui/gameActions.js';
 import { bondIconUrl, enemyIconUrl } from '../ui/assetUrls.js';
 import { phaseTotalSeconds, sortedPlayers } from '../ui/gameLogic.js';
 import { useStore, isSpectating } from '../store.js';
+import { MatchInfoDialog, matchInfoModel } from '../ui/matchInfo.js';
+import { data } from '../data.js';
 import { RECON_TRIAL_ROUNDS, RECON_TRIAL_BOSSES, RECON_BOND_ID } from '../../../shared/reconModes.js';
 import { t, N_ } from '../../../shared/i18n.js';
 
@@ -60,6 +62,24 @@ const LOAD_OPTS = Object.freeze([
 const MAJOR_MAX = 2;
 const MINOR_MAX = 3;
 const STORY_MAX = 1;
+
+/**
+ * 局内「策略效果」（screens/game.js 的 EFFECTS 列）读的行：这名玩家本局选定的**重构协助 / 熔芯负载**。
+ * 名称与说明直接取自上面两张表（与预重构屏同一份 i18n），这里只按 id 反查，不复制文案。
+ * @param {Record<string, { assist?: string|null, load?: string|null }>|null} choices `pub.recon.choices`
+ * @param {string|null} selfId 自己
+ * @returns {{ id: string, key: 'assist'|'load', kind: string, name: string, desc: string }[]}
+ */
+export function reconProtocolRows(choices, selfId) {
+  const c = choices && selfId ? choices[selfId] : null;
+  if (!c) return [];
+  const rows = [];
+  const assist = ASSIST_OPTS.find((o) => o.id === c.assist);
+  const load = LOAD_OPTS.find((o) => o.id === c.load);
+  if (assist) rows.push({ id: assist.id, key: 'assist', kind: t('重构协助'), name: t(assist.name), desc: t(assist.desc) });
+  if (load) rows.push({ id: load.id, key: 'load', kind: t('熔芯负载'), name: t(load.name), desc: t(load.desc) });
+  return rows;
+}
 
 /** 一名博士已交的选择（pub.recon.choices[pid]），容错成 { major, minor, story, bosses, assist, load, ban }。 */
 function normalizeChoice(c) {
@@ -299,6 +319,7 @@ function OverviewColumn({ p, choice, gd, self, storyVisible, continued, index })
 
 export function PreReconScreen() {
   const pub = useStore((s) => s.match.public);
+  const priv = useStore((s) => s.match.private);
   const myId = useStore((s) => s.me.playerId);
   const room = useStore((s) => s.room);
   const gd = useGameData();
@@ -307,6 +328,8 @@ export function PreReconScreen() {
   // 提交确认弹窗 / 队友详情弹窗（后者存 playerId；null = 关）
   const [confirm, setConfirm] = useState(false);
   const [viewing, setViewing] = useState(null);
+  // 本局信息弹窗（禁用盟约 / 禁用干员 / 特训敌人 …，与简报、策略选择屏同一份 ui/matchInfo.js 的 MatchInfo）
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const mode = gd.config?.modes?.[pub?.modeId];
   // 候选盟约池：本模式**不禁止**的盟约（inactiveBondIds 才是「本局禁用」的那张表；activeBondIds 不是闸门），
@@ -388,6 +411,10 @@ export function PreReconScreen() {
   // 本地选择的摘要（右侧 / 提交确认共用）；没有选中任何一项时提交确认里多一句提醒。
   const localRows = summaryRows({ major, minor, story, bosses, assist, load, ban }, gd, storyPool.length > 0);
   const emptyPick = !major.length && !minor.length && !story && !Object.keys(bosses).length && !assist && !load && !ban;
+  // 本局信息弹窗（禁用盟约 / 禁用干员 / 特训敌人 …，与简报、策略选择屏同一份 MatchInfo）：只在打开时构建
+  const info = infoOpen
+    ? matchInfoModel(pub, { bonds: gd.list('bonds'), chess: gd.chess, mode, priv, diyData: { chess: data.get('chess'), backups: data.get('backups') } })
+    : null;
   const viewingPlayer = viewing != null ? players.find((p) => p.playerId === viewing) || null : null;
   // ---- 总览（全员交齐后）---------------------------------------------------------------
   const summaryOn = pub?.recon?.summary === true;
@@ -418,12 +445,14 @@ export function PreReconScreen() {
           </div>`;
         })}
         <p class="prc__hint t-dim">${t('全员提交后进入队伍总览（{done}/{total}）', { done: doneCount, total: players.length })}</p>
+        <${Button} variant="secondary" icon="search" block=${true} class="draft-order__info" data-testid="match-info-open"
+          aria-haspopup="dialog" onClick=${() => setInfoOpen(true)}>${t('查看禁用盟约与干员')}<//>
       </aside>
 
       <section class="prc__body">
         <div class="prc-block brackets">
           <h3 class="brief-h"><span>${t('盟约倾向')}</span><${MicroLabel} tone="ice">BOND LEANINGS<//></h3>
-          <p class="prc-block__note">${t('定下本局重点经营的盟约：主盟约（核心盟约）至多 {major} 个，副盟约（附加盟约）至多 {minor} 个，故事集盟约至多 {story} 个。', { major: MAJOR_MAX, minor: MINOR_MAX, story: STORY_MAX })}</p>
+          <p class="prc-block__note">${t('定下本局重点经营的盟约：主盟约（核心盟约）至多 {major} 个，副盟约（附加盟约）至多 {minor} 个，故事集盟约至多 {story} 个。', { major: MAJOR_MAX, minor: MINOR_MAX, story: STORY_MAX })}${t('所选盟约会提高其干员的出现概率：主盟约合计 +{major}%、副盟约合计 +{minor}%、故事集盟约合计 +{story}%（组内平分，其余盟约相应降低）。', { major: 10, minor: 20, story: 10 })}</p>
           <${BondGroup} assets=${gd.m} title=${t('主盟约')} kind=${t('核心盟约')} micro="MAJOR // CORE" max=${MAJOR_MAX} pool=${corePool} picks=${major} onToggle=${toggleMajor} taken=${new Set(minor)} ban=${ban} onBan=${toggleBan} />
           <${BondGroup} assets=${gd.m} title=${t('副盟约')} kind=${t('附加盟约')} micro="MINOR // ADD-ON" max=${MINOR_MAX} pool=${addonPool} picks=${minor} onToggle=${toggleMinor} taken=${new Set(major)} ban=${ban} onBan=${toggleBan} />
           <${BondGroup} assets=${gd.m} title=${t('故事集盟约')} micro="SIDE STORY" max=${STORY_MAX} pool=${storyPool}
@@ -496,6 +525,12 @@ export function PreReconScreen() {
     </section>` : null}
 
     <${ExitModal} open=${exit} onClose=${() => setExit(false)} solo=${false} />
+    <${MatchInfoDialog} open=${infoOpen} onClose=${() => setInfoOpen(false)} model=${info}
+      status=${html`<span class=${cx('minfo-dlg__turn', submitted ? 'is-mint' : 'is-warn')}>
+        <${Icon} name=${submitted ? 'check' : 'hourglass'} />${submitted
+          ? t('已提交 · 阶段结束前可改选重交')
+          : `${t('决策中')} · ${t('全员提交后进入队伍总览（{done}/{total}）', { done: doneCount, total: players.length })}`}
+      </span>`} />
 
     <${Modal} open=${confirm} onClose=${() => setConfirm(false)} title=${t('确认重构走向')} micro="PRE-RECON // CONFIRM"
       tone="ice" width="min(92vw, 7.2rem)"

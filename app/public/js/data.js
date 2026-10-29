@@ -172,6 +172,8 @@ export function createDataStore(opts = {}) {
   const localized = new Map();
   /** name → the view `get` shows the file through (setView; the art manifest with the cosmetic plugins) */
   const views = new Map();
+  /** 重构模拟的盟约别名（官方 id → `recon_<id>`）：只在重构对局里由 game.js 设置，见 `setBondAlias`。 */
+  let bondAlias = null;
   /**
    * The content set the files come from (setContent: `values` name → JSON, `overlay(lang)` → a language's game texts or
    * null), or null: the files at `base`.
@@ -304,6 +306,24 @@ export function createDataStore(opts = {}) {
     })();
     entries.set(name, entry);
     return entry.promise;
+  }
+
+  /** 重构模拟的备选盟约记录 id（`recon_<官方 id>`）：永不单独出现在列表 / 查询结果里。 */
+  const isReconId = (id) => typeof id === 'string' && id.startsWith('recon_');
+  /** 官方盟约 id → 本局要用的那个 id（没设别名 / 非 bonds 文件 ⇒ 原样）。 */
+  function aliasId(name, id) {
+    if (name !== 'bonds' || !bondAlias) return id;
+    return bondAlias[String(id)] ?? id;
+  }
+  /** `get('bonds')` 的那一份（对象表）：丢掉 `recon_*`，并把官方 id 换成别名记录（`bondId` 保持官方 id）。 */
+  function aliasBonds(file) {
+    const out = {};
+    for (const [id, rec] of Object.entries(file)) {
+      if (isReconId(id)) continue;
+      const to = bondAlias[id];
+      out[id] = to && file[to] ? { ...file[to], bondId: id } : rec;
+    }
+    return out;
   }
 
   /**
@@ -442,8 +462,9 @@ export function createDataStore(opts = {}) {
     /** JSON of a loaded file in the current locale, through its view (setView); null when missing / not loaded yet. */
     get: (name) => {
       const v = localizedEntry(name)?.value ?? entries.get(name)?.value ?? null;
+      const withAlias = name === 'bonds' && bondAlias && v && typeof v === 'object' ? aliasBonds(v) : v;
       const view = views.get(name);
-      return view && v != null ? view(v) : v;
+      return view && withAlias != null ? view(withAlias) : withAlias;
     },
     /** The file exactly as downloaded (Chinese texts), whatever the locale. */
     getRaw: (name) => entries.get(name)?.value ?? null,
@@ -452,7 +473,9 @@ export function createDataStore(opts = {}) {
     /** Record by id from a loaded file (null when unknown / not loaded). */
     lookup(name, id) {
       if (id == null) return null;
-      return index(name)?.get(String(id)) ?? null;
+      const real = aliasId(name, id);
+      const rec = index(name)?.get(String(real)) ?? null;
+      return rec && name === 'bonds' && String(real) !== String(id) ? { ...rec, bondId: String(id) } : rec;
     },
     /**
      * Record by id from a loaded file exactly as downloaded (its Chinese texts), whatever the locale — what the server
@@ -463,10 +486,29 @@ export function createDataStore(opts = {}) {
       const e = entries.get(name);
       if (!e || e.status !== 'ready') return null;
       if (!e.index) e.index = buildIndex(name, e.value);
-      return e.index.get(String(id)) ?? null;
+      const real = aliasId(name, id);
+      return e.index.get(String(real)) ?? null;
     },
     /** All records of a loaded file as an array (empty when not loaded). */
-    list: (name) => [...(index(name)?.values() ?? [])],
+    list: (name) => {
+      const all = [...(index(name)?.values() ?? [])];
+      if (name !== 'bonds') return all;
+      // `recon_*` 是重构对局的备选记录，永远不会被单独列出来
+      const base = all.filter((r) => !String(r && r.bondId || '').startsWith('recon_'));
+      if (!bondAlias) return base;
+      const ix = index('bonds');
+      return base.map((r) => {
+        const a = r && bondAlias[r.bondId];
+        if (!a) return r;
+        const rr = ix.get(String(a));
+        return rr ? { ...rr, bondId: r.bondId } : r;
+      });
+    },
+    /** 重构对局：把官方盟约 id 映射到 `recon_<id>`（`null` 撤销）。对局结束后 game.js 清掉。 */
+    setBondAlias(map) {
+      bondAlias = map && typeof map === 'object' ? { ...map } : null;
+      notify('bonds');
+    },
     /** Drop a cached file and refetch it now (subscribers are notified when it settles). */
     invalidate(name) {
       if (!entries.has(name)) return Promise.resolve(null);

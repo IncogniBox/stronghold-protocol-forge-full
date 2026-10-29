@@ -122,7 +122,22 @@ untimed. Solo: free pick, no timer, no skip. Starting LP = `bands[id].totalHp`.
 ### 1.2 机变 (SP draft)
 Family = weighted pick from `choices.schedule[modeId].rounds[r].families`; cards: co-op 6 shared (each player takes 1,
 random order, 30 s first / 16 s others, timeout ⇒ a random remaining card), solo 3; solo and single-human drafts are
-untimed. The UI picks a card with two taps (select → 确认选择, DESIGN §18.2). A 驰援 tactic card
+untimed. **From 6 players up one card per player** (`generateDraft`'s `players`; 重构模拟 seats up to 20 — the user
+2026-10-28: "超过 6 人时，每多 1 人增加 1 个选项"), so a 20-seat recon room drafts 20 cards; a bounty pool too small for
+that is drawn again (duplicates, [ASSUMED — the official draft never seats 20]). 重构模拟 has no `schedule` entry (its
+mode is synthesized at run time), so `choices.js reconScheduleEntry` builds its 7 SP rounds (R3/6/9/12/15/18/20 — the
+mode's own curve) from the official 终极 co-op family mix: 悬赏决策 14 / 机密商店 4 / 战术决策 4 at every round
+[ASSUMED — the official rounds R3/R9/R11 do not line up], the bounty kind by round (`bountyDraftKind`: initial / boss /
+hunter) and the official event lists of the matching kind. 重构决策 (`recon`, weight 3 [ASSUMED]) is recon-only: its pool
+is the pack's `choices.reconDecisions` record (`cards`: effect ids or `{ id, name?, desc?, team? }`, `id` = the effects
+record / `choice:<id>` key), drawn as tactic-shaped cards so a pick runs the same registry-then-EffectRef path; an empty
+pool means the family is never offered. **重构模拟 has no SP rounds for now** (the owner removed every round's SP
+selection on 2026-10-28: `CURVE_SP_ROUNDS` is empty and every `isSpPrepare` is false — no 机变 phase is entered); the
+schedule, family mix and the recon decision pool stay in the engine for when the owner supplies those effects. The
+**重构决策** themselves are a separate, per-player private 3-of-6 pick inside the PREP (`Match.offerReconDecision` →
+`ps.personalChoice` with `kind: 'recon'`, the same personal-choice channel as 教鞭; the pack's meta offers its round pool
+on `onPrepStart` and applies the pick on `onChoicePick`; `view` carries `kind: 'recon'` and 3 tactic-shaped cards). The UI
+picks a card with two taps (select → 确认选择, DESIGN §18.2). A 驰援 tactic card
 (`single_special_choice_gain_bond_chess`) is only offered while its bond still has chess in this match's pool
 (`Match.bondInPool`; a bond whose every member is banned would grant nothing); more generally a 驰援 or 盟誓
 (`global_special_choice_bond_addlayer`) card is offered only while one of its bonds is live (`Match.bondLive`: not in
@@ -1057,7 +1072,10 @@ player who quit during the last field or the pause is neither a helper nor a lea
 helpers = `unite.js helperOrder` (research 08 §5, PRTS 卫戍协议/帮助 §联防阶段): ≤ `unite.maxHelpers` (2) perfect players
 chosen by most units on the field (downed included) > an active bond > most standing units > seat; the pair ordered by
 units > active bond > Σ active layers > standing > seat (LP plays no part), the first one on the right-hand field
-(colOffset +8, where escaped_multi enters), the other colOffset 0; the escaped template of that size routes the leaked
+(colOffset +8, where escaped_multi enters), the other colOffset 0 — on a two-half map (a left/right ordinary band, the
+45×60 重构战场) both stand on the map's own halves instead: each helper is placed on its assigned half, the right-hand
+one **mirrored** through the map's mirror axis (`side: 'R'`, colOffset 0), so a player who fought on the left half keeps
+their layout reflected, not shifted (the owner's report of 2026-10-27); the escaped template of that size routes the leaked
 enemies by slot class on the round's battlefield — the match stage opened to both halves (`GEO.UNITE_RECT`, cols 0–20),
 its terrain, crates, water, devices, runes and band map characters included, as in 0.1.x (the owner's decision of
 2026-10-07, 「官服保留地形」; 0.2.0 fought it on the escaped levels' own map, the placeholder road every wave template
@@ -1069,7 +1087,18 @@ at once, it lies on its tile with the redeploy ring and redeploys like after any
 playtest #5 item 2 — it used to stay out and vanish); its timer is its full redeploy time (the official setup carries
 only hp / tech per operator; confirmed by the user), with the redeploy-time effects that start with the battle (机变 征召); summons are
 fielded as the board has them (their SP carried); `flags.layerGainsEnabled = false`; time limit = the round's combat limit.
+A **self-drawn map** (`stage.routes`, the 45×60 重构战场) routes the 联防 on its own routes instead of the escaped template
+(`waves.js uniteRoutePlan`, the owner's specification of 2026-10-27): with one helper every leak walks the two **ground**
+routes of the helper's own half (the left half — where a lone helper stands), alternating, flyers included; with two
+helpers the wave first walks the **upper** ground route of the right half (the one whose start row is highest: the map's
+rows count from the bottom, so a larger row is higher up), and an enemy that reaches the right protection target is **not**
+billed — the same unit (HP, buffs and mods kept) is hidden there, reappears at the **lower enemy entrance** (the start of
+the lower left ground route) and walks the **lower** left ground route; only reaching the **left** target leaks, charged
+to the leaker (`sourcePlayerId`). An official stage has no `stage.routes` and keeps the template's routes, byte for byte.
 Every enemy still alive at the end (leaked again, or never spawned before the limit) costs its **source** player 1 LP.
+A client-run 联防 result that bills **no** survivor while the field's own last counter (`b.progress.left`) had some is
+re-simulated on the server (`MatchUnite._settledUniteResult`, the owner's report of 2026-10-27 「有剩余的敌人也没有扣除生命值」):
+the round's LP never depends on a client's leak list — normally the two runs agree byte for byte and nothing is replaced.
 A client-run 联防 result may bill a survivor only to a leaker who sent that enemy in — a split / summon only to a leaker
 who sent in its parent, ≤ the parents' data offspring count (磨砻 2, 烹泉 4 …; fields.js offspringPerParent).
 **Live counter** (user playtest #6 item 7; PRTS 卫戍协议/帮助 "防卫失败的玩家可通过上方信息栏确认自身所属敌人的剩余数量"):

@@ -255,13 +255,13 @@ export function bondList(gd, bonds, { full = false, off = null } = {}) {
  * @param {ReturnType<typeof computeBonds>} bonds
  * @param {Record<string, number>|null|undefined} gains
  */
-export function bondsWithGains(bonds, gains) {
+export function bondsWithGains(bonds, gains, cap = undefined) {
   if (!gains || typeof gains !== 'object') return bonds;
   let out = null;
   for (const [id, n] of Object.entries(gains)) {
     const b = bonds && bonds[id];
     if (!b) continue;
-    const add = layerGainRoom(b.layers, Math.floor(Number(n) || 0));
+    const add = layerGainRoom(b.layers, Math.floor(Number(n) || 0), cap);
     if (!(add > 0)) continue;
     if (!out) out = { ...bonds };
     out[id] = { ...b, layers: (b.layers || 0) + add };

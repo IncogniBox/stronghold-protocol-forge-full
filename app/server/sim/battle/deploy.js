@@ -23,7 +23,9 @@ export class BattleDeploy {
     }
     const k = R0 * COLS + C0;
     const occ = this._occ[k];
-    if (occ && occ !== u && occ.alive && occ.deployed) { this.log(`tile ${R0},${C0} occupied; ${u} not deployed`); return false; }
+    // `noTile`（装饰性召唤物：望的跟子这类不占格的投射物）既不占格、也不被占格挡住 —— 写成 `_occ` 会让部署与 `unitAt`
+    // 把它当成真单位（官方规则里它「不占格」，任何部署落在它那格时它消失即可）。
+    if (!u.noTile && occ && occ !== u && occ.alive && occ.deployed) { this.log(`tile ${R0},${C0} occupied; ${u} not deployed`); return false; }
     // "倒地干员所在地块视为可部署，但所有我方单位在此处的部署行为将被阻止" (PRTS 卫戍协议/帮助 §作战阶段 单位部署)
     if (this.downOn(R0, C0, u)) { this.log(`a knocked-out operator lies on ${R0},${C0}; ${u} not deployed`); return false; }
     const first = u.deploySeq === 0;
@@ -53,7 +55,7 @@ export class BattleDeploy {
     // 联防 reconstructs deployment/battle-start effects first, then restores HP/SP once in Battle.start.
     const restoreLater = this.kind === 'unite' && this._startDeploying;
     if (!restoreLater && cs && u.kind === 'op' && Number.isFinite(cs.hpPct) && cs.hpPct > 0) u.hp = u.s.maxHp * Math.min(1, cs.hpPct);
-    this._occ[k] = u;
+    if (!u.noTile) this._occ[k] = u;
     this._refreshRange(u); // also rebuilds baseRangeKeys (initial range incl. permanent rangeExtend)
     if (!u.skill) this._setupUnit(u);
     u.skill.reset(restoreLater ? null : cs);

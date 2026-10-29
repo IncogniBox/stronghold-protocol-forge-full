@@ -9,10 +9,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { makeMatch } from './harness.js';
 import { makeBattle } from '../helpers/battleHarness.js';
-import { routeGroup, routeIndexIn, routeSpawn, stageRoutesOf } from '../../server/match/waves.js';
+import { createRng } from '../../server/sim/rng.js';
+import { routeGroup, routeIndexIn, routeSpawn, stageRoutesOf, stageBossRoutesOf, buildBossWave, setupMatchWaves } from '../../server/match/waves.js';
 
 const STAGE = JSON.parse(fs.readFileSync(new URL('../../workshop/mode-recon/stages.json', import.meta.url), 'utf8')).my_map;
-const ROUTES = STAGE.routes;
+const ALL_ROUTES = STAGE.routes;
+/** boss 区域的那几条（起点落在四块 boss 场地矩形里）——普通回合不用它们，只给首领。 */
+const BOSS_RECTS = [STAGE.layout.battle.boss, ...STAGE.layout.bossAreas.slice(1).map((a) => a.battle)];
+const inBossArea = (r) => BOSS_RECTS.some((q) => r.start[0] >= q.r0 && r.start[0] <= q.r1 && r.start[1] >= q.c0 && r.start[1] <= q.c1);
+const BOSS_ROUTES = ALL_ROUTES.filter(inBossArea);
+const ROUTES = ALL_ROUTES.filter((r) => !inBossArea(r));
 const MID = STAGE.layout.mirrorCol / 2;
 
 /** A recon match on the 45×60 map, at its first prep (the stage is forced like the editor's ▶ playtest). */
@@ -20,7 +26,7 @@ function reconPrep(o = {}) {
   const prev = process.env.SP_STAGE;
   process.env.SP_STAGE = 'my_map';
   try {
-    const h = makeMatch({ mode: 'recon', modeId: 'mode_recon_funny', difficulty: 'FUNNY', humans: 2, bots: 0, seed: 1, fake: true, ...o });
+    const h = makeMatch({ mode: 'recon', modeId: 'mode_recon_abyss', difficulty: 'ABYSS', humans: 2, bots: 0, seed: 1, fake: true, ...o });
     h.start();
     h.runToPhase('PREP');
     return h;
@@ -52,8 +58,8 @@ describe('重构战场 my_map：8 条作者路线（左 4 / 右 4，各 2 地面
     const h = reconPrep();
     const m = h.m;
     assert.equal(m.stageId, 'my_map');
-    assert.equal(m.stage.routes.length, 8, '编译后的 stage 带着作者画的路线');
-    assert.deepEqual(m.wave.routes, ROUTES, '整张路线表换成地图的');
+    assert.equal(m.stage.routes.length, 16, '编译后的 stage 带着作者画的 16 条路线（8 普通 + 8 boss 区域）');
+    assert.deepEqual(m.wave.routes, ROUTES, '普通回合的路线表只取地图上非 boss 区域的 8 条');
     const base = m.wave.spawns.length;
     assert.ok(base > 0);
     for (const s of m.wave.spawns) {
@@ -105,11 +111,66 @@ describe('重构战场 my_map：8 条作者路线（左 4 / 右 4，各 2 地面
     assert.equal(h.battle.result().perPlayer.pL.killedInTotal, 0);
   });
 
+  test('boss 区域路线：四块场地各 2 条、起点在各自矩形内、闭环（起点 = 终点）', () => {
+    const h = reconPrep();
+    const gd = h.m.gd;
+    assert.equal(BOSS_ROUTES.length, 8, '四块 boss 区域各两条');
+    for (let i = 0; i < 4; i++) {
+      const list = stageBossRoutesOf(gd, 'my_map', i);
+      assert.equal(list.length, 2, `区域${i + 1} 两条`);
+      const q = BOSS_RECTS[i];
+      for (const r of list) {
+        assert.deepEqual(r.start, r.end, `区域${i + 1} 的路线是闭环（终点回到起点）`);
+        assert.ok(r.start[0] >= q.r0 && r.start[0] <= q.r1 && r.start[1] >= q.c0 && r.start[1] <= q.c1,
+          `区域${i + 1} 的起点落在该区域的战斗矩形里（首领站位中心）`);
+      }
+    }
+  });
+
+  test('boss 回合的护送小怪也走地图：模板路线按比例缩进这块场地的战斗矩形', () => {
+    const h = reconPrep();
+    const m = h.m;
+    const setup = setupMatchWaves(m.gd, createRng(1));
+    const bossId = Object.keys(m.gd.mode && m.gd.mode.hiddenBossWeights || {})[0] || 'boss_8';
+    for (let i = 0; i < 4; i++) {
+      const w = buildBossWave(m.gd, createRng(1), setup.factions, 21, { bossId, solo: false, areaIndex: i }, 'my_map');
+      const q = BOSS_RECTS[i];
+      assert.ok(w.routes.length >= 3, `区域${i + 1}: 模板路线换成缩放后的那几条`);
+      const ptsOf = (r) => [r.start, r.end, ...(Array.isArray(r.checkpoints) ? r.checkpoints : [])
+        .map((c) => (Array.isArray(c) ? (typeof c[0] === 'number' ? c : c.slice(1)) : null)).filter(Boolean)];
+      for (const s of w.spawns) {
+        if (s.tag === 'boss' || s.tag === 'part') continue;   // 首领 / 部位走的是该区域的闭环巡逻线
+        const r = w.routes[s.routeIndex];
+        assert.ok(r, `区域${i + 1}: ${s.enemyKey} 有路线`);
+        for (const p of ptsOf(r)) {
+          assert.ok(p[0] >= q.r0 && p[0] <= q.r1 && p[1] >= q.c0 && p[1] <= q.c1,
+            `区域${i + 1}: 护送路线点 ${JSON.stringify(p)} 落在场内 ${JSON.stringify(q)}`);
+        }
+      }
+    }
+  });
+
+  test('闭环巡逻线：走完一圈回到起点不算漏怪，敌人仍在场上', () => {
+    const loop = { motion: 'WALK', start: [2, 10], end: [2, 10], checkpoints: [[2, 6], [4, 6], [4, 14], [2, 14]] };
+    const h = makeBattle({
+      stage: 'flat', kind: 'boss', rect: { r0: 1, r1: 5, c0: 2, c1: 18 }, routes: [loop], timeLimit: 120,
+      players: [{ playerId: 'p0', seat: 0, side: 'L', colOffset: 0, units: [] }],
+      enemies: [{ key: 'enemy_1007_slime', routeIndex: 0, count: 1, ownerPlayerId: 'p0', tag: 'boss' }],
+      content: 'none',
+    });
+    h.run(120);
+    const res = h.battle.result();
+    assert.equal(res.perPlayer.p0.leaked.length, 0, '走完一圈 / 数圈都不算漏怪');
+    const alive = h.battle.enemies.filter((e) => e.alive);
+    assert.equal(alive.length, 1, '巡逻中的首领一直留在场上（不是走一圈就消失）');
+    assert.equal(alive[0].route.loop, true, '闭环路线被认成巡逻');
+  });
+
   test('官方图没有自己的路线表：不换表、不按半场复制出怪', () => {
     const prev = process.env.SP_STAGE;
     delete process.env.SP_STAGE;
     try {
-      const h = makeMatch({ mode: 'coop', difficulty: 'FUNNY', humans: 0, bots: 1, seed: 3, fake: true });
+      const h = makeMatch({ mode: 'coop', difficulty: 'ABYSS', humans: 0, bots: 1, seed: 3, fake: true });
       h.start();
       h.runToPhase('PREP');
       const m = h.m;

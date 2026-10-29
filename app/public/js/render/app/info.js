@@ -37,6 +37,10 @@ export function renderInfo(u) {
     // DESIGN §16 loadout of an ally (UnitInfo.skillIndex / moduleId): the Spine actor plays that skill's clip, and a
     // tap hands them to the detail card (a teammate's unit shows its owner's skill / module)
     skillIndex: Number.isInteger(u.skillIndex) ? u.skillIndex : undefined,
+    // 召唤物自己那条技能（UnitInfo.tokenSkill，server/sim/snapshot.js）：**必须转写** —— token 记录只有一条技能
+    // （index 恒 0），只按 skillIndex 取永远是默认那条；望的棋子在 S1 / S2 / S3 下是 `sktok_wang_1` / `_2` / `_3`
+    // 三条不同的官方特效（render/vfx/skills.js resolveSkill 按这个 id 取）。
+    tokenSkill: typeof u.tokenSkill === 'string' && u.tokenSkill ? u.tokenSkill : undefined,
     // an ally whose skill is an ammo magazine (UnitInfo.ammoSkill): its rounds are the cells under the HP bar, so no sustained
     // skill aura is drawn for it (render/fx/rings.js _aura)
     ammoSkill: u.ammoSkill === true ? true : undefined,

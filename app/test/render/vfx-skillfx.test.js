@@ -17,7 +17,7 @@ const SKILL = 16; // UF.SKILL
 
 const LOOPING = new Set(['foo_s1_buff', 'foo_s1_ready', 'foo_s2_burn', 'buff_stun', 'buff_burn', 'foo_s3_loop', 'bar_buff', 'foo_s1_range_l',
   'indigo_attack_charge_02', 'indigo_attack_charge_03', 'indigo_attack_charge_04', 'indigo_attack_charge_05', 'clemnt_skill_03_mark_all_01',
-  'once_loop', 'oncep_loop', 'trainee_buff', 'mentor_buff']);
+  'once_loop', 'oncep_loop', 'trainee_buff', 'mentor_buff', 'mentor_switch']);
 const KEYS = ['foo_atk_start', 'foo_atk_hit', 'foo_s2_mode_cast', 'foo_s3_mode_cast', 'foo_trail', 'foo_phit', 'foo_s1_buff', 'foo_s1_begin',
   'foo_s1_range', 'foo_s1_range_l', 'foo_s1_end', 'foo_s1_ready', 'foo_s1_trig', 'foo_s2_cast_start', 'foo_s2_cast_spell', 'foo_s2_aim', 'foo_s2_h1',
   'foo_s2_h2', 'foo_s2_burn', 'foo_s2_trail', 'foo_s2_phit', 'foo_s3_loop', 'foo_s3_tick', 'foo_each_hit', 'bar_buff', 'bar_birth',
@@ -26,7 +26,10 @@ const KEYS = ['foo_atk_start', 'foo_atk_hit', 'foo_s2_mode_cast', 'foo_s3_mode_c
   'qux_s1_cast', 'qux_s1_trail', 'qux_mode_cast', 'once_buff', 'once_loop', 'oncep_buff', 'oncep_loop',
   'trainee_buff', 'mentor_buff', 'mentor_s2_cast', 'mentor_s2_hit',
   'mentor_buff_test#1', 'mentor_s2_cast_test#1', 'mentor_s2_hit_test#1',
-  'mentor_trail', 'mentor_hit', 'mentor_stop', 'mentor_reached', 'lemuen_buff', 'foo_atk_hit_suf'];
+  'mentor_trail', 'mentor_hit', 'mentor_stop', 'mentor_reached', 'mentor_switch', 'mentor_switch_test#1', 'mentor_selfhit', 'mentor_selfhit_test#1', 'lemuen_buff', 'foo_atk_hit_suf',
+  'mentor_once_range',
+  // 脱手类教官技能（异客 S3 的雷暴 / 蕾缪安 S3 的锁定与礼炮）的官方绑定特效
+  'pasngr_skill_03_range', 'pasngr_skill_03_hit', 'lemuen_skill_03_crosshair_range', 'lemuen_skill_03_crosshair_02', 'lemuen_skill_03_hit_01'];
 
 const melee = (k, ev = 2) => ({ effects: [k], oneshot: 1, startEvent: ev, endEvent: 3, directionType: 0 });
 
@@ -86,10 +89,24 @@ function makeIndex() {
     ] },
     skchr_mentor_2: { mode: 1, projectiles: [], uses: [
       { role: 'loop', keys: ['mentor_buff'], from: 'BuffDuringSkill._buffs', node: 'sk', on: 'owner' },
+      // 换攻击模式的变身行（赤刃明霄陈 S3 的红龙就是这一条）：不叠到学员身上
+      { role: 'loop', keys: ['mentor_switch'], from: 'ActiveBuffAbility._buffs', node: 'SwitchMode', on: 'owner' },
     ] },
     // 蕾缪安 S3：技能结束后 10 s 内仍有归属它的攻击（礼炮）；index 侧的技能 id 决定那个窗口
     skchr_lemuen_3: { mode: null, projectiles: [], uses: [
       { role: 'loop', keys: ['lemuen_buff'], from: 'BuffDuringSkill._buffs', node: 'sk', on: 'owner' },
+    ] },
+    // 自增益、只改普攻：特效全在攻击的命中行里（逻各斯 S3 这类）——没有 start / range / loop / end 行
+    skchr_selfbuff_1: { mode: null, projectiles: [], uses: [
+      { role: 'hit', ability: 'MeleeAttack', list: 'combat', keys: ['mentor_selfhit'], from: 'Attack._hit', directionType: 0, oneshot: 1 },
+    ] },
+    // 单次释放类（异客 S3 的雷暴这类）：没有攻击行、没有常驻行，只有一条 range 行 —— 官方行按「每次触发」播
+    skchr_mentor_once_1: { mode: null, projectiles: [], uses: [
+      { role: 'range', keys: ['mentor_once_range'], from: 'CastSkill._rangeEffect', node: 'sk', on: 'owner' },
+    ] },
+    // 异客 S3 辉煌裂片：技能本体没有攻击行；雷暴是 kit 的 'storm' fx，FX_BINDINGS 按这个技能 id 登记
+    skchr_pasngr_3: { mode: null, projectiles: ['projectile_chr_pasngr_s3'], uses: [
+      { role: 'range', keys: ['pasngr_skill_03_range'], from: 'CastSkill._rangeEffect', node: 'sk', on: 'owner' },
     ] },
   };
   const unit = (modes, sk, skin = null) => ({ kind: 'char', skin, modes, skills: Object.fromEntries(sk.map((s) => [s, skills[s]])), startEffect: null, deadEffect: null });
@@ -114,7 +131,10 @@ function makeIndex() {
         { name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } },
         { name: 'S2', attack: { class: 'MeleeAttack', projectileKey: 'proj_mentor', cast: [melee('mentor_s2_cast')], hit: [{ effects: ['mentor_s2_hit'], directionType: 0 }] } },
       ], ['skchr_mentor_2']),
+      char_611_selfbuff: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], ['skchr_selfbuff_1']),
+      char_612_once: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], ['skchr_mentor_once_1']),
       char_4193_lemuen: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], ['skchr_lemuen_3']),
+      char_472_pasngr: unit([{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], ['skchr_pasngr_3']),
       enemy_1: { kind: 'enemy', modes: [{ name: 'Default', attack: { class: 'MeleeAttack', cast: [], hit: [] } }], skills: {} },
     },
     skills,
@@ -129,6 +149,10 @@ function makeIndex() {
       proj_qux_s1_2: { main: 'qux_s1_trail', onHit: [], effects: ['qux_s1_trail'] },
       // 教官技能自己那枚弹道：命中 / 停止特效（维什戴尔 S3 的小爆 + 大爆炸）
       proj_mentor: { main: 'mentor_trail', onHit: ['mentor_hit'], onStop: ['mentor_stop'], onReached: ['mentor_reached'], effects: ['mentor_trail', 'mentor_hit', 'mentor_stop', 'mentor_reached'], movement: { class: 'AdvancedMovement' } },
+      // 异客 S3 的雷暴（FX_BINDINGS skchr_pasngr_3.storm 的 projectile：到达点就是雷暴范围）
+      projectile_chr_pasngr_s3: { main: null, onReached: ['pasngr_skill_03_range'], effects: ['pasngr_skill_03_range'] },
+      // 蕾缪安 S3 的礼炮（FX_BINDINGS skchr_lemuen_3.bombard 的 projectile：到达点是命中特效）
+      projectile_chr_lemuen_s3_attack: { main: null, onReached: ['lemuen_skill_03_hit_01'], effects: ['lemuen_skill_03_hit_01'] },
     },
     skins: {
       char_100_foo: { points: { HitPoint: { all: { pos: [0, 0.2, -0.25] } }, Muzzle: { all: { pos: [0.3, 0.3, -0.3] } } } },
@@ -159,6 +183,7 @@ const RECS = {
   char_510_oncep: { charId: 'char_510_oncep', skill: { skillId: 'skchr_once_2', index: 0, skillType: 'PASSIVE', durationType: 'NONE', duration: -1, bb: {} } },
   char_600_trainee: { charId: 'char_600_trainee', skill: { skillId: 'skchr_trainee_1', index: 0, skillType: 'MANUAL', durationType: 'NONE', duration: 20, bb: {} } },
   char_610_mentor: { charId: 'char_610_mentor', skill: { skillId: 'skchr_mentor_2', index: 1, skillType: 'MANUAL', durationType: 'NONE', duration: 20, bb: {} } },
+  char_612_once: { charId: 'char_612_once', skill: { skillId: 'skchr_mentor_once_1', index: 0, skillType: 'MANUAL', durationType: 'NONE', duration: 10, bb: {} } },
 };
 
 function fakeOfx(index, { active = true } = {}) {
@@ -635,13 +660,95 @@ describe('特训：教官的技能特效叠在学员身上', () => {
     const t = view(2, 'enemy_1', 5.45);
     frame();
     w.skill(a, true);
+    // 业主 2026-10-29：学员要完整继承教官技能的效果与特效 —— 常驻 buff 行、换模式的变身行都照叠
     assert.ok(spawned.includes('mentor_buff_test#1'), '教官技能的 buff 行用时装的变体');
+    assert.ok(spawned.includes('mentor_switch_test#1'), '换模式（SwitchMode）的变身行也完整继承');
+    const keys = w.keysFor([a]);
+    assert.ok(keys.includes('mentor_s2_cast_test#1') && keys.includes('mentor_s2_hit_test#1'), 'mode 的施放 / 命中行按时装变体预载（不会退回默认那枚）');
     assert.equal(w.attack(a, t, 'none', 1), true);
     assert.ok(spawned.includes('mentor_s2_cast_test#1'), '教官 mode 的施放行用时装的变体');
     assert.ok(!spawned.includes('mentor_s2_cast'), '默认那枚不播');
     w.damage(t, 'phys', null, 1.03);
     assert.ok(spawned.includes('mentor_s2_hit_test#1'), '教官 mode 的命中行用时装的变体（命中敌人的特效）');
     assert.ok(!spawned.includes('mentor_s2_hit'), '默认那枚不播');
+  });
+
+  test('浮游单元的命中：mentorFunnelHit 也叠教官 mode 的命中行（按时装变体）', async () => {
+    const { w, spawned, view, frame } = await setup({ wiring: { skin: () => 'mentor_outfit' } });
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_610_mentor', spine: 'char_610_mentor', skillIndex: 1 };
+    const t = view(2, 'enemy_1', 5.45);
+    frame();
+    w.skill(a, true);
+    spawned.length = 0;
+    assert.equal(w.skills.mentorFunnelHit(a, t, 0), true, '浮游单元的命中叠上了教官的命中行');
+    assert.ok(spawned.includes('mentor_s2_hit_test#1'), '用时装的变体，不是默认那枚');
+  });
+
+  test('单次释放类教官（异客 S3 的雷暴这类）：官方行不在施放时播，改为每次攻击 / 浮游单元每次命中时在目标处播', async () => {
+    const { w, spawned, view, frame } = await setup();
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_612_once', spine: 'char_612_once', skillIndex: 0 };
+    const t = view(2, 'enemy_1', 5.45);
+    frame();
+    spawned.length = 0;
+    w.skill(a, true);
+    assert.ok(!spawned.includes('mentor_once_range'), '施放那一下不播（sim 改成每次触发）');
+    assert.equal(w.skills.mentorOnceAt(a, t), true, '攻击触发时在目标处播');
+    assert.ok(spawned.includes('mentor_once_range'));
+  });
+
+  test('脱手类教官（蕾缪安 S3）：锁定 / 礼炮的 kit fx 走教官技能登记的官方绑定（不是引擎默认特效）', async () => {
+    const { w, spawned, view, frame } = await setup();
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_4193_lemuen', spine: 'char_4193_lemuen', skillIndex: 2 };
+    view(2, 'enemy_1', 5.45);   // 被锁 / 被礼炮命中的敌人（绑定把特效挂在它身上）
+    frame();
+    w.skill(a, true);
+    const keys = w.keysFor([a]);
+    for (const k of ['lemuen_skill_03_crosshair_range', 'lemuen_skill_03_crosshair_02', 'lemuen_skill_03_hit_01']) {
+      assert.ok(keys.includes(k), `${k} 也在预载集合里（归教官技能的绑定）`);
+    }
+    spawned.length = 0;
+    // 锁定：kit 的 'lock'（src = 学员、id = 被锁的敌人）
+    assert.equal(w.simFx('lock', 5.45, 10, { id: 2, src: 1, hold: 1 }), true, '锁定 fx 由官方层认领（不再画引擎默认锁定）');
+    for (const k of ['lemuen_skill_03_crosshair_range', 'lemuen_skill_03_crosshair_02']) assert.ok(spawned.includes(k), k);
+    // 礼炮：技能结束后 0.3–0.7 s 落下（kit 的 'bombard'，id = 学员、点在落点）
+    w.skill(a, false);
+    spawned.length = 0;
+    assert.equal(w.simFx('bombard', 6.4, 10.2, { id: 1, r: 1.5 }), true, '礼炮 fx 由官方层认领');
+    assert.ok(spawned.includes('lemuen_skill_03_hit_01'), '礼炮命中用教官技能的官方特效');
+  });
+
+  test('脱手类教官（异客 S3）：雷暴 / 落雷的 kit fx 也认教官技能的官方绑定', async () => {
+    const { w, spawned, view, frame } = await setup();
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_472_pasngr', spine: 'char_472_pasngr', skillIndex: 2 };
+    frame();
+    w.skill(a, true);
+    spawned.length = 0;
+    // 雷暴：kit 的 'storm'（id = 学员，点在雷暴中心）
+    assert.equal(w.simFx('storm', 5.4, 10.2, { id: 1, duration: 4, r: 1.5 }), true, '雷暴 fx 由官方层认领');
+    assert.ok(spawned.includes('pasngr_skill_03_range'), '雷暴范围用教官技能的官方特效');
+    // 每 0.5 s 的落雷：kit 的 'lightning'（src = 学员、id = 敌人）
+    assert.equal(w.simFx('lightning', 5.45, 10, { id: 2, src: 1 }), true, '落雷 fx 由官方层认领');
+    assert.ok(spawned.includes('pasngr_skill_03_hit'), '落雷命中用教官技能的官方特效');
+  });
+
+  test('自增益教官（特效只在攻击命中行，逻各斯 S3 这类）：本体每次伤害与浮游单元命中都继承', async () => {
+    const { w, spawned, view, frame } = await setup({ wiring: { skin: () => 'mentor_outfit' } });
+    const a = view(1, 'char_600_trainee', 5, { skill: 0 });
+    a.info.reconMentor = { defId: 'char_611_selfbuff', spine: 'char_611_selfbuff', skillIndex: 0 };
+    const t = view(2, 'enemy_1', 5.45);
+    frame();
+    w.skill(a, true);
+    spawned.length = 0;
+    assert.equal(w.attack(a, t, 'none', 1), true);
+    w.damage(t, 'phys', null, 1.03);
+    assert.ok(spawned.includes('mentor_selfhit_test#1'), '本体命中：教官的攻击命中行（时装变体）');
+    spawned.length = 0;
+    assert.equal(w.skills.mentorFunnelHit(a, t, 0), true, '浮游单元命中同样叠教官的攻击命中行');
+    assert.ok(spawned.includes('mentor_selfhit_test#1'));
   });
 
   test('学员每一发弹药都带教官那枚弹道的命中 / 停止特效（维什戴尔 S3 的小爆 + 大爆炸）', async () => {

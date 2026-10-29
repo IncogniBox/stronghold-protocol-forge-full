@@ -20,7 +20,8 @@ const LOOPING = new Set(['roar_loop', 'tok_loop', 'ind_02', 'ind_03', 'ind_04', 
 const KEYS = ['mh_cast', 'mh_hit_1', 'mh_hit_3', 'mh_plain', 'lp_1', 'lp_2', 'rd_1', 'rd_2', 'rd_3', 'once_1', 'once_2', 'an_1', 'an_2', 'b0_a', 'b0_b',
   'b0_c', 'gra_cast', 'grb_cast', 'par_m', 'par_r', 'par_trail', 'sel_r', 'sel_trail', 'sel_m', 'en_shot', 'en_trail', 'en_combat_cast', 'en_combat_hit',
   'en_reborn_hit', 'roar_start', 'roar_loop', 'roar_end', 'bash_cast', 'bash_reborn', 'two_a', 'two_b', 'icm_hit', 'wolf_plain', 'wolf_buff',
-  'tok_loop', 'ind_start', 'ind_02', 'ind_03', 'ind_04', 'ind_05', 'ind_trail', 'med_cast', 'med_hit', 'kb_1', 'kb_2', 'kb_base', 'skb_1', 'skb_base', 'g_hit', 'g_enemy', 'g_heal', 'g_die'];
+  'tok_loop', 'ind_start', 'ind_02', 'ind_03', 'ind_04', 'ind_05', 'ind_trail', 'med_cast', 'med_hit', 'kb_1', 'kb_2', 'kb_base', 'skb_1', 'skb_base', 'g_hit', 'g_enemy', 'g_heal', 'g_die',
+  'pw_1', 'pw_3'];
 
 function makeIndex() {
   const prefabs = Object.fromEntries(KEYS.map((k) => [k, { file: `prefabs/${k}.json`, looping: LOOPING.has(k), ...(k === 'ind_02' ? { spawn: 9, follow: 6 } : {}) }]));
@@ -88,6 +89,11 @@ function makeIndex() {
         { name: 'M2', attack: null, combat: melee([], [row('icm_hit', { emitter: 0 })], { emitters: [{ class: 'UberEffectEmitterInCertainMode', activeMode: 1 }] }) },
       ]),
       token_700_tok: unit('token', [{ name: 'Default', attack: null }], { sktok_tok: { rootClass: 'CastTokenSkill', uses: [{ role: 'loop', keys: ['tok_loop'], from: 'BuffDuringSkill._buffs', node: 'Tok', on: 'owner' }] } }),
+      // 望的棋子这类：token 记录只有一条技能（index 恒 0），官方索引里同一单位有三条（随主人的技能槽）
+      token_702_piece: unit('token', [{ name: 'Default', attack: null }], {
+        sktok_piece_1: { rootClass: 'CastTokenSkill', uses: [{ role: 'hit', keys: ['pw_1'], from: 'UberEffectEmitter._castEffects', node: 'P1' }] },
+        sktok_piece_3: { rootClass: 'CastTokenSkill', uses: [{ role: 'hit', keys: ['pw_3'], from: 'UberEffectEmitter._castEffects', node: 'P3' }] },
+      }),
       // the 秘术师's chargeable group as index v2 writes it
       char_469_indigo: unit('char', [{ name: 'Default', attack: { class: 'MultiChargeRangedAttack', projectileKey: 'proj_ind', cast: [], charge: { group: 0, ability: 0 } } }], {}, {
         charge: [{ node: 'Trait/ChargableAttackGroup', class: 'AbilityChargeableGroup', maxChargeTimes: 3,
@@ -315,6 +321,19 @@ describe('enemy and summon skills of index v2', () => {
     b.form = 'reborn';
     frame(); w.enemyCast(b, 0); frame(); w.attack(b, o, 'none', 2);
     assert.ok(spawned.includes('bash_reborn'), 'the Reborn copy');
+  });
+
+  test("a summon's own resolved skill (UnitInfo.tokenSkill) wins over the record's single one", () => {
+    // 望的棋子：token 记录只有一条技能（取势），但她在 S1 / S2 / S3 下棋子的官方特效是三条不同的 token 技能。
+    // 客户端原先只认 skillIndex（token 恒 0）⇒ 永远取到默认那条；UnitInfo.tokenSkill 让 sim 解析出的那份决定。
+    const idx = makeIndex();
+    const info = { kind: 'token', side: 'ally', defId: 'token_702_piece', spine: 'token_702_piece', tokenSkill: 'sktok_piece_3' };
+    const r = resolveSkill(idx, { info });
+    assert.deepEqual([r.skillId, r.via, r.reason], ['sktok_piece_3', 'record', null]);
+    assert.ok(r.skill && r.skill.rootClass === 'CastTokenSkill');
+    const miss = resolveSkill(idx, { info: { ...info, tokenSkill: 'sktok_nope' } });
+    assert.equal(miss.skillId, null, '索引里没有那条 ⇒ 退回旧链路（这里该单位有两条技能，不猜）');
+    assert.equal(miss.reason, 'token-skill');
   });
 
   test("a summon's skill: its record's, else the only one its unit has; it plays like an operator's", async () => {

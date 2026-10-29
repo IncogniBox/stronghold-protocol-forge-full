@@ -25,8 +25,14 @@ const SUCCESS_SFX = {
 let unequipOn = false;
 /** 记下这一页的有效档位（由 `roomMods.js` 从 `welcome.mods.packs[].behaviour` 合成后调用）。 */
 export function setUnequipAllowed(on) { unequipOn = on === true; }
-/** 当前档位（缺省 / 没声明 ⇒ `false` = 官方：装上的装备不画「卸下」）。 */
-export function unequipAllowed() { return unequipOn; }
+/**
+ * 玩家级的那一半：对局里「只有这名玩家能拆」（重构模拟的装备重构 —— 服务端按 `effects[].unequip` 放行）。
+ * 写入点是 `screens/game.js`（自己的选择变化时置上、离开对局时清掉）；与房间规则是「或」的关系。
+ */
+let unequipSelf = false;
+export function setUnequipSelfAllowed(on) { unequipSelf = on === true; }
+/** 当前档位（缺省 / 没声明 / 自己没选那一项 ⇒ `false` = 官方：装上的装备不画「卸下」）。 */
+export function unequipAllowed() { return unequipOn || unequipSelf; }
 
 let inflight = 0;
 const busyListeners = new Set();

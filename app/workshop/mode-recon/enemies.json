@@ -9,7 +9,7 @@
     "descRaw": "可以的话，请倾全队之力消灭他。该敌人<@eb.danger>威胁极大</>，<@eb.key>远程及近战攻击能造成大量伤害</>。",
     "applyWay": "ALL",
     "stats": {
-      "maxHp": 10500,
+      "maxHp": 50000,
       "atk": 1000,
       "def": 150,
       "res": 30,
@@ -69,9 +69,9 @@
     "skills": [],
     "notCountInTotal": false,
     "tags": [],
-    "be": 16040,
+    "be": 55540,
     "beFactor": 1,
-    "attrPower": 16040,
+    "attrPower": 55540,
     "isFlyEnemy": false,
     "tokenOnly": false,
     "acTypes": [],
@@ -100,7 +100,7 @@
     "descRaw": "被它攻击的单位会受到灼烧伤害。被阻挡时引爆体内岩浆对周围造成<@eb.danger>高额伤害</>。",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 40000,
+      "maxHp": 50000,
       "atk": 230,
       "def": 220,
       "res": 70,
@@ -171,9 +171,9 @@
     "tags": [
       "infection"
     ],
-    "be": 42020,
+    "be": 52020,
     "beFactor": 1,
-    "attrPower": 42020,
+    "attrPower": 52020,
     "isFlyEnemy": false,
     "tokenOnly": false,
     "acTypes": [],
@@ -201,7 +201,7 @@
     "descRaw": "整合运动干部，萨卡兹雇佣兵，擅长使用爆炸物。",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 10000,
+      "maxHp": 50000,
       "atk": 470,
       "def": 100,
       "res": 50,
@@ -272,9 +272,9 @@
     "tags": [
       "sarkaz"
     ],
-    "be": 12800,
+    "be": 52800,
     "beFactor": 1,
-    "attrPower": 12800,
+    "attrPower": 52800,
     "isFlyEnemy": false,
     "tokenOnly": false,
     "acTypes": [],
@@ -301,7 +301,7 @@
     "descRaw": "年龄不详，性别不详，履历不详。",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 45000,
+      "maxHp": 50000,
       "atk": 800,
       "def": 1000,
       "res": 30,
@@ -399,9 +399,9 @@
     "tags": [
       "sarkaz"
     ],
-    "be": 52090,
+    "be": 57090,
     "beFactor": 1,
-    "attrPower": 52090,
+    "attrPower": 57090,
     "isFlyEnemy": false,
     "tokenOnly": false,
     "acTypes": [],
@@ -588,7 +588,7 @@
     "descRaw": "夕绘出的怪物。【纬地经天】：<@eb.key>使我方晦明变化</>。【破桎而出】：护盾<@eb.key>未被击破</>则造成<@eb.danger>巨额范围伤害</>。",
     "applyWay": "RANGED",
     "stats": {
-      "maxHp": 30000,
+      "maxHp": 100000,
       "atk": 500,
       "def": 750,
       "res": 50,
@@ -682,7 +682,7 @@
       {
         "prefabKey": "CrossAttack",
         "priority": 0,
-        "cooldown": 30,
+        "cooldown": 20,
         "initCooldown": 15,
         "spCost": 0,
         "bb": {
@@ -693,12 +693,12 @@
       {
         "prefabKey": "ShieldBurst",
         "priority": 0,
-        "cooldown": 70,
-        "initCooldown": 30,
+        "cooldown": 40,
+        "initCooldown": 20,
         "spCost": 0,
         "bb": {
-          "duration": 15,
-          "dynamic": 2500,
+          "duration": 10,
+          "dynamic": 15000,
           "atk_scale": 6,
           "range_radius": 3
         },
@@ -711,8 +711,8 @@
         "initCooldown": 40,
         "spCost": 0,
         "bb": {
-          "duration": 15,
-          "dynamic": 3000,
+          "duration": 10,
+          "dynamic": 20000,
           "atk_scale": 8,
           "range_radius": 3
         },
@@ -741,9 +741,9 @@
     "tags": [
       "animated"
     ],
-    "be": 34900,
+    "be": 104900,
     "beFactor": 1,
-    "attrPower": 34900,
+    "attrPower": 104900,
     "isFlyEnemy": false,
     "tokenOnly": false,
     "acTypes": [],
@@ -772,7 +772,7 @@
     "descRaw": "狱警形态<@eb.key>法术抗性提升</>，攻击造成<@eb.key>法术伤害</>，不攻击禁锢装置；杀手形态<@eb.key>防御提升</>，攻击造成<@eb.key>物理伤害</>；进入杀手形态时<@eb.key>解放全场敌人</>",
     "applyWay": "ALL",
     "stats": {
-      "maxHp": 25000,
+      "maxHp": 100000,
       "atk": 700,
       "def": 400,
       "res": 20,
@@ -876,7 +876,7 @@
         "initCooldown": 0,
         "spCost": 3,
         "bb": {
-          "stun": 3,
+          "stun": 6,
           "max_target": 2
         },
         "bbStr": {}
@@ -889,7 +889,7 @@
         "spCost": 3,
         "bb": {
           "times": 2,
-          "def_penetrate": 0.6
+          "def_penetrate": 1
         },
         "bbStr": {}
       }
@@ -902,9 +902,9 @@
     },
     "notCountInTotal": false,
     "tags": [],
-    "be": 29760,
+    "be": 104760,
     "beFactor": 1,
-    "attrPower": 29760,
+    "attrPower": 104760,
     "isFlyEnemy": false,
     "tokenOnly": false,
     "acTypes": [],
@@ -933,7 +933,7 @@
     "descRaw": "卡西米尔骑士竞赛三届冠军，不会使用法术的莱塔尼亚残次品，天生的武者——黑骑士，会<@eb.key>穿过阻挡其的单位，并造成物理伤害</>",
     "applyWay": "MELEE",
     "stats": {
-      "maxHp": 28000,
+      "maxHp": 250000,
       "atk": 900,
       "def": 600,
       "res": 50,
@@ -1052,7 +1052,7 @@
       {
         "prefabKey": "Blink",
         "priority": 0,
-        "cooldown": 30,
+        "cooldown": 25,
         "initCooldown": 0,
         "spCost": 0,
         "bb": {
@@ -1076,7 +1076,7 @@
       {
         "prefabKey": "Blink2",
         "priority": 0,
-        "cooldown": 30,
+        "cooldown": 25,
         "initCooldown": 0,
         "spCost": 0,
         "bb": {
@@ -1088,9 +1088,9 @@
     ],
     "notCountInTotal": false,
     "tags": [],
-    "be": 34450,
+    "be": 256450,
     "beFactor": 1,
-    "attrPower": 34450,
+    "attrPower": 256450,
     "isFlyEnemy": false,
     "tokenOnly": false,
     "acTypes": [],
@@ -1380,5 +1380,4779 @@
     "spine": "enemy_2101_dyspll",
     "modelScale": null,
     "attackAnim": null
+  },
+  "enemy_ws_recon_mousek": {
+    "key": "enemy_ws_recon_mousek",
+    "name": "鼠王·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "MK",
+    "desc": "对生命上限最高单位造成大量物理伤害。对生命上限最低单位大幅降低攻击力并造成法术伤害",
+    "descRaw": "对<@eb.key>生命上限最高</>单位造成大量物理伤害。对<@eb.key>生命上限最低</>单位大幅降低攻击力并造成法术伤害",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 50000,
+      "atk": 470,
+      "def": 350,
+      "res": 30,
+      "moveSpeed": 0.6,
+      "bat": 3.4,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 5,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": false,
+        "frozen": true,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【唱沙】对场上生命上限最高单位及其十字范围内所有目标造成大量物理伤害",
+        "textRaw": "【唱沙】对场上生命上限最高单位及其十字范围内所有目标造成大量物理伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【沙狱】使场上生命上限最低的单位及其周围目标攻击力降低且持续受到法术伤害",
+        "textRaw": "【沙狱】使场上生命上限最低的单位及其周围目标攻击力降低且持续受到法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "出场时拥有能够吸收大量法术伤害的屏障，屏障存在时防御力大幅增加",
+        "textRaw": "出场时拥有能够吸收大量法术伤害的屏障，屏障存在时防御力大幅增加",
+        "format": "NORMAL"
+      },
+      {
+        "text": "生命值低于50%时，自身造成的伤害提升",
+        "textRaw": "生命值低于50%时，自身造成的伤害提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】唱沙额外选择生命上限第二高的单位；基础生命值统一为50000",
+        "textRaw": "【重构】唱沙额外选择生命上限第二高的单位；基础生命值统一为50000",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "shield.dynamic": 7000,
+        "defup.def": 3000,
+        "enrage.hp_ratio": 0.5,
+        "enrage.damage_scale": 1.5
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "DriftSand",
+        "priority": 0,
+        "cooldown": 15,
+        "initCooldown": 20,
+        "spCost": 0,
+        "bb": {
+          "damage": 800
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SandStorm",
+        "priority": 0,
+        "cooldown": 25,
+        "initCooldown": 60,
+        "spCost": 0,
+        "bb": {
+          "damage": 70,
+          "atk": -0.7,
+          "duration": 15
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Mark",
+        "priority": 1,
+        "cooldown": 9999,
+        "initCooldown": 1,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 53490,
+    "beFactor": 1,
+    "attrPower": 53490,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1509_mousek",
+    "spine": "enemy_1509_mousek",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 2.333,
+      "hit": 1.367
+    },
+    "effectRef": "enemy_1509_mousek"
+  },
+  "enemy_ws_recon_mephi": {
+    "key": "enemy_ws_recon_mephi",
+    "name": "梅菲斯特·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "MP",
+    "desc": "整合运动干部，能同时治疗至多3名敌人，并使全场宿主单位的自然生命回复速度加倍。",
+    "descRaw": "整合运动干部，能同时治疗至多<@eb.key>3名</>敌人，并使全场宿主单位的自然生命回复速度加倍。",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 200000,
+      "atk": 500,
+      "def": 200,
+      "res": 60,
+      "moveSpeed": 0.5,
+      "bat": 6,
+      "aspd": 100,
+      "rangeRadius": 20,
+      "rawRangeRadius": 20,
+      "blockCnt": 1,
+      "massLevel": 3,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [
+        "none"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "全场的敌方单位的自然生命回复速度加倍",
+        "textRaw": "全场的敌方单位的自然生命回复速度加倍",
+        "format": "NORMAL"
+      },
+      {
+        "text": "普通攻击能够同时治疗3名敌方单位",
+        "textRaw": "普通攻击能够同时治疗3名敌方单位",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】为全场敌人提供 +25/秒的生命回复；每 12 秒回复周围敌人攻击力 +500 的生命；每 20 秒召唤一批宿主；浮士德阵亡后额外多召唤一批",
+        "textRaw": "【重构】为全场敌人提供 +25/秒的生命回复；每 12 秒回复周围敌人攻击力 +500 的生命；每 20 秒召唤一批宿主；浮士德阵亡后额外多召唤一批",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "healaura.hp_recovery_per_sec": 1
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 203280,
+    "beFactor": 1,
+    "attrPower": 203280,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1507_mephi",
+    "spine": "enemy_1507_mephi",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 3.167,
+      "hit": 1.1
+    },
+    "effectRef": "enemy_1507_mephi"
+  },
+  "enemy_ws_recon_faust": {
+    "key": "enemy_ws_recon_faust",
+    "name": "浮士德·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "FA",
+    "desc": "整合运动干部，无法被阻挡，能进行超远距离的物理攻击，并且能够启动场地中隐藏的弩炮台。",
+    "descRaw": "整合运动干部，<@eb.key>无法被阻挡</>，能进行超远距离的物理攻击，并且能够启动场地中隐藏的<@eb.key>弩炮台</>。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 200000,
+      "atk": 1000,
+      "def": 350,
+      "res": 35,
+      "moveSpeed": 0.5,
+      "bat": 5,
+      "aspd": 100,
+      "rangeRadius": 20,
+      "rawRangeRadius": 20,
+      "blockCnt": 1,
+      "massLevel": 5,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": false,
+        "frozen": true,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "无法被阻挡且登场时一段时间内无敌",
+        "textRaw": "无法被阻挡且登场时一段时间内无敌",
+        "format": "NORMAL"
+      },
+      {
+        "text": "会释放能使攻击力加倍的特殊弩箭",
+        "textRaw": "会释放能使攻击力加倍的特殊弩箭",
+        "format": "NORMAL"
+      },
+      {
+        "text": "每隔一段时间会召唤战场中隐藏的弩炮台",
+        "textRaw": "每隔一段时间会召唤战场中隐藏的弩炮台",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】登场无敌改为隐匿；移除无法被阻挡；致命弩箭首次/冷却 -7 秒；梅菲斯特阵亡后攻击间隔 -2 秒；移除弩炮台",
+        "textRaw": "【重构】登场无敌改为隐匿；移除无法被阻挡；致命弩箭首次/冷却 -7 秒；梅菲斯特阵亡后攻击间隔 -2 秒；移除弩炮台",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "invincible.duration": 150
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "CriticalHit",
+        "priority": 0,
+        "cooldown": 17,
+        "initCooldown": 17,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 2
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SummonBallis",
+        "priority": 1,
+        "cooldown": 30,
+        "initCooldown": 15,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {
+          "branch_id": "faust_ballis"
+        }
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 206155,
+    "beFactor": 1,
+    "attrPower": 206155,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1508_faust",
+    "spine": "enemy_1508_faust",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 3,
+      "hit": 1.333
+    },
+    "effectRef": "enemy_1508_faust"
+  },
+  "enemy_ws_recon_frstar2": {
+    "key": "enemy_ws_recon_frstar2",
+    "name": "霜星，“冬痕”·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "FNF",
+    "desc": "雪怪小队领袖，为了最后的战斗解放了所剩无几的生命。",
+    "descRaw": "雪怪小队领袖，为了最后的战斗解放了所剩无几的生命。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 100000,
+      "atk": 440,
+      "def": 380,
+      "res": 50,
+      "moveSpeed": 0.5,
+      "bat": 3.7,
+      "aspd": 100,
+      "rangeRadius": 2,
+      "rawRangeRadius": 2,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": false,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "普通攻击和冰环均能造成法术伤害，且对目标施加寒冷效果",
+        "textRaw": "普通攻击和冰环均能造成法术伤害，且对目标施加<$ba.cold>寒冷</>效果",
+        "format": "NORMAL"
+      },
+      {
+        "text": "冰环法术对被冻结的目标伤害加倍",
+        "textRaw": "冰环法术对被<$ba.frozen>冻结</>的目标伤害加倍",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第二形态下会有一段无敌时间，且攻击和技能威力更强大",
+        "textRaw": "第二形态下会有一段无敌时间，且攻击和技能威力更强大",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】攻击附加 5 秒寒冷；冰盾可抵挡 2 次法术伤害；第二形态护盾破裂后造成范围法术伤害",
+        "textRaw": "【重构】攻击附加 5 秒寒冷；冰盾可抵挡 2 次法术伤害；第二形态护盾破裂后造成范围法术伤害",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "reborn.duration": 5,
+        "reborn.atk": 0.5,
+        "reborn.reborn_invincible.duration": 10,
+        "attackfreeze.freeze": 5
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "IceShield",
+        "priority": 2,
+        "cooldown": 20,
+        "initCooldown": 35,
+        "spCost": 0,
+        "bb": {
+          "max_cnt": 2
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "IceShield[Reborn]",
+        "priority": 2,
+        "cooldown": 20,
+        "initCooldown": 35,
+        "spCost": 0,
+        "bb": {
+          "max_cnt": 3
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SummonFrosts",
+        "priority": 10,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {
+          "branch_id": "frstar_frosts"
+        }
+      },
+      {
+        "prefabKey": "IceBurst",
+        "priority": 1,
+        "cooldown": 10.5,
+        "initCooldown": 10.5,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1,
+          "freeze": 10,
+          "frstar2_s.atk_scale": 2
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "IceBurst[Reborn]",
+        "priority": 1,
+        "cooldown": 10.5,
+        "initCooldown": 10.5,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1,
+          "freeze": 10,
+          "frstar2_s.atk_scale": 2
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 103490,
+    "beFactor": 1,
+    "attrPower": 103490,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1510_frstar2",
+    "spine": "enemy_1510_frstar2",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.6,
+      "hit": 0.933
+    },
+    "effectRef": "enemy_1510_frstar2"
+  },
+  "enemy_ws_recon_dekght": {
+    "key": "enemy_ws_recon_dekght",
+    "name": "腐败骑士·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "DK1",
+    "desc": "当凋零骑士死亡时，攻击力、攻击速度、移动速度大幅提升",
+    "descRaw": "当凋零骑士死亡时，攻击力、攻击速度、移动速度大幅提升",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 200000,
+      "atk": 1200,
+      "def": 1200,
+      "res": 30,
+      "moveSpeed": 0.65,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": true,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "攻击时使目标与周围四格的单位受到物理伤害",
+        "textRaw": "攻击时使目标与周围四格的单位受到物理伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "蓄力攻击，对目标与周围四格的单位造成高额物理伤害",
+        "textRaw": "蓄力攻击，对目标与周围四格的单位造成高额物理伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "当<凋零骑士>死亡时，攻击力、攻击速度、移动速度大幅提升",
+        "textRaw": "当<凋零骑士>死亡时，攻击力、攻击速度、移动速度大幅提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】基础生命值统一为200000",
+        "textRaw": "【重构】基础生命值统一为200000",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "aoe.attack@dekght[aoe].atk_scale": 1,
+        "triggerrage.atk": 0.5,
+        "triggerrage.attack_speed": 50,
+        "triggerrage.move_speed": 1.5
+      },
+      "bbStr": {
+        "aoe.attack@dekght[aoe].range_id": "x-5"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "ChargeAttack",
+        "priority": 0,
+        "cooldown": 10,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 3,
+          "dekght[aoe].atk_scale": 3,
+          "duration": 4
+        },
+        "bbStr": {
+          "dekght[aoe].range_id": "x-5"
+        }
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [
+      "sarkaz"
+    ],
+    "be": 209690,
+    "beFactor": 1,
+    "attrPower": 209690,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1513_dekght",
+    "spine": "enemy_1513_dekght",
+    "modelScale": 1.0741,
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 2.367,
+      "hit": 1.1
+    },
+    "effectRef": "enemy_1513_dekght"
+  },
+  "enemy_ws_recon_dekght_2": {
+    "key": "enemy_ws_recon_dekght_2",
+    "name": "凋零骑士·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "DK2",
+    "desc": "当腐败骑士死亡时，攻击力、攻击速度、移动速度大幅提升",
+    "descRaw": "当腐败骑士死亡时，攻击力、攻击速度、移动速度大幅提升",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 200000,
+      "atk": 500,
+      "def": 600,
+      "res": 70,
+      "moveSpeed": 0.65,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": true,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "同时攻击两名目标",
+        "textRaw": "同时攻击两名目标",
+        "format": "NORMAL"
+      },
+      {
+        "text": "对三名目标发射爆炸箭，短暂延迟后爆炸，对目标与周围四格的单位造成高额法术伤害",
+        "textRaw": "对三名目标发射爆炸箭，短暂延迟后爆炸，对目标与周围四格的单位造成高额法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "当<腐败骑士>死亡时，攻击力、攻击速度、移动速度大幅提升",
+        "textRaw": "当<腐败骑士>死亡时，攻击力、攻击速度、移动速度大幅提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】基础生命值统一为200000",
+        "textRaw": "【重构】基础生命值统一为200000",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "triggerrage.atk": 0.5,
+        "triggerrage.attack_speed": 50,
+        "triggerrage.move_speed": 1.5
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "TripleAttack",
+        "priority": 0,
+        "cooldown": 10,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {
+          "dekght_2[aoe].interval": 2.5,
+          "dekght_2[aoe].atk_scale": 1.6
+        },
+        "bbStr": {
+          "dekght_2[aoe].range_id": "x-5"
+        }
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [
+      "sarkaz"
+    ],
+    "be": 204510,
+    "beFactor": 1,
+    "attrPower": 204510,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1513_dekght_2",
+    "spine": "enemy_1513_dekght_2",
+    "modelScale": 1.0741,
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.667,
+      "hit": 1
+    },
+    "effectRef": "enemy_1513_dekght_2"
+  },
+  "enemy_ws_recon_talula": {
+    "key": "enemy_ws_recon_talula",
+    "name": "塔露拉·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "TA",
+    "desc": "令人捉摸不透的整合运动领袖。",
+    "descRaw": "令人捉摸不透的整合运动领袖。",
+    "applyWay": "ALL",
+    "stats": {
+      "maxHp": 500000,
+      "atk": 1500,
+      "def": 700,
+      "res": 50,
+      "moveSpeed": 0.5,
+      "bat": 4.5,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【日冕】对范围内所有我方单位造成法术伤害",
+        "textRaw": "【日冕】对范围内所有我方单位造成法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【烈焚灼息】使场上一名我方单位持续受到逐渐递增的真实伤害（每秒造成真实伤害，可被抵抗）",
+        "textRaw": "【烈焚灼息】使场上一名我方单位持续受到逐渐递增的真实伤害（每秒造成真实伤害，可被<$ba.buffres>抵抗</>）",
+        "format": "NORMAL"
+      },
+      {
+        "text": "被阻挡时造成真实伤害",
+        "textRaw": "被阻挡时造成真实伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "生命值降至一半时防御力、法抗与技能释放速度大幅提升",
+        "textRaw": "生命值降至一半时防御力、法抗与技能释放速度大幅提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】日冕之火伤害提高；半血后进入更强的火焰形态",
+        "textRaw": "【重构】日冕之火伤害提高；半血后进入更强的火焰形态",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "halfhp.def": 1,
+        "halfhp.magic_resistance": 0.8,
+        "halfhp.hp_ratio": 0.5
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "DragonFire",
+        "priority": 0,
+        "cooldown": 19,
+        "initCooldown": 19,
+        "spCost": 0,
+        "bb": {
+          "dragon_fire.duration": 30.5,
+          "dragon_fire.baseDamage": 50,
+          "dragon_fire.addOnDamage": 180,
+          "dragon_fire.addOnDuration": 30
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "DanceFire",
+        "priority": 1,
+        "cooldown": 20,
+        "initCooldown": 20,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1,
+          "range_radius": 2.5
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "DragonFire[Half]",
+        "priority": 0,
+        "cooldown": 7,
+        "initCooldown": 7,
+        "spCost": 0,
+        "bb": {
+          "dragon_fire.duration": 30.5,
+          "dragon_fire.baseDamage": 50,
+          "dragon_fire.addOnDamage": 180,
+          "dragon_fire.addOnDuration": 30
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "DanceFire[Half]",
+        "priority": 1,
+        "cooldown": 10,
+        "initCooldown": 15,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1,
+          "range_radius": 2.5
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 509750,
+    "beFactor": 1,
+    "attrPower": 509750,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1503_talula",
+    "spine": "enemy_1503_talula",
+    "attackAnim": {
+      "clip": "Attack_2",
+      "dur": 2.333,
+      "hit": 1.333
+    },
+    "effectRef": "enemy_1503_talula"
+  },
+  "enemy_ws_recon_patrt": {
+    "key": "enemy_ws_recon_patrt",
+    "name": "爱国者·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "PT",
+    "desc": "最后一位纯血温迪戈。行军姿态防御力与法术抗性极高，毁灭姿态免疫眩晕",
+    "descRaw": "最后一位纯血温迪戈。行军姿态<@eb.key>防御力与法术抗性</>极高，毁灭姿态<@eb.key>免疫眩晕</>",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 250000,
+      "atk": 1600,
+      "def": 500,
+      "res": 45,
+      "moveSpeed": 0.4,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 7,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": true,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "大幅强化敌军攻击与防御力",
+        "textRaw": "大幅强化敌军攻击与防御力",
+        "format": "NORMAL"
+      },
+      {
+        "text": "行军姿态",
+        "textRaw": "行军姿态",
+        "format": "TITLE"
+      },
+      {
+        "text": "攻击力提升，防御力与法术抗性大幅提升，使自身极容易受到我方攻击，普通攻击为4连击",
+        "textRaw": "攻击力提升，防御力与法术抗性大幅提升，使自身极容易受到我方攻击，普通攻击为4连击",
+        "format": "NORMAL"
+      },
+      {
+        "text": "生命值降为0后，进入重生阶段，期间持续对周围造成真实伤害，一段时间后切换至毁灭姿态",
+        "textRaw": "生命值降为0后，进入重生阶段，期间持续对周围造成真实伤害，一段时间后切换至毁灭姿态",
+        "format": "NORMAL"
+      },
+      {
+        "text": "毁灭姿态",
+        "textRaw": "毁灭姿态",
+        "format": "TITLE"
+      },
+      {
+        "text": "能够远程攻击",
+        "textRaw": "能够远程攻击",
+        "format": "NORMAL"
+      },
+      {
+        "text": "对最远的高台单位投掷长枪造成物理伤害",
+        "textRaw": "对最远的高台单位投掷长枪造成物理伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "持续对周围造成真实伤害",
+        "textRaw": "持续对周围造成真实伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "免疫眩晕，免疫冻结，免疫浮空",
+        "textRaw": "免疫眩晕，免疫冻结，免疫浮空",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】投枪攻击段数提高；重生后更难被击倒",
+        "textRaw": "【重构】投枪攻击段数提高；重生后更难被击倒",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "strength.atk": 0.2,
+        "strength.def": 200,
+        "shield.atk": 0.5,
+        "shield.def": 2,
+        "shield.magic_resistance": 1,
+        "taunt.taunt_level": 2,
+        "reborn.duration": 10,
+        "reborn.patrt_t_state_2[reborn_invincible].duration": 10,
+        "immo_trigger[rage].interval": 0.6,
+        "immo_trigger[rage].move_speed": 0.1,
+        "immo_trigger[rage].base_attack_time": -0.4,
+        "immo_trigger[rage].atk": 0.2,
+        "immo_trigger[rage].def": 200
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "Immo[Rage]",
+        "priority": 0,
+        "cooldown": 9999,
+        "initCooldown": 9999,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 0.0521
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "throwspear[Rage]",
+        "priority": 0,
+        "cooldown": 15,
+        "initCooldown": 15,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1.755
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "immo_trigger[reborning]",
+        "priority": 0,
+        "cooldown": 9999,
+        "initCooldown": 9999,
+        "spCost": 0,
+        "bb": {
+          "interval": 0.6,
+          "duration": 10,
+          "atk": 0.2,
+          "def": 200
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [
+      "sarkaz"
+    ],
+    "be": 259635,
+    "beFactor": 1,
+    "attrPower": 259635,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1506_patrt",
+    "spine": "enemy_1506_patrt",
+    "attackAnim": {
+      "clip": "Attack_1",
+      "dur": 1.5,
+      "hit": 0.633
+    },
+    "effectRef": "enemy_1506_patrt"
+  },
+  "enemy_ws_recon_mirbst": {
+    "key": "enemy_ws_recon_mirbst",
+    "name": "狂躁异质裂兽·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "KD",
+    "desc": "它早已失去神识，唯一支撑它的，只有求生的本能。",
+    "descRaw": "它早已失去神识，唯一支撑它的，只有求生的本能。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 500000,
+      "atk": 1000,
+      "def": 300,
+      "res": 40,
+      "moveSpeed": 0.5,
+      "bat": 3.5,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 1,
+      "blockCnt": 1,
+      "massLevel": 7,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": true,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [
+        "feared"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "第一形态",
+        "textRaw": "第一形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "攻击为二连击，并使目标受到来自自身的伤害大幅提升",
+        "textRaw": "攻击为二连击，并使目标受到来自自身的伤害大幅提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "狂怒，攻击无视敌我，且会寻找并攻击对自身造成伤害的单位，受到的物理与法术伤害大幅降低，攻击速度和移动速度大幅提升",
+        "textRaw": "狂怒，攻击无视敌我，且会寻找并攻击对自身造成伤害的单位，受到的物理与法术伤害大幅降低，攻击速度和移动速度大幅提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "持续一定时间或生命值低于一定比例后退出狂怒状态并尝试逃跑",
+        "textRaw": "持续一定时间或生命值低于一定比例后退出狂怒状态并尝试逃跑",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第二形态",
+        "textRaw": "第二形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "短暂延迟后再度出现，维持一定时间的狂怒状态，期间受到的物理与法术伤害大幅降低，攻击力大幅提升",
+        "textRaw": "短暂延迟后再度出现，维持一定时间的狂怒状态，期间受到的物理与法术伤害大幅降低，攻击力大幅提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "攻击自身周围所有我方单位",
+        "textRaw": "攻击自身周围所有我方单位",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【落石】向全场对自身造成最多伤害的单位造成物理伤害并造成晕眩",
+        "textRaw": "【落石】向全场对自身造成最多伤害的单位造成物理伤害并造成<$ba.stun>晕眩</>",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】狂怒不会结束；生命值低于 50% 切换第二形态并持续回血",
+        "textRaw": "【重构】狂怒不会结束；生命值低于 50% 切换第二形态并持续回血",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "M0CrazyBonus.attack_speed": 200,
+        "M0CrazyBonus.move_speed": 2,
+        "M0CrazyBonus.damage_resistance": 0.5,
+        "RunController.run_duration": 120,
+        "RunController.hp_ratio": 0.5,
+        "RunToNearestHole.delay": 10,
+        "M2LimitCrazyBonus.atk": 1,
+        "M2LimitCrazyBonus.damage_resistance": 0.6,
+        "M2LimitCrazyBonus.duration": 60,
+        "AttackParam.attack@max_target": 3,
+        "IncreasedDamage.damage_scale": 2,
+        "M0CrazyBonus.attack@enemy_atk_scale": 2,
+        "IncreasedDamage.damage_scale_duration": 20,
+        "HpRatioCtrl.min_hp_ratio": 0.2
+      },
+      "bbStr": {
+        "RunToNearestHole.map_position_list": "(1,6)|(3,10)|(4,1)|(6,6)",
+        "RunToNearestHole.branch_id": "mirbst_m2_route"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "StartRun",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "ThrowStone",
+        "priority": 0,
+        "cooldown": 20,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1.5,
+          "stun": 10
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [
+      "infection"
+    ],
+    "be": 506020,
+    "beFactor": 1,
+    "attrPower": 506020,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1571_mirbst",
+    "spine": "enemy_1571_mirbst",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.567,
+      "hit": 0.633
+    },
+    "effectRef": "enemy_1571_mirbst"
+  },
+  "enemy_ws_recon_mandra": {
+    "key": "enemy_ws_recon_mandra",
+    "name": "蔓德拉·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "MD",
+    "desc": "操纵岩石的术师。她来自维多利亚的阴影深处，誓要将过去从贵族们手下受过的屈辱悉数奉还。",
+    "descRaw": "操纵岩石的术师。她来自维多利亚的阴影深处，誓要将过去从贵族们手下受过的屈辱悉数奉还。",
+    "applyWay": "ALL",
+    "stats": {
+      "maxHp": 1000000,
+      "atk": 640,
+      "def": 520,
+      "res": 35,
+      "moveSpeed": 0.4,
+      "bat": 1.8,
+      "aspd": 100,
+      "rangeRadius": 1.5,
+      "rawRangeRadius": 1.5,
+      "blockCnt": 1,
+      "massLevel": 7,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【石之盾】所受伤害降低，受到破碎支柱的伤害后暂时失效",
+        "textRaw": "【石之盾】所受伤害降低，受到破碎支柱的伤害后暂时失效",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第一形态",
+        "textRaw": "第一形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【蔓德拉的注目】寻找范围内攻击最高的目标，造成法术伤害并使其攻速下降，若其撤退或被击倒则使所在地块损毁",
+        "textRaw": "【蔓德拉的注目】寻找范围内攻击最高的目标，造成法术伤害并使其攻速下降，若其撤退或被击倒则使所在地块损毁",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第二形态",
+        "textRaw": "第二形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【石之盾】额外提供近地悬浮，并对周围造成持续法术伤害",
+        "textRaw": "【石之盾】额外提供<$ba.float>近地悬浮</>，并对周围造成持续法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "周期性击倒破碎支柱",
+        "textRaw": "周期性击倒破碎支柱",
+        "format": "NORMAL"
+      },
+      {
+        "text": "更频繁地使用【蔓德拉的注目】",
+        "textRaw": "更频繁地使用【蔓德拉的注目】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】石之盾减伤提高至80%；注目额外降低目标25点法抗；第二形态石之盾伤害+20%，命中额外降低10点法抗；移除破碎支柱",
+        "textRaw": "【重构】石之盾减伤提高至80%；注目额外降低目标25点法抗；第二形态石之盾伤害+20%，命中额外降低10点法抗；移除破碎支柱",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "StoneSkin.damage_resistance": 0.8,
+        "ReSummonStoneSkin.duration": 25,
+        "ReSummonStoneSkin.hp_ratio_offset": -0.4,
+        "StoneSkin_2.range_radius": 1.7,
+        "StoneSkin_2.atk_scale": 0.36,
+        "StoneSkin_2.interval": 1,
+        "Reborn.duration": 5,
+        "Reborn.mandra_p2_invinsible.duration": 3,
+        "Reborn.mandra_ray_p2[cd]": 10,
+        "Reborn.summon_dupilr_p2[cd]": 20
+      },
+      "bbStr": {
+        "Reborn.branch_id": "summon_dupilr"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "PetrifiedRay",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 5,
+        "spCost": 0,
+        "bb": {
+          "mandra_ray[cd].duration": 7.1,
+          "mandra_ray[cd].cooldown": 15,
+          "range_radius": 1.5,
+          "atk_scale": 1,
+          "hit_interval": 1,
+          "attack_speed": -0.7,
+          "mandra_ray[cd].interval": 6
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Reborn",
+        "priority": 1,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "mandra_p2_invinsible.duration": 5,
+          "mandra_ray_p2[cd]": 10,
+          "summon_dupilr_p2[cd]": 10
+        },
+        "bbStr": {
+          "branch_id": "reborn_summon_dupilr"
+        }
+      },
+      {
+        "prefabKey": "SummonDupilr",
+        "priority": 2,
+        "cooldown": 15,
+        "initCooldown": 15,
+        "spCost": 0,
+        "bb": {
+          "dupilr_t[auto_collapse].interval": 5
+        },
+        "bbStr": {
+          "branch_id": "summon_dupilr"
+        }
+      },
+      {
+        "prefabKey": "SummonStoneSkin_2",
+        "priority": 4,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SummonStoneSkin",
+        "priority": 3,
+        "cooldown": 5,
+        "initCooldown": 5,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SelfStun",
+        "priority": 5,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "sp": {
+      "type": "INCREASE_WITH_TIME",
+      "maxSp": 0,
+      "initSp": 0,
+      "increment": 1
+    },
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 1004865,
+    "beFactor": 1,
+    "attrPower": 1004865,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1523_mandra",
+    "spine": "enemy_1523_mandra",
+    "attackAnim": {
+      "clip": "C1_Attack",
+      "dur": 1.5,
+      "hit": 0.833
+    },
+    "effectRef": "enemy_1523_mandra"
+  },
+  "enemy_ws_recon_bldkgt": {
+    "key": "enemy_ws_recon_bldkgt",
+    "name": "血骑士狄开俄波利斯·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "BK",
+    "desc": "卡西米尔感染者骑士参赛制度的提议人，大骑士领感染者的英雄，无数孩子与感染者心中的偶像。",
+    "descRaw": "卡西米尔感染者骑士参赛制度的提议人，大骑士领感染者的英雄，无数孩子与感染者心中的偶像。",
+    "applyWay": "ALL",
+    "stats": {
+      "maxHp": 1000000,
+      "atk": 1750,
+      "def": 1000,
+      "res": 40,
+      "moveSpeed": 0.6,
+      "bat": 6,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 7,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys",
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "受到伤害降低，减伤效果对阻挡自身的单位无效",
+        "textRaw": "受到伤害降低，减伤效果对阻挡自身的单位无效",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第一形态",
+        "textRaw": "第一形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【血归】使目标晕眩，每秒造成法术伤害",
+        "textRaw": "【血归】使目标<$ba.stun>晕眩</>，每秒造成法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "复活姿态",
+        "textRaw": "复活姿态",
+        "format": "TITLE"
+      },
+      {
+        "text": "血骑士保持无敌并持续召唤<凝血之刃>，一段时间后进入第二形态",
+        "textRaw": "血骑士保持无敌并持续召唤<凝血之刃>，一段时间后进入第二形态",
+        "format": "NORMAL"
+      },
+      {
+        "text": "在【复活姿态】下血骑士生命值恢复满时会回到第一形态",
+        "textRaw": "在【复活姿态】下血骑士生命值恢复满时会回到第一形态",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第二形态",
+        "textRaw": "第二形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "攻击力提升，变为远程攻击",
+        "textRaw": "攻击力提升，变为远程攻击",
+        "format": "NORMAL"
+      },
+      {
+        "text": "持续召唤<凝血之刃>。",
+        "textRaw": "持续召唤<凝血之刃>。",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】减伤对阻挡者仍生效原本的50%；血归伤害提升至400；复活姿态20秒，每10秒召唤20枚凝血之刃（落点距本体2.5格以外），每枚回复10%最大生命；第二形态攻击目标+1",
+        "textRaw": "【重构】减伤对阻挡者仍生效原本的50%；血归伤害提升至400；复活姿态20秒，每10秒召唤20枚凝血之刃（落点距本体2.5格以外），每枚回复10%最大生命；第二形态攻击目标+1",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "Passive.damage_scale": 0.75,
+        "Passive2.damage_scale": 0.5,
+        "Reborn.hp_ratio": 0.5,
+        "Reborn.duration": 0.5,
+        "CheckTrigger.recovery_time": 20,
+        "CheckTrigger.hp_ratio": 1,
+        "Passive2.atk": 0.5,
+        "Passive2.invincible_time": 6,
+        "Devour.hp_ratio": 0.1
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "BloodPool",
+        "priority": 0,
+        "cooldown": 15,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {
+          "stun": 10,
+          "interval": 1,
+          "damage": 400
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SummonBldbld",
+        "priority": 0,
+        "cooldown": 10,
+        "initCooldown": 2,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {
+          "branch_id": "bldkgt_bldbld"
+        }
+      },
+      {
+        "prefabKey": "SummonBldbld2",
+        "priority": 0,
+        "cooldown": 12,
+        "initCooldown": 5,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {
+          "branch_id": "bldkgt_bldbld2"
+        }
+      },
+      {
+        "prefabKey": "BloodPool2",
+        "priority": 0,
+        "cooldown": 15,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {
+          "stun": 10,
+          "interval": 1,
+          "damage": 400
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "RebornToPrev",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "RebornToNext",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 1011870,
+    "beFactor": 1,
+    "attrPower": 1011870,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1524_bldkgt",
+    "spine": "enemy_1524_bldkgt",
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 2.233,
+      "hit": 1.267
+    },
+    "effectRef": "enemy_1524_bldkgt"
+  },
+  "enemy_ws_recon_morphis": {
+    "key": "enemy_ws_recon_morphis",
+    "name": "莫菲丝·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": null,
+    "desc": "梦中的一切明明这么有趣，为什么还想要逃离呢......留在这里多好。",
+    "descRaw": "梦中的一切明明这么有趣，为什么还想要逃离呢......留在这里多好。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 1000000,
+      "atk": 680,
+      "def": 580,
+      "res": 35,
+      "moveSpeed": 0.7,
+      "bat": 2.8,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 5,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "tauntLevel": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "rawRangeRadius": 2.5,
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": false
+      },
+      "otherImmunities": []
+    },
+    "abilities": [
+      {
+        "text": "莫菲丝会连接可被我方单位阻挡的丝线，每根未被阻挡的丝线都会使莫菲丝攻击力提升",
+        "textRaw": "莫菲丝会连接可被我方单位阻挡的丝线，每根未被阻挡的丝线都会使莫菲丝攻击力提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【幻梦的纠缠】以丝线连接攻击范围内最远的我方单位，持续造成法术伤害",
+        "textRaw": "【幻梦的纠缠】以丝线连接攻击范围内最远的我方单位，持续造成法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【感官的剥离】以丝线连接敌方单位，使其分担莫菲丝受到的大部分伤害",
+        "textRaw": "【感官的剥离】以丝线连接敌方单位，使其分担莫菲丝受到的大部分伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【梦境的演变】莫菲丝召唤并骑乘一只“安眠伴随兽”，使自身不可阻挡、移动速度增加并获得屏障，持续一段时间或屏障被击破后停止",
+        "textRaw": "【梦境的演变】莫菲丝召唤并骑乘一只“安眠伴随兽”，使自身不可阻挡、移动速度增加并获得屏障，持续一段时间或屏障被击破后停止",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】每根丝线额外 +25% 防御与 +25 法抗；可连接自身（自身受伤 -25%）；屏障 = max(20% 生命, 100000)、持续 20 秒；丝线伤害间隔 0.2 秒",
+        "textRaw": "【重构】每根丝线额外 +25% 防御与 +25 法抗；可连接自身（自身受伤 -25%）；屏障 = max(20% 生命, 100000)、持续 20 秒；丝线伤害间隔 0.2 秒",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "EnemyLineT.atk": 0.25,
+        "EnemyLineT.duration": 40,
+        "EnemyLineT.damage_share": 0.65,
+        "EnemyLineAdvanceT.damage_share": 0.7,
+        "RedLine.atk_scale": 0.5,
+        "RedLine.atk_scale_2": 0.6,
+        "RedLine.duration": 10,
+        "RedLine.interval": 0.2,
+        "Shield.dynamic_ratio": 0.2,
+        "Shield.dynamic": 100000,
+        "Shield.interval": 20,
+        "Shield.move_speed": 0.7,
+        "Reborn.duration": 5,
+        "Reborn.hit_interval": 1,
+        "Reborn.max_hp": 0.3,
+        "Reborn.atk": 0.2,
+        "Reborn.base_attack_time": -0.8
+      },
+      "bbStr": {}
+    },
+    "skills": [],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 1005245,
+    "beFactor": 1,
+    "attrPower": 1005245,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1569_ldevil",
+    "spine": "enemy_1569_ldevil",
+    "modelScale": null,
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 1,
+      "hit": 0.267
+    },
+    "effectRef": "enemy_1569_ldevil"
+  },
+  "enemy_ws_recon_dirctr": {
+    "key": "enemy_ws_recon_dirctr",
+    "name": "“酒神”·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "TR",
+    "desc": "死亡常在，戏剧永恒。",
+    "descRaw": "死亡常在，戏剧永恒。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 1000000,
+      "atk": 700,
+      "def": 500,
+      "res": 40,
+      "moveSpeed": 0.7,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 5,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": false
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【未曾领悟】被摄影区域外的我方单位攻击时受到的物理和法术伤害大幅降低",
+        "textRaw": "【未曾领悟】被摄影区域外的我方单位攻击时受到的物理和法术伤害大幅降低",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【意兴盎然】攻击数次后，下次攻击的攻击力提升",
+        "textRaw": "【意兴盎然】攻击数次后，下次攻击的攻击力提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第一形态",
+        "textRaw": "第一形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【戏剧化】在场时，每当一个我方单位神经损伤爆发，在短暂延迟后对该单位周围4格的我方单位造成伤害，并造成神经损伤",
+        "textRaw": "【戏剧化】在场时，每当一个我方单位<$ba.dt.neural>神经损伤</>爆发，在短暂延迟后对该单位周围4格的我方单位造成伤害，并造成<$ba.dt.neural>神经损伤</>",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【渗散荒诞】使1台摄影机（优先选择已激活的摄影机）生成屏障，令其无法工作。一段时间后若屏障没有被打破，则引爆屏障对周围8格我方单位造成伤害。",
+        "textRaw": "【渗散荒诞】使1台摄影机（优先选择已激活的摄影机）生成<$ba.barrier>屏障</>，令其无法工作。一段时间后若屏障没有被打破，则引爆屏障对周围8格我方单位造成伤害。",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第二形态",
+        "textRaw": "第二形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【戏剧化】在场时，每当一个我方单位神经损伤爆发，在短暂延迟后对该单位周围8格的我方单位造成伤害，并造成神经损伤",
+        "textRaw": "【戏剧化】在场时，每当一个我方单位<$ba.dt.neural>神经损伤</>爆发，在短暂延迟后对该单位周围8格的我方单位造成伤害，并造成<$ba.dt.neural>神经损伤</>",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【渗散荒诞】使2台摄影机（优先选择已激活的摄影机）生成屏障，令其无法工作。一段时间后若屏障没有被打破，则引爆屏障对周围8格我方单位造成伤害。",
+        "textRaw": "【渗散荒诞】使2台摄影机（优先选择已激活的摄影机）生成屏障，令其无法工作。一段时间后若屏障没有被打破，则引爆屏障对周围8格我方单位造成伤害。",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【幕间不息】蓄力后，对攻击范围内处于摄影区域的我方单位，由近到远进行一次攻击。攻击额外造成神经损伤。技能期间每次攻击命中后，使下次攻击造成更高伤害",
+        "textRaw": "【幕间不息】蓄力后，对攻击范围内处于摄影区域的我方单位，由近到远进行一次攻击。攻击额外造成<$ba.dt.neural>神经损伤</>。技能期间每次攻击命中后，使下次攻击造成更高伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】非阻挡干员的物理/法术伤害 -50%；攻击目标 +1；幕间不息对自身 2.8 格方形内我方由近到远逐个攻击；重生 5 秒",
+        "textRaw": "【重构】非阻挡干员的物理/法术伤害 -50%；攻击目标 +1；幕间不息对自身 2.8 格方形内我方由近到远逐个攻击；重生 5 秒",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "aura.atk_scale_aura": 0.3,
+        "aura.ep_damage_ratio": 0.4,
+        "aura2.atk_scale_aura": 0.7,
+        "aura2.ep_damage_ratio": 0.4,
+        "aura2.ability_range_forward_extend": 3,
+        "aura3.atk_scale_aura": 0.7,
+        "aura3.ep_damage_ratio": 0.4,
+        "aura3.change1_stack_cnt": 3,
+        "aura3.change2_stack_cnt": 5,
+        "aura3.max_stack_cnt": 8,
+        "aura3.ability_range_forward_extend": 2,
+        "scale.damage_resistance": 0.7,
+        "Reborn.duration": 5,
+        "Reborn.invincible": 10,
+        "aura3.one": 1,
+        "aura3.mult": 0.2,
+        "aura.attack@ep_damage_ratio": 0.3,
+        "aura2.attack@ep_damage_ratio": 0.4,
+        "aura3.attack@ep_damage_ratio": 0.4
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "control",
+        "priority": 0,
+        "cooldown": 35,
+        "initCooldown": 15,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "replace",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 3,
+        "bb": {
+          "atk_scale_s1": 2,
+          "ep_damage_ratio": 1.3
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "control2",
+        "priority": 0,
+        "cooldown": 35,
+        "initCooldown": 17,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "s3",
+        "priority": 0,
+        "cooldown": 32,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "replace2",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 3,
+        "bb": {
+          "atk_scale_s1": 2,
+          "ep_damage_ratio": 1.5
+        },
+        "bbStr": {}
+      }
+    ],
+    "sp": {
+      "type": "INCREASE_WHEN_ATTACK",
+      "maxSp": 3,
+      "initSp": 0,
+      "increment": 1
+    },
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 1005120,
+    "beFactor": 1,
+    "attrPower": 1005120,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1568_dirctr",
+    "spine": "enemy_1568_dirctr",
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 3,
+      "hit": 1.833
+    },
+    "effectRef": "enemy_1568_dirctr"
+  },
+  "enemy_ws_recon_dywqgs": {
+    "key": "enemy_ws_recon_dywqgs",
+    "name": "“望”·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "WAN",
+    "desc": "谋臣、罪人，于岁陵置下的一手。",
+    "descRaw": "谋臣、罪人，于岁陵置下的一手。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 1000000,
+      "atk": 800,
+      "def": 1200,
+      "res": 60,
+      "moveSpeed": 0.6,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 5,
+      "rawRangeRadius": 5,
+      "blockCnt": 1,
+      "massLevel": 7,
+      "lpr": 50,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": true,
+        "sleep": false,
+        "frozen": false,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "初始形态",
+        "textRaw": "初始形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【落】每次部署单位时，在该单位周围4格的可部署位置部署一枚“瑕”",
+        "textRaw": "【落】每次部署单位时，在该单位周围4格的可部署位置部署一枚“瑕”",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【落】每隔一段时间，随机选择我方单位周围四格不存在单位的可部署格子，部署一枚“瑕”",
+        "textRaw": "【落】每隔一段时间，随机选择我方单位周围四格不存在单位的可部署格子，部署一枚“瑕”",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第一形态",
+        "textRaw": "第一形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "自身周围的“瑕”每秒回复一定比例的生命值，且会攻击周围的我方目标并使其眩晕",
+        "textRaw": "自身周围的“瑕”每秒回复一定比例的生命值，且会攻击周围的我方目标并使其眩晕",
+        "format": "NORMAL"
+      },
+      {
+        "text": "自身周围每有一枚“瑕”，受到的物理和法术伤害降低，受到的控制效果时间减少",
+        "textRaw": "自身周围每有一枚“瑕”，受到的物理和法术伤害降低，受到的控制效果时间减少",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【征】场上有目标“失气”时，进入全图攻击模式，优先选择被包围的目标，最多同时攻击三名目标",
+        "textRaw": "【征】场上有目标“失气”时，进入全图攻击模式，优先选择被包围的目标，最多同时攻击三名目标",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第二形态",
+        "textRaw": "第二形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "进入第二形态时，连续部署多枚“瑕”，若被“瑕”围住的可部署地块没有部署单位，则该地块开始不断生成敌人",
+        "textRaw": "进入第二形态时，连续部署多枚“瑕”，若被“瑕”围住的可部署地块没有部署单位，则该地块开始不断生成敌人",
+        "format": "NORMAL"
+      },
+      {
+        "text": "复活后，同时在我方单位周围的可部署地块部署一枚“瑕”",
+        "textRaw": "复活后，同时在我方单位周围的可部署地块部署一枚“瑕”",
+        "format": "NORMAL"
+      },
+      {
+        "text": "当场上最后一枚“瑕”被击退时，自身同时退场",
+        "textRaw": "当场上最后一枚“瑕”被击退时，自身同时退场",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】【落】每次部署我方在该位置造成伤害并每 10 秒再触发；第一形态攻击 50% 眩晕 5 秒、未被阻挡受伤 -50%；【征】每 40 秒一次；重生 5 秒、无敌 10 秒；第二形态连续 6 次【落】后每 10 秒召唤 2 只特训精英",
+        "textRaw": "【重构】【落】每次部署我方在该位置造成伤害并每 10 秒再触发；第一形态攻击 50% 眩晕 5 秒、未被阻挡受伤 -50%；【征】每 40 秒一次；重生 5 秒、无敌 10 秒；第二形态连续 6 次【落】后每 10 秒召唤 2 只特训精英",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "ActiveChessDamage.one_minus_status_resistance": -0.2,
+        "ActiveChessDamage.max_stack_cnt": -1,
+        "ActiveChessDamage.max_valid_stack_cnt": 4,
+        "ActiveChessDamage.hp_ratio": 0.02,
+        "Reborn.duration": 5,
+        "RebornSpawn.spawn_duration": 30,
+        "RebornSpawn.interval": 30,
+        "Reborn.invincible_duration": 10,
+        "FinalAttributeUp.attack_speed": 100,
+        "FinalAttributeUp.attack@atk_scale": 1,
+        "ActiveChessDamage.range_radius": 1.6,
+        "ActiveChessDamageS2.range_radius": 1.6,
+        "SummonEnemyBetweenTraps.interval": 20,
+        "SummonChessWhenBorn.cd_duration": 30,
+        "FinalAttributeUp.attack@max_target": 3,
+        "ActiveChessDamage.temp_damage_resistance": 0.2,
+        "ActiveChessDamageS2.temp_damage_resistance": 0.2
+      },
+      "bbStr": {
+        "SummonEnemyBetweenTraps.enemy_key": "enemy_2101_dyspll"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "SiegeChess1",
+        "priority": 0,
+        "cooldown": 25,
+        "initCooldown": 25,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "StartBattle",
+        "priority": 0,
+        "cooldown": 999999,
+        "initCooldown": 40,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SwitchFinalMode",
+        "priority": 0,
+        "cooldown": 1,
+        "initCooldown": 1,
+        "spCost": 0,
+        "bb": {
+          "duration": 10
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Reborning",
+        "priority": 0,
+        "cooldown": 99999,
+        "initCooldown": 99999,
+        "spCost": 0,
+        "bb": {
+          "duration": 30
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [
+      "animated"
+    ],
+    "be": 1007780,
+    "beFactor": 1,
+    "attrPower": 1007780,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2120_dywqgs",
+    "spine": "enemy_2120_dywqgs",
+    "attackAnim": {
+      "clip": "B_Attack",
+      "dur": 2.167,
+      "hit": 1.067
+    },
+    "effectRef": "enemy_2120_dywqgs"
+  },
+  "enemy_ws_recon_bsnake": {
+    "key": "enemy_ws_recon_bsnake",
+    "name": "“不死的黑蛇”·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "BSN",
+    "desc": "无数次死去也不曾自乌萨斯土地上消失的古老意志。",
+    "descRaw": "无数次死去也不曾自乌萨斯土地上消失的古老意志。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 2500000,
+      "atk": 770,
+      "def": 800,
+      "res": 50,
+      "moveSpeed": 0.5,
+      "bat": 4.5,
+      "aspd": 100,
+      "rangeRadius": 2,
+      "rawRangeRadius": 2,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "第一阶段",
+        "textRaw": "第一阶段",
+        "format": "TITLE"
+      },
+      {
+        "text": "攻击造成真实伤害并对目标施加【烈焚灼息】(每秒造成真实伤害且伤害递增，可被抵抗)",
+        "textRaw": "攻击造成真实伤害并对目标施加【烈焚灼息】(每秒造成真实伤害且伤害递增，可被<$ba.buffres>抵抗</>)",
+        "format": "NORMAL"
+      },
+      {
+        "text": "周期性对两名我方单位施加【烈焚灼息】，附带【烈焚灼息】的我方单位对黑蛇造成的伤害大幅降低",
+        "textRaw": "周期性对两名我方单位施加【烈焚灼息】，附带【烈焚灼息】的我方单位对黑蛇造成的伤害大幅降低",
+        "format": "NORMAL"
+      },
+      {
+        "text": "引爆场上所有附带【烈焚灼息】的我方单位，对其与周围四格造成法术伤害且对溅射目标施加【烈焚灼息】",
+        "textRaw": "引爆场上所有附带【烈焚灼息】的我方单位，对其与周围四格造成法术伤害且对溅射目标施加【烈焚灼息】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "生命值降至0时释放【不息恶火】对全场造成巨额法术伤害，并进入狂暴状态",
+        "textRaw": "生命值降至0时释放【不息恶火】对全场造成巨额法术伤害，并进入狂暴状态",
+        "format": "NORMAL"
+      },
+      {
+        "text": "狂暴状态",
+        "textRaw": "狂暴状态",
+        "format": "TITLE"
+      },
+      {
+        "text": "生命上限与攻击力大幅提升",
+        "textRaw": "生命上限与攻击力大幅提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "额外召唤<能量聚合体>协助其作战",
+        "textRaw": "额外召唤<能量聚合体>协助其作战",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】第一阶段减伤提高16%；烈焚灼息持续+10秒；点燃首次/冷却-4秒；引爆首次/冷却-10秒、伤害+230；第一次重生：不息恶火持续-13秒、每轮间隔-1秒（按所在半场换火柱方向）、伤害+230、无敌-5秒，15秒后回黑蛇形态（满血+5秒无敌）；第二次重生：再放一次不息恶火，结束后保留10%生命、受伤-99%、每秒流失1%直至倒下；狂暴期首次召唤能量聚合体-25秒",
+        "textRaw": "【重构】第一阶段减伤提高16%；烈焚灼息持续+10秒；点燃首次/冷却-4秒；引爆首次/冷却-10秒、伤害+230；第一次重生：不息恶火持续-13秒、每轮间隔-1秒（按所在半场换火柱方向）、伤害+230、无敌-5秒，15秒后回黑蛇形态（满血+5秒无敌）；第二次重生：再放一次不息恶火，结束后保留10%生命、受伤-99%、每秒流失1%直至倒下；狂暴期首次召唤能量聚合体-25秒",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "protect.bsnake_t[protect].damage_resistance": 0.5,
+        "reborn.bsnake_t[protect].damage_resistance": 0.5,
+        "reborn.duration": 5,
+        "reborn.max_hp": 0.5,
+        "reborn.atk": 0.5,
+        "fire.attack@dragon_fire.duration": 30.5,
+        "fire.attack@dragon_fire.baseDamage": 50,
+        "fire.attack@dragon_fire.addOnDamage": 180,
+        "fire.attack@dragon_fire.addOnDuration": 30
+      },
+      "bbStr": {
+        "reborn.bgm": "talulhahard"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "SummonFlame",
+        "priority": 0,
+        "cooldown": 50,
+        "initCooldown": 75,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {
+          "branch_id": "bsnake_flame"
+        }
+      },
+      {
+        "prefabKey": "Ignite",
+        "priority": 0,
+        "cooldown": 19,
+        "initCooldown": 19,
+        "spCost": 0,
+        "bb": {
+          "dragon_fire.duration": 30.5,
+          "dragon_fire.baseDamage": 50,
+          "dragon_fire.addOnDamage": 180,
+          "dragon_fire.addOnDuration": 30
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "DragonFireExplode",
+        "priority": 0,
+        "cooldown": 35,
+        "initCooldown": 35,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1,
+          "dragon_fire.duration": 30.5,
+          "dragon_fire.baseDamage": 50,
+          "dragon_fire.addOnDamage": 180,
+          "dragon_fire.addOnDuration": 30
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "ScreenAttack",
+        "priority": 1,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1,
+          "duration": 28,
+          "interval": 2,
+          "trig_cnt": 10,
+          "invincible": 15
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 2506400,
+    "beFactor": 1,
+    "attrPower": 2506400,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1515_bsnake",
+    "spine": "enemy_1515_bsnake",
+    "attackAnim": {
+      "clip": "Attack_A",
+      "dur": 2.333,
+      "hit": 1.033
+    },
+    "effectRef": "enemy_1515_bsnake"
+  },
+  "enemy_ws_recon_skzjkl": {
+    "key": "enemy_ws_recon_skzjkl",
+    "name": "奎隆，摩诃萨埵权化·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "QLN",
+    "desc": "泰拉的觉者，阿纳萨。",
+    "descRaw": "泰拉的觉者，阿纳萨。",
+    "applyWay": "MELEE",
+    "stats": {
+      "maxHp": 2500000,
+      "atk": 1800,
+      "def": 2000,
+      "res": 75,
+      "moveSpeed": 0.5,
+      "bat": 5,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": -1,
+      "blockCnt": 1,
+      "massLevel": 9,
+      "lpr": 30,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "disarmedCombat"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "入定阶段",
+        "textRaw": "入定阶段",
+        "format": "TITLE"
+      },
+      {
+        "text": "【不着相】无敌一段时间后进入自在阶段",
+        "textRaw": "【不着相】无敌一段时间后进入自在阶段",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【呼吸法】每隔一段时间，召唤尼卢火，每存在一个尼卢火奎隆受到的物理与法术伤害降低，拥有抵抗",
+        "textRaw": "【呼吸法】每隔一段时间，召唤尼卢火，每存在一个尼卢火奎隆受到的物理与法术伤害降低，拥有<$ba.buffres>抵抗</>",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【清火执】奎隆每隔一段时间对尼卢火所在位置及周围所有单位造成一次法术伤害",
+        "textRaw": "【清火执】奎隆每隔一段时间对尼卢火所在位置及周围所有单位造成一次法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "自在阶段",
+        "textRaw": "自在阶段",
+        "format": "TITLE"
+      },
+      {
+        "text": "【呼吸法】拥有抵抗，每隔一段时间，召唤尼卢火，每存在一个尼卢火奎隆受到的物理与法术伤害降低，每隔一段时间，召唤一批敌人，思维混乱时召唤不同敌人",
+        "textRaw": "【呼吸法】拥有<$ba.buffres>抵抗</>，每隔一段时间，召唤尼卢火，每存在一个尼卢火奎隆受到的物理与法术伤害降低，每隔一段时间，召唤一批敌人，思维混乱时召唤不同敌人",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【怒目】每次攻击时，对尼卢火及周围所有单位造成一次法术伤害",
+        "textRaw": "【怒目】每次攻击时，对尼卢火及周围所有单位造成一次法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【惩五戒】对目标进行连续五次攻击",
+        "textRaw": "【惩五戒】对目标进行连续五次攻击",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【承三身】生命值每降低25%，召唤“托生莲座”，在“托生莲座”进入目标点前处于无敌状态",
+        "textRaw": "【承三身】生命值每降低25%，召唤“托生莲座”，在“托生莲座”进入目标点前处于无敌状态",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【棒喝】生命值首次低于0%时，移除场上敌我所有单位及待部署区的所有干员，并进入无忧觉阶段",
+        "textRaw": "【棒喝】生命值首次低于0%时，移除场上敌我所有单位及待部署区的所有干员，并进入无忧觉阶段",
+        "format": "NORMAL"
+      },
+      {
+        "text": "无忧觉阶段",
+        "textRaw": "无忧觉阶段",
+        "format": "TITLE"
+      },
+      {
+        "text": "【菩萨辩】进入新的区域作战，攻击变为二连击，仅能使用被“托生莲座”装载进入保护目标的干员进行作战",
+        "textRaw": "【菩萨辩】进入新的区域作战，攻击变为二连击，仅能使用被“托生莲座”装载进入保护目标的干员进行作战",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】不着相10秒；入定每15秒尼卢火、每30秒召5只特训精英；清火执首次20秒、之后每20秒，伤害2000；自在：怒目每3次命中触发、伤害+200；呼吸法每25秒尼卢火、每20秒召7普通+3精英；惩五戒冷却-5秒、段数+1、每段+200、每2段触发怒目；承三身改为每次+15%减伤（不再无敌/阻挡/停手）；尼卢火持续-20秒，退场时全体在场干员攻击-40%/30秒、伤害+500；重生后清除其他敌人（首领除外）、普攻二连击、每10秒尼卢火、每15秒惩五戒",
+        "textRaw": "【重构】不着相10秒；入定每15秒尼卢火、每30秒召5只特训精英；清火执首次20秒、之后每20秒，伤害2000；自在：怒目每3次命中触发、伤害+200；呼吸法每25秒尼卢火、每20秒召7普通+3精英；惩五戒冷却-5秒、段数+1、每段+200、每2段触发怒目；承三身改为每次+15%减伤（不再无敌/阻挡/停手）；尼卢火持续-20秒，退场时全体在场干员攻击-40%/30秒、伤害+500；重生后清除其他敌人（首领除外）、普攻二连击、每10秒尼卢火、每15秒惩五戒",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "M0_T1.interval": 25,
+        "M0_T2.interval": 55,
+        "M1Reborn.duration": 0.33,
+        "M1_T1.interval": 35,
+        "M1_T2.interval": 38,
+        "M1_T31.hp_ratio": 0.5,
+        "M1_T32.hp_ratio": 0.25,
+        "M2Passive.m2_revive_duration": 7,
+        "M2ReviveEnd.delay": 7,
+        "M3_T1.interval": 10,
+        "M3_T2.interval": 20,
+        "M1_T33.hp_ratio": 0.75
+      },
+      "bbStr": {
+        "M0_T1.branch_id": "skzjkl_skzth_m0",
+        "M0_T2.branch_id": "skzjkl_m0_summon_enemy",
+        "M1_T1.branch_id": "skzjkl_skzth_m1",
+        "M1_T2.branch_id": "skzjkl_m1_summon_enemy",
+        "M2ReviveEnd.location": "(5,20)",
+        "M2ReviveEnd.branch_id": "skzjkl_stage_2",
+        "M3_T1.branch_id": "skzjkl_skzth_m3",
+        "M3_T2.branch_id": "skzjkl_m3_summon_enemy"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "M0TriggerSkzth",
+        "priority": 2,
+        "cooldown": 10,
+        "initCooldown": 30,
+        "spCost": 0,
+        "bb": {
+          "boom_damage_scale": 1
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "M0SwitchMode",
+        "priority": 10,
+        "cooldown": 95,
+        "initCooldown": 95,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "M1MultiAttack",
+        "priority": 2,
+        "cooldown": 20,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {
+          "boom_damage_scale": 1,
+          "atk_scale": 1
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "M1SummonSkzjbc",
+        "priority": 3,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "anim_fix_duration": 99999
+        },
+        "bbStr": {
+          "branch_id": "skzjkl_m1_summon_skzjbc"
+        }
+      },
+      {
+        "prefabKey": "M3MultiAttack",
+        "priority": 2,
+        "cooldown": 20,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1,
+          "boom_damage_scale": 1
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [
+      "sarkaz"
+    ],
+    "be": 2515225,
+    "beFactor": 1,
+    "attrPower": 2515225,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2089_skzjkl",
+    "spine": "enemy_2089_skzjkl",
+    "attackAnim": {
+      "clip": "B_Attack",
+      "dur": 1.5,
+      "hit": 0.467
+    },
+    "effectRef": "enemy_2089_skzjkl"
+  },
+  "enemy_ws_recon_syskad": {
+    "key": "enemy_ws_recon_syskad",
+    "name": "伊莎玛拉，腐化之心·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "SKA",
+    "desc": "她不再歌唱，它为大群发声。在我方角色附近留下伊莎玛拉之泪为变身充能，在伊莎玛拉之泪部署角色可阻止充能",
+    "descRaw": "她不再歌唱，它为大群发声。在我方角色附近留下<@eb.key>伊莎玛拉之泪</>为变身充能，在<@eb.key>伊莎玛拉之泪</>部署角色可阻止充能",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 2500000,
+      "atk": 1600,
+      "def": 1200,
+      "res": 70,
+      "moveSpeed": 0.6,
+      "bat": 6,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 30,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "none",
+      "dmgTypes": [
+        "none"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "初始形态",
+        "textRaw": "初始形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "普通攻击能够同时治疗3名敌方单位",
+        "textRaw": "普通攻击能够同时治疗3名敌方单位",
+        "format": "NORMAL"
+      },
+      {
+        "text": "周期性召唤<伊莎玛拉之泪>为自身充能，充能完成后变身",
+        "textRaw": "周期性召唤<伊莎玛拉之泪>为自身充能，充能完成后变身",
+        "format": "NORMAL"
+      },
+      {
+        "text": "本体生命值降至一半以下时攻击力大幅上升，并额外召唤2个<伊莎玛拉之泪>",
+        "textRaw": "本体生命值降至一半以下时攻击力大幅上升，并额外召唤2个<伊莎玛拉之泪>",
+        "format": "NORMAL"
+      },
+      {
+        "text": "变身形态",
+        "textRaw": "变身形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "同时攻击3个目标并造成真实伤害",
+        "textRaw": "同时攻击3个目标并造成真实伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】治疗量+48600；留下泪时+30技力、在场每秒+2技力；半血时额外留3滴泪；变身形态攻击目标+1，生命×75%/攻击×80%/防御×50%/法抗×70%/移速×80%/攻击间隔×50%；变身后被击倒：重生后充能缩减至80",
+        "textRaw": "【重构】治疗量+48600；留下泪时+30技力、在场每秒+2技力；半血时额外留3滴泪；变身形态攻击目标+1，生命×75%/攻击×80%/防御×50%/法抗×70%/移速×80%/攻击间隔×50%；变身后被击倒：重生后充能缩减至80",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "Reborn.duration": 5,
+        "Reborn.hp_ratio": 0.02,
+        "HpSave.dynamic": -1,
+        "FetchAttributes.syskad_t[fetch].hp_ratio": 1,
+        "FetchAttributes.syskad_t[monster].max_hp": 0.5,
+        "FetchAttributes.syskad_t[monster].atk": 0.625,
+        "FetchAttributes.syskad_t[monster].def": 0.3,
+        "FetchAttributes.syskad_t[monster].magic_resistance": 0.5,
+        "FetchAttributes.syskad_t[monster].move_speed": -0.2,
+        "FetchAttributes.syskad_t[monster].base_attack_time": 0.5,
+        "FetchAttributes.syskad_t[monster].hp_ratio": 1,
+        "Berserk.hp_ratio": 0.5,
+        "Berserk.atk": 0.5
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "change",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 120,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "BerserkCorrupt",
+        "priority": 1,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Corrupt",
+        "priority": 0,
+        "cooldown": 30,
+        "initCooldown": 8,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "sp": {
+      "type": "INCREASE_WITH_TIME",
+      "maxSp": 120,
+      "initSp": 0,
+      "increment": 1
+    },
+    "notCountInTotal": false,
+    "tags": [
+      "seamonster"
+    ],
+    "be": 2511810,
+    "beFactor": 1,
+    "attrPower": 2511810,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2039_syskad",
+    "spine": "enemy_2039_syskad",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 2.667,
+      "hit": 1.167
+    },
+    "effectRef": "enemy_2039_syskad"
+  },
+  "enemy_ws_recon_shchmr": {
+    "key": "enemy_ws_recon_shchmr",
+    "name": "玻利瓦尔，症结之核·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "CBV",
+    "desc": "我们终究会和自己最丑陋的部分相伴一生，并始终尝试战胜它们，或者被它们吞噬。",
+    "descRaw": "我们终究会和自己最丑陋的部分相伴一生，并始终尝试战胜它们，或者被它们吞噬。",
+    "applyWay": "ALL",
+    "stats": {
+      "maxHp": 2500000,
+      "atk": 1600,
+      "def": 4000,
+      "res": 50,
+      "moveSpeed": 0.6,
+      "bat": 2.5,
+      "aspd": 100,
+      "rangeRadius": 0.85,
+      "rawRangeRadius": 0.85,
+      "blockCnt": 1,
+      "massLevel": 10,
+      "lpr": 30,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys",
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "disarmedCombat"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "第一形态",
+        "textRaw": "第一形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "攻击会降低目标的防御力",
+        "textRaw": "攻击会降低目标的防御力",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【灾厄之口】生命值降为0时释放：暂时离场，立刻摧毁场上的“危朽”或“崩解”，长时间封锁待部署区单位；\n选中全场生命值最高的干员，持续对其周围造成高额真实伤害，并对全场其余目标造成较少法术伤害；\n被选中目标离场会延长【灾厄之口】的持续时间；技能结束后进入下一形态",
+        "textRaw": "【灾厄之口】生命值降为0时释放：暂时离场，立刻摧毁场上的“危朽”或“崩解”，长时间封锁待部署区单位；\n选中全场生命值最高的干员，持续对其周围造成高额真实伤害，并对全场其余目标造成较少法术伤害；\n被选中目标离场会延长【灾厄之口】的持续时间；技能结束后进入下一形态",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第二形态",
+        "textRaw": "第二形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【未熄之地】对一名目标发射火球造成法术伤害，在目标周围留下造成持续法术伤害的火焰，优先选取未处于火中的目标",
+        "textRaw": "【未熄之地】对一名目标发射火球造成法术伤害，在目标周围留下造成持续法术伤害的火焰，优先选取未处于火中的目标",
+        "format": "NORMAL"
+      },
+      {
+        "text": "生命值降为0时，再次释放【灾厄之口】，技能结束后返回场上并转为下一形态",
+        "textRaw": "生命值降为0时，再次释放【灾厄之口】，技能结束后返回场上并转为下一形态",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第三形态",
+        "textRaw": "第三形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "周期性起飞一段时间，起飞时不进行普通攻击但会频繁释放【未熄之地】",
+        "textRaw": "周期性起飞一段时间，起飞时不进行普通攻击但会频繁释放【未熄之地】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "经过较长时间后，再次释放【灾厄之口】",
+        "textRaw": "经过较长时间后，再次释放【灾厄之口】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】普攻降防-120；未熄之地冷却-2秒、首次-1秒；灾厄之口离场10秒、每0.25秒一跳、目标提前离场延长2秒；二形态攻击+50%/生命+50%；三形态攻击+20%/生命+60%、起飞6秒（20/10）、火球3秒一发、RebornLike 60秒",
+        "textRaw": "【重构】普攻降防-120；未熄之地冷却-2秒、首次-1秒；灾厄之口离场10秒、每0.25秒一跳、目标提前离场延长2秒；二形态攻击+50%/生命+50%；三形态攻击+20%/生命+60%、起飞6秒（20/10）、火球3秒一发、RebornLike 60秒",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "reborn_1.duration": 3.6,
+        "reborn_1.cnt": 2,
+        "reborn_1.atk": 0.2,
+        "reborn_1.max_hp": 0.5,
+        "reborn_1.duration_card": 90,
+        "reborn_2.duration": 3.6,
+        "reborn_2.cnt": 2,
+        "reborn_2.atk": 0.3,
+        "reborn_2.max_hp": 1,
+        "reborn_2.duration_card": 90,
+        "DefReduce.def": -100
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "Fire",
+        "priority": 0,
+        "cooldown": 1,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "duration": 20,
+          "duration_extend": 10,
+          "atk_scale_pure": 0.4,
+          "interval": 0.5,
+          "atk_scale_magic": 0.15,
+          "first_trigger_interval": 2
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Fireball",
+        "priority": 0,
+        "cooldown": 12,
+        "initCooldown": 6,
+        "spCost": 0,
+        "bb": {
+          "atk_scale_main": 1.2,
+          "range_radius": 20,
+          "projectile_delay_time": 25,
+          "interval": 1,
+          "atk_scale_dot": 0.15
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Fire",
+        "priority": 0,
+        "cooldown": 1,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "duration": 20,
+          "duration_extend": 10,
+          "atk_scale_pure": 0.4,
+          "interval": 0.5,
+          "atk_scale_magic": 0.15,
+          "first_trigger_interval": 2
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Fireball",
+        "priority": 0,
+        "cooldown": 12,
+        "initCooldown": 6,
+        "spCost": 0,
+        "bb": {
+          "atk_scale_main": 1.2,
+          "range_radius": 20,
+          "projectile_delay_time": 25,
+          "interval": 1,
+          "atk_scale_dot": 0.15
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "RebornLike",
+        "priority": 0,
+        "cooldown": 60,
+        "initCooldown": 60,
+        "spCost": 0,
+        "bb": {
+          "duration": 3.6,
+          "cnt": 2,
+          "duration_card": 90
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Fly",
+        "priority": 0,
+        "cooldown": 15,
+        "initCooldown": 5,
+        "spCost": 0,
+        "bb": {
+          "duration": 15
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Fireball_Fly",
+        "priority": 0,
+        "cooldown": 4,
+        "initCooldown": 1,
+        "spCost": 0,
+        "bb": {
+          "atk_scale_main": 1.2,
+          "range_radius": 20,
+          "projectile_delay_time": 25,
+          "interval": 1,
+          "atk_scale_dot": 0.15
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Return",
+        "priority": 0,
+        "cooldown": 1,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 2520150,
+    "beFactor": 1,
+    "attrPower": 2520150,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2150_shchmr",
+    "spine": "enemy_2150_shchmr",
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 2.4,
+      "hit": 0.967
+    },
+    "effectRef": "enemy_2150_shchmr"
+  },
+  "enemy_ws_recon_dycyue": {
+    "key": "enemy_ws_recon_dycyue",
+    "name": "朔壳·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "SQ",
+    "desc": "一具被生生夺走，用以隐藏所有恶意与怨愤的躯壳。它原来的主人已陷入永眠，取而代之的是——",
+    "descRaw": "一具被生生夺走，用以隐藏所有恶意与怨愤的躯壳。它原来的主人已陷入永眠，取而代之的是——",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 5000000,
+      "atk": 1800,
+      "def": 2500,
+      "res": 60,
+      "moveSpeed": 0.6,
+      "bat": 4.5,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 1,
+      "massLevel": 9,
+      "lpr": 50,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【暴武】有一定概率闪避非自身阻挡单位的物理和法术伤害。待部署区每有一张“宿傲”，自身攻击力提升",
+        "textRaw": "【暴武】有一定概率闪避非自身阻挡单位的物理和法术伤害。待部署区每有一张“宿傲”，自身攻击力提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【醉生】往待部署区加入一张“宿傲”",
+        "textRaw": "【醉生】往待部署区加入一张“宿傲”",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【溯律】在自身所在位置生成“敛傲”。待部署区每有一张“宿傲”， 额外生成一枚“敛傲”",
+        "textRaw": "【溯律】在自身所在位置生成“敛傲”。待部署区每有一张“宿傲”， 额外生成一枚“敛傲”",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【描躯】在场上召唤一节“身形”，使位于其上的目标单位强制撤退。“身形”在场时，自身无法被攻击",
+        "textRaw": "【描躯】在场上召唤一节“身形”，使位于其上的目标单位强制撤退。“身形”在场时，自身无法被攻击",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】暴武闪避+25%（被阻挡时-25%），改为在场每10秒攻击+10%/防御+10%；醉生冷却-12秒、改为自身所在格召唤1枚剑傲；溯律冷却-10秒、随机3名我方各召1枚敛傲；描躯冷却-24秒、身形在场时改为闪避+10%、不再强制撤退；被击倒后召35只普通+15只精英",
+        "textRaw": "【重构】暴武闪避+25%（被阻挡时-25%），改为在场每10秒攻击+10%/防御+10%；醉生冷却-12秒、改为自身所在格召唤1枚剑傲；溯律冷却-10秒、随机3名我方各召1枚敛傲；描躯冷却-24秒、身形在场时改为闪避+10%、不再强制撤退；被击倒后召35只普通+15只精英",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "MasterBlcok.base_atk": 0.3,
+        "MasterBlcok.prob": 0.5,
+        "BranchData.max_index": 5,
+        "MasterBlcok.action_index": 2
+      },
+      "bbStr": {
+        "MasterBlcok.branch_id": "summon_dysuih"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "Punch",
+        "priority": 0,
+        "cooldown": 30,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {
+          "range_radius": 13
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SendPunchCard",
+        "priority": 1,
+        "cooldown": 36,
+        "initCooldown": 5,
+        "spCost": 0,
+        "bb": {
+          "cnt": 1,
+          "max_cards": 8
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SummonBody",
+        "priority": 2,
+        "cooldown": 54,
+        "initCooldown": 20,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {
+          "branch_id": "dycyue_body"
+        }
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [
+      "animated"
+    ],
+    "be": 5016680,
+    "beFactor": 1,
+    "attrPower": 5016680,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2126_dycyue",
+    "spine": "enemy_2126_dycyue",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 3,
+      "hit": 1
+    },
+    "effectRef": "enemy_2126_dycyue"
+  },
+  "enemy_ws_recon_csdoll": {
+    "key": "enemy_ws_recon_csdoll",
+    "name": "伤心的大锁·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "DOL",
+    "desc": "剧团报幕人的作品之一，耐久极高且具有强大的自愈能力，释放的护盾存在期间会不断出现额外的敌人。",
+    "descRaw": "剧团报幕人的作品之一，耐久极高且具有<@eb.key>强大的自愈能力</>，释放的护盾存在期间会不断出现额外的敌人。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 25000000,
+      "atk": 800,
+      "def": 700,
+      "res": 60,
+      "moveSpeed": 0.1,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": 0,
+      "blockCnt": 1,
+      "massLevel": 10,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "disarmedCombat",
+        "feared",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "同时攻击2个目标",
+        "textRaw": "同时攻击2个目标",
+        "format": "NORMAL"
+      },
+      {
+        "text": "耐久极高，具有强大的自愈能力，自身在场时会有源源不断的敌人出现",
+        "textRaw": "耐久极高，具有强大的自愈能力，自身在场时会有源源不断的敌人出现",
+        "format": "NORMAL"
+      },
+      {
+        "text": "周期性释放屏障保护自身，屏障期间停止攻击，但全场敌人移动速度提升且会持续出现额外的敌人",
+        "textRaw": "周期性释放屏障保护自身，屏障期间停止攻击，但全场敌人移动速度提升且会持续出现额外的敌人",
+        "format": "NORMAL"
+      },
+      {
+        "text": "每受到一定次数伤害后对全场我方单位造成法术伤害",
+        "textRaw": "每受到一定次数伤害后对全场我方单位造成法术伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "战斗经过较长时间后扣除30目标生命",
+        "textRaw": "战斗经过较长时间后扣除30目标生命",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】攻击目标+1；自愈每秒最多100000；全场攻击所需受击次数+5（25 次）；屏障首次 80 秒、之后每 80 秒一次、持续 30 秒、护盾最多 1000000，屏障期间召 5 只特训精英；召唤序列改为 20/40/60 秒 10 普通、80/100/120 秒 3 精英、150 秒卢西恩“猩红血钻”后每 20 秒 5 普通+2 精英；报幕助手不实现",
+        "textRaw": "【重构】攻击目标+1；自愈每秒最多100000；全场攻击所需受击次数+5（25 次）；屏障首次 80 秒、之后每 80 秒一次、持续 30 秒、护盾最多 1000000，屏障期间召 5 只特训精英；召唤序列改为 20/40/60 秒 10 普通、80/100/120 秒 3 精英、150 秒卢西恩“猩红血钻”后每 20 秒 5 普通+2 精英；报幕助手不实现",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "summon.csdoll_summon[1].duration": 90,
+        "summon.csdoll_summon[1].interval": 24,
+        "summon.csdoll_summon[1].branch_id": 0,
+        "summon.csdoll_summon[2].duration": 180,
+        "summon.csdoll_summon[2].interval": 20,
+        "summon.csdoll_summon[2].branch_id": 0,
+        "summon.csdoll_summon[3].interval": 16,
+        "summon.csdoll_summon[3].branch_id": 0,
+        "hprecovery.hp_recovery_per_sec_by_max_hp_ratio": 0.0025,
+        "aoetrigger.stack_cnt": 20,
+        "aoe.atk_scale": 1.5,
+        "aoetrigger.warning_stack_cnt": 10,
+        "movespeedup.move_speed": 2
+      },
+      "bbStr": {
+        "summon.csdoll_summon[1].branch_id": "csdoll_1",
+        "summon.csdoll_summon[2].branch_id": "csdoll_2",
+        "summon.csdoll_summon[3].branch_id": "csdoll_3"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "shield",
+        "priority": 1,
+        "cooldown": 45,
+        "initCooldown": 60,
+        "spCost": 0,
+        "bb": {
+          "hp_ratio": 0.05,
+          "interval": 20,
+          "branch_id": 0
+        },
+        "bbStr": {
+          "branch_id": "csdoll_rush"
+        }
+      },
+      {
+        "prefabKey": "Doom",
+        "priority": 0,
+        "cooldown": 480,
+        "initCooldown": 480,
+        "spCost": 0,
+        "bb": {
+          "value": -30,
+          "atk_scale": 2
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 25006280,
+    "beFactor": 1,
+    "attrPower": 25006280,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2018_csdoll",
+    "spine": "enemy_2018_csdoll",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.5,
+      "hit": 1
+    },
+    "effectRef": "enemy_2018_csdoll"
+  },
+  "enemy_ws_recon_skzamy": {
+    "key": "enemy_ws_recon_skzamy",
+    "name": "“阿米娅”，炉芯终曲·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "AFF",
+    "desc": "一位谦卑的英雄，一个瑰丽的梦想。未来在她眼中凝聚，道路在她脚下消散。",
+    "descRaw": "一位谦卑的英雄，一个瑰丽的梦想。未来在她眼中凝聚，道路在她脚下消散。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 12500000,
+      "atk": 600,
+      "def": 8000,
+      "res": 70,
+      "moveSpeed": 0.35,
+      "bat": 5,
+      "aspd": 100,
+      "rangeRadius": 10,
+      "rawRangeRadius": 10,
+      "blockCnt": 1,
+      "massLevel": 10,
+      "lpr": 999,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 0,
+      "hitRateArts": 0,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "disarmedCombat",
+        "feared"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【仅剩的创意】战场上存在若干“仅剩的创意”，“仅剩的创意”会在触碰到昔日道标或地形时改变移动方向，若触碰昔日道标则释放其中的敌人或友方干员",
+        "textRaw": "【仅剩的创意】战场上存在若干“仅剩的创意”，“仅剩的创意”会在触碰到昔日道标或地形时改变移动方向，若触碰昔日道标则释放其中的敌人或友方干员",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第一形态",
+        "textRaw": "第一形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【不应存在之人】阿米娅受到的物理与法术伤害降低50%，生命值首次低于50%时，获得无敌",
+        "textRaw": "【不应存在之人】阿米娅受到的物理与法术伤害降低50%，生命值首次低于50%时，获得无敌",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【尽头重现】当博卓卡斯替，圣卫铳骑、特雷西斯，黑冠尊主、奎隆，摩诃萨埵权化、曼弗雷德被击倒或离开战场时回复技力，技力满时施放【存续先兆】",
+        "textRaw": "【尽头重现】当博卓卡斯替，圣卫铳骑、特雷西斯，黑冠尊主、奎隆，摩诃萨埵权化、曼弗雷德被击倒或离开战场时回复技力，技力满时施放【存续先兆】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【存续先兆】停止攻击，逐渐消灭所有场地及其上的单位，每消灭一个昔日道标或敌人，扣除相应敌人的目标生命值，随后进入下一场地作战，思维混乱时，存续先兆所需的技力大幅降低",
+        "textRaw": "【存续先兆】停止攻击，逐渐消灭所有场地及其上的单位，每消灭一个昔日道标或敌人，扣除相应敌人的目标生命值，随后进入下一场地作战，思维混乱时，存续先兆所需的技力大幅降低",
+        "format": "NORMAL"
+      },
+      {
+        "text": "第二形态",
+        "textRaw": "第二形态",
+        "format": "TITLE"
+      },
+      {
+        "text": "【黑冠余威】进入第二形态后，立即对周围最多7个目标造成一次真实伤害，同时，每次碰触“仅剩的创意”时立即对周围最多7个目标造成一次真实伤害",
+        "textRaw": "【黑冠余威】进入第二形态后，立即对周围最多7个目标造成一次真实伤害，同时，每次碰触“仅剩的创意”时立即对周围最多7个目标造成一次真实伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【无言的期盼】每隔一段时间，召唤一个仅剩的创意",
+        "textRaw": "【无言的期盼】每隔一段时间，召唤一个仅剩的创意",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【永恒存续】消灭场上所有的敌人、干员、昔日道标，随后结束作战",
+        "textRaw": "【永恒存续】消灭场上所有的敌人、干员、昔日道标，随后结束作战",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】受到的物理/法术伤害×0.34；半血首次 10 秒无敌；普攻 3×3 追加 ATK×2 法术；每 30 秒召唤仅剩的创意（HP 25000，2.8 格内我方伤害-25%，朝自身移动）；创意被击倒后原地召恐卡兹（HP 50000）+年代印痕（HP 75000）；尽头重现改为每 20 秒 10 普通+3 精英；第二形态黑冠余威对周围最多 4 目标造成 200% 攻击真伤；第二次被击倒触发永恒存续",
+        "textRaw": "【重构】受到的物理/法术伤害×0.34；半血首次 10 秒无敌；普攻 3×3 追加 ATK×2 法术；每 30 秒召唤仅剩的创意（HP 25000，2.8 格内我方伤害-25%，朝自身移动）；创意被击倒后原地召恐卡兹（HP 50000）+年代印痕（HP 75000）；尽头重现改为每 20 秒 10 普通+3 精英；第二形态黑冠余威对周围最多 4 目标造成 200% 攻击真伤；第二次被击倒触发永恒存续",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "ReduceDamageS1.damage_resistance": 0.5,
+        "ReduceDamageS2.damage_resistance": 0.5,
+        "ReduceDamageS3.damage_resistance": 0.5,
+        "InvincibleS1.hp_ratio": 0.5,
+        "InvincibleS2.hp_ratio": 0.5,
+        "RebornS3.duration": 10,
+        "RebornS4.duration": 2.5,
+        "AbsorbSkzamb.range_radius": 0.5
+      },
+      "bbStr": {
+        "Blink1.location": "(5,15)",
+        "Blink2.location": "(3,26)"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "DeepBreathS1",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 180,
+        "bb": {
+          "duration": 35,
+          "startCol": 1,
+          "endCol": 9,
+          "interval": 3.5
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "DeepBreathS2",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 180,
+        "bb": {
+          "duration": 35,
+          "startCol": 13,
+          "endCol": 22,
+          "interval": 3.5
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "DeepBreathS3",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 180,
+        "bb": {
+          "duration": 60,
+          "startCol": 24,
+          "endCol": 35,
+          "interval": 6
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "DeepBreathS4",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 280,
+        "bb": {
+          "duration": 60,
+          "startCol": 24,
+          "endCol": 35,
+          "interval": 6
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "AOEAttackInit",
+        "priority": 0,
+        "cooldown": 99999,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 2.5
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "AOEAttack",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 2.5
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Doom",
+        "priority": 0,
+        "cooldown": 99999,
+        "initCooldown": 3,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "SummonBallS4",
+        "priority": 0,
+        "cooldown": 15,
+        "initCooldown": 15,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "sp": {
+      "type": "INCREASE_WITH_TIME",
+      "maxSp": 300,
+      "initSp": 0,
+      "increment": 1
+    },
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 12527210,
+    "beFactor": 1,
+    "attrPower": 12527210,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2092_skzamy",
+    "spine": "enemy_2092_skzamy",
+    "effectRef": "enemy_2092_skzamy",
+    "attackAnim": {
+      "clip": "A_Attack",
+      "dur": 3,
+      "hit": 1.5
+    }
+  },
+  "enemy_ws_recon_muama": {
+    "key": "enemy_ws_recon_muama",
+    "name": "AMa-10·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "ALC",
+    "desc": "“保护你自己，AMa-10，生存才是生命诞生时便拥有的本能。”彼时，她还不明白，究竟是什么，会值得用永恒的生命做交换。",
+    "descRaw": "“保护你自己，AMa-10，生存才是生命诞生时便拥有的本能。”彼时，她还不明白，究竟是什么，会值得用永恒的生命做交换。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 10000000,
+      "atk": 600,
+      "def": 1200,
+      "res": 10,
+      "moveSpeed": 1,
+      "bat": 6,
+      "aspd": 100,
+      "rangeRadius": 2,
+      "rawRangeRadius": 2,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared",
+        "palsy",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "无法移动，无法被传送",
+        "textRaw": "无法移动，无法被传送",
+        "format": "NORMAL"
+      },
+      {
+        "text": "攻击同一目标时攻击力逐渐提升",
+        "textRaw": "攻击同一目标时攻击力逐渐提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【防火墙】自身周围8格的边界拥有“防火墙”，受到来自“防火墙”外的物理与法术伤害大幅降低；“防火墙”内无法直接部署我方单位",
+        "textRaw": "【防火墙】自身周围8格的边界拥有“防火墙”，受到来自“防火墙”外的物理与法术伤害大幅降低；“防火墙”内无法直接部署我方单位",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【刷新】每隔一段时间将自己转移至指定地块，并重新生成“防火墙”",
+        "textRaw": "【刷新】每隔一段时间将自己转移至指定地块，并重新生成“防火墙”",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【信息洪流】对一个方向内三格发射信息洪流，使首个击中的单位晕眩一段时间，期间持续受到真实伤害",
+        "textRaw": "【信息洪流】对一个方向内三格发射信息洪流，使首个击中的单位<$ba.stun>晕眩</>一段时间，期间持续受到真实伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】与 AMa-10异构体·重构共享血量，只出现在 boss 区域2；防火墙减伤 -10%（受来自防火墙外的伤害 ×0.2）；同目标连续攻击 +100 攻击（最多 4 层）；信息洪流 1000 真伤、眩晕 6 秒（横向 30/30，纵向 30/15）；刷新 40 秒 / 首次 20 秒，移动到随机我方所在位置；生命低于 4% 时锁定并进入假死，每秒回复 1% 生命、50% 时结束，假死期间仍可被攻击",
+        "textRaw": "【重构】与 AMa-10异构体·重构共享血量，只出现在 boss 区域2；防火墙减伤 -10%（受来自防火墙外的伤害 ×0.2）；同目标连续攻击 +100 攻击（最多 4 层）；信息洪流 1000 真伤、眩晕 6 秒（横向 30/30，纵向 30/15）；刷新 40 秒 / 首次 20 秒，移动到随机我方所在位置；生命低于 4% 时锁定并进入假死，每秒回复 1% 生命、50% 时结束，假死期间仍可被攻击",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "SameTargetAtkUp.atk": 100,
+        "SameTargetAtkUp.max_stack_cnt": 4,
+        "DamageResistance.damage_resistance": 0.9
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "HorizontalLineAttack",
+        "priority": 0,
+        "cooldown": 40,
+        "initCooldown": 40,
+        "spCost": 0,
+        "bb": {
+          "value": 120,
+          "stun": 8
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "VerticalLine",
+        "priority": 0,
+        "cooldown": 40,
+        "initCooldown": 20,
+        "spCost": 0,
+        "bb": {
+          "value": 120,
+          "stun": 10
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Blink",
+        "priority": 0,
+        "cooldown": 60,
+        "initCooldown": 30,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 10006630,
+    "beFactor": 1,
+    "attrPower": 10006630,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1590_muama",
+    "spine": "enemy_1590_muama",
+    "effectRef": "enemy_1590_muama",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 2,
+      "hit": 0.633
+    }
+  },
+  "enemy_ws_recon_mutwin": {
+    "key": "enemy_ws_recon_mutwin",
+    "name": "AMa-10异构体·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "ALC",
+    "desc": "“凯尔希，我希望你能去保护这片大地上的生命。”她会回到我们的身边，带着一句诺言。",
+    "descRaw": "“凯尔希，我希望你能去保护这片大地上的生命。”她会回到我们的身边，带着一句诺言。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 10000000,
+      "atk": 600,
+      "def": 2000,
+      "res": 10,
+      "moveSpeed": 1,
+      "bat": 6,
+      "aspd": 100,
+      "rangeRadius": 2,
+      "rawRangeRadius": 2,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 2,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "phys",
+      "dmgTypes": [
+        "phys"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": false,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared",
+        "palsy",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "无法移动，无法被传送",
+        "textRaw": "无法移动，无法被传送",
+        "format": "NORMAL"
+      },
+      {
+        "text": "攻击同一目标时攻击力逐渐提升",
+        "textRaw": "攻击同一目标时攻击力逐渐提升",
+        "format": "NORMAL"
+      },
+      {
+        "text": "另一个AMa-10异构体在场且未进入假死时，生命值降至0后会进入假死，期间生命持续恢复，生命值为满时复活",
+        "textRaw": "另一个AMa-10异构体在场且未进入假死时，生命值降至0后会进入假死，期间生命持续恢复，生命值为满时复活",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【防火墙】自身周围8格的边界拥有“防火墙”，受到来自“防火墙”外的物理与法术伤害大幅降低；“防火墙”内无法直接部署我方单位",
+        "textRaw": "【防火墙】自身周围8格的边界拥有“防火墙”，受到来自“防火墙”外的物理与法术伤害大幅降低；“防火墙”内无法直接部署我方单位",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【刷新】每隔一段时间将自己转移至指定地块，并重新生成“防火墙”",
+        "textRaw": "【刷新】每隔一段时间将自己转移至指定地块，并重新生成“防火墙”",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【信息洪流】对一个方向内三格发射信息洪流，使首个击中的单位晕眩一段时间，期间持续受到真实伤害",
+        "textRaw": "【信息洪流】对一个方向内三格发射信息洪流，使首个击中的单位<$ba.stun>晕眩</>一段时间，期间持续受到真实伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】与 AMa-10·重构共享血量，只出现在 boss 区域3；防火墙减伤 -10%；同目标连续攻击 +100（最多 4 层）；信息洪流 1000 真伤、眩晕 6 秒（横向 30/30，纵向 30/15）；刷新 40 秒 / 首次 20 秒，移动到随机我方所在位置；生命低于 4% 时锁定并进入假死，每秒回复 1% 生命、50% 时结束，假死期间仍可被攻击",
+        "textRaw": "【重构】与 AMa-10·重构共享血量，只出现在 boss 区域3；防火墙减伤 -10%；同目标连续攻击 +100（最多 4 层）；信息洪流 1000 真伤、眩晕 6 秒（横向 30/30，纵向 30/15）；刷新 40 秒 / 首次 20 秒，移动到随机我方所在位置；生命低于 4% 时锁定并进入假死，每秒回复 1% 生命、50% 时结束，假死期间仍可被攻击",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "FakeDeath.target_hp_ratio": 1,
+        "FakeDeath.hp_ratio": 0.04,
+        "SameTargetAtkUp.atk": 100,
+        "SameTargetAtkUp.max_stack_cnt": 4,
+        "DamageResistance.damage_resistance": 0.9,
+        "Reborn.duration": 0.1,
+        "Reborn.hp_ratio": 0.02
+      },
+      "bbStr": {
+        "DamageResistance.boss_room": "(0,6,0)"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "HorizontalLineAttack",
+        "priority": 0,
+        "cooldown": 40,
+        "initCooldown": 40,
+        "spCost": 0,
+        "bb": {
+          "value": 200,
+          "stun": 5
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "VerticalLine",
+        "priority": 0,
+        "cooldown": 40,
+        "initCooldown": 20,
+        "spCost": 0,
+        "bb": {
+          "value": 200,
+          "stun": 5
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Blink",
+        "priority": 0,
+        "cooldown": 60,
+        "initCooldown": 20,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 10009030,
+    "beFactor": 1,
+    "attrPower": 10009030,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1591_mutwin",
+    "spine": "enemy_1591_mutwin",
+    "effectRef": "enemy_1591_mutwin",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 1.5,
+      "hit": 0.6
+    }
+  },
+  "enemy_ws_recon_musnake": {
+    "key": "enemy_ws_recon_musnake",
+    "name": "“终始”·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "E0B",
+    "desc": "没有绝对的起点，没有绝对的终点，在自我吞噬中自我孕育，它以此走向长久的闭合。直到今日，这个圆环断出拒不愈合的缺口，而她，将成为缺口上的起点。",
+    "descRaw": "没有绝对的起点，没有绝对的终点，在自我吞噬中自我孕育，它以此走向长久的闭合。直到今日，这个圆环断出拒不愈合的缺口，而她，将成为缺口上的起点。",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 15000000,
+      "atk": 888,
+      "def": 888,
+      "res": 8,
+      "moveSpeed": 0,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": -1,
+      "blockCnt": 1,
+      "massLevel": 6,
+      "lpr": 3,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "none",
+      "dmgTypes": [
+        "none"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": false,
+        "silence": false,
+        "sleep": false,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "每失去一定生命值，获得无敌，期间若完成指定交互则受到伤害并晕眩一段时间，否则回复一定生命值",
+        "textRaw": "每失去一定生命值，获得无敌，期间若完成指定交互则受到伤害并<$ba.stun>晕眩</>一段时间，否则回复一定生命值",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【防火墙】自身周围的边界拥有“防火墙”，受到来自“防火墙”外的物理与法术伤害大幅降低",
+        "textRaw": "【防火墙】自身周围的边界拥有“防火墙”，受到来自“防火墙”外的物理与法术伤害大幅降低",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【信息洪流】对固定方向发射信息洪流，使首个击中的单位晕眩一段时间，期间持续受到真实伤害",
+        "textRaw": "【信息洪流】对固定方向发射信息洪流，使首个击中的单位<$ba.stun>晕眩</>一段时间，期间持续受到真实伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【中断】战斗经过较长时间后，消失，并扣除50点目标生命",
+        "textRaw": "【中断】战斗经过较长时间后，消失，并扣除50点目标生命",
+        "format": "NORMAL"
+      },
+      {
+        "text": "无法被传送",
+        "textRaw": "无法被传送",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】防火墙减伤 -10%；生命跌破 60% / 20% 时结束区域2 / 区域3 两只的假死并令其回复 10% 生命；信息洪流冷却 -5 秒、首次 -5 秒，目标数 +2、真伤 +700（1000 点、眩晕 10 秒）；区域2 / 区域3 两只未假死时每 5 秒召唤 5 普通 + 2 精英，击倒它们使我方伤害 +50% / 攻速 +20 / 受伤 -20%",
+        "textRaw": "【重构】防火墙减伤 -10%；生命跌破 60% / 20% 时结束区域2 / 区域3 两只的假死并令其回复 10% 生命；信息洪流冷却 -5 秒、首次 -5 秒，目标数 +2、真伤 +700（1000 点、眩晕 10 秒）；区域2 / 区域3 两只未假死时每 5 秒召唤 5 普通 + 2 精英，击倒它们使我方伤害 +50% / 攻速 +20 / 受伤 -20%",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "TimeOut.interval": 998,
+        "TimeOut.duration": 999,
+        "TimeOut.value": -50,
+        "StepKill.hp_ratio": 0.2,
+        "StepKill.enemy_musnake_heal_buff.hp_ratio": 0.2,
+        "DamageResistance.damage_resistance": 0.9
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "GlobalLineAttack",
+        "priority": 0,
+        "cooldown": 25,
+        "initCooldown": 15,
+        "spCost": 0,
+        "bb": {
+          "value": 300,
+          "stun": 10
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Injured",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "stun_duration": 7,
+          "hp_ratio": 0.05
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 15007128,
+    "beFactor": 1,
+    "attrPower": 15007128,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1593_musnake",
+    "spine": "enemy_1593_musnake",
+    "effectRef": "enemy_1593_musnake"
+  },
+  "enemy_ws_recon_suisho": {
+    "key": "enemy_ws_recon_suisho",
+    "name": "岁·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "SUI1",
+    "desc": "大炎最后射落的神明，复立于对手面前。祂仰起头，望穿自太古至终末的所有时间，却未尝真正走入这人间。",
+    "descRaw": "大炎最后射落的神明，复立于对手面前。祂仰起头，望穿自太古至终末的所有时间，却未尝真正走入这人间。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 25000000,
+      "atk": 800,
+      "def": 1600,
+      "res": 50,
+      "moveSpeed": 1,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 0,
+      "massLevel": 10,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": false,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared",
+        "palsy",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "巨大的身躯横亘在场上，四个部位共享生命值且依序释放技能，单个部位受到过高伤害时，会抬起并脱离战斗",
+        "textRaw": "巨大的身躯横亘在场上，四个部位共享生命值且依序释放技能，单个部位受到过高伤害时，会抬起并脱离战斗",
+        "format": "NORMAL"
+      },
+      {
+        "text": "部位释放技能时会抬起，无法被攻击且不再使所在地块不可部署，不可通行",
+        "textRaw": "部位释放技能时会抬起，无法被攻击且不再使所在地块不可部署，不可通行",
+        "format": "NORMAL"
+      },
+      {
+        "text": "部位被镇岁柱影响后，会削弱对应属性以及对应部位的技能，岁全盛时拥有额外的高额属性且受到的物理与法术伤害减少",
+        "textRaw": "部位被镇岁柱影响后，会削弱对应属性以及对应部位的技能，岁全盛时拥有额外的高额属性且受到的物理与法术伤害减少",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【十方怼怒】抬起岁·首，一段时间后对最北边的友方单位喷吐一口火焰，造成法术伤害与灼燃损伤，火焰随后向南爆开，使范围内持续灼烧，造成法术伤害与灼燃损伤并引爆<“未熄”>，持续一段时间",
+        "textRaw": "【十方怼怒】抬起岁·首，一段时间后对最北边的友方单位喷吐一口火焰，造成法术伤害与<$ba.dt.burning>灼燃损伤</>，火焰随后向南爆开，使范围内持续灼烧，造成法术伤害与<$ba.dt.burning>灼燃损伤</>并引爆<“未熄”>，持续一段时间",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【柱折维绝】生命值低于一定比例时，召唤额外敌人且4个部位立即同时释放【十方怼怒】、【掩月】、【蔽日】、【天倾地陷】",
+        "textRaw": "【柱折维绝】生命值低于一定比例时，召唤额外敌人且4个部位立即同时释放【十方怼怒】、【掩月】、【蔽日】、【天倾地陷】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "被镇岁柱削弱后，岁的攻击力降低，且【十方怼怒】的范围减少",
+        "textRaw": "被镇岁柱削弱后，岁的攻击力降低，且【十方怼怒】的范围减少",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】只会出现在 boss 区域1。【十方怼怒】改为向所有干员的位置爆开火焰，持续10秒。抬起改为5秒并获得80%减伤（不再无敌、不动、不可选中），技能首次释放与冷却统一为30秒。【柱折维绝】生命值首次低于50%时，召唤20只普通与10只精英（本场战斗的随机特训敌人类型），并令四个部位同时释放技能。",
+        "textRaw": "【重构】只会出现在 boss 区域1。【十方怼怒】改为向所有干员的位置爆开火焰，持续10秒。抬起改为5秒并获得80%减伤（不再无敌、不动、不可选中），技能首次释放与冷却统一为30秒。【柱折维绝】生命值首次低于50%时，召唤20只普通与10只精英（本场战斗的随机特训敌人类型），并令四个部位同时释放技能。",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "config.main_attack_atk_scale": 1.8,
+        "config.dot_attack_atk_scale": 0.2,
+        "config.main_attack_ele_atk_scale": 0.45,
+        "config.dot_attack_ele_atk_scale": 0.1,
+        "config.dot_attack_duration": 25,
+        "config.dot_attack_trigger_interval": 0.5,
+        "config.doom": 600,
+        "config.atk": -0.3
+      },
+      "bbStr": {
+        "config.default_pos": "(16,19)"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "FireBreathReady",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 75,
+        "bb": {
+          "duration": 10
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "FireBreath",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "sp": 50
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Break",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Stress",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "sp": {
+      "type": "INCREASE_WITH_TIME",
+      "maxSp": 75,
+      "initSp": 50,
+      "increment": 1
+    },
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 25008950,
+    "beFactor": 1,
+    "attrPower": 25008950,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1582_suisho",
+    "spine": "enemy_1582_suisho",
+    "effectRef": "enemy_1582_suisho",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 3.333,
+      "hit": 1.333
+    }
+  },
+  "enemy_ws_recon_suizzh": {
+    "key": "enemy_ws_recon_suizzh",
+    "name": "岁·左爪·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "SUI2",
+    "desc": null,
+    "descRaw": null,
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 300000,
+      "atk": 800,
+      "def": 2000,
+      "res": 60,
+      "moveSpeed": 1,
+      "bat": 0.1,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 0,
+      "massLevel": 10,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "none",
+      "dmgTypes": [
+        "none"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": false,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared",
+        "palsy",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【掩月】与【蔽日】共同释放，抬起岁·左爪，一段时间后，以最东的友方单位为目标爪击，对范围内的所有友方单位造成一次高额物理伤害",
+        "textRaw": "【掩月】与【蔽日】共同释放，抬起岁·左爪，一段时间后，以最东的友方单位为目标爪击，对范围内的所有友方单位造成一次高额物理伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "被镇岁柱削弱后，岁的法术抗性降低，且左爪不再释放【掩月】",
+        "textRaw": "被镇岁柱削弱后，岁的法术抗性降低，且左爪不再释放【掩月】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】只会出现在 boss 区域2。【掩月】优先选择生命值最高的我方目标，命中其3×3内所有我方。抬起改为5秒并获得80%减伤（不再无敌、不动、不可选中），技能首次释放与冷却统一为30秒。",
+        "textRaw": "【重构】只会出现在 boss 区域2。【掩月】优先选择生命值最高的我方目标，命中其3×3内所有我方。抬起改为5秒并获得80%减伤（不再无敌、不动、不可选中），技能首次释放与冷却统一为30秒。",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "config.def": 0,
+        "config.magic_resistance": -30
+      },
+      "bbStr": {
+        "config.default_pos": "(16,20)"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "ClawsReady",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 75,
+        "bb": {
+          "duration": 10
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "ComeTheClaws",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 2.2,
+          "sp": 25
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Break",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Stress",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "sp": {
+      "type": "INCREASE_WITH_TIME",
+      "maxSp": 75,
+      "initSp": 25,
+      "increment": 1
+    },
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 310180,
+    "beFactor": 1,
+    "attrPower": 310180,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1583_suizzh",
+    "spine": "enemy_1583_suizzh",
+    "effectRef": "enemy_1583_suizzh",
+    "attackAnim": {
+      "clip": "Die_Attack",
+      "dur": 4.667,
+      "hit": 3.067
+    }
+  },
+  "enemy_ws_recon_suiyzh": {
+    "key": "enemy_ws_recon_suiyzh",
+    "name": "岁·右爪·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "SUI3",
+    "desc": null,
+    "descRaw": null,
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 300000,
+      "atk": 800,
+      "def": 2000,
+      "res": 60,
+      "moveSpeed": 1,
+      "bat": 0.2,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 0,
+      "massLevel": 10,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "none",
+      "dmgTypes": [
+        "none"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": false,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared",
+        "palsy",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【蔽日】与【掩月】共同释放，抬起岁·右爪，一段时间后，以最西的友方单位为目标爪击，对范围内的所有友方单位造成一次高额物理伤害",
+        "textRaw": "【蔽日】与【掩月】共同释放，抬起岁·右爪，一段时间后，以最西的友方单位为目标爪击，对范围内的所有友方单位造成一次高额物理伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "被镇岁柱削弱后，岁的防御力降低，且右爪不再释放【蔽日】",
+        "textRaw": "被镇岁柱削弱后，岁的防御力降低，且右爪不再释放【蔽日】",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】只会出现在 boss 区域3。【蔽日】优先选择生命值最高的我方目标，命中其3×3内所有我方。抬起改为5秒并获得80%减伤（不再无敌、不动、不可选中），技能首次释放与冷却统一为30秒。",
+        "textRaw": "【重构】只会出现在 boss 区域3。【蔽日】优先选择生命值最高的我方目标，命中其3×3内所有我方。抬起改为5秒并获得80%减伤（不再无敌、不动、不可选中），技能首次释放与冷却统一为30秒。",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "config.def": -0.5,
+        "config.magic_resistance": 0
+      },
+      "bbStr": {
+        "config.default_pos": "(15,16)"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "ClawsReady",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 75,
+        "bb": {
+          "duration": 10
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "ComeTheClaws",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 2.2,
+          "sp": 25
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Break",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Stress",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "sp": {
+      "type": "INCREASE_WITH_TIME",
+      "maxSp": 75,
+      "initSp": 25,
+      "increment": 1
+    },
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 310180,
+    "beFactor": 1,
+    "attrPower": 310180,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1584_suiyzh",
+    "spine": "enemy_1584_suiyzh",
+    "effectRef": "enemy_1584_suiyzh",
+    "attackAnim": {
+      "clip": "Die_Attack",
+      "dur": 4.667,
+      "hit": 3.067
+    }
+  },
+  "enemy_ws_recon_suiwei": {
+    "key": "enemy_ws_recon_suiwei",
+    "name": "岁·尾·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "SUI4",
+    "desc": null,
+    "descRaw": null,
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 300000,
+      "atk": 800,
+      "def": 2000,
+      "res": 60,
+      "moveSpeed": 1,
+      "bat": 0.3,
+      "aspd": 100,
+      "rangeRadius": 2.5,
+      "rawRangeRadius": 2.5,
+      "blockCnt": 0,
+      "massLevel": 10,
+      "lpr": 1,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "none",
+      "dmgTypes": [
+        "none"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": false,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared",
+        "palsy",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "【天倾地陷】抬起岁·尾，一段时间后，以最南的友方单位为目标，对范围内的所有友方单位连续戳击三次，造成物理伤害，若击败友方单位，根据数量生成<“未熄”>",
+        "textRaw": "【天倾地陷】抬起岁·尾，一段时间后，以最南的友方单位为目标，对范围内的所有友方单位连续戳击三次，造成物理伤害，若击败友方单位，根据数量生成<“未熄”>",
+        "format": "NORMAL"
+      },
+      {
+        "text": "被镇岁柱削弱后，岁的生命值降低，且【天倾地陷】的范围缩小，伤害降低",
+        "textRaw": "被镇岁柱削弱后，岁的生命值降低，且【天倾地陷】的范围缩小，伤害降低",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】只会出现在 boss 区域4。【天倾地陷】攻击次数+1（3→4），范围扩大至5×5。抬起改为5秒并获得80%减伤（不再无敌、不动、不可选中），技能首次释放与冷却统一为30秒。",
+        "textRaw": "【重构】只会出现在 boss 区域4。【天倾地陷】攻击次数+1（3→4），范围扩大至5×5。抬起改为5秒并获得80%减伤（不再无敌、不动、不可选中），技能首次释放与冷却统一为30秒。",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "config.summon_interval": 2,
+        "config.scale": 1,
+        "config.max_hp": -0.3
+      },
+      "bbStr": {
+        "config.default_pos": "(13,18)"
+      }
+    },
+    "skills": [
+      {
+        "prefabKey": "TailReady",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 75,
+        "bb": {
+          "duration": 10
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Stab",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {
+          "atk_scale": 1.1,
+          "sp": 0
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Break",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Stress",
+        "priority": 0,
+        "cooldown": 0,
+        "initCooldown": 0,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "sp": {
+      "type": "INCREASE_WITH_TIME",
+      "maxSp": 75,
+      "initSp": 0,
+      "increment": 1
+    },
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 310180,
+    "beFactor": 1,
+    "attrPower": 310180,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_1585_suiwei",
+    "spine": "enemy_1585_suiwei",
+    "effectRef": "enemy_1585_suiwei",
+    "attackAnim": {
+      "clip": "Die_Attack",
+      "dur": 4.667,
+      "hit": 3.067
+    }
+  },
+  "enemy_ws_recon_shophm": {
+    "key": "enemy_ws_recon_shophm",
+    "name": "洛伦茨，扰动之谬·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "TL",
+    "desc": "哥伦比亚“源阶方”项目的首席科学家，前项目负责人罗伯特的女儿——托妮·洛伦茨。",
+    "descRaw": "哥伦比亚“源阶方”项目的首席科学家，前项目负责人罗伯特的女儿——托妮·洛伦茨。",
+    "applyWay": "RANGED",
+    "stats": {
+      "maxHp": 3000000,
+      "atk": 550,
+      "def": 700,
+      "res": 50,
+      "moveSpeed": 0.4,
+      "bat": 4,
+      "aspd": 100,
+      "rangeRadius": 1.8,
+      "rawRangeRadius": 1.8,
+      "blockCnt": 1,
+      "massLevel": 3,
+      "lpr": 0,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "试图向<源阶方>移动，到达终点时摧毁<源阶方>，扣除30点目标生命，并使全场单位持续受到真实伤害",
+        "textRaw": "试图向<源阶方>移动，到达终点时摧毁<源阶方>，扣除30点目标生命，并使全场单位持续受到真实伤害",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【象限封锁】封锁附近的地面，使其永久无法部署我方单位",
+        "textRaw": "【象限封锁】封锁附近的地面，使其永久无法部署我方单位",
+        "format": "NORMAL"
+      },
+      {
+        "text": "被击倒时，使<源阶方>解除无敌并开始行动",
+        "textRaw": "被击倒时，使<源阶方>解除无敌并开始行动",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】会出现在 boss 区域2 / 3 / 4（不再出现在区域1）；多个区域的洛伦茨共享血量并相互叠加（每只 3000000）。【冰盾】首次释放与冷却各 -10 秒（30→20）。朝<源阶方>移动的相关效果移除。【象限封锁】不实现。被击倒时进入假死（强制保留1点生命值，随后每秒恢复3%的生命值），处于假死状态时<源阶方>移除大部分减伤并开始行动；<源阶方>被击倒时解除假死并同步退场。",
+        "textRaw": "【重构】会出现在 boss 区域2 / 3 / 4（不再出现在区域1）；多个区域的洛伦茨共享血量并相互叠加（每只 3000000）。【冰盾】首次释放与冷却各 -10 秒（30→20）。朝<源阶方>移动的相关效果移除。【象限封锁】不实现。被击倒时进入假死（强制保留1点生命值，随后每秒恢复3%的生命值），处于假死状态时<源阶方>移除大部分减伤并开始行动；<源阶方>被击倒时解除假死并同步退场。",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "reborn.duration": 1,
+        "exit.value": -30,
+        "exit.value_damage": 200,
+        "exit.interval": 0.5,
+        "exit.projectile_range": 99
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "IceShield",
+        "priority": 0,
+        "cooldown": 30,
+        "initCooldown": 30,
+        "spCost": 0,
+        "bb": {
+          "max_cnt": 3
+        },
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 3005000,
+    "beFactor": 1,
+    "attrPower": 3005000,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2147_shophm",
+    "spine": "enemy_2147_shophm",
+    "effectRef": "enemy_2147_shophm",
+    "attackAnim": {
+      "clip": "Attack",
+      "dur": 2,
+      "hit": 0.5
+    }
+  },
+  "enemy_ws_recon_shorbb": {
+    "key": "enemy_ws_recon_shorbb",
+    "name": "源阶方·重构",
+    "level": 0,
+    "rank": "BOSS",
+    "handbookIndex": "OFT",
+    "desc": "两代洛伦茨研究的最终成果，启动后将会把源石蕴含的能量转化成第三相态，造成不可估量的信息污染与篡改。",
+    "descRaw": "两代洛伦茨研究的最终成果，启动后将会把源石蕴含的能量转化成第三相态，造成不可估量的信息污染与篡改。",
+    "applyWay": "NONE",
+    "stats": {
+      "maxHp": 22000000,
+      "atk": 1500,
+      "def": 1500,
+      "res": 50,
+      "moveSpeed": 1,
+      "bat": 1,
+      "aspd": 100,
+      "rangeRadius": 0,
+      "rawRangeRadius": -1,
+      "blockCnt": 1,
+      "massLevel": 10,
+      "lpr": 30,
+      "hpRecoveryPerSec": 0,
+      "elementRes": 0,
+      "elementDmgRes": 0,
+      "hitRatePhys": 1,
+      "hitRateArts": 1,
+      "dmgType": "arts",
+      "dmgTypes": [
+        "arts"
+      ],
+      "motion": "WALK",
+      "immunities": {
+        "stun": true,
+        "silence": true,
+        "sleep": true,
+        "frozen": true,
+        "levitate": true
+      },
+      "otherImmunities": [
+        "feared",
+        "palsy",
+        "attract"
+      ],
+      "tauntLevel": 0
+    },
+    "abilities": [
+      {
+        "text": "初始无敌，<洛伦茨，扰动之谬>被击杀后解除无敌并开始行动，召唤数个<源阶方模块>",
+        "textRaw": "初始无敌，<洛伦茨，扰动之谬>被击杀后解除无敌并开始行动，召唤数个<源阶方模块>",
+        "format": "NORMAL"
+      },
+      {
+        "text": "受到的物理和法术伤害减少，如果伤害来自左右两侧则进一步减少",
+        "textRaw": "受到的物理和法术伤害减少，如果伤害来自左右两侧则进一步减少",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【失链裂变】对全场我方单位造成法术伤害，自身生命值小于一半时冷却时间降低",
+        "textRaw": "【失链裂变】对全场我方单位造成法术伤害，自身生命值小于一半时冷却时间降低",
+        "format": "NORMAL"
+      },
+      {
+        "text": "召唤源阶粒素，自身生命值小于一半时，召唤更多源阶粒素",
+        "textRaw": "召唤源阶粒素，自身生命值小于一半时，召唤更多源阶粒素",
+        "format": "NORMAL"
+      },
+      {
+        "text": "<源阶方模块>全部消失后，自身重新进入无敌，<洛伦茨，扰动之谬>返回战场",
+        "textRaw": "<源阶方模块>全部消失后，自身重新进入无敌，<洛伦茨，扰动之谬>返回战场",
+        "format": "NORMAL"
+      },
+      {
+        "text": "【重构】初始95%减伤；洛伦茨进入假死状态时移除65%的减伤（95%→30%）并开始行动；来自左右两侧的伤害进一步减到70%的效果移除。【失链裂变】首次释放冷却-5秒（15→10）。召唤源阶方模块改为直接对全场造成1次死亡爆炸（冷却20秒，首次10秒）。源阶粒素（基础生命值50000）改为每10秒召唤5个（全部 boss 区域都会召唤），不可被阻挡、会主动向防守点移动，进入防守点时触发1次死亡爆炸。模块全灭的效果不实现，但洛伦茨解除假死时减伤回归。",
+        "textRaw": "【重构】初始95%减伤；洛伦茨进入假死状态时移除65%的减伤（95%→30%）并开始行动；来自左右两侧的伤害进一步减到70%的效果移除。【失链裂变】首次释放冷却-5秒（15→10）。召唤源阶方模块改为直接对全场造成1次死亡爆炸（冷却20秒，首次10秒）。源阶粒素（基础生命值50000）改为每10秒召唤5个（全部 boss 区域都会召唤），不可被阻挡、会主动向防守点移动，进入防守点时触发1次死亡爆炸。模块全灭的效果不实现，但洛伦茨解除假死时减伤回归。",
+        "format": "NORMAL"
+      }
+    ],
+    "talents": {
+      "bb": {
+        "DamageScale.damage_scale": 0.3,
+        "DamageScale.cooldown": 0,
+        "Aura.value_damage": 0,
+        "Aura.interval": 1,
+        "Angry.hp_ratio": 0.5,
+        "Passive.mark": 1,
+        "AuraSpeed.move_speed": 1,
+        "DamageScale.atk": 0,
+        "DamageScale.damage_scale_in_range": 0.7
+      },
+      "bbStr": {}
+    },
+    "skills": [
+      {
+        "prefabKey": "Summon",
+        "priority": 0,
+        "cooldown": 30,
+        "initCooldown": 10,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {
+          "branch_id": "boss_summon"
+        }
+      },
+      {
+        "prefabKey": "Revive",
+        "priority": 1,
+        "cooldown": 1,
+        "initCooldown": 1,
+        "spCost": 0,
+        "bb": {
+          "duration": 5
+        },
+        "bbStr": {
+          "branch_id": "boss_trap"
+        }
+      },
+      {
+        "prefabKey": "Aoe",
+        "priority": 0,
+        "cooldown": 1,
+        "initCooldown": 15,
+        "spCost": 0,
+        "bb": {
+          "cooldown": 8,
+          "cooldown_advance": 4,
+          "atk_scale": 1
+        },
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Branch",
+        "priority": 1,
+        "cooldown": 5,
+        "initCooldown": 1,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {
+          "branch_id": "boss_summon_2",
+          "branch_id_advance": "boss_summon_2_advance"
+        }
+      },
+      {
+        "prefabKey": "Suiside",
+        "priority": 0,
+        "cooldown": 1,
+        "initCooldown": 1,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      },
+      {
+        "prefabKey": "Return",
+        "priority": 0,
+        "cooldown": 1,
+        "initCooldown": 1,
+        "spCost": 0,
+        "bb": {},
+        "bbStr": {}
+      }
+    ],
+    "notCountInTotal": false,
+    "tags": [],
+    "be": 22012150,
+    "beFactor": 1,
+    "attrPower": 22012150,
+    "isFlyEnemy": false,
+    "tokenOnly": false,
+    "acTypes": [],
+    "acType": null,
+    "templateSlot": null,
+    "summons": [],
+    "inactiveIn": [],
+    "seasonOverride": null,
+    "iconId": "enemy_2148_shorbb",
+    "spine": "enemy_2148_shorbb",
+    "effectRef": "enemy_2148_shorbb"
   }
 }

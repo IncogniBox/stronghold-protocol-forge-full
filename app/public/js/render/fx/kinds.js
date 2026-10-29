@@ -12,6 +12,14 @@ export const FX_KINDS = Object.freeze({
   // every 0.6 game s with `{ tiles: [[r, c]…] }`. `overlay` = 常驻地块底色（**不闪**、不叠加，同一 `key` 原地替换），
   // 颜色比原先的电光蓝暗一档（业主 2026-10-21：覆盖太亮、还有闪动）。
   dosWater: { a: 'overlay', c: 0x3f7f9f, dur: 1.2, alpha: 0.1 },
+  // 战斗逻辑点名的**官方特效 prefab**（`extra.key`，`extra.holdS` 战斗秒，默认 `dur`）：那枚 prefab 在官方特效层里
+  // 按 key 起一枚、撑满这个窗口再收掉 —— 只画官方画面，**没有**程序化替身（拿不到 / 官方特效关着就什么都不画，
+  // 调用方自己发别的 fx 作为回落）。首例：重构模拟的“不死的黑蛇”·不息恶火，官方全屏火雨 `screen_bsnake`
+  // （`workshop/mode-recon/battle/main.mjs`）—— 以前客户端没有任何「按名字播一枚 prefab」的通道，那个技能只剩一
+  // 条画不出来的 `beam`（业主 2026-10-28：全屏火雨还是没有实现）。
+  // `pt`: the prefab is authored around the battle field — it stays where the event puts it, never snapped onto the unit
+  // its `extra.id` names (the caster).
+  official: { a: 'official', c: 0xff6a2a, dur: 6, pt: true },
   // blasts
   // [ASSUMED] Clementia's S3 uses the shared blast placeholder until her official effect is ported.
   blast: { a: 'blast', c: 0xffb35c },

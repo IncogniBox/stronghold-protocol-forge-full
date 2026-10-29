@@ -467,6 +467,13 @@ describe('an ammo skill has no standing aura', () => {
     assert.equal(renderInfo(unitInfo(h.enemy('enemy_dummy'))).ammoSkill, undefined);
     assert.equal(renderInfo({ id: 1, ammoSkill: 'yes' }).ammoSkill, undefined, 'only a real true counts');
   });
+
+  test('UnitInfo.tokenSkill: a summon\'s resolved skill id rides the view (renderInfo must transcribe it)', () => {
+    // 召唤物只有一条技能记录（index 恒 0）：客户端靠这个 id 取官方特效（望的棋子在 S1/S2/S3 下是 sktok_wang_1/2/3）
+    assert.equal(renderInfo({ id: 1, kind: 'token', side: 'ally', tokenSkill: 'sktok_wang_3' }).tokenSkill, 'sktok_wang_3');
+    assert.equal(renderInfo({ id: 2, kind: 'token', side: 'ally' }).tokenSkill, undefined, '缺省不写');
+    assert.equal(renderInfo({ id: 3, kind: 'token', side: 'ally', tokenSkill: 3 }).tokenSkill, undefined, 'only a real string counts');
+  });
 });
 
 describe('the chain: sim → snapshot → SnapshotBuffer → UnitView', () => {

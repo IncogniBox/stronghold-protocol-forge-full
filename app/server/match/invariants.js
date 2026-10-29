@@ -29,7 +29,7 @@
 //            with one to three different cards
 //   match    phase known; teamLp / boss pool within range; combat fields match the alive players
 
-import { PHASE, BOND_LAYER_CAP, GEO } from '../../shared/constants.js';
+import { PHASE, bondLayerCap, GEO } from '../../shared/constants.js';
 import { ruleOption } from '../../shared/plugins/rules.js';
 import { inField, FIELD, canPlace, placeClass, positionClass, parseKey } from './board.js';
 import { computeBonds } from './bondsMeta.js';
@@ -88,9 +88,10 @@ export function collectViolations(m, { limit = 25 } = {}) {
     if (!(ps.shop.level >= 1 && ps.shop.level <= gd.maxShopLevel)) fail(`${id}: shop level ${ps.shop.level}`);
     if (!(ps.shop.upgradePrice >= 0)) fail(`${id}: upgradePrice ${ps.shop.upgradePrice}`);
     if (!Number.isInteger(ps.shop.freeRefreshes) || ps.shop.freeRefreshes < 0) fail(`${id}: freeRefreshes ${ps.shop.freeRefreshes}`);
-    // the official per-bond layer cap (shared/constants.js): no writer may pass it
+    // the per-bond layer cap of THIS mode (official 999 / 重构模拟 2000): no writer may pass it
+    const layerCap = bondLayerCap(m && m.gd && m.gd.modeId);
     for (const [b, v] of Object.entries(ps.layers || {})) {
-      if (!(Number.isFinite(v) && v >= 0 && (!(BOND_LAYER_CAP > 0) || v <= BOND_LAYER_CAP))) fail(`${id}: ${b} layers ${v}`);
+      if (!(Number.isFinite(v) && v >= 0 && (!(layerCap > 0) || v <= layerCap))) fail(`${id}: ${b} layers ${v}`);
     }
 
     if (!ps.alive) {
@@ -103,7 +104,8 @@ export function collectViolations(m, { limit = 25 } = {}) {
     const pc = ps.personalChoice;
     if (pc) {
       if (!ps.alive || ps.ready || m.phase !== PHASE.PREP || pc.round !== m.round) fail(`${id}: a personal choice outside its own prep (${m.phase} R${m.round}, offered in R${pc.round})`);
-      if (!Array.isArray(pc.cards) || !pc.cards.length || pc.cards.length > 3 || new Set(pc.cards.map((c) => c && c.effectId)).size !== pc.cards.length) fail(`${id}: personal choice of ${pc.cards && pc.cards.length} cards`);
+      const keyOf = (c) => (c && (c.effectId || c.id)) || null;
+      if (!Array.isArray(pc.cards) || !pc.cards.length || pc.cards.length > 3 || new Set(pc.cards.map(keyOf)).size !== pc.cards.length) fail(`${id}: personal choice of ${pc.cards && pc.cards.length} cards`);
     }
 
     // pieces

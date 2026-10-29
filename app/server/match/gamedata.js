@@ -212,7 +212,8 @@ export class GameData {
       (this.shopItemsByTier[it.tier] ||= []).push(id);
     }
     for (const k of Object.keys(this.shopItemsByTier)) this.shopItemsByTier[k].sort();
-    this.bondIds = Object.keys(this._bonds).sort((a, b) => (numOr(this._bonds[a].identifier, 99) - numOr(this._bonds[b].identifier, 99)) || (a < b ? -1 : 1));
+    // `recon_<id>` 是重构模拟的**备选记录**（只在重构对局里由 Match 覆盖到官方 id 上），本身不是一条可抽的盟约。
+    this.bondIds = Object.keys(this._bonds).filter((id) => !id.startsWith('recon_')).sort((a, b) => (numOr(this._bonds[a].identifier, 99) - numOr(this._bonds[b].identifier, 99)) || (a < b ? -1 : 1));
     this.modeInactiveBonds = new Set(Array.isArray(this.mode.inactiveBondIds) ? this.mode.inactiveBondIds : []);
     /** bandBondIds memo */
     this._bandBonds = new Map();
@@ -430,7 +431,9 @@ export class GameData {
   equipCapacity(items, extra = null) {
     const list = [...(items || [])];
     if (extra) list.push(extra);
-    return equipCapacityOf(this.equipPerChess, list, (id) => this.item(id));
+    // 重构模拟：每名干员可携带的装备数 **+1**（业主 2026-10-29；官方对局仍是 `equipPerChess` 2 格，逐字节不变）
+    const base = this.equipPerChess + (this.isRecon ? 1 : 0);
+    return equipCapacityOf(base, list, (id) => this.item(id));
   }
   get maxArtsPerRound() { return posIntOr(this.economy.maxArtsPerRound, DEFAULTS.maxArtsPerRound); }
   get goldenCopies() { return posIntOr(this.economy.goldenCopies, DEFAULTS.goldenCopies); }

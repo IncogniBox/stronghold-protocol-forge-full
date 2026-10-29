@@ -8,6 +8,7 @@
 
 import { boardOrder, pieceDir } from '../board.js';
 import { computeBonds, bondSnapshot, activatedLayers, bondsWithGains } from '../bondsMeta.js';
+import { bondLayerCap } from '../../../shared/constants.js';
 import { RECON_TRAINEE_STAT_RATIO } from '../../../shared/reconModes.js';
 
 export class PlayerRound {
@@ -136,7 +137,7 @@ export class PlayerRound {
    * in-battle gains of this round's finished normal battle (bondsMeta.bondsWithGains). The 联防 field fights with them too
    * (battleInput `reached`); no other rule reads them.
    */
-  bondsView() { return bondsWithGains(this.bonds, this.pendingLayerGains); }
+  bondsView() { return bondsWithGains(this.bonds, this.pendingLayerGains, bondLayerCap(this.m && this.m.gd && this.m.gd.modeId)); }
 
   /**
    * `reached`: the bonds carry the layers this round's own combat reached (bondsView: the pending in-battle gains, capped
@@ -210,6 +211,14 @@ export class PlayerRound {
               const mLo = this.loadoutFor(this.gd.chess(mp.id));
               u.reconTrainee = { chessId: mp.id, loadout: { skillIndex: mLo.skillIndex, moduleId: mLo.moduleId }, ratio: RECON_TRAINEE_STAT_RATIO, ...(mSkin ? { skin: mSkin } : null) };
             }
+            // 链式特训（业主 2026-10-29）：教官 B 自己也是学员时，把 B 的那条（它的教官 C）当 `chain` 带下去 ——
+            // sim 把 B 的**组成三围**（B + C×0.5）当作教官三围，A 再按 ×0.5 叠加 ⇒ A + B×0.5 + C×0.25。
+            // 只链数值；B 的盟约 / 特质 / 天赋 / 影子技能仍取 B 自己的（C 的不传给 A）。
+            const upUid = trained.get(mp.uid);
+            if (upUid != null && upUid !== piece.uid) {
+              const chain = this.reconChainEntry(upUid, trained, new Set([piece.uid, mp.uid]));
+              if (chain) u.reconTrainee.chain = chain;
+            }
           }
         }
         if (carry && carry.has(piece.uid)) u.carryState = carry.get(piece.uid);
@@ -236,6 +245,39 @@ export class PlayerRound {
       })),
       deviceOverrides: { ...this.deviceOverrides },
     };
+  }
+
+  /**
+   * 特训的**链式**那一层（业主 2026-10-29）：教官 uid 自己也是学员时，返回它作为学员的那条
+   * `{ chessId: <它的教官>, loadout | diy, ratio, chain? }` —— 也就是它自己的 `reconTrainee`。只取数值链
+   * （sim 把这一条当成教官的组成三围）；同一 uid 重复出现（环）或棋子查无 ⇒ null。
+   * @param {number} uid 教官自己的棋子 uid（它的 mentor 在 `trained` 里）
+   * @param {Map<number, number>} trained 本局累积的「学员 uid → 教官 uid」
+   * @param {Set<number>} seen 链上已经出现过的 uid（含学员自己与直接教官）
+   */
+  reconChainEntry(uid, trained, seen) {
+    if (!Number.isInteger(uid) || seen.has(uid)) return null;
+    const p = this.trainPieceOf(uid);
+    if (!p || !p.id) return null;
+    const next = new Set(seen);
+    next.add(uid);
+    const pick = this.diyPickOf(p.id);
+    let entry;
+    if (pick) {
+      entry = { chessId: p.id, diy: { charId: pick.charId, skillIndex: pick.skillIndex, uniEquipId: pick.uniEquipId }, ratio: RECON_TRAINEE_STAT_RATIO };
+    } else if (this.fieldsStandIn(p.id)) {
+      entry = { chessId: p.id, loadout: { standIn: true }, ratio: RECON_TRAINEE_STAT_RATIO };
+    } else {
+      const lo = this.loadoutFor(this.gd.chess(p.id));
+      entry = { chessId: p.id, loadout: { skillIndex: lo.skillIndex, moduleId: lo.moduleId }, ratio: RECON_TRAINEE_STAT_RATIO };
+    }
+    // 再往上一层（B 的教官 C 自己还是学员）：逐层带上，环由上行的 seen 截断（每名学员一条，链长天然有界）
+    const up = next.size <= 8 ? trained.get(uid) : null;
+    if (up != null) {
+      const deeper = this.reconChainEntry(up, trained, next);
+      if (deeper) entry.chain = deeper;
+    }
+    return entry;
   }
 
   /** uids of the board's chess pieces in **placement order** (empty when nothing is placed).

@@ -42,8 +42,18 @@ export function BriefingScreen() {
   const mode = gd.config?.modes?.[pub.modeId];
   // (+ the own 自选 pieces this match leaves out of the shop: m.private.diyBanned)
   const info = matchInfoModel(pub, { bonds: gd.list('bonds'), chess: gd.chess, mode, priv, diyData: { chess: data.get('chess'), backups: data.get('backups') } });
-  const boss = pub.bossId ? gd.boss(pub.bossId) : null;
-  const bossEnemy = boss ? gd.enemy(boss.enemyKey) : null;
+  // 重构模拟的首领卡画**第 20 回合实际出战的「·重构」首领**（pub.recon.bossKey）——原版首领不进重构模拟；
+  // 官方对局（没有 recon.bossKey）仍按 pub.bossId 的 boss 表那一条。
+  const reconBossKey = pub.recon?.bossKey || null;
+  const reconBoss = reconBossKey ? gd.enemy(reconBossKey) : null;
+  const boss = !reconBossKey && pub.bossId ? gd.boss(pub.bossId) : null;
+  const bossEnemy = reconBoss || (boss ? gd.enemy(boss.enemyKey) : null);
+  const bossIconKey = reconBoss ? reconBoss.iconId || reconBossKey : boss?.enemyKey;
+  // 首领卡上的能力条目：重构首领的记录是图鉴形状（{ text, format }，跳过 TITLE），官方首领仍是字符串数组
+  const bossAbilities = reconBoss
+    ? (Array.isArray(reconBoss.abilities) ? reconBoss.abilities : [])
+      .filter((a) => a && typeof a.text === 'string' && a.format !== 'TITLE').slice(0, 3).map((a) => a.text)
+    : (Array.isArray(boss?.abilities) ? boss.abilities.slice(0, 3) : []);
   const stage = pub.stageId ? gd.stage(pub.stageId) : null;
   // the mode's battlefield pool (config.json modes[].stages): 标准 is always 战场#01, 险境+ draw one at random
   const poolN = Array.isArray(mode?.stages) ? mode.stages.length : 0;
@@ -70,14 +80,14 @@ export function BriefingScreen() {
           <${MicroLabel} tone="gold">${t('ENEMY LEADER // 敌方领袖')}</${MicroLabel}>
           <div class="brief-boss__art">
             <div class="brief-boss__ring" aria-hidden="true"></div>
-            ${bossEnemy ? html`<${Img} src=${enemyIconUrl(m, boss.enemyKey)} class="brief-boss__sil" fallback=${html`<span class="brief-boss__q">?</span>`} />`
+            ${bossEnemy ? html`<${Img} src=${enemyIconUrl(m, bossIconKey)} class="brief-boss__sil" fallback=${html`<span class="brief-boss__q">?</span>`} />`
               : html`<span class="brief-boss__q">?</span>`}
           </div>
           <div class="brief-boss__text">
-            <h2 class="brief-boss__name">${boss?.name || bossEnemy?.name || t('未知领袖')}</h2>
+            <h2 class="brief-boss__name">${bossEnemy?.name || boss?.name || t('未知领袖')}</h2>
             <span class="brief-boss__when">${tParts('第 {r} 回合 · 最终攻势', { r: html`<b class="num">${mode?.bossRound ?? pub.lastRound ?? 14}</b>` })}</span>
-            ${Array.isArray(boss?.abilities) && boss.abilities.length ? html`<ul class="brief-boss__abil">
-              ${boss.abilities.slice(0, 3).map((a, i) => html`<li key=${i}><${RichText} text=${a} /></li>`)}
+            ${bossAbilities.length ? html`<ul class="brief-boss__abil">
+              ${bossAbilities.map((a, i) => html`<li key=${i}><${RichText} text=${a} /></li>`)}
             </ul>` : null}
           </div>
         </div>

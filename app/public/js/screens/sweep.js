@@ -20,6 +20,7 @@ import { html, Icon, roman } from '../ui/components.js';
 import { Img, RichText, GIcon } from '../ui/gameComponents.js';
 import { bondIconUrl, bandIconUrl, enemyIconUrl, factionIconUrl, chessAvatarUrl } from '../ui/assetUrls.js';
 import { attackInterval, fmtNum } from '../ui/gameLogic.js';
+import { formatBondDesc } from '../ui/richText.js';
 import { abilityRows } from '../ui/abilityLines.js';
 import { data, useData } from '../data.js';
 import { useStore, loadPref, savePref } from '../store.js';
@@ -101,11 +102,11 @@ export function bossEnemyKeys(boss) {
 // ---- small pieces ------------------------------------------------------------------------------------------------------
 
 /** The big square at the top of the left panel (bracket corners, a ring behind a glyph or the art). */
-function Hero({ src, glyph = false, art = false, name, sub = null, fallback }) {
+function Hero({ src, base = null, glyph = false, art = false, name, sub = null, fallback }) {
   return html`<div class="sw-hero">
     <span class=${cx('sw-hero__box', glyph && 'is-glyph', art && 'is-art')}>
       <i class="sw-hero__c sw-hero__c--tl"></i><i class="sw-hero__c sw-hero__c--br"></i>
-      <span class="sw-hero__img"><${Img} src=${src} fallback=${fallback} /></span>
+      <span class="sw-hero__img">${base ? html`<img class="sw-hero__base" src=${base} alt="" />` : null}<${Img} src=${src} fallback=${fallback} /></span>
     </span>
     <h3 class="sw-hero__name">${name}</h3>
     ${sub ? html`<span class="sw-hero__sub">${sub}</span>` : null}
@@ -142,7 +143,24 @@ function EnemyThumb({ e, m, on = false, onClick = null, size = 'sm' }) {
 
 // ---- 盟约报告 ----------------------------------------------------------------------------------------------------------
 
-function BondPanel({ bond, m, notOwned }) {
+/** 重构模拟会换掉图标的八条核心盟约（`workshop/mode-recon` 的 `recon_<id>` 记录）。 */
+const RECON_BOND_IDS = Object.freeze(['yanShip', 'sargonShip', 'victoriaShip', 'kjeragShip', 'lateranoShip', 'egirShip', 'siracusaShip', 'kazimierzShip']);
+/** 重构盟约的**底图**（叠层展示：底图在下，官方盟约图标在上）。 */
+const RECON_BASE = '/workshop-assets/mode-recon/bond/recon_base.png';
+const isReconBondId = (id) => typeof id === 'string' && id.startsWith('recon_');
+
+/**
+ * 盟约图标：**正常档**读官方素材；**重构档**也读官方图标（重构只加一层底图，见 `BondTile` / `Hero` 的 `base`）。
+ * `recon_` 前缀总是剥掉 —— 改写 `sweep.bonds` 的包可能拿不到 / 忘了传 `recon`，图标不能因此变空。
+ */
+function sweepBondIcon(m, bondId) {
+  const official = isReconBondId(bondId) ? bondId.slice('recon_'.length) : bondId;
+  // 这八条走官方的固定路径（客户端素材清单里没有它们的条目；包也不再覆盖图标）
+  if (RECON_BOND_IDS.includes(official)) return `/assets/bond/${official}.png`;
+  return bondIconUrl(m, official);
+}
+
+function BondPanel({ bond, m, notOwned, recon = false, onToggleRecon = null }) {
   const off = new Set(Array.isArray(notOwned) ? notOwned : []);
   const ids = Array.isArray(bond.visibleMembers) && bond.visibleMembers.length ? bond.visibleMembers : (bond.members || []);
   const members = ids.map((id) => data.lookup('chess', id)).filter(Boolean)
@@ -150,14 +168,17 @@ function BondPanel({ bond, m, notOwned }) {
   const anyOff = members.some((c) => off.has(c.chessId));
   const steps = Array.isArray(bond.thresholds) ? bond.thresholds.filter((n) => Number.isFinite(n)) : [];
   return html`<div class="sw-detail">
-    <${Hero} src=${bondIconUrl(m, bond.bondId)} glyph=${true} name=${bond.name}
+    <${Hero} src=${sweepBondIcon(m, bond.bondId)} base=${recon ? RECON_BASE : null} glyph=${true} name=${bond.name}
       fallback=${html`<span class="sw-hero__txt">${[...(bond.name || '?')][0]}</span>`} />
     <div class="sw-facts">
       <span class="sw-pill">${t('激活所需人数')}<b class="num">${bond.activeCount ?? steps[0] ?? '—'}</b></span>
       ${steps.length > 1 ? html`<span class="sw-pill sw-pill--ghost" title=${t('达到这些人数时效果增强')}>${t('档位')}<b class="num">${steps.join(' / ')}</b></span>` : null}
       <span class="sw-kind">${bond.isCore ? t('核心盟约') : t('附加盟约')}</span>
+      ${onToggleRecon ? html`<button type="button" class=${cx('sw-pill', 'sw-pill--ghost', 'sw-recon-toggle', recon && 'is-on')}
+        aria-pressed=${recon ? 'true' : 'false'} title=${t('切换「重构模拟」的盟约图标与描述')} onClick=${onToggleRecon}>
+        ${t('重构模拟')}<b class="num">${recon ? 'ON' : 'OFF'}</b></button>` : null}
     </div>
-    <div class="sw-text"><${RichText} as="p" text=${bond.descRaw || bond.desc || ''} /></div>
+    <div class="sw-text"><${RichText} as="p" text=${formatBondDesc(bond, 0)} /></div>
     ${members.length ? html`<div class="sw-box">
       <div class="sw-box__head">
         <span class="sw-box__k"><${Icon} name="user" />${t('对应干员')}<small class="num">${members.length}</small></span>
@@ -173,10 +194,17 @@ function BondPanel({ bond, m, notOwned }) {
   </div>`;
 }
 
-/** 一张盟约圆盘 tile（圆盘 + 名字）：`sweep.bonds` 端口的拼装单元，供包自己重组分区时复用。 */
-export function BondTile({ bond, m, on, onSel }) {
+/**
+ * 一张盟约圆盘 tile（圆盘 + 名字）：`sweep.bonds` 端口的拼装单元，供包自己重组分区时复用。
+ * 叠层由 **bondId 自己**判定（`recon_` 前缀）：改写 `sweep.bonds` 的包转手 `BondTile` 时可能不传 `recon`。
+ */
+export function BondTile({ bond, m, on, onSel, recon = false }) {
+  const layer = recon || isReconBondId(bond?.bondId);
   return html`<${Tile} kind="bond" on=${on} onClick=${() => onSel(bond.bondId)} title=${bond.name}>
-    <span class="sw-disc"><${Img} src=${bondIconUrl(m, bond.bondId)} fallback=${html`<span class="sw-disc__txt">${[...(bond.name || '?')][0]}</span>`} /></span>
+    <span class=${cx('sw-disc', layer && 'is-recon')}>
+      ${layer ? html`<img class="sw-disc__base" src=${RECON_BASE} alt="" />` : null}
+      <${Img} src=${sweepBondIcon(m, bond.bondId)} fallback=${html`<span class="sw-disc__txt">${[...(bond.name || '?')][0]}</span>`} />
+    </span>
     <span class="sw-tile__cap">${bond.name}</span>
   <//>`;
 }
@@ -188,21 +216,24 @@ export function BondTile({ bond, m, on, onSel }) {
  * 素材清单由这里自己取（`data.get('assets')`）：props 是**每一帧的只读深拷贝**，把整份清单塞进去等于每帧深拷一遍。
  * @param {{ bonds: any[], sel: string|null, onSel: (bondId: string) => void }} props
  */
-export function BondSections({ bonds, sel, onSel }) {
+export function BondSections({ bonds, sel, onSel, recon = false }) {
   const m = data.get('assets');
   const sections = [
     { id: 'core', name: t('核心盟约'), glyph: html`<${GIcon} name="flag" />`, items: bonds.filter((b) => b.isCore) },
     { id: 'extra', name: t('附加盟约'), glyph: html`<${Icon} name="link" />`, items: bonds.filter((b) => !b.isCore) },
   ];
   return sections.map((s) => s.items.length ? html`<${Section} key=${s.id} name=${s.name} glyph=${s.glyph} count=${s.items.length}>
-    ${s.items.map((b) => html`<${BondTile} key=${b.bondId} bond=${b} m=${m} on=${sel === b.bondId} onSel=${onSel} />`)}
+    ${s.items.map((b) => html`<${BondTile} key=${b.bondId} bond=${b} m=${m} on=${sel === b.bondId} onSel=${onSel} recon=${recon} />`)}
   <//>` : null);
 }
 export const SweepBonds = modComponent('sweep.bonds', BondSections);
 
-function BondsTab({ sel, onSel }) {
-  const all = (data.list('bonds') || []).filter((b) => b && b.bondId).sort((a, b) => (a.identifier ?? 99) - (b.identifier ?? 99));
-  return html`<${SweepBonds} bonds=${all} sel=${sel} onSel=${onSel} />`;
+function BondsTab({ sel, onSel, recon = false }) {
+  const all = recon
+    ? RECON_BOND_IDS.map((id) => data.lookup('bonds', `recon_${id}`)).filter(Boolean)
+    : (data.list('bonds') || []).filter((b) => b && b.bondId);
+  all.sort((a, b) => (a.identifier ?? 99) - (b.identifier ?? 99));
+  return html`<${SweepBonds} bonds=${all} sel=${sel} onSel=${onSel} recon=${recon} />`;
 }
 
 // ---- 策略报告 ----------------------------------------------------------------------------------------------------------
@@ -430,15 +461,23 @@ export function SweepReport({ onClose }) {
   const [tab, setTabState] = useState(() => { const v = loadPref(TAB_PREF, 'bonds'); return TABS.some((x) => x.id === v) ? v : 'bonds'; });
   const setTab = (v) => { setTabState(v); savePref(TAB_PREF, v); };
   const [bondSel, setBondSel] = useState(null);
+  /** 盟约报告：正常档（缺省）/ 重构模拟档 —— 后者换成包里 `recon_<id>` 的图标与描述。 */
+  const [reconBonds, setReconBonds] = useState(false);
   const [bandSel, setBandSel] = useState(null);
   const [enemySel, setEnemySel] = useState(null);
   const [codex, setCodex] = useState(null);
   const [leaving, leave] = useLeave(onClose);
 
   // defaults once the data is there: the first tile of each tab
-  const bonds = ready ? (data.list('bonds') || []).filter((b) => b && b.bondId).sort((a, b) => (a.identifier ?? 99) - (b.identifier ?? 99)) : [];
+  const bonds = ready
+    ? (reconBonds
+      ? RECON_BOND_IDS.map((id) => data.lookup('bonds', `recon_${id}`)).filter(Boolean)
+      : (data.list('bonds') || []).filter((b) => b && b.bondId)).sort((a, b) => (a.identifier ?? 99) - (b.identifier ?? 99))
+    : [];
+  /** 没有装 mode-recon（数据里没有 `recon_*` 记录）时，切换按钮不画。 */
+  const hasReconBonds = ready && RECON_BOND_IDS.some((id) => !!data.lookup('bonds', `recon_${id}`));
   const bands = ready ? (data.list('bands') || []).filter((b) => b && b.bandId).sort((a, b) => (a.sortId ?? 99) - (b.sortId ?? 99)) : [];
-  const bond = data.lookup('bonds', bondSel) || bonds[0] || null;
+  const bond = (reconBonds ? bonds.find((b) => b.bondId === bondSel) : data.lookup('bonds', bondSel)) || bonds[0] || null;
   const band = data.lookup('bands', bandSel) || bands[0] || null;
   const firstBoss = ready ? bossList()[0] : null;
   const eSel = enemySel || (firstBoss ? { kind: 'boss', id: firstBoss.bossId } : null);
@@ -467,8 +506,9 @@ export function SweepReport({ onClose }) {
   if (!ready) {
     right = html`<p class="sw-loading">${t('正在读取报告…')}</p>`;
   } else if (tab === 'bonds') {
-    left = bond ? html`<${BondPanel} key=${bond.bondId} bond=${bond} m=${m} notOwned=${notOwned} />` : null;
-    right = html`<${BondsTab} sel=${bond?.bondId} onSel=${setBondSel} />`;
+    left = bond ? html`<${BondPanel} key=${bond.bondId} bond=${bond} m=${m} notOwned=${notOwned} recon=${reconBonds}
+      onToggleRecon=${hasReconBonds ? () => { setReconBonds(!reconBonds); setBondSel(null); } : null} />` : null;
+    right = html`<${BondsTab} sel=${bond?.bondId} onSel=${setBondSel} recon=${reconBonds} />`;
   } else if (tab === 'bands') {
     left = band ? html`<${BandPanel} key=${band.bandId} band=${band} m=${m} />` : null;
     right = html`<${BandsTab} m=${m} sel=${band?.bandId} onSel=${setBandSel} />`;

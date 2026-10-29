@@ -9,9 +9,9 @@ import { Unit } from '../units.js';
 import { normDir, mirrorDir } from '../dir.js';
 import { SkillRuntime } from '../skills.js';
 import { resolveProfile } from '../professions.js';
-import { normalizeToken } from '../simdata.js';
+import { normalizeToken, mentorLoadoutOf } from '../simdata.js';
 import { isPotential, isCultivate } from '../../../shared/potential.js';
-import { setupUnitKit, kitPackOf } from '../content/index.js';
+import { setupUnitKit, kitPackOf, attachMentorToSummon } from '../content/index.js';
 import { installTraitAttackSpeed } from '../content/traitMods.js';
 import { clone } from './util.js';
 
@@ -19,10 +19,13 @@ import { clone } from './util.js';
  * The deploy field a battle of `kind` fights on for the player whose input carries `side`: the boss half in a boss /
  * hidden battle, otherwise — on a map whose ordinary band is a mirrored pair — that player's own half of it ('normalL'
  * for 'L', 'normalR' for the mirrored 'R'), else the own ordinary board. Only a normal-kind battle ever splits: 联防
- * ('unite') keeps the single ordinary board plus its `colOffset` columns.
+ * ('unite') keeps the single ordinary board plus its `colOffset` columns — except on a two-half map, where the two
+ * helpers stand on the map's own halves (the right-hand one reflected through the map's mirror axis, so a helper coming
+ * from the left half is mirrored rather than shifted; the owner's report of 2026-10-27).
  */
 const boardField = (kind, side, layout) => {
   if (kind === 'boss' || kind === 'hidden') return side === 'R' ? 'bossR' : 'bossL';
+  if (kind === 'unite') return isDualLayout(layout) ? (side === 'R' ? 'normalR' : 'normalL') : 'normal';
   if (kind !== 'normal' || !isDualLayout(layout)) return 'normal';
   return side === 'R' ? 'normalR' : 'normalL';
 };
@@ -157,7 +160,8 @@ export class BattlePlayers {
     // the mirrored right side reflects the PLACEMENT through the map's own axis (reflecting the column number itself
     // would only coincide when the window's middle column is 10); the plain side lands the board's left edge on THIS
     // map's own rect (officially FIELD.c0 = 2, i.e. no shift). `colOffset` is the extra hand / 整备区 shift the caller
-    // passes (0 for the left side, 8 for the boss field's right half / a 联防 right-hand helper).
+    // passes (0 for the left side; 8 for the boss field's right half, and for a 联防 right-hand helper on a single-board
+    // map — a two-half map's unite helper is mirrored instead, see `boardField`).
     const mirrored = field === 'normalR' || field === 'bossR';
     // 镜像前先落回**它那一侧左半场那块矩形**（bossR → bossLeft、normalR → normalLeft）：官方两块左界都是 2，
     // 一张把普通带放得更宽的图上两者才会分开。
@@ -205,7 +209,12 @@ export class BattlePlayers {
     // `traineeMentor` 指针，content 层再把教官的技能效果作为「影子技能」并进学员自己的技能、教官的特质 / 天赋
     // installer 追加到学员的 kit（content/index.js applyTraineeMentor）。
     if (inp.reconTrainee && typeof inp.reconTrainee === 'object' && inp.reconTrainee.chessId) {
-      lo.traineeOf = { chessId: String(inp.reconTrainee.chessId), loadout: inp.reconTrainee.loadout ?? null, diy: inp.reconTrainee.diy ?? null, ratio: inp.reconTrainee.ratio };
+      lo.traineeOf = {
+        chessId: String(inp.reconTrainee.chessId), loadout: inp.reconTrainee.loadout ?? null, diy: inp.reconTrainee.diy ?? null, ratio: inp.reconTrainee.ratio,
+        // 链式特训（业主 2026-10-29）：教官自己也是学员时，它的那条（教官的教官）随条目下去 —— sim 只拿它算教官的
+        // 组成三围（逐层 ×ratio 递减），教官的技能 / 特质 / 天赋仍取教官自己的。
+        ...(inp.reconTrainee.chain && typeof inp.reconTrainee.chain === 'object' ? { chain: inp.reconTrainee.chain } : null),
+      };
     }
     const def = this.data.getChess(inp.chessId, lo);
     if (!def) { this.log(`unknown chess ${inp.chessId}${lo.diy ? ' (illegal 自选 pick)' : ''}`); return null; }
@@ -247,11 +256,25 @@ export class BattlePlayers {
    * Token def: an inline def (PlayerBattleInput `def`, spawnToken `opts.def`) as given, else the data record's variant
    * for the owner — `owner` = the owning ally unit (its chess and its selected skill / module: getToken(id,
    * owner.defId, owner.def.loadout), DESIGN §16), a chess id, or null.
+   * 特训学员（`def.traineeMentor`）的召唤物按**教官**解析：望的棋子是教官技能（`overrideTokenKey`）放下的，它的 `bySkill`
+   * 变体（三条 token 技能 / 形态 / 模组）只有按教官的技能槽取才对 —— 拿学员自己的 loadout 去查，variants 里没有学员
+   * 的键，`getToken` 会退回第一条变体（默认形态 + 取势那一条 token 技能），于是无论学员继承的是望的哪个技能，
+   * 棋子看起来都是取势的（业主 2026-10-29）。
    */
   _tokenDef(tokenId, owner, inline) {
     if (inline) return normalizeToken(tokenId, inline);
     if (!this.data.getToken) return null;
-    if (owner && typeof owner === 'object') return this.data.getToken(tokenId, owner.defId ?? null, owner.def?.loadout ?? null);
+    if (owner && typeof owner === 'object') {
+      const tm = owner.def?.traineeMentor;
+      if (tm && typeof tm === 'object' && typeof this.data.getChess === 'function') {
+        try {
+          const mdef = this.data.getChess(tm.chessId, mentorLoadoutOf(tm));
+          // 教官 def 的键是 `id`（Unit 才有 `defId`）：传 `defId` 会解析成「没有主人」⇒ 退回默认变体（取势）
+          if (mdef && mdef !== owner.def) return this.data.getToken(tokenId, mdef.id ?? null, mdef.loadout ?? null);
+        } catch { /* 教官查无：按学员自己的解析（别名 / 默认变体），与从前一致 */ }
+      }
+      return this.data.getToken(tokenId, owner.defId ?? null, owner.def?.loadout ?? null);
+    }
     return this.data.getToken(tokenId, owner ?? null);
   }
 
@@ -292,12 +315,20 @@ export class BattlePlayers {
       }
     }
     u.kit = kit || {};
+    // kit 的**归属包**先取（DESIGN §28.52 的 kit 那一半）：下面的特训召唤物会换成一个追加过教官 installer 的副本，
+    // 副本没有装载期的标记，所以归属必须在换之前读走。
+    const pack = kitPackOf(u.kit);
+    // 特训学员的召唤物（业主 2026-10-29）：主人是特训学员时，教官的天赋 / 特质 installer 也挂到这只 token 上
+    // （token 自己的技能 / 特性照常；不走 setupUnitKit 的包定制 token kit 同样覆盖 —— 那是 `_setupUnit(u, kit)`
+    // 的调用路径）。教官查无 / 构造失败 ⇒ 原样。
+    if (u.kind === 'token' && u.ownerUnit && u.ownerUnit.def && u.ownerUnit.def.traineeMentor) {
+      try { u.kit = attachMentorToSummon(this, u, u.kit); } catch (e) { this._internalError?.('attachMentorToSummon', e); }
+    }
     // kit 的**归属包**（DESIGN §28.52 的 kit 那一半）：`kits/<id>.js` 的逐单位回调真正注册的地方就是下面两行
     // （`talents[].install` / `kit.install`），所以包的标记要在**这里**盖 —— 只把 `setupUnitKit` 里那次构造调用
     // 包进作用域是空转（包通常在 `install` 里挂钩子）。`kitPackOf` 是装载期那张归属表的唯一读者；`null` = 引擎
     // 自己的内容（或调用方直接递进来的 kit，例如包在回调里 `_setupUnit(t, kit)` 生成的召唤物 —— 那时 `_safe` 的
     // 第四个参数是 null，作用域会落到**当前**那个包上，正是我们要的）。
-    const pack = kitPackOf(u.kit);
     u.profile = resolveProfile(u.def, u.kit.trait || null);
     if (u.def.untargetable) this.addBuff(u, { key: 'trait:untargetable', flags: { untargetable: true }, persist: true, allowDead: true });
     // abnormal effects a summon holds (tokens.json `abnormal`, PRTS; user playtest #6 item 18): 禁疗 — no heal reaches it;

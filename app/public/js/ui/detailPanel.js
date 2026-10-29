@@ -482,7 +482,7 @@ function skillTextNote(sk) {
 
 // `owner` = 这张卡画的是**谁的**棋子（换装 / 时装）：`undefined` = 自己；一个 playerId = 那位队友（看他的卡时用他
 // 选的时装）；`null` = 归属未知 → 不套用任何选择。多数调用点（含全部测试）不传 = 自己，输出与从前逐字相同。
-export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bonds, offBonds = null, removedBonds = null, loadout, onBond, live = null, hint = null, unitItems = null, standIn = null, diy = null, voiceSettings = null, cultOpts = null, owner = undefined, morphMode = 'official', onUnequip = null, trainee = null }) {
+export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bonds, offBonds = null, removedBonds = null, loadout, onBond, live = null, hint = null, unitItems = null, standIn = null, diy = null, voiceSettings = null, cultOpts = null, owner = undefined, morphMode = 'official', onUnequip = null, trainee = null, equipBonus = 0, equipModeBonus = 0 }) {
   const m = data.get('assets');
   const hp = hpOf(live, snapHp);
   // 0.2.0 自选编队: `chess` is then the composed 自选 record (the operator, the slot's tier / price); its skill and module are
@@ -621,7 +621,11 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
   // 缺省档就是 `items.length`）。两者相合，缺省档下与官方那条算术逐字相同。
   // 上游 0.3.1 把档位作为 `morphMode` 交给这张卡：显式给 `plus` 时以它为准（测试 / 插件预览直接传这一档）。
   const slot = morphMode === 'plus' ? morphSlotPolicy('plus') : slotPolicy();
-  const equipCap = equipCapacity(DEFAULT_EQUIP_PER_CHESS, carried, getItem);
+  const equipCap = equipCapacity(DEFAULT_EQUIP_PER_CHESS, carried, getItem)
+    // 重构模拟：每名干员 +1（与放置校验 / 服务端同一条）
+    + (equipModeBonus || 0)
+    // 重构模拟·维多利亚 6 名：盟约成员的装备位 +1（与放置校验 / 服务端同一条判据）
+    + (equipBonus && ((chess?.bonds) || []).includes('victoriaShip') ? equipBonus : 0);
   const equipUsed = slot.slotsUsed(items, getItem);
   const carriedUsed = slot.slotsUsed(carried, getItem);
   // 装备自己声明要看的那份「已继承」数据（`params.inherited_key` → 视图里的 `piece.itemData[<键>]`）：源石辅助仪
@@ -913,11 +917,30 @@ function DeviceDetail({ device, snapHp = null, live = null }) {
  */
 function reconTraineeMentorRec(p, priv) {
   if (!p || !Number.isInteger(p.uid)) return null;
-  const t = (priv?.reconTraining || []).find((x) => x && x.trainee === p.uid);
+  const t = reconTrainingOf(p.uid, priv);
   if (!t) return null;
-  const find = (uid) => [...(priv?.board || []), ...(priv?.temp || []), ...(priv?.hand || [])].find((v) => v && v.kind === 'chess' && v.uid === uid) || null;
-  const mp = find(t.mentor);
+  const mp = reconPieceOf(t.mentor, priv);
   if (!mp) return null;
+  const rec = reconMentorRecord(mp, priv);
+  if (!rec) return null;
+  // 链式特训（业主 2026-10-29）：教官自己也是学员 ⇒ 它的三围按它那一层组成的（B + C×0.5），A 再 ×0.5 叠加。
+  // 只有三围沿链（与服务端 simdata _chainStats 同一条）；教官的技能 / 特质 / 天赋仍取它自己的。
+  return { ...rec, stats: reconChainStats(rec, t.mentor, priv, 0, new Set([p.uid])) };
+}
+
+/** 某位棋子在 `priv` 里的那条特训关系（uid 表；每个学员一条）。 */
+function reconTrainingOf(uid, priv) {
+  return (priv?.reconTraining || []).find((x) => x && x.trainee === uid) || null;
+}
+
+/** 场上 / 待部署 / 手牌里 uid 命中的棋子视图。 */
+function reconPieceOf(uid, priv) {
+  return [...(priv?.board || []), ...(priv?.temp || []), ...(priv?.hand || [])].find((v) => v && v.kind === 'chess' && v.uid === uid) || null;
+}
+
+/** 棋子视图 `mp` 按它自己选定技能 / 模组解析的那份记录（补位 / 自选 pick 同样解析），查无 ⇒ null。 */
+function reconMentorRecord(mp, priv) {
+  if (!mp || !mp.id) return null;
   const rec = data.lookup('chess', mp.id);
   if (!rec) return null;
   // 甄选干员（自选槽位）教官：按槽位的 pick 组合成所选干员的那份记录（影子技能是 pick 选定的那一发）
@@ -928,6 +951,30 @@ function reconTraineeMentorRec(p, priv) {
   const lo = priv?.loadout && typeof priv.loadout === 'object' ? priv.loadout : null;
   const keyed = lo && baseId && lo[baseId] ? { [baseId]: lo[baseId] } : lo;
   try { return chessLoadout(base, keyed, (id) => data.lookup('chess', id))?.record || base; } catch { return base; }
+}
+
+/**
+ * 链式特训的三围（服务端 `simdata._chainStats` 的客户端镜像）：`rec` 是这一层的**自己的**记录，`uid` 是它
+ * （作为学员）的 uid；它的教官记录按 `ratio` 叠加、再逐层往上。只取三围——盟约 / 特质 / 天赋 / 技能不沿链传。
+ */
+function reconChainStats(rec, uid, priv, depth, seen) {
+  const st = rec && rec.stats;
+  if (!st || depth >= 8 || seen.has(uid)) return st;
+  const t = reconTrainingOf(uid, priv);
+  if (!t) return st;
+  const mp = reconPieceOf(t.mentor, priv);
+  if (!mp) return st;
+  const mrec = reconMentorRecord(mp, priv);
+  if (!mrec) return st;
+  const ms = reconChainStats(mrec, t.mentor, priv, depth + 1, new Set([...seen, uid]));
+  if (!ms) return st;
+  const r = RECON_TRAINEE_STAT_RATIO;
+  return {
+    ...st,
+    atk: Math.round(st.atk + ms.atk * r),
+    def: Math.round(st.def + ms.def * r),
+    maxHp: Math.round(st.maxHp + ms.maxHp * r),
+  };
 }
 
 /**
@@ -1005,11 +1052,15 @@ export function resolveDetail(target, pieces, { priv = null, backups = data.get(
     if (p.kind === 'token') { const t = data.lookup('tokens', p.id) || diyToken(p.id); return t ? { type: 'token', token: t, piece: p, ownerId: tokenOwnerId(p, pieces) } : null; }
     const c = data.lookup('chess', p.id);
     const d = ownDiy(c);
-    if (d) return { type: 'chess', chess: d.chess, piece: p, standIn: null, diy: d.diy };
     // 重构协议·特训（shared/reconModes.js）：学员的详情卡 = 组成记录（客户端镜像 sim getTrainee——叠加式：学员
     // 自己的技能 / 特质 / 天赋，+ 教官的 50% 三围、双方盟约 + 授予的 bond_recon + 「教官教学」区块），带「特训学员」徽标。
+    // **甄选干员（自选槽位）当学员时也走这一条**：自己的那一份用 pick 组出的记录（业主 2026-10-29）。
     const tr = reconTraineeMentorRec(p, priv);
-    if (tr) return { type: 'chess', chess: traineeChess(c, tr), piece: p, standIn: ownSi(c), trainee: { mentor: tr.name, mentorRec: tr, base: c, ratio: RECON_TRAINEE_STAT_RATIO } };
+    if (tr) {
+      const own = d ? d.chess : c;
+      return { type: 'chess', chess: traineeChess(own, tr), piece: p, standIn: d ? null : ownSi(c), diy: d?.diy ?? null, trainee: { mentor: tr.name, mentorRec: tr, base: own, ratio: RECON_TRAINEE_STAT_RATIO } };
+    }
+    if (d) return { type: 'chess', chess: d.chess, piece: p, standIn: null, diy: d.diy };
     return c ? { type: 'chess', chess: c, piece: p, standIn: ownSi(c) } : null;
   }
   if (target.kind === 'chess') {
@@ -1056,8 +1107,12 @@ export function resolveDetail(target, pieces, { priv = null, backups = data.get(
     // 0.2.2: another player's unit says its 潜能 / 练度 itself (UnitInfo potential / cultivate); an own piece's unit follows
     // m.private.ops (the panel's `cultOpts`)
     const cv = own?.piece ? null : { cultOpts: { cultivation: unitCultivation(u) } };
+    // 特训学员（含**甄选干员当学员**，业主 2026-10-29）：自己的那一份用 DIY 记录（dr），再叠教官
+    if (c && tr) {
+      const own = dr || c;
+      return { type: 'chess', chess: traineeChess(own, tr), piece: own?.piece || null, unitId: u.id, unitItems: Array.isArray(u.items) ? u.items : null, standIn: dr ? null : si, diy: dr ? pick : null, trainee: { mentor: tr.name, mentorRec: tr, base: own, ratio: RECON_TRAINEE_STAT_RATIO }, ...cv };
+    }
     if (dr) return { type: 'chess', chess: dr, piece: own?.piece || null, unitId: u.id, unitItems: Array.isArray(u.items) ? u.items : null, standIn: null, diy: pick, ...cv };
-    if (c && tr) return { type: 'chess', chess: traineeChess(c, tr), piece: own?.piece || null, unitId: u.id, unitItems: Array.isArray(u.items) ? u.items : null, standIn: si, trainee: { mentor: tr.name, mentorRec: tr, base: c, ratio: RECON_TRAINEE_STAT_RATIO }, ...cv };
     if (c) return { type: 'chess', chess: c, piece: own?.piece || null, unitId: u.id, unitItems: Array.isArray(u.items) ? u.items : null, standIn: si, ...cv };
     const t = data.lookup('tokens', u.defId) || diyToken(u.defId);
     if (t) return { type: 'token', token: t, unitId: u.id, ownerId: tokenOwnerId(own?.piece, pieces) };
@@ -1095,7 +1150,7 @@ export function selectVoiceKey(detail) {
  *   (the owner's request of 2026-10-08 「添加一下干员点击上去的语气一样的语音」 lifted 2026-10-03's 「整备阶段不需要干员语音」
  *   for this line only; [ASSUMED] the official prep tap says 选中干员 like the battle's FOCUS_CHAR)
  */
-export const DetailPanel = modComponent('loadout.detail', function DetailPanel({ detail, editable, snapHp, onClose, onSell, onDestroy, onUnequip = null, bonds = [], offBonds = null, removedBonds = null, loadout = null, ops = null, onBond = null, side = 'left', shopOpen = false, live = null, voice = false, owner = undefined }) {
+export const DetailPanel = modComponent('loadout.detail', function DetailPanel({ detail, editable, snapHp, onClose, onSell, onDestroy, onUnequip = null, bonds = [], offBonds = null, removedBonds = null, loadout = null, ops = null, onBond = null, side = 'left', shopOpen = false, live = null, voice = false, owner = undefined, equipBonus = 0, equipModeBonus = 0 }) {
   const getter = typeof live === 'function' ? live : null;
   useTicker(detail && getter ? 250 : 0);
   // 配音语言 (v0.7.1): the panel is the component that subscribes to the settings store, so picking a dub in the card
@@ -1133,7 +1188,7 @@ export const DetailPanel = modComponent('loadout.detail', function DetailPanel({
     <div class="dpanel__scroll">
       ${detail.type === 'chess' ? html`<${ChessDetail} chess=${detail.chess} piece=${detail.piece} snapHp=${snapHp} editable=${editable} onSell=${sellIt}
         bonds=${bonds} offBonds=${offBonds} removedBonds=${removedBonds} loadout=${loadout} onBond=${onBond} live=${liveNow} hint=${detail.hint || null} unitItems=${detail.unitItems || null}
-        standIn=${detail.standIn || null} diy=${detail.diy || null} voiceSettings=${voiceSettings} cultOpts=${detail.cultOpts || { ops }} owner=${owner} onUnequip=${onUnequip} trainee=${detail.trainee || null} />` : null}
+        standIn=${detail.standIn || null} diy=${detail.diy || null} voiceSettings=${voiceSettings} cultOpts=${detail.cultOpts || { ops }} owner=${owner} onUnequip=${onUnequip} trainee=${detail.trainee || null} equipBonus=${equipBonus} equipModeBonus=${equipModeBonus} />` : null}
       ${detail.type === 'item' ? html`<${ItemDetail} item=${detail.item} piece=${detail.piece} editable=${editable} onDestroy=${destroyIt} offBonds=${offBonds} itemData=${detail.piece?.itemData ?? null} bonds=${bonds} />` : null}
       ${detail.type === 'enemy' ? html`<${EnemyDetail} enemy=${detail.enemy} snapHp=${snapHp} count=${detail.count} live=${liveNow} />` : null}
       ${detail.type === 'token' ? html`<${TokenDetail} token=${detail.token} piece=${detail.piece} ownerId=${detail.ownerId ?? null} snapHp=${snapHp} live=${liveNow} />` : null}

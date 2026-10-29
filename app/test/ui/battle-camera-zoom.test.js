@@ -1,5 +1,5 @@
-// 重构战场的**战斗**摄像机：普通带的战斗与休整期看同一条自己的半场，并在非官方布局的图上同样推近 50%（业主 2026-10-26
-// 「战斗时的摄像机视角是不是没有和休整期一样拉近 50%」）。官方 19×21 的图不推近。
+// 重构战场的**战斗**摄像机：普通带的战斗与休整期看同一条自己的半场，并在非官方布局的图上同样推近 20%（业主 2026-10-29
+// 「之前拉近 50% 有些太近」⇒ 从 1.5 拉远 20% 到 1.2）。官方 19×21 的图不推近。
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,23 +11,23 @@ const STAGE = JSON.parse(fs.readFileSync(new URL('../../workshop/mode-recon/stag
 const L = layoutOf(STAGE);
 const SRC = fs.readFileSync(new URL('../../public/js/screens/game.js', import.meta.url), 'utf8');
 
-describe('big-map combat camera: the prep 50% zoom', () => {
-  test('presetCamera zoom 1.5 scales the fitted tile size by exactly 1.5', () => {
+describe('big-map combat camera: the prep 20% zoom', () => {
+  test('presetCamera zoom 1.2 scales the fitted tile size by exactly 1.2', () => {
     const rect = { r0: L.battle.normal.r0, r1: L.battle.normal.r1, c0: 18, c1: 30 };
     const vp = { width: 1920, height: 1080 };
     const plain = presetCamera('normal', vp, { rect, side: 'L', layout: L });
-    const close = presetCamera('normal', vp, { rect, side: 'L', layout: L, zoom: 1.5 });
-    assert.ok(Math.abs(close.scale / plain.scale - 1.5) < 1e-6, `${close.scale} / ${plain.scale}`);
+    const close = presetCamera('normal', vp, { rect, side: 'L', layout: L, zoom: 1.2 });
+    assert.ok(Math.abs(close.scale / plain.scale - 1.2) < 1e-6, `${close.scale} / ${plain.scale}`);
   });
 
   test('the combat view lands on the prep view (same half, same zoom); the old full-band view was much farther', () => {
     const vp = { width: 1920, height: 1080 };
-    const prep = presetCamera('prep', vp, { rect: { r0: 31, r1: 38, c0: 18, c1: 30 }, side: 'L', layout: L, zoom: 1.5 });
-    const combat = presetCamera('normal', vp, { rect: { r0: 34, r1: 38, c0: 18, c1: 30 }, side: 'L', layout: L, zoom: 1.5 });
+    const prep = presetCamera('prep', vp, { rect: { r0: 31, r1: 38, c0: 18, c1: 30 }, side: 'L', layout: L, zoom: 1.2 });
+    const combat = presetCamera('normal', vp, { rect: { r0: 34, r1: 38, c0: 18, c1: 30 }, side: 'L', layout: L, zoom: 1.2 });
     const old = presetCamera('normal', vp, { rect: { r0: 34, r1: 38, c0: 20, c1: 40 }, side: 'L', layout: L });
     const ratio = combat.scale / prep.scale;
     assert.ok(ratio > 0.9 && ratio < 1.25, `combat/prep tile scale ${ratio.toFixed(3)}`);
-    assert.ok(old.scale < prep.scale * 0.6, `the old full-band view was ${(old.scale / prep.scale).toFixed(3)}× the prep scale`);
+    assert.ok(old.scale < prep.scale * 0.75, `the old full-band view was ${(old.scale / prep.scale).toFixed(3)}× the prep scale`);
   });
 
   test('the ordinary-band combat field takes its own half rect (outer margin kept) + the prep zoom', () => {
@@ -36,18 +36,18 @@ describe('big-map combat camera: the prep 50% zoom', () => {
     const n = L.deployRects.normalLeft, p = L.battle.prep;
     assert.deepEqual([Math.min(p.c0, n[2] - 2), n[3]], [18, 30]);
     assert.equal(L.mirrorCol - 18, 42, 'the right half mirrors it');
-    assert.match(SRC, /const mapZoom = stageLayout && !isOfficialLayout\(stageLayout\) \? 1\.5 : null/);
+    assert.match(SRC, /const mapZoom = stageLayout && !isOfficialLayout\(stageLayout\) \? 1\.2 : null/);
     assert.match(SRC, /ownHalfRect = kind === 'normal' && !field\.prep/);
     assert.match(SRC, /rect: ownHalfRect, side, \.\.\.\(mapZoom \? \{ zoom: mapZoom \} : \{\}\)/);
   });
 
   test('watching a teammate: the prep scout frames the watched player\'s own half, symmetrically', () => {
     const vp = { width: 1920, height: 1080 };
-    const left = presetCamera('prep', vp, { rect: { r0: 31, r1: 38, c0: 18, c1: 30 }, side: 'L', layout: L, zoom: 1.5 });
-    const right = presetCamera('prep', vp, { rect: { r0: 31, r1: 38, c0: 30, c1: 42 }, side: 'R', layout: L, zoom: 1.5 });
+    const left = presetCamera('prep', vp, { rect: { r0: 31, r1: 38, c0: 18, c1: 30 }, side: 'L', layout: L, zoom: 1.2 });
+    const right = presetCamera('prep', vp, { rect: { r0: 31, r1: 38, c0: 30, c1: 42 }, side: 'R', layout: L, zoom: 1.2 });
     assert.ok(Math.abs(left.scale - right.scale) < 1e-6, 'both halves frame the same 13 columns');
-    assert.ok(left.scale > presetCamera('prep', vp, { rect: L.battle.prep, side: 'L', layout: L }).scale * 1.4,
-      'a half at 1.5× is much closer than the whole band');
+    assert.ok(left.scale > presetCamera('prep', vp, { rect: L.battle.prep, side: 'L', layout: L }).scale * 1.2,
+      'a half at 1.2× is much closer than the whole band');
     assert.match(SRC, /const scoutRect = watchedSide \? normalHalfRect\(watchedSide, true\) : null/);
     assert.match(SRC, /watchedSide = watchedId && watchedId !== myId && dualNormal \? normalPairSide\(watchedId\) : null/);
   });
@@ -61,6 +61,6 @@ describe('big-map combat camera: the prep 50% zoom', () => {
   test('official layouts are still not zoomed', () => {
     assert.equal(isOfficialLayout(layoutOf(null)), true);
     assert.equal(layoutOf(null).size[0], 19);
-    assert.doesNotMatch(SRC, /zoom: 1\.5.*isOfficialLayout|isOfficialLayout.*zoom: 1\.5/, '官方图那条路不请求 zoom');
+    assert.doesNotMatch(SRC, /zoom: 1\.2.*isOfficialLayout|isOfficialLayout.*zoom: 1\.2/, '官方图那条路不请求 zoom');
   });
 });

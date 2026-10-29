@@ -39,6 +39,187 @@
 - 包版本 `1.4.1 → 1.4.2`；`workshop:validate` 0 error。
 - 特训敌人「涤墨」的类型图标换成用户提供的图（`public/assets/ui/enemyTypeIcon/dimo_icon.png`，旧图已留 `.bak-`）。
 
+### 时装特效补全（`workshop/skin-supplement` 1.4.2 → 1.4.3）
+
+- 264 套时装逐套对照客户端：按官方 `skinId` 的 `@` 后缀在干员自己的特效 bundle 里收全部 `_<fx>` 变体（不再只看
+  「默认 key + 后缀」，那正是 1.4.0 漏提的原因 —— `plosis_attack_start_01` 与默认 `plosis_attack_01_start` 不同名，
+  `radian_*` 与默认 `raidian_*` 不同名，`birth` / `buff` / `token` 行在默认皮里没有同名 key）。
+- 补 **126 套 / 354 个 key**：prefab 3469 → **3824**、贴图 key 3942 → **4128**、网格 1334 → **1386**；
+  `index.json` 的 `skins` 196 → **197**（新增能天使「音律联觉」，挂载点从 `skinpack` 实测）。`game-radian`、
+  `yun-plosis` 两套原先有 `fx` 条目却零 prefab，这次一并落地。
+- 复查后每套的客户端变体都在包内（0 缺）；召唤物自己的变体（30 套 / 297 key）仍不收 —— 本包不含召唤物模型。
+- `workshop:validate` 0 error。
+
+### 重构协议·特训后续打磨（2026-10-29）
+
+- **频率**：教官技能的影子从「每次攻击 +1 次应用」改成「**每一次伤害**同步 1 次」——多段攻击按段数
+  （`attack.hits = 学员自己的段数 × (1 + 教官的段数)`：教官 1 段时就是原来的 ×2，赤刃明霄陈 S3 的 3 段时 ×4；`hitsFn`
+  现算段数的 kit 按同一式；一次攻击 4 段伤害 ⇒ 4 次教官效果）。学员自己的技能没有 attack 行时，教官那一套直接
+  作为它的攻击（段数照教官的，不再压成 1 段）。**教官改变的攻击目标选择数量**（`targeting.maxTargets`，逻各斯 S3 的
+  `attack@max_target` 这类）同样取大并入。
+- **攻击命中的附带效果也继承**（业主 2026-10-29）：`mergeShadowSpec` 现在链式接上教官的 `attack.afterHit` /
+  `attack.onEachHit` / `attack.onHit` —— 维什戴尔 S3 的爆炸（余震 / 好礼）此前整段没继承。学员 kit **自己直接结算**的伤害
+  （浮游单元的每一次命中、技能 DoT 的 tick 这类不走 `resolveHit` 的实例）由 `installMentorApply` 补一次教官的攻击应用
+  （一整套教官攻击：`hits` 段「ATK × 教官攻击倍率」的伤害 + 教官的 `afterHit` / `onEachHit` / `onHit`）；学员自己那次攻击的伤害已由段数 / 溅射覆盖，
+  按 `isAttack` / `isSplash` / `attackId` 跳过，教官余震的溅射实例也不会再触发（无递归）。
+- **单次释放类教官技能改成「每次攻击 1 次」**（业主 2026-10-29）：本体没有 attack / mods / targeting、效果全在一次
+  `onStart` 里生成的技能（异客 S3 辉煌裂片的雷暴这类）继承后不再只在施放时触发一次 —— `mergeShadowSpec` 把它的
+  `onStart` 挂到学员的 `onAttack`（每次攻击各 1 次，与弹药类相似），浮游单元每次命中由 `installMentorApply` 走同一份。
+- **链式继承**：教官自己也是学员时，`reconTrainee.chain` 带它的教官那条 ⇒ 三围逐层 ×0.5
+  （A + B×0.5 + C×0.25），只有三围沿链；盟约 / 特质 / 天赋 / 影子技能仍取直接教官自己的。详情卡同步。
+- **召唤物**：学员召唤的 token 也吃教官的天赋 / 特质 installer（token 自己的技能 / 特性照常，影子技能不并）。
+- **技能行为的完整继承 + 特效恢复**（业主 2026-10-29 第二次校正）：教官 kit 的 `install` 里按 `unit.skill.id` 注册的
+  钩子（赤刃明霄陈 S3 的剑气 tick 只在 `skchr_chen3_3` 上）现在也会装到学员身上 —— 跑教官 `install` 的一瞬临时换 id、
+  装完还原（运行期仍读学员自己的 `skill.active / activations`），学员因此**真的获得技能描述里的那道游走剑气**；
+  同时恢复教官 start / range / loop / end 行的完整叠加（不再跳过任何一行，红龙变身也在）。
+- **详情卡「教官」区块回归**（业主 2026-10-29）：上一轮链式改造把教官 uid 直接当棋子视图传进去 ⇒ 整块静默消失；现已按 uid 取棋子视图再解析记录。
+- **甄选干员（自选槽位）的特训显示**（业主 2026-10-29）：特训弹窗里槽位件按 pick 组出的干员记录显示名字 / 头像（不再只剩「甄选干员」+ 警告图标）；甄选干员当**学员**时，详情卡也照常显示教官区块（此前 DIY 分支先 return，把特训叠加整段盖掉）。
+- **教官时装变体的预载补全**（业主 2026-10-29）：教官换攻击模式那份 mode 的施放 / 命中行此前没按时装变体预载（播放时可能退回默认那枚）；现在 `keysFor` 对 mode 行与弹道 onHit / onStop 都按 `skins[stem].fx` 预载变体。
+- **浮游单元的命中叠教官命中行**（业主 2026-10-29）：附着的未释放无人机与本体同属一次攻击，`FxWiring.damage` → `_landed` 已按这一发的第几次伤害播合并后的命中组（学员 + 教官），不再重复补播；没有攻击记录的**远程单元**（`funnelfx._remoteHit`）与**释放的分散单元**（`_pulse`，荒芜拉普兰德 S3）各自调 `SkillFx.mentorFunnelHit`，把教官 plan 的命中组与 mode 命中行 / 弹道 onHit·onStop 补播到目标上。
+- **自增益教官的 plan 不再被误判为空**（业主 2026-10-29）：逻各斯 S3 这类「只改普攻、特效全在攻击命中行」的技能，`skillfx.of` 从前只认 start / range / loop / end 行，`mentorPlan` 整份丢掉（学员本体与浮游单元都拿不到普攻命中特效）；现在 plan 任意一行的 prefab 已装就算，攻击命中行照常继承。
+- **简报页的首领卡改成·重构首领**（业主 2026-10-29）：重构模拟的「确认本局信息」左上角此前画的是 `pub.bossId` 那只
+  **官方首领**（原版首领不进重构模拟）；现在公开视图带 `pub.recon.bossKey`（= 第 20 回合实际出战的·重构首领，
+  `reconBossSpawnKeyFor(bossRound)`，与出怪替换同一个 key），客户端 `screens/briefing.js` 按它取 `enemies.json` 的
+  名称 / 图鉴 / `iconId`。官方对局没有这个键，仍按 `pub.bossId` 的 boss 表画，行为不变。
+- **预重构屏也有「查看禁用盟约与干员」**（业主 2026-10-29）：策略选择屏左侧那个入口现在在预重构屏的左侧状态列
+  （「全员提交后进入队伍总览」下面）也有一个 —— 同一条 `ui/matchInfo.js` 的 `MatchInfo` / `MatchInfoDialog`，模型与简报
+  同一份；弹窗底部状态行显示自己的提交状态与「全员提交后进入队伍总览（n/m）」。
+- **「特训」按钮挪到调度中心工具行**（业主 2026-10-29）：从休整期顶栏挪到调度中心「剩余可放置角色」那一行的
+  **冻结 / 刷新左侧**（`ui/shopBar.js` 的 `train` 槽），同一套 `toolbtn` 外观、**荧光青**（`--mint-400` + 外发光）；
+  图标换成业主给的 `public/icons/recon-train.png`（白色线稿按蒙版取 `currentColor`，与大厅重构入口同一画法）。
+  本回合已交过时按钮填充成实心青（点开仍可换人 / 取消）。新增 i18n `特训`（en/ja/ko/zh-TW）。工具行在重构对局里
+  改用三列（`shopbar__tools.is-train`），特训 / 冻结 / 刷新排在**同一排**（不再让刷新折到第二行）。
+- **单次释放类教官的范围 / 特效 / 自建实体的每一发**（业主 2026-10-29）：
+  - `mentorSingleCastApply` 触发时把学员的攻击范围**临时换成命中目标所在的那一格**再跑教官的 `onStart` ——
+    荒芜拉普兰德 S3 这类**全场**浮游单元在学员范围外命中也照常触发（此前范围外整段不触发）。
+  - 客户端：教官是单次释放类（计划里没有攻击行 / 常驻行，只有 range·start 行）时，施放那一下**不再**播官方行，
+    改由 `SkillFx.mentorOnceAt` 在**每一次攻击 / 浮游单元每一次命中**的目标处播（`wiring.attack` 与 `mentorFunnelHit` 调），
+    不再只有引擎过程化的雷暴。
+  - `installMentorApply` 不再一律跳过 `isAttack`：引擎那一次攻击的实例一定带 `attackId`（已被段数覆盖），
+    包侧自建实体的「每一发」（丰川祥子的赞乐音符：`isAttack`、无 `attackId`）现在也各触发一次教官效果；
+    `isAttack && isSkill` 仍跳过（教官自己技能里的结算，防自我触发）。
+  - **只在攻击时触发 + 0.2 s 内置 CD**（业主 2026-10-29 追加）：单次释放类不再被技能 DoT 的 `isSkill` tick 触发
+    （此前荒芜拉普兰德 S3 每秒的范围伤害会让它每秒都触发）；`runMentorOnce` 统一计时，攻击路径与伤害路径共用，
+    同一次攻击的多段 / 音符连发 / 同帧多笔只在 0.2 s 内算一次（客户端 `mentorOnceAt` 同一窗口同样去重）。
+- **重构模拟基础部署上限 9 + 人事部文档改为 +1**（业主 2026-10-29）：重构对局的 `PlayerState.deployCapBonus` 初始为 1
+  （官方 8 → 重构 9，官方对局不变）；`equip_destory_deployment_cnt_change`（人事部文档）从「上限变为 9」改成**相对 +1**
+  （`ctx.addDeployCap(1)`；官方 8 → 9 与从前同一结果，重构 9 → 10，多件可叠加）。
+- **涤墨·挟潮·来：操戈出在自身格**（业主 2026-10-29）：每 10 秒召唤的 2 只操戈从「周围 2 格内的空格」改为**自身所处格**
+  （`workshop/dimo-enemies/battle/main.mjs installXiechao`）。`workshop-validate` 0 error。
+- **重构协助 / 熔芯负载没选就随机补 1 个**（业主 2026-10-29）：预重构的两项选择缺席时不再等于「没有效果」——
+  `Match.fillReconChoices`（`server/match/match/phases.js`）在「队伍总览」亮起时（`enterReconSummary`，超时也走这条）
+  给每个座位**各补一个**：已交合法 id 的保留，缺的（含不在六个合法值里的）用 `shared/reconModes.js` 新导出的
+  `RECON_ASSIST_IDS` / `RECON_LOAD_IDS` 抽一个。随机数走**独占**流 `deriveSeed(seed, 'recon-seat:<playerId>:<assist|load>')`
+  —— 同一 seed + 同一座位恒得同一个（重放一致），不碰别人的流；`finishPreRecon` 再兜一次（幂等）。补选后的值随公开视图
+  `pub.recon.choices` 下发，局内「策略效果」两行与装备拆卸开关看到的就是实际生效的那份。官方对局 `reconChoices` 恒 null，
+  一个字节不动。
+- **脱手类教官技能的 kit fx 不再退回引擎默认特效**（业主 2026-10-29）：`FX_BINDINGS` / `FX_COVER` 按**技能 id** 登记，
+  异客 S3 的雷暴 / 落雷、蕾缪安 S3 的锁定 / 礼炮这些**脱手类**技能的 fx 全由 kit 发出 —— 学员自己的技能 id 查不到它们，
+  于是画的是引擎过程化特效（教官本体是对的）。现在 `SkillFx.of` 记下教官技能的 index 侧 id（`U.mentorSkillId`）：
+  `simFx` 的绑定 / cover、`bindsReached`、`_lasts` / `_planDrawn` 先问学员自己的技能、再问教官的影子技能，绑定的特效 key
+  按**教官的**时装取变体；`keysFor` 也预载教官技能绑定的键。回归：`test/render/vfx-skillfx.test.js` 38 → **40**。
+- **会部署召唤物的教官技能：学员每次攻击 / 每次弹药各部署一枚**（业主 2026-10-29）：技能记录声明了召唤物
+  （data `overrideTokenKey` —— 望 S1/S2/S3 的棋子 `token_10064_wang_stone1`、令的三只墨魂、夕 S3 的小自在）时，
+  `content/index.js installTraineeSummons` 让学员在**自己的技能期间**每次攻击（落点 = 被攻击目标所在格，不可用时按
+  技能顺序就近）与每次消耗弹药（以学员所在格为中心）各部署一枚；技能结束（含弹药打空）时一起退场。无视教官技能的
+  弹药 / 部署数量限制，也不占可部署干员数量上限。同一发攻击同时消耗弹药只算一枚；教官 kit 自己就在目标格召唤同一枚
+  （夕 S3 的召唤 / 刷新）时不重复叠。**召唤物吃技能自己的效果**（业主 2026-10-29 追加）：教官 kit 可以导出
+  `tokenSummon(battle, unit, token)` 钩子，学员部署出的每一枚召唤物都会调它 —— 望的 kit 把棋子登记成她的一片棋子
+  （`mem.wangNode`，立即激活、不可选中、不普攻），于是照常按**学员选的这个技能**（S1 停顿 + DoT / S2 连线 + 减速 /
+  S3 范围伤害）触发并播 `explode` 特效，攻击力借用学员自己的。回归：`test/match/recon-train.test.js` 39 → **44**。
+- **学员施放技能时教官的音效真的响了**（业主 2026-10-29「学员继承教官的技能缺少了教官的音效」）：
+  - 客户端：教官那一层与学员自己的技能音用了**同一把节流键**（`unit()` 的 `${unitId}:skill`），后一声必然落在
+    160 ms 的单位冷却里被丢掉 —— 叠上去的教官发动音永远是静的。现在教官用 `${id}:mentor` 自己的键
+    （`public/js/audio.js` 的 `['skill', id, 1]` 分支），两套发动音同时响。
+  - 数据：`data/assets.json` 的 `sfx.units[id].skills` 里原本缺着教官技能的发动音。望唯一一条发动音 bank 就在 S3
+    （`battle.ON_SKILL_START.skchr_wang_3`），而清单只在「两个槽以上」时才写 `skills`，整条被丢掉；予愿 S3 的 bank
+    带子键（`…skchr_aglna2_3.move_like_projectile.skill_start`），按 skillId 精确查表查不到，槽位落回通用
+    `b_char_atkboost`。`tools/assets/audio.mjs` 新增 `skillBanksOf`（先精确 id、再按 `<skillId>.` 前缀收子键 bank），
+    `plan.mjs` 用它取每个技能槽的发动音，并允许「只有非默认槽有 bank」也写 `skills`。
+  - 重跑 `node tools/fetch-assets.mjs --add-only --asset-source=mirror --voice-langs=cn,en,kr --optional-voice`：
+    补齐 9 个之前没计划的官方 mp3（`p_skill_stwctp_s` 望 S3、`p_skill_arstrnstf_s` 予愿 S3 等），重生成清单
+    （18 个干员新增 / 补全 `skills` 槽位音）。`ui.enemyTypeIcon/dimo_icon` 是用户提供的图、没有可下载的源，现在也由
+    plan 记着，重建不会再把它掉出清单（`--prune` 也不会当孤儿删）。
+  - 回归：`test/assets.test.js` 新增 3 条（子键 bank / 唯一非默认槽 / 清单里望与予愿 S3 的发动音），
+    `test/ui/audio.test.js` 特训新增 1 条（学员与教官各一声发动音）。
+- **望的棋子按对应技能生效、跟子有模型**（业主 2026-10-29）：
+  - **棋子技能取错**：望的棋子（`token_10064_wang_stone1`）的 token 记录按主人的技能槽分三条（`sktok_wang_1/2/3`
+    = 取势 / 连星 / 天下劫），客户端却只认 `skillIndex` —— token 只有一条技能记录（index 恒 0），于是**永远取到默认
+    那条（取势）**。现在 sim 把解析后的那条随快照下发（`UnitInfo.tokenSkill`，`render/app/info.js renderInfo` 转写），
+    `render/vfx/skills.js resolveSkill` 按它取官方 plan（`token_wang_skill_01/02/03_hit` 三套特效各归各位）。
+  - **特训学员的棋子整段取势**：学员部署的棋子曾按**学员自己**的 loadout 查 token 变体（variants 里没有学员的键 ⇒
+    `getToken` 退回第一条变体 = 默认形态 + 取势），继承望的哪个技能都一样。`Battle._tokenDef` 现在对
+    `def.traineeMentor` 的召唤物按**教官 def** 解析（技能槽 / 形态 / 模组），映射与 content 层共用
+    `simdata.mentorLoadoutOf`。
+  - **跟子没有模型**：天赋（铸子）/ 天下劫在相邻格放下的跟子此前只是 `mem.wang.followers` 里的数据（只有 `summon`
+    粒子），客户端无处画。`spawnToken` 新增 `noTile`（不写 `_occ`：部署 / 寻路 / `unitAt` 都当这格是空的，与官方
+    「跟子不占格」一致），每枚跟子随之生成一枚不可选中、不普攻的装饰棋子 token → 快照里出现、画出棋子模型，
+    用掉 / 被部署挤掉 / 望离场时与跟子一起退场。
+  - 回归：`test/content/op_wang.test.js` 新增 3 条（跟子 = `noTile` 装饰 token + 用它那条 token 技能、学员 ← 望的
+    棋子按教官技能槽、`UnitInfo.tokenSkill`）；`test/render/vfx-index2.test.js` +1（`tokenSkill` 优先于记录里那一条）、
+    `test/render/hud-readouts.test.js` +1（`renderInfo` 转写）；`r40a-wang-dp` / `recon-train` / `we2-placement` 全绿。
+- **重构战场的整备区恢复 16 + 8**（业主 2026-10-29）：地图被编辑器重新导出时把 `layout.bench` 整段丢了，整备区退回官方
+  10 / 5。已把 10 个场名的声明补回 `stage-specs/my_map.json` 与导出的 `stages.json`（普通左右两半 + 4 块 boss 场地 × 2 座），
+  `test/recon-bench.test.js` 8/8 重新变绿。
+- 回归：`test/match/recon-train.test.js` 25 → **36**（链式 / battleInput 的 chain / 召唤物 / 剑气完整继承 / 驭械术师浮游单元 /
+  攻击次数与目标数继承 / kit 直伤叠教官攻击与 afterHit / 单次释放类教官每次攻击 1 次），`test/match/recon-trials.test.js` **13** 条，全套绿。
+
+### 重构模拟：视角 / 首领音乐 / 整备区装备 / R20-R21 首领与路线（2026-10-29）
+
+- **战场取景拉远 20%**：45×60 重构战场的休整期与普通带战斗共用同一套取景，此前整体推近 1.5（业主 2026-10-26「和休整期
+  一样拉近 50%」）；业主 2026-10-29「有些太近了」⇒ 改为 **1.2**（`ui/gameLogic/camera.js` 的 `framed` 与 `screens/game.js`
+  的 `mapZoom` 同步）。官方 19×21 的图仍不推近。回归：`test/ui/battle-camera-zoom.test.js` 6 条、`gameLogic` 的取景条。
+- **首领战斗曲接管其他音乐**（`workshop/mode-recon/ui/music.js` + `public/js/audio.js` 新增 `bossMusicOn` /
+  `setBossMusic` / `subscribeBossMusic`）：首领曲一响，战斗自定曲（`ui/battleMusic.js`）暂停让路；**多索雷斯盟约**与
+  **颂乐人偶 Fever** 两条例外不被覆盖，但音量压到 **50%**（`workshop/dossoles/ui/music.js` 的 `targetVolume`、
+  `workshop/ave-mujica/ui/fever.js` 的 `duck`）。首领离场 / 战斗结束交还，其他曲目照常回来。
+  回归：`test/match/recon-music.test.js` 9 条（新增 3 条接管判据）。
+- **临时整备区也能把装备配给干员**：`canPlace` 新增 `temp` 分支（装备落在临时整备区那排的干员身上 = `g.equip`，
+  别的一律拒绝）；`render/drag.js` 的 `isLegal` / `resolveDrop` / 拖动合法性不再把 `temp` 整段拒收，`screens/game.js` 的
+  合法格高亮也扫这一排。回归：`test/ui/gameLogic.test.js` +2 断言、`test/render/drag.test.js` 2 条改按新口径。
+- **R20 / R21 的首领真的换成·重构首领**：`reconBossWaveFor` 以前只改 `spawn.key`，而出生读的是 `s.enemyKey ?? s.key`
+  （`sim/simdata.js`）⇒ 场上出的始终是模板里那只官方首领（且官方 19×21 的出生点落在 45×60 地图的场地外，看起来「没有
+  boss」）。现在 `key` / `enemyKey` / `preview` 一起换；**隐秘核心**那条路径此前整段跳过替换，现与最终攻势一样调用它
+  （多 key 组的按区域分场也随之生效）。官方隐秘首领自带的部件（斩胄之剑 / 破胄之锤）不再跟进来。
+  回归：`test/match/recon-trials.test.js` 13 → **15**。
+- **闭环巡逻线不再「走一圈就消失」**：自绘地图给 boss 场地画的是起点 = 终点的闭环；sim 以前走到终点就 `leak`（首领离场、
+  场上什么都没有）。`sim/battle/spawns.js` 给这种路线打 `loop`，`sim/ai.js` 的 `advanceRoute` 在最后一腿走完后回到第一腿
+  继续巡逻，不算漏怪。回归：`test/match/recon-routes.test.js` +1。
+- **boss 场的护送小怪也走地图**：模板路线是官方 19×21 板上画的，直接用在 45×60 图里会落到场地外（sim 的 `compileRoute`
+  把越界坐标夹回边缘 ⇒ 小怪贴着边界蹭）。`waves.js buildBossWave` 现在把模板路线按比例缩进**这块场地的战斗矩形**
+  （首领 / 部位仍走该区域的闭环巡逻线），`wave.routes` 同步换成缩放后的表（悬赏敌人一并落进场内）。
+  回归：`test/match/recon-routes.test.js` +1。
+- **boss 区域整备区用自己那一座的格子**：第 2… 块 boss 场地的整备区是按座位声明的（`bossA{n}:0` / `:1`，两位棋手在场地的
+  上下两半），但 `prepCamera` 只带出 `area` 没带 `seat` ⇒ 客户端 `boardGeoNow` / `bossPrepField` 恒按 0 号座取整备格，
+  1 号座的博士看到 / 用的是**另一位**的整备格（业主 2026-10-29「不是更改之后的部署区」）。镜头现在把 `seat` 一起带出去
+  （`prepCamKey` 也带上它）。回归：`test/ui/gameLogic.test.js` +1。
+
+### 重构模拟：隐秘核心候选分档 / 装备上限 / 盟约层数上限（2026-10-29）
+
+- **隐秘核心（R21）候选按房间人数分档**（`shared/reconModes.js RECON_TRIAL_BOSSES[21]`）：**≤5 人**只有伤心的大锁·重构 /
+  “阿米娅”，炉芯终曲·重构两条；**6–7 人**加洛伦茨组（`minPlayers 4 → 6`）与“终始”那组（AMa-10 / 异构体 / 终始，6 人起）；
+  **≥8 人**才加岁四部位（新增 `minPlayers: 8`）。回归：`test/match/recon-trials.test.js` 新增「按人数分档」一条。
+- **每名干员的装备格 +1**（业主 2026-10-29）：重构对局的基础容量 2 → **3**，与装备自身 `params.slot_cap`、维多利亚
+  6 名成员的 +1 叠加。服务端 `server/match/gamedata.js equipCapacity`（`isRecon` 时 +1）、客户端
+  `ui/gameLogic/placement.js` 的 `equipReplaces`（`ctx.reconMode`）与 `ui/detailPanel.js`（`equipModeBonus`）三处同源。
+- **盟约叠加层数上限 999 → 2000**（业主 2026-10-29，只服务重构模拟）：`shared/constants.js` 新增
+  `RECON_BOND_LAYER_CAP = 2000` 与 `bondLayerCap(modeId)`，`layerGainRoom(before, n, cap)` 接受模式上限。所有写入点按
+  **本局模式**取值：`PlayerState.addLayers` / `bondsView`、SETTLE 合并、`Battle.addLayers`、`unite.helperStats`、
+  `fields.validateClientResult`、`invariants`、开发面板 `test`、客户端 `ui/watchBonds.js` 的实时层数。官方对局仍 999，
+  一个字节不变。
+- **维多利亚·重构的「6 名成员装备 +1」不生效**（业主 2026-10-29）：服务端判定一直是对的，问题在客户端 ——
+  `placementContext` 没有接收 `reconMode`（`ctx.reconMode` 恒 undefined），`equipReplaces` 的 +1 分支永远走不到，第 3 件
+  仍弹替换对话框。现在 `placementContext` 收纳 `reconMode` 并放进 ctx。回归：`test/ui/gameLogic.test.js` 新增一条
+  （重构 3 格 / 维多利亚 4 格 / 官方 2 格），`test/match/equipCapacity.test.js` +2 条（重构基础 3 格、层数 2000）。
+
+### 召唤物的图标让位给官方特效
+
+- **官方特效画出的召唤物不再叠引擎图标**（业主 2026-10-29）：予愿安洁莉娜 S3 起飞留在原地的「一会儿见！」
+  （`token_10071_aglna2_agairp`）没有模型 / 头像，客户端提取的特效段（该 token 的 passive loop `token_aglna2_agairp_01`）
+  就是它的样子 —— 现在单位视图的兜底图标（召唤物 battle-card 菱形）在官方那一层已装好时不画（`render/units.js`
+  `_ensurePicture` ← `ctx.officialLook`，`render/app.js` 按 fx index 判定，只对 `kind: 'token'`）；设置「官方特效」关掉 /
+  2D 板 / 该 token 一个 key 都没装时图标照旧回来。回归：`test/render/unitview.test.js` 47 → **48**。
+
 ### 战斗音乐切换（对局左下角）
 
 - 对局 HUD 左下角多一个 `♫` 按钮（与设置 / 说明同一排），打开「战斗音乐」面板：从服务器曲目库（官方 BGM + 工坊包）选一首，替换 `prep` / `combat` / `boss` / `unite` 的默认 BGM。

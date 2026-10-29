@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ERR, PHASE } from '../../shared/constants.js';
 import { DATA, makeMatch, checkInvariants } from './harness.js';
+import { generateDraft, reconScheduleEntry, reconDraftCards } from '../../server/match/choices.js';
 import { BAND_TURN_SECONDS } from '../../server/match/Match.js';
 
 const TURN_MS = BAND_TURN_SECONDS * 1000;
@@ -290,5 +291,52 @@ test('a single human (a 同盟 room started alone or with AI teammates only) is 
   assert.equal(pub.deadline - pub.serverNow, 25000, 'INFO_CHECK 25 s');
   h.toPrep(1);
   assert.ok(h.m.deadline > 0, 'co-op prep is timed');
+  h.m.dispose();
+});
+
+// 业主 2026-10-28：「先把所有回合的 SP 选择移除」—— 重构模拟今天没有任何回合进机变；`choices.js` 的机变接口
+// （官方家族 / 人数扩容 / 重构决策）保留，等业主给「重构决策」的效果后再把要开的回合打开。
+test('重构模拟：所有回合的 SP 选择已移除；机变接口保留（家族 / 卡数按人数）', () => {
+  const h = makeMatch({ mode: 'recon', modeId: 'mode_recon_abyss', humans: 1, bots: 8, seed: 21, fake: true }).start();
+  const m = h.m;
+  assert.equal(m.gd.isRecon, true);
+  assert.deepEqual(m.gd.spRounds(), [], '没有任何回合进机变');
+  // 家族表：官方终极多人 R11 的混排权重（悬赏 14 / 机密商店 4 / 战术决策 4）；悬赏种类按回合（官方 R8 前 initial / R11 起 hunter）
+  const rounds = [3, 6, 9, 12, 15, 18, 20];
+  for (const r of rounds) {
+    const e = reconScheduleEntry(m.gd, r);
+    assert.deepEqual(e.families, [{ family: 'bounty', weight: 14 }, { family: 'shop', weight: 4 }, { family: 'tactic', weight: 4 }], `R${r} 家族`);
+    assert.equal(e.bountyDraft, r < 8 ? 'initial' : r < 11 ? 'boss' : 'hunter', `R${r} 悬赏种类`);
+    assert.ok(e.events.bounty.length && e.events.shop.length && e.events.tactic.length, `R${r} 借官方事件表`);
+  }
+  // 卡数：6 人 ⇒ 6，20 人 ⇒ 20；每个回合 × 每个家族都能凑满（悬赏卡池不够时重复抽）
+  for (const r of rounds) {
+    for (const players of [6, 20]) {
+      for (let i = 0; i < 6; i++) {
+        const d = generateDraft(m.gd, m.rngDraft, r, { players, stageId: m.stageId });
+        assert.ok(d, `R${r} ${players} 人有抽签`);
+        assert.equal(d.cards.length, Math.max(6, players), `R${r} ${players} 人 ⇒ ${d.cards.length} 张（${d.family}）`);
+      }
+    }
+  }
+  m.dispose();
+});
+
+// 重构模拟专属的 SP 决策（业主 2026-10-28「增加一个重构模拟专属的 SP 决策：重构决策」）：候选池是工坊包
+// `choices.json` 的 `reconDecisions` 记录（id = 效果 id，效果落地后自动生效），没有候选池时这一家族不出现。
+test('重构模拟 重构决策：包给出 choices.reconDecisions 才有 recon 家族；卡按效果 id / {id,name,desc}', () => {
+  const h = makeMatch({ mode: 'recon', modeId: 'mode_recon_abyss', humans: 1, bots: 1, seed: 22, fake: true }).start();
+  const gd = h.m.gd;
+  assert.ok(!reconScheduleEntry(gd, 3).families.some((f) => f.family === 'recon'), '没有候选池 ⇒ 不加这一家族');
+  const pool = { id: 'reconDecisions', cards: ['recon_choice_a', { id: 'recon_choice_b', name: '乙', desc: '效果乙', team: true }] };
+  const fake = { choices: { ...gd.choices, reconDecisions: pool }, effect: (id) => (id === 'recon_choice_a' ? { name: '甲', desc: '效果甲' } : null) };
+  const entry = reconScheduleEntry(fake, 3);
+  assert.deepEqual(entry.families.map((f) => f.family), ['bounty', 'shop', 'tactic', 'recon'], '有候选池 ⇒ 多出重构决策');
+  const cards = reconDraftCards(fake, h.m.rngDraft, 7);
+  assert.equal(cards.length, 7, '人多时重复抽满');
+  assert.ok(cards.every((c) => c.kind === 'tactic'), '按 tactic 形状应用（choice:<id> → EffectRef 默认）');
+  assert.deepEqual(cards.filter((c) => c.id === 'recon_choice_a').map((c) => c.name), ['甲'], '名字取自效果记录');
+  assert.equal(cards.find((c) => c.id === 'recon_choice_b').name, '乙', '池里写了名字就用它');
+  assert.equal(cards.find((c) => c.id === 'recon_choice_b').team, true, 'team 标记透传');
   h.m.dispose();
 });

@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { makeBattle, enemyRec, checkInvariants } from '../helpers/battleHarness.js';
+import { unitInfo } from '../../server/sim/snapshot.js';
 import { KITTED_CHARS, OPERATOR_KITS, KITS } from '../../server/sim/content/kits/index.js';
 import { diyPool, validateDiyPicks, diyRecord } from '../../shared/diy.js';
 import { STONE } from '../../server/sim/content/kits/ops/op-wang.js';
@@ -58,7 +59,8 @@ function field({ tier = 5, elite = false, mod = null, skill = 0, row = 12, col =
   h.b.players[0].dp = dp;
   h.step();
   const u = h.unit(1);
-  return { h, u, st: h.b.allyUnits.filter((a) => a.kind === 'token' && a.defId === STONE) };
+  // 棋子 = 真正占格的 token；跟子（`noTile` 的装饰 token，业主 2026-10-29）不算
+  return { h, u, st: h.b.allyUnits.filter((a) => a.kind === 'token' && a.defId === STONE && !a.noTile) };
 }
 const at = (st, r, c) => st.find((s) => s.homeR === r && s.homeC === c);
 /** The tiles [r, c] the 跟子 were placed on, in order (the kit's 'summon' fx with `follower`). */
@@ -99,6 +101,60 @@ test('望 in every 自选 form: her kit, stats + module attributes, 3-3, blocks 
   const data = { chess: CHESS, backups: BACKUPS };
   for (const t of [5, 6]) assert.ok(diyPool(t, { data, kitted: KITTED_CHARS }).includes(WANG), `tier ${t}`);
   assert.equal(validateDiyPicks({ [SLOT[6]]: { charId: WANG, skillIndex: 2, uniEquipId: X } }, { data, kitted: KITTED_CHARS }).ok, true);
+});
+
+// 业主 2026-10-29「天赋会在相邻位置部署棋子的模型没有显示（天下劫也有这个问题）」：跟子官方是「望自己的投射物」
+// （不占格、不可选中），所以它不是一个占格单位 —— 现在每枚跟子额外生成一枚 `noTile` 的装饰棋子 token：快照里出现
+// ⇒ 客户端画出棋子模型；不写 `_occ` ⇒ 部署 / 寻路 / `unitAt` 都当它不存在（与官方「不占格」一致）。
+test('跟子有模型: every 跟子 is a `noTile` decorative 棋子 token (no tile, untargetable, no attack), its skill follows her slot', () => {
+  for (const [tier, elite, skill] of [[6, true, 0], [6, true, 1], [6, true, 2]]) {
+    const { h, u, st } = field({ tier, elite, skill, stones: [[10, 6], [10, 7]] });
+    h.step();
+    const w = u.mem.wang;
+    const v = tokOf(tier, elite, skill, null);
+    assert.equal(unitInfo(st[0]).tokenSkill, v.skill.skillId, `${label([tier, elite, null])} S${skill + 1}: 棋子自己那条技能随主人的技能槽`);
+    assert.ok(w.followers.length >= 2, `${label([tier, elite, null])} S${skill + 1}: the battle start dropped the 跟子`);
+    for (const f of w.followers) {
+      assert.ok(f.unit && f.unit.alive && f.unit.kind === 'token' && f.unit.defId === STONE, `follower at ${f.r},${f.c} has its token`);
+      assert.equal(f.unit.noTile, true, '不占格（noTile）');
+      assert.equal(h.b.unitAt(f.r, f.c), null, 'unitAt 看不到它：任何部署 / 敌人走过这一格都照常');
+      assert.equal(!!f.unit.s.flags.untargetable, true, '不可选中');
+      assert.equal(!!f.unit.profile.noAttack, true, '不普攻');
+      // 客户端按 UnitInfo.tokenSkill 取官方特效：三条技能对应三条 token 技能
+      assert.equal(unitInfo(f.unit).tokenSkill, v.skill.skillId, `${label([tier, elite, null])} S${skill + 1}: 跟子的技能`);
+    }
+    // 跟子被踩掉 ⇒ 模型一起退场
+    const f0 = w.followers[0];
+    const tok0 = f0.unit;
+    h.spawn('enemy_dummy', { pos: [f0.r, f0.c] });
+    h.step();
+    assert.ok(!tok0.alive, '跟子用掉时它的装饰 token 也退场');
+    assert.equal(f0.unit, null);
+    assert.ok(!h.b.allyUnits.includes(tok0) || !tok0.alive);
+    done(h);
+  }
+});
+
+// 业主 2026-10-29「无论哪个技能部署的棋子效果都是取势（1技能）的效果」：学员部署的棋子曾按**学员自己**的 loadout 解析
+// token 变体（variants 里没有学员的键 ⇒ 退回第一条 = 默认形态 + `sktok_wang_1`），于是继承望的哪个技能都是取势。
+// 现在 `Battle._tokenDef` 对特训学员按**教官 def** 解析（技能槽 / 形态 / 模组）。
+test('特训学员 ← 望: the pieces it deploys resolve 望\'s token variant of HER slot (never the default 取势 one)', () => {
+  for (const si of [0, 1, 2]) {
+    const h = makeBattle({
+      defs: { enemies: { enemy_dummy: enemyRec({ key: 'enemy_dummy', hp: 1e9, speed: 0, mass: 0 }) } },
+      timeLimit: 30, autoFinish: false, seed: 5,
+      units: [{ uid: 1, chessId: 'chess_char_1_01_a', row: 10, col: 3,
+        reconTrainee: { chessId: SLOT[6], diy: { charId: WANG, skillIndex: si }, ratio: 0.5 } }],
+    });
+    h.step();
+    const u = h.unit(1);
+    const tok = h.b.tokenDef(STONE, u);
+    const v = tokOf(6, true, si, null);
+    assert.equal(tok.skill.id, `sktok_wang_${si + 1}`, `S${si + 1}: 棋子自己那条技能按教官的技能槽`);
+    assert.equal(tok.skill.id, v.skill.skillId, `S${si + 1}: 与望本体同一份变体`);
+    if (si === 2) assert.deepEqual(tok.skill.rangeGrid, [[2, 0], [1, 0], [0, -2], [0, -1], [0, 0], [0, 1], [0, 2], [-1, 0], [-2, 0]], '天下劫的 x-6 触发范围');
+    done(h);
+  }
 });
 
 test('铸子: the battle-start deployment of a placed 棋子 is its 手动部署 — one 跟子 next to it, so a lone 棋子 is live; with no free neighbour it never sets off; two side by side activate each other — an enemy (air too) on one sets it off and it is used up; it stays active once its partner is gone', () => {

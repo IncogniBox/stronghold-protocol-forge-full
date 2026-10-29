@@ -634,6 +634,10 @@ export class AudioManager {
     this.uiVoices = 0;
     this.wantBgm = null;      // desired key (kept while locked)
     this.lastBgmKey = null;   // the key the screen asked for last (refreshBgm)
+    // 重构模拟的首领战斗曲是否正在接管（`workshop/mode-recon/ui/music.js` 调 setBossMusic）：
+    // 其他自带音乐的工坊面板（多索雷斯 / 颂乐人偶 Fever）读它把自己压到 50%，战斗自定曲（ui/battleMusic.js）直接让路。
+    this.bossMusicOn = false;
+    this.bossMusicSubs = new Set();
     this.bgm = null;          // { key, loopUrl, nodes: [{src, gain}], gain }
     this.bgmToken = 0;
     this.units = new Map();   // battle unit id → defId
@@ -930,6 +934,25 @@ export class AudioManager {
    */
   refreshBgm() {
     if (this.lastBgmKey != null) this.playBgm(this.lastBgmKey);
+  }
+
+  /**
+   * 重构模拟的首领战斗曲接管 / 交还（`workshop/mode-recon/ui/music.js`）：置位后
+   * `ui/battleMusic.js` 暂停玩家的自定战斗曲，多索雷斯 / 颂乐人偶 Fever 那两个面板把自己压到 50%
+   * （它们不被首领曲覆盖 —— 业主 2026-10-29）。订阅者同步调用。
+   * @param {boolean} on
+   */
+  setBossMusic(on) {
+    on = !!on;
+    if (this.bossMusicOn === on) return;
+    this.bossMusicOn = on;
+    for (const fn of [...this.bossMusicSubs]) { try { fn(on); } catch { /* ignore */ } }
+  }
+
+  /** 订阅首领曲接管状态（返回退订函数）。@param {(on: boolean) => void} fn */
+  subscribeBossMusic(fn) {
+    this.bossMusicSubs.add(fn);
+    return () => this.bossMusicSubs.delete(fn);
   }
 
   async _startBgm(key, track, token) {
@@ -1633,7 +1656,9 @@ export class AudioManager {
             if (u.reconMentor) {
               // 新一次施放：上一轮技能遗留的礼炮窗口作废（窗口只从这一次结束起算）
               u.mentorUntil = -Infinity;
-              this.unit(u.reconMentor.def, 'skill', e[1], u.reconMentor.skillIndex ?? undefined, false, u.reconMentor.skin);
+              // 教官那一声用自己的节流键：`unit()` 的键是 `${unitId}:skill`，与学员自己的同一把，后一声必然落在
+              // 160 ms 的单位冷却里被丢掉——叠上去的教官技能音因此永远是静的（业主「学员继承教官的技能缺少了教官的音效」）
+              this.unit(u.reconMentor.def, 'skill', `${e[1]}:mentor`, u.reconMentor.skillIndex ?? undefined, false, u.reconMentor.skin);
             }
             // 作战中N: the equipped skill's own slot (0-based; 作战中4 is the fallback of a 4th slot)
             if (unitSoundClass(u) === 'char') {

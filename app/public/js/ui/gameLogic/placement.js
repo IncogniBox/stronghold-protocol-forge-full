@@ -215,12 +215,14 @@ export function indexPieces(priv) {
  * @param {{ priv:any, stage:any, editable:boolean, field?:'normal'|'bossL'|'bossR', getChess?:(id:string)=>any,
  *   getToken?:(id:string)=>any, getItem?:(id:string)=>any, getEffect?:(id:string)=>any }} o
  */
-export function placementContext({ priv, stage, editable, field = 'normal', getChess = () => null, getToken = () => null, getItem = () => null, getEffect = () => null, backups = null, layout = null }) {
+export function placementContext({ priv, stage, editable, field = 'normal', getChess = () => null, getToken = () => null, getItem = () => null, getEffect = () => null, backups = null, layout = null, reconMode = false }) {
   const pieces = indexPieces(priv);
   const boardAt = new Map();
   for (const e of pieces.values()) if (e.area === 'board') boardAt.set(tileKey(e.row, e.col), e);
   const handAt = new Map();
   for (const e of pieces.values()) if (e.area === 'hand') handAt.set(e.idx, e);
+  const tempAt = new Map();
+  for (const e of pieces.values()) if (e.area === 'temp') tempAt.set(e.idx, e);
   const cap = Number.isInteger(priv?.deployCap) ? priv.deployCap : 8;
   let deployed = 0;
   for (const e of pieces.values()) if (e.area === 'board' && e.piece.kind === 'chess') deployed += 1;
@@ -233,9 +235,13 @@ export function placementContext({ priv, stage, editable, field = 'normal', getC
   const deploy = field !== 'normal'
     ? deploySets(stage, field, ov, L)
     : deploySets(effectiveStage(stage, ov, L), 'normal', {}, L);
-  return { priv, pieces, boardAt, handAt, deploy, cap, count, field, editable: !!editable, getChess, getToken, getItem, backups, layout: L,
+  return { priv, pieces, boardAt, handAt, tempAt, deploy, cap, count, field, editable: !!editable, getChess, getToken, getItem, backups, layout: L,
+    // 重构模拟（`mode_recon_*`）：装备上限 +1（与 `server/match/gamedata.js equipCapacity` 同一条）
+    reconMode: !!reconMode,
     // 整备区容量是本局的（m.private.hand 数组长度：官方 10 / 45×60 重构战场 16）
-    handSize: Array.isArray(priv?.hand) ? priv.hand.length : GEO.HAND_SIZE };
+    handSize: Array.isArray(priv?.hand) ? priv.hand.length : GEO.HAND_SIZE,
+    // 临时整备区同理（官方 5 / 45×60 重构战场 8）：第 3 行那排格子也能把装备配给上面的干员
+    tempSize: Array.isArray(priv?.temp) ? priv.temp.length : GEO.TEMP_SIZE };
 }
 
 /**
@@ -373,6 +379,18 @@ export function canPlace(ctx, uid, target) {
     return { ok: true, action: 'swap' };
   }
 
+  // 临时整备区（第 3 行那排格子）：**只有装备能落** —— 落在干员身上就是配装（与手牌那条同一套判据），
+  // 别的一律拒绝。业主 2026-10-29「重构模拟的整备区和正常模式的整备区一样，可以把装备装备到整备区的干员身上
+  // （但是目前有些整备格子没法装备）」—— 临时整备区此前在 `canPlace` / `render/drag.js` 里整段被拒。
+  if (target.area === 'temp') {
+    const idx = target.idx;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= (ctx.tempSize || GEO.TEMP_SIZE)) return no('BAD_TILE', t('无法放置在该位置'));
+    if (piece.kind !== 'item') return no('BAD_TILE', t('临时整备区无法放入单位'));
+    const occ = ctx.tempAt.get(idx);
+    if (!occ) return no('BAD_TARGET', t('请将装备拖拽至干员身上'));
+    return equipCheck(ctx, piece, occ.piece);
+  }
+
   if (target.area === 'board') {
     const { row, col } = target;
     if (!Number.isInteger(row) || !Number.isInteger(col)) return no('BAD_TILE', t('无法部署在该位置'));
@@ -457,7 +475,12 @@ export function equipReplaces(ctx, uid, targetPiece) {
   // 不占格的那一件永远不是被顶掉的那一件（它自己从不打开替换对话框）
   if (slot.isSlotless(rec)) return false;
   // 「还装得下吗」：占了几格（策略；`plus` 档下变形同构体不计数）< 容量（官方 2 + 携带者的 slot_cap，含正落下的这件）
-  const cap = equipCapacity(DEFAULT_EQUIP_PER_CHESS, [...items, rec], (id) => ctx.getItem?.(id));
+  const cap = equipCapacity(DEFAULT_EQUIP_PER_CHESS, [...items, rec], (id) => ctx.getItem?.(id))
+    // 重构模拟：每名干员可携带的装备数 +1（与 server/match/gamedata.js 的 `isRecon` 同一条）
+    + (ctx.reconMode ? 1 : 0)
+    // 重构模拟·维多利亚 6 名：该盟约成员可携带的装备数 +1（与 `server/match/player/items.js` 同一条判据）
+    + (ctx.reconMode && (ctx.priv?.bonds || []).some((b) => b && b.bondId === 'victoriaShip' && b.tier >= 2)
+      && ((ctx.getChess?.(targetPiece.id)?.bonds) || []).includes('victoriaShip') ? 1 : 0);
   if (slot.slotsUsed(items, ctx.getItem) < cap) return false;
   if (!consumedOnEquip(rec)) return !equipMerges(ctx, uid);
   const promotes = Array.isArray(rec.buffs) && rec.buffs.some((b) => PROMOTE_KEYS.has(b?.key));
@@ -521,7 +544,9 @@ export function dropIntent(ctx, uid, target) {
   if (!res.ok) return null;
   if (res.action === 'art') return { t: 'g.art', fields: { itemUid: uid, row: target.row, col: target.col } };
   if (res.action === 'equip') {
-    const occ = target.area === 'hand' ? ctx.handAt.get(target.idx) : ctx.boardAt.get(tileKey(target.row, target.col));
+    const occ = target.area === 'hand' ? ctx.handAt.get(target.idx)
+      : target.area === 'temp' ? ctx.tempAt.get(target.idx)
+        : ctx.boardAt.get(tileKey(target.row, target.col));
     // both slots used: the replace dialog picks the equipped item to destroy (g.equip replaceUid) — see equipReplaces
     return { t: 'g.equip', fields: { itemUid: uid, targetUid: occ.piece.uid }, confirmReplace: equipReplaces(ctx, uid, occ.piece) };
   }
@@ -543,7 +568,7 @@ export function dropFailureReason(ctx, uid, tile) {
   let target = null;
   if (tile.area === 'board') target = { area: 'board', row: tile.row, col: tile.col };
   else if (tile.area === 'hand') target = { area: 'hand', idx: Number.isInteger(tile.idx) ? tile.idx : tile.col };
-  else if (tile.area === 'temp') return ctx.pieces.get(uid).area === 'temp' ? null : t('临时整备区无法放入单位');
+  else if (tile.area === 'temp') target = { area: 'temp', idx: Number.isInteger(tile.idx) ? tile.idx : tile.col };
   else if (Number.isInteger(tile.row) && tile.row >= boardRectOf(ctx.layout, ctx.field).r0 && tile.row <= boardRectOf(ctx.layout, ctx.field).r1) return t('无法部署在该位置');
   else return null;
   const res = canPlace(ctx, uid, target);

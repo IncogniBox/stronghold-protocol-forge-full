@@ -117,7 +117,9 @@ redeployed at once on its landing tile — no 不屈 roll) and permanent removal
 | field | row | col | direction |
 |---|---|---|---|
 | normal | row | col + colOffset (0) | unit `dir` (default RIGHT) |
-| unite | row | col + colOffset (0 or 8) | unit `dir` |
+| unite, single-board map | row | col + colOffset (0 or 8) | unit `dir` |
+| unite, two-half map, side L | row | col on `normalL` (no shift) | unit `dir` |
+| unite, two-half map, side R | row | **mirrorCol − col** on `normalR` (mirrored, colOffset 0) | **mirrored**: RIGHT ↔ LEFT (`battle.mapDir`) |
 | boss/hidden, side L | row − 7 when row ≥ 7 (board 9–12 → boss 2–5) | col + colOffset | unit `dir` |
 | boss/hidden, side R | same | **20 − col** (mirrored; colOffset ignored) | **mirrored**: RIGHT ↔ LEFT, UP / DOWN unchanged (`battle.mapDir`) |
 
@@ -190,7 +192,10 @@ A spec entry the battle queues (`_queueSpawn`) is `inTotal` when it counts (`cou
 that is the HUD capsule's own set (§1.3); everything content spawns at runtime (a split, a summon — a boss's included —,
 a part) is not, even when it counts for LP (`counted`).
 `RouteSpec` accepts data/waves.json routes (`{motion, start, end, checkpoints:[[r,c]…], steps:[{t:'move',p},{t:'wait',s},{t:'disappear'},{t:'appear',p}]}`)
-and research routes (`{m, s, e, cp:[['MOVE',r,c]…]}`). `spawnsFromTemplate(waveEntry, {mods})` (simdata.js) converts a
+and research routes (`{m, s, e, cp:[['MOVE',r,c]…]}`). A spawn may also carry its own `route` (a `RouteSpec`), which wins over
+its `routeIndex` — the 联防 of a self-drawn map uses one explicit two-leg route per leak (right-hand helper's upper ground
+route → `disappear` at the right target → `appear` at the lower entrance → the lower left ground route → the left target),
+so the same unit (HP, buffs, mods) crosses both halves and only the left target leaks (docs/META.md §4). `spawnsFromTemplate(waveEntry, {mods})` (simdata.js) converts a
 template into `{ routes, spawns, maxPlayTime, overrides, extraRoutes }` (non-spawn `action` entries are skipped; `unharmful`
 and `tag:'part'` spawns don't count in `total`). The boss templates' 传送门 reads as "reappear on the far side" (GitHub
 #336, PR #337): four official routes write the crossing as `disappear → wait → move` to the exit with no `appear` (their
@@ -1425,6 +1430,12 @@ Unknown subprofessions fall back to the profession default (test `professions.te
   readouts of `snapshot.js` `ammoView` (an ally's running ammo skill: whole rounds, the magazine = `ammoMax`), `wolfView` (伺夜's 狼群:
   `mem.shadows` of `mem.wolfCapacity`) and `negView` (`unit.negFill()`, set by 斩业星熊's T1 业火: the 我执 pool as a share of its cap);
   UnitInfo `ammoSkill` marks an ally whose skill is an ammo magazine (DESIGN §8.2).
+  UnitInfo `tokenSkill` is the summon's own **resolved** skill id (a token record has ONE skill, so its `skillIndex` is always 0
+  and the client would always draw that one): 望's 棋子 resolve `sktok_wang_1` / `_2` / `_3` from her selected skill
+  (`getDiyToken` `bySkill`), and the client looks its official fx plan up by that id (`render/vfx/skills.js resolveSkill`).
+  Decorative summons — 望's 跟子, the 铸子/skill-deployed 棋子 that officially "take no tile" — are spawned with
+  `spawnToken(..., { noTile: true })`: a real token (a `spawn` event, so it is drawn) that never writes `_occ`
+  (`server/sim/battle/deploy.js`), so deployment, pathing and `unitAt` treat its tile as empty.
   `layers: [[id, n]]` and `charges: [[id, stored, max]]` (each only when non-empty; display only, 0.3.0 round 46) =
   `snapshot.js` `layerView` (the sum of a unit's buffs' `shieldHits`: 泥岩's 护盾 layers) and `chargeView` (an ally skill
   with maxCharges > 1: `skill.charges`), read by the official effects (DESIGN §35.16).

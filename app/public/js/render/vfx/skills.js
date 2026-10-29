@@ -397,6 +397,14 @@ export function resolveSkill(idx, { info = null, rec = null, unitKey = null, ski
   // [ASSUMED] An explicit slot wins over an id; a missing mapping falls through to the old resolver.
   const mapped = mapping?.[String(index ?? srec?.index)] ?? mapping?.[srec?.skillId] ?? mapping?.[srec?.prefabId];
   if (typeof mapped === 'string' && find(mapped)) return { ...out, skillId: mapped, skill: find(mapped), via: 'plugin' };
+  // 召唤物自己那条技能（UnitInfo.tokenSkill）：token 记录只有一条技能（index 恒 0），按 skillIndex 取永远是默认那条
+  // —— 望的棋子在 S1 / S2 / S3 下是 `sktok_wang_1` / `_2` / `_3` 三条不同的官方特效，sim 解析出的那份随快照下来，
+  // 这里按 id 直接取它（取不到时退回下一条链路）。
+  const ownId = lc(info?.tokenSkill);
+  if (ownId) {
+    const s = find(ownId);
+    if (s) return { ...out, skillId: ownId, skill: s, via: 'record' };
+  }
   const ns = key.startsWith('plugin:') ? key.slice(0, key.lastIndexOf(':') + 1) : '';
   for (const id of skillIdsOf(srec).flatMap(id => ns ? [ns + id, id] : [id])) {
     const s = find(id);

@@ -282,6 +282,7 @@ export class SkillFx {
         let mentorPlan = null;
         let mentorMode = null;
         let mentorFx = null;
+        let mentorSkillId = null;
         if (rm && typeof rm.spine === 'string' && this.w.idx) {
           try {
             const hasLib = (k) => !!k && this.w.ofx.lib.has(k);
@@ -303,8 +304,18 @@ export class SkillFx {
             if (!mr?.plan) mr = planFor(this.w.idx, { info: minfo, rec: null, unitKey: rm.spine });
             const hasRow = (e) => !!e && hasLib(withFxKey(e.key, mentorFx, hasLib)) || (e.slots || []).some((s) => hasLib(withFxKey(s, mentorFx, hasLib)));
             const has = (e) => !!e && (hasLib(e.key) || (e.slots || []).some(hasLib) || hasRow(e));
-            if (mr?.plan && [...mr.plan.start, ...mr.plan.range, ...mr.plan.loop, ...mr.plan.end].some(has)) {
+            // 业主 2026-10-29：只看 start / range / loop / end 会把**自增益、只改普攻**的教官技能（逻各斯 S3 这类，
+            // 特效全在攻击的命中行里）整份丢掉——改成 plan 的任意一行（含 attack / each / pulse 的键）装上就算。
+            const anyKey = !!mr?.plan && planKeys(mr.plan).some((k) => {
+              if (!k) return false;
+              const lk = String(k).toLowerCase();
+              return hasLib(lk) || hasLib(withFxKey(lk, mentorFx, hasLib));
+            });
+            if (anyKey || (mr?.plan && [...mr.plan.start, ...mr.plan.range, ...mr.plan.loop, ...mr.plan.end].some(has))) {
               mentorPlan = withFx(mr.plan, mentorFx, hasLib);
+              // 教官技能的 index 侧 id：kit fx 的官方绑定（FX_BINDINGS / FX_COVER）按**技能**登记，学员那一份特效
+              // 也要按教官的技能去认（异客 S3 的雷暴 'storm' / 蕾缪安 S3 的锁定与礼炮都是这样，业主 2026-10-29）
+              if (typeof mr?.skillId === 'string' && mr.skillId) mentorSkillId = lc(mr.skillId);
             }
             // 教官技能**攻击模式**的官方行（新约能天使 S3 这类「技能本体只是 buff，攻击换到 mode S3」的技能：
             // 施放 / 范围 / 命中全在 mode 里，不在 skill 的 attack 行）——学员攻击时由 wiring 的 _mentorAttackSet 叠上。
@@ -324,6 +335,14 @@ export class SkillFx {
           U.mentorPlan = mentorPlan;
           U.mentorMode = mentorMode ? { unitKey: rm.spine, mode: mentorMode } : null;
           U.mentorFx = mentorFx;
+          U.mentorSkillId = mentorSkillId;
+          // 「单次释放类」教官（异角 S3 的雷暴这类：技能本体没有攻击行、也没有常驻行，效果全在 kit 的一次 onStart 里）：
+          // sim 侧改成了**每次攻击 / 浮游单元每次命中各触发一次**，客户端对应地不再在施放时播一次，而是由
+          // `mentorOnceAt` 在每一次触发处播这些官方行（业主 2026-10-29）。
+          U.mentorOnce = !!mentorPlan
+            && !mentorPlan.attacks.some((a) => a.cast.length || a.range.length || (a.aim || []).length || a.hit.some((g) => g.length))
+            && !mentorPlan.loop.length && !mentorPlan.targets.length && !mentorPlan.trigger.length
+            && (mentorPlan.start.length + mentorPlan.range.length) > 0;
         }
       }
       this.units.set(id, U);
@@ -359,8 +378,8 @@ export class SkillFx {
       enemy: r.enemy || [], enemySlots: Array.isArray(rec?.skills) ? rec.skills.length : 0, ewin: null, prevAnim: 0, modePlans: new Map(),
       // 特训（叠加式）：教官技能的官方 plan（skillfx.of 按 UnitInfo.reconMentor 解析）——随学员的施放叠加播放；
       // mentorMode 是教官技能换了攻击模式的那些技能（能天使 S3 的 mode S3）的攻击行来源；mentorFx 是教官当前时装的
-      // 特效后缀（那些行已按它换成变体 key）
-      mentorPlan: null, mentorMode: null, mentorFx: null,
+      // 特效后缀（那些行已按它换成变体 key）；mentorSkillId 是教官技能的 index 侧 id（kit fx 的官方绑定按它认）
+      mentorPlan: null, mentorMode: null, mentorFx: null, mentorSkillId: null,
     };
   }
 
@@ -520,17 +539,14 @@ export class SkillFx {
           if (h) { drew = true; this._keep(U, e, h); }
         }
       }
-      // 特训（叠加式）：教官技能的 start / range / loop 随学员的施放一起播——loops 进同一份 U.loops
-      // （技能结束 / 死亡 / 撤退一起停；hold 'skill' 的跟挂点）
-      if (U.mentorPlan) {
-        let mDraw = 0;
+      // 特训（叠加式）：教官的 start / range / loop 随学员的施放一起播 —— 全部行都叠（业主 2026-10-29 校正：
+      // 学员要**完整**继承教官技能的效果，包括赤刃明霄陈 S3 的剑气 / 红龙那一条变身与游走剑气）。
+      if (U.mentorPlan && !U.mentorOnce) {
         for (const e of uniq([...U.mentorPlan.start, ...U.mentorPlan.range, ...U.mentorPlan.loop])) {
           if (e.birth) continue;
           const h = this._play(e, v);
-          if (h) { mDraw++; drew = true; this._keep(U, e, h); }
+          if (h) { drew = true; this._keep(U, e, h); }
         }
-        // 诊断（每次施放一条）：教官叠加行实际播出的数量
-        console.debug(`[特训fx] 学员 ${U.v?.info?.spine || ''} 施放：教官行播出 ${mDraw} 条`);
       }
       // the skill's own cast at its start (tagCasts 'start'): its rows now, its hits on the damage that follows
       if (U.plan && this._castOnce(U, v, 'start')) drew = true;
@@ -556,7 +572,7 @@ export class SkillFx {
     if (was && U.plan) this._endCast(U, v);
     this._stopLoops(U);
     if (U.plan) for (const e of uniq(U.plan.end)) this._keep(U, e, this._play(e, v));
-    // 特训（叠加式）：教官技能的 end 行随学员技能的结束一起播（loops 已在上面随 _stopLoops 一起停）
+    // 特训（叠加式）：教官的 end 行随学员技能的结束一起播（loop 在上面那条里就不叠）
     if (U.mentorPlan) for (const e of uniq(U.mentorPlan.end)) this._keep(U, e, this._play(e, v));
     return U.drawsStart || !!U.mentorPlan;
   }
@@ -689,13 +705,16 @@ export class SkillFx {
 
   /** The skill's plan has installed effects (FX_COVER: they stand for the kit fx only when they are drawn). */
   _planDrawn(U) {
-    if (U.planOk === undefined) U.planOk = !!U.plan && planKeys(U.plan).some((k) => this.w.ofx.lib.has(k));
+    if (U.planOk === undefined) {
+      const drawn = (p) => !!p && planKeys(p).some((k) => this.w.ofx.lib.has(k));
+      U.planOk = drawn(U.plan) || drawn(U.mentorPlan);
+    }
     return U.planOk;
   }
 
   /** A kit fx of the unit belongs to its skill (rule 5, `during` bindings): on, its activation frame, just ended, or held. */
   _lasts(U) {
-    if (!U || !U.plan) return false;
+    if (!U || (!U.plan && !U.mentorPlan)) return false;
     const now = this.w.ofx.time;
     return this._on(U) || U.startFrame === this.frame || now - U.offAt <= COVER_AFTER_S || this.marks.some((m) => m.owner === U.id && m.until > now);
   }
@@ -897,6 +916,59 @@ export class SkillFx {
     if (!replace && !fx.cast.length && !fx.hit.length && !st.U.tHit.length) return null;
     const buffs = mAtk ? [...st.U.tHit, ...targetsOf(this.w.idx, U.mentorPlan).hit] : st.U.tHit;
     return { U: st.U, fx, replace, projectile, shot: replace ? fx.shot : null, buffs, late: forced };
+  }
+
+  /**
+   * 特训：学员的**浮游单元**命中一件目标时，也把教官的命中行叠上（业主 2026-10-29：浮游单元的每一次攻击也要触发
+   * 教官的技能效果与特效）。`nth` = 这一发攻击里的第几次伤害（命中组按组号取，与本体同一把尺）；教官 plan 的键
+   * 已在 `of()` 里按时装换过变体，这里直接播、不再套学员的时装。
+   */
+  mentorFunnelHit(v, tgt, nth = 0) {
+    const U = v ? this.of(v) : null;
+    if (!U?.mentorPlan || !this.active() || !tgt) return false;
+    // 单次释放类教官：浮游单元的这一次命中在目标处再播一遍它的官方行（`mentorOnceAt`）
+    if (U.mentorOnce) this.mentorOnceAt(v, tgt);
+    let drew = false;
+    const n = Math.max(0, Math.floor(nth) || 0);
+    const m = planAttack(perAttack(U.mentorPlan), { heal: false, ranged: true });
+    const groups = m?.hit || [];
+    if (groups.length) {
+      const g = groups[Math.min(n, groups.length - 1)] || [];
+      for (const e of g) if (e && e.key && this.w.playOn(e.key, tgt, { follow: true, important: true })) drew = true;
+    }
+    // 教官技能把攻击换到了 mode（新约能天使 S3 这类）：mode 的命中行 / 弹道 onHit·onStop 同样叠
+    // （`_mentorAttackSet` 已按时装换过变体，命中组按组号与本体同一把尺）
+    if (U.mentorMode) {
+      const set = this.w._mentorAttackSet(U.v, tgt, 'none', n, {});
+      if (set) {
+        for (const row of set.hit) {
+          for (const k of this.w._rowKeys(row, U.v, n)) {
+            if (k && this.w.playOn(k, tgt, { follow: true, important: true })) drew = true;
+          }
+        }
+      }
+    }
+    return drew;
+  }
+
+  /**
+   * 单次释放类教官（异客 S3 的雷暴这类）的官方行：sim 在**每一次攻击 / 浮游单元每一次命中**触发一次，客户端就在
+   * 触发处（目标上）播一遍这些行（`mentorPlan.range` / `start`，已按时装换成变体）。施放那一下不再播（见 `of` 的
+   * `mentorOnce`）。
+   */
+  mentorOnceAt(v, tgt) {
+    const U = v ? this.of(v) : null;
+    if (!U?.mentorOnce || !U.mentorPlan || !this.active() || !tgt) return false;
+    // 与服务端同一条 0.2 s 内置 CD（别的触发在同一个窗口里就不再播）
+    const now = this.w.ofx.time;
+    if (U.mentorOnceAt != null && now - U.mentorOnceAt < 0.2 - 1e-9) return false;
+    U.mentorOnceAt = now;
+    let drew = false;
+    for (const e of uniq([...U.mentorPlan.range, ...U.mentorPlan.start])) {
+      const h = this._play(e, tgt, { follow: true, important: true });
+      if (h) drew = true;
+    }
+    return drew;
   }
 
   /**
@@ -1157,12 +1229,19 @@ export class SkillFx {
     }
     for (const field of ['src', 'id']) {
       const U = extra[field] != null ? this.units.get(extra[field]) : null;
-      const bind = U ? FX_BINDINGS[U.skillId]?.[kind] : null;
-      if (bind && bind.owner === field && (!bind.during || this._lasts(U))) return bind.attack ? this._boundAttack(U, bind) : this._bound(U, bind, x, y, extra);
+      const hit = U ? this._bindOf(U, kind) : null;
+      if (hit && hit.bind.owner === field && (!hit.bind.during || this._lasts(U))) {
+        return this._boundSheet(U, hit, x, y, extra);
+      }
     }
     // a binding whose fx names no owner: the unit whose skill of that id lasts
     for (const sid of BOUND_BY_SKILL[kind] || []) {
-      for (const Uo of this.units.values()) if (Uo && Uo.skillId === sid && Uo.v && this._lasts(Uo)) return this._bound(Uo, FX_BINDINGS[sid][kind], x, y, extra);
+      for (const Uo of this.units.values()) {
+        if (!Uo || !Uo.v) continue;
+        const hit = this._bindOf(Uo, kind);
+        if (!hit || hit.bind.owner !== 'skill' || hit.sid !== sid || (hit.bind.during && !this._lasts(Uo))) continue;
+        return this._boundSheet(Uo, hit, x, y, extra);
+      }
     }
     // (6) a summon's arrival on a unit whose official birth effect drew in this frame
     if (extra.id != null && !FUNNEL_KINDS.has(kind) && (ARRIVAL.has(kind) || fxSpec(kind, extra).a === 'summon')) {
@@ -1211,9 +1290,29 @@ export class SkillFx {
     }
   }
 
+  /**
+   * 这套 kit fx 属于哪个技能的官方绑定：先认单位**自己的**技能，再认特训教官**影子技能**（`mentorSkillId`）——
+   * 脱手类技能（异客 S3 的雷暴、蕾缪安 S3 的锁定 / 礼炮）的 fx 全在 FX_BINDINGS 里按技能 id 登记，学员自己的
+   * 技能 id 查不到它们，原先就整段退回引擎默认特效（业主 2026-10-29）。
+   * @returns {{ bind: any, sid: string, fx: string|null }|null} `fx` = 教官时装的变体后缀（自己那份为 null）
+   */
+  _bindOf(U, kind) {
+    if (!U) return null;
+    const own = U.skillId ? FX_BINDINGS[U.skillId]?.[kind] : null;
+    if (own) return { bind: own, sid: U.skillId, fx: null };
+    const mfx = U.mentorSkillId && U.mentorSkillId !== U.skillId ? FX_BINDINGS[U.mentorSkillId]?.[kind] : null;
+    return mfx ? { bind: mfx, sid: U.mentorSkillId, fx: U.mentorFx } : null;
+  }
+
+  /** A binding's entries: the attack node of the plan they name, else the effects placed at the fx. */
+  _boundSheet(U, hit, x, y, extra) {
+    if (hit.bind.attack) return this._boundAttack(U, hit.bind, hit.fx ? U.mentorPlan : U.plan);
+    return this._bound(U, hit.bind, x, y, extra, hit.fx);
+  }
+
   /** An FX_BINDINGS `attack` entry: that plan attack's rows on the owner now, its hits on the damage that follows. */
-  _boundAttack(U, bind) {
-    const a = U.plan?.attacks.find((x) => x.node === bind.attack);
+  _boundAttack(U, bind, plan = U.plan) {
+    const a = plan?.attacks.find((x) => x.node === bind.attack);
     const v = U.v;
     if (!a || !v) return false;
     let drew = false;
@@ -1226,18 +1325,34 @@ export class SkillFx {
   _covered(kind, extra) {
     for (const field of ['src', 'id']) {
       const U = extra[field] != null ? this.units.get(extra[field]) : null;
-      if (U && U.v && coverOf(U.skillId, kind) && this._lasts(U) && this._planDrawn(U)) return true;
+      // 自己那份技能，或特训教官的影子技能（异客 S3 这类脱手技能：教官技能才登记了 cover）
+      const sid = U && U.v
+        ? (coverOf(U.skillId, kind) ? U.skillId
+          : U.mentorSkillId && U.mentorSkillId !== U.skillId && coverOf(U.mentorSkillId, kind) ? U.mentorSkillId : null)
+        : null;
+      if (sid && this._lasts(U) && this._planDrawn(U)) return true;
     }
     return false;
+  }
+
+  /**
+   * A binding effect's prefab key: the unit's own outfit variant (`fxKey`), or — when the binding came from the trainee's
+   * mentor skill — the mentor's (`mentorFx` suffix). null when neither is installed (the procedural fx stays).
+   */
+  _bindingKey(key, U, fx = null) {
+    if (!fx) return this.w.fxKey(key, U.v);
+    const k = lc(key);
+    if (!k) return null;
+    const v = String(withFxKey(k, fx, (x) => this.w.ofx.lib.has(x))).toLowerCase();
+    return this.w.ofx.lib.has(v) ? v : null;
   }
 
   /**
    * An FX_BINDINGS entry: the projectile's reached effects (or its keys) where the fx happens, held as the binding
    * says; a binding's own `keys` at 'target' once on the unit the fx names.
    */
-  _bound(U, bind, x, y, extra) {
-    // 变体按技能主人的时装解析（`fxKey`：这套时装装了 `<key>_<fx>` 就用它）—— 绑定投影到地面 / 目标身上时也一样
-    const keys = bindingEffects(this.w.idx, bind).map((k) => this.w.fxKey(k, U.v)).filter(Boolean);
+  _bound(U, bind, x, y, extra, fx = null) {
+    const keys = bindingEffects(this.w.idx, bind).map((k) => this._bindingKey(k, U, fx)).filter(Boolean);
     if (!keys.length) return false;
     if (bind.at === 'target') {
       // once on the unit the fx names (泡泡's attacker, 归溟幽灵鲨 S1's ally), else where it happens; turned by the owner's side
@@ -1276,10 +1391,12 @@ export class SkillFx {
    */
   bindsReached(src, proj) {
     const U = proj ? this.units.get(idOf(src)) : null;
-    const binds = U ? FX_BINDINGS[U.skillId] : null;
-    if (!binds) return false;
-    for (const b of Object.values(binds)) {
-      if (b.at === 'point' && b.projectile && this.w.idx?.projectiles?.[lc(b.projectile)] === proj && (!b.during || this._lasts(U))) return true;
+    if (!U) return false;
+    // 自己那份技能，或特训教官的影子技能（脱手类教官的绑定按教官的技能 id 登记）
+    for (const sid of [U.skillId, U.mentorSkillId === U.skillId ? null : U.mentorSkillId]) {
+      for (const b of Object.values(FX_BINDINGS[sid] || {})) {
+        if (b.at === 'point' && b.projectile && this.w.idx?.projectiles?.[lc(b.projectile)] === proj && (!b.during || this._lasts(U))) return true;
+      }
     }
     return false;
   }
@@ -1494,12 +1611,21 @@ export class SkillFx {
         for (const k of planKeys(U.mentorPlan)) out.add(k);
         for (const pk of U.mentorPlan.projectiles) proj(pk);
       }
-      // …以及教官技能换了攻击模式时那份 mode 的施放 / 命中行（_mentorAttackSet 用的同一份）
+      // …以及教官技能的 kit fx 官方绑定（异客 S3 的雷暴 / 蕾缪安 S3 的锁定与礼炮这类脱手技能只在 FX_BINDINGS 里）
+      // ——同样按教官**当前时装**的变体预载
+      if (U.mentorSkillId) {
+        const has = (x) => !!x && this.w.ofx.lib.has(x);
+        for (const k of bindingKeys(idx, U.mentorSkillId)) out.add(withFxKey(k, U.mentorFx, has));
+      }
+      // …以及教官技能换了攻击模式时那份 mode 的施放 / 命中行（_mentorAttackSet 用的同一份）——同样按教官**当前时装**
+      // 的变体预载（业主 2026-10-29：不会出现教官穿了皮肤、学员继承的却还是默认特效）
       if (U.mentorMode?.mode) {
+        const has = (x) => this.w.ofx.lib.has(x);
         for (const a of [U.mentorMode.mode.attack, U.mentorMode.mode.combat]) {
           if (!a) continue;
-          for (const f of ['cast', 'castTarget', 'inputTarget', 'hit']) for (const r of a[f] || []) for (const k of r.effects || []) out.add(k);
-          const has = (x) => this.w.ofx.lib.has(x);
+          for (const f of ['cast', 'castTarget', 'inputTarget', 'hit']) {
+            for (const r of a[f] || []) for (const k of r.effects || []) out.add(String(withFxKey(k, U.mentorFx, has)).toLowerCase());
+          }
           const subs = [a, ...(Array.isArray(a.abilities) ? a.abilities : [])];
           for (const ab of subs) for (const pk of [ab.projectileKey, ...(ab.extraProjectileKeys || [])]) {
             proj(pk);

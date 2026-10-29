@@ -3887,6 +3887,37 @@ function applyVariantDataPatches(out, packs, report) {
 }
 
 /**
+ * 重构盟约（`recon_<官方 id>`）的成员表按 **棋子自己的 `bonds`** 重算，返回新的 `bonds` 表（没写这类记录时是 `null`）。
+ *
+ * 为什么：重构记录是包里的静态 JSON，手抄的 `members` / `visibleMembers` 只可能是**那一刻**的官方名册；后来由
+ * **别的包**新增、却带着同一条官方盟约的干员不会出现在名册里。局内计数读的是棋子的 `bonds`（`isMember`），
+ * 于是「谁算这个盟约的人」有两份答案：加成给了新干员，报告「对应干员」与局内「对应盟约」名单里却没有他。
+ * 与 `reconcilePluginBonds` 对 `bond_x_` 的做法同一条（成员以 chess 为准）：`members` = 所有非黄金形态的携带者，
+ * `visibleMembers` = 其中 `visible !== false` 的那些（隐藏棋子不进名册，与官方名册同一条口径）。
+ * 只认 `recon_` 前缀，其它盟约记录逐字节不动。
+ * @param {Readonly<Record<string, any>>} data 合并后的数据（要有 `bonds` 与 `chess`）
+ * @returns {Record<string, any>|null} 新的 `bonds` 表，没有 `recon_*` 记录时 `null`
+ */
+function reconBondMembers(data) {
+  const bonds = isPlainObj(data.bonds) ? data.bonds : null;
+  const chess = isPlainObj(data.chess) ? data.chess : null;
+  if (!bonds || !chess) return null;
+  let next = null;
+  for (const [id, rec] of Object.entries(bonds)) {
+    if (!id.startsWith('recon_') || !isPlainObj(rec)) continue;
+    const base = id.slice('recon_'.length);
+    const holders = Object.values(chess).filter((c) => isPlainObj(c) && !c.isGolden
+      && typeof c.chessId === 'string' && Array.isArray(c.bonds) && c.bonds.includes(base));
+    (next ||= { ...bonds })[id] = {
+      ...rec,
+      members: holders.map((c) => c.chessId),
+      visibleMembers: holders.filter((c) => c.visible !== false).map((c) => c.chessId),
+    };
+  }
+  return next;
+}
+
+/**
  * Apply every pack's content on top of the official data and return a NEW top-level object (the input is never
  * mutated; the caller freezes the result). Official ids are only replaced when the pack declared them in `overrides`;
  * a collision that was not declared is a reported error and the record already in place is kept.
@@ -4019,6 +4050,11 @@ export function applyWorkshop(base, packs) {
   // 自选池（`diy.ownedPool` / `diy.operators`）：读 `data.backups.units` 里那条已经合并好的记录，
   // 所以必须排在内容文件那一层之后 —— 它在这个函数里是最末一批，天然满足。
   mergeWorkshopOperators(out, packs, report);
+  // 重构盟约的名册（见 `reconBondMembers`）：必须在**所有包**的 chess 都并完之后 —— 名册要包含别的包新增的干员。
+  {
+    const bonds = reconBondMembers(out);
+    if (bonds) out.bonds = bonds;
+  }
   // 试玩开关（`pack.json.playtest`）不并进任何数据文件 —— 它是**行为层**的声明，引擎只在试玩服务器里读它
   // （`SP_PLAYTEST=1`）。但两个包撞同一个 id 这件事必须与其它面一样被点名报告，否则输的一方会在
   // 「我明明勾了」和「试玩里没有」之间反复，而日志一句话都不说。

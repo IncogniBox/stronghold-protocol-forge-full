@@ -1320,12 +1320,14 @@ function yanyouKit(bb, raw) {
       onDeploy(battle, unit, () => { unit.mem.keysAt = null; refreshKeys(unit); });
       // every damage it deals adds burn (not the burn itself, not element bursts; not a killing blow — the hook runs
       // before the kill, at 0 HP: no burst on the corpse)
-      if (epRatio > 0) {
+      if (epRatio > 0 || unit.mem.yanyouRecon) {
         battle.on('damaged', (ctx) => {
           const t = ctx.target;
           if (ctx.source !== unit || !t || t.side !== 'enemy' || !hasHp(t)) return;
           if (ctx.type === 'element' || ctx.type === 'elemental' || !(ctx.amount > 0)) return;
-          battle.dealDamage(unit, ctx.target, { type: 'element', element: 'burn', amount: unit.s.atk * epRatio, tags: ['yanyou'] });
+          const ratio = unit.mem.yanyouRecon?.burn ?? epRatio;
+          if (!(ratio > 0)) return;
+          battle.dealDamage(unit, ctx.target, { type: 'element', element: 'burn', amount: unit.s.atk * ratio, tags: ['yanyou'] });
         }, { owner: unit });
       }
       // "即将受到元素损伤前取消此元素损伤"
@@ -1348,10 +1350,11 @@ function yanyouKit(bb, raw) {
         }
         refreshKeys(unit);
         auraAcc += dt;
-        if (fragMul > 1 && auraAcc >= YANYOU_AURA_EVERY - 1e-9) {
+        const fragNow = unit.mem.yanyouRecon?.frag ?? fragMul;
+        if (fragNow > 1 && auraAcc >= YANYOU_AURA_EVERY - 1e-9) {
           auraAcc = 0;
           for (const e of battle.foesInRadius(unit.x, unit.y, YANYOU_FRAGILE_RADIUS)) {
-            battle.applyStatus(e, 'elemFragile', { duration: 2 * YANYOU_AURA_EVERY, value: fragMul - 1, source: unit });
+            battle.applyStatus(e, 'elemFragile', { duration: 2 * YANYOU_AURA_EVERY, value: fragNow - 1, source: unit });
           }
         }
       }, { owner: unit });
@@ -1398,13 +1401,37 @@ function airTile(battle, playerId, taken) {
   return best;
 }
 
+/** 叙拉古 9 名的「狼之主」（重构模拟）：用狼群召唤物承接（[ASSUMED]，文本没有写明属性）；`owner` 是场上一名成员。 */
+export function spawnWolfLord(battle, owner, { atk = 0, hp = 0 } = {}) {
+  if (!battle || !owner) return null;
+  const rec = battle.data.rawToken?.(TOKEN_IDS.wolfPack) ?? null;
+  const base = rec?.stats || {};
+  const stats = {};
+  if (Number.isFinite(atk) && atk > 0) stats.atk = num(base.atk, 0) + atk;
+  if (Number.isFinite(hp) && hp > 0) stats.maxHp = num(base.maxHp, 1) + hp;
+  let tile = findSummonTile(battle, owner, 'melee');
+  if (!tile) {
+    // 满场时（重构里 9 名成员常把一排占满）：退到「战场矩形内任意可站、无人的格子」
+    const R = battle.rect;
+    const occ = new Set(battle.allies().filter((a) => a.alive).map((a) => (Math.round(a.tileR) * COLS) + Math.round(a.tileC)));
+    for (let r = R.r1; r >= R.r0 && !tile; r--) {
+      for (let c = R.c0; c <= R.c1; c++) {
+        if (occ.has(r * COLS + c) || !battle.grid.canStand(r, c, { ranged: false })) continue;
+        tile = [r, c];
+        break;
+      }
+    }
+  }
+  if (!tile) return null;
+  return battle.spawnToken(owner, TOKEN_IDS.wolfPack, tile[0], tile[1], { stats });
+}
+
 /**
- * 炎 bond summon: spawn `count` “炎佑” for `playerId` (flying ally that picks its own targets; bonds.js computes the
  * numbers). atk / hp (0.3 × the 炎 sums at battle start) are ADDED to the template stats (600 / 12000): PRTS "登场时使
  * 自身攻击力、生命值增加召唤自身的玩家场地上的所有【炎】盟约干员攻击力、生命值的30%（最终加算）". atkMul (9 炎: ×1.5,
  * [ASSUMED] on the whole ATK) and dmgTakenMul (9 炎: 0.1) are applied as a persistent buff. Returns the spawned units.
  */
-export function spawnYanyou(battle, playerId, { atk, hp, atkMul = 1, dmgTakenMul = 1, count = 1 } = {}) {
+export function spawnYanyou(battle, playerId, { atk, hp, atkMul = 1, dmgTakenMul = 1, count = 1, maxTargets = null, burn = null, frag = null } = {}) {
   const rec = battle.data.rawToken?.(TOKEN_IDS.yanyou) ?? battle.data.rawEnemy?.(TOKEN_IDS.yanyou) ?? null;
   if (!rec) return [];
   const def = yanyouFallbackDef(battle);
@@ -1426,6 +1453,12 @@ export function spawnYanyou(battle, playerId, { atk, hp, atkMul = 1, dmgTakenMul
     if (num(atkMul, 1) !== 1 && num(atkMul, 1) >= 0) mods.atkMul = num(atkMul, 1);
     if (num(dmgTakenMul, 1) !== 1 && num(dmgTakenMul, 1) >= 0) mods.dmgTakenMul = num(dmgTakenMul, 1);
     if (Object.keys(mods).length) battle.addBuff(u, { key: 'bond:yanyou', persist: true, allowDead: true, mods });
+    // 重构模拟的炎三档（`bb.recon`）：攻击目标数 / 灼燃比例 / 元素脆弱比例由召唤方给，这里只把值挂到单位上，
+    // kit 的钩子每一下现读（见 yanyouKit 的 `mem.yanyouRecon`）。
+    if (maxTargets != null || burn != null || frag != null) {
+      u.mem.yanyouRecon = { maxTargets, burn, frag };
+      if (Number.isFinite(Number(maxTargets)) && Number(maxTargets) > 0) u.profile.maxTargets = Math.max(1, Math.floor(Number(maxTargets)));
+    }
     u.mem.hoverDy = out.length === 0 ? 0 : (out.length % 2 ? 0.8 : -0.8); // the 2nd one hovers beside the first
     u.hp = u.s.maxHp;
     battle.fx('yanyouSummon', { x: u.x, y: u.y, id: u.id, playerId });

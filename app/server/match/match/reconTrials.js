@@ -20,6 +20,7 @@
 
 import { createRng, deriveSeed } from '../../sim/rng.js';
 import { RECON_TRIAL_BOSSES } from '../../../shared/reconModes.js';
+import { previewInfo } from '../waves.js';
 
 /**
  * 追加的试炼首领在回合开始后**几游戏秒**入场（与波次里敌人 `time` 同一口径：游戏秒）。业主给的是「进场稍晚于
@@ -56,13 +57,17 @@ export class MatchReconTrials {
     if (!this.gd.isRecon) return null;
     const choices = RECON_TRIAL_BOSSES[Number(r)];
     if (!Array.isArray(choices) || !choices.length) return null;
+    // 房间人数门槛（第 21 回合的 AMa-10 三只需要多人配合）：人不够就把这一组从候选里剔掉
+    const players = Array.isArray(this.order) ? this.order.length : 0;
+    const usable = choices.filter((c) => !(Number.isInteger(c.minPlayers) && players < c.minPlayers));
+    if (!usable.length) return null;
     for (const ps of this.order) {
       const c = this.reconChoices ? this.reconChoices[ps.playerId] : null;
       const pick = c && c.bosses && typeof c.bosses === 'object' ? c.bosses[String(r)] : null;
-      if (typeof pick === 'string' && choices.some((ch) => ch && ch.id === pick)) return pick;
+      if (typeof pick === 'string' && usable.some((ch) => ch && ch.id === pick)) return pick;
     }
     const rng = createRng(deriveSeed(this.seed, TRIAL_STREAM));
-    const drawn = rng.pick(choices);
+    const drawn = rng.pick(usable);
     return drawn && typeof drawn.id === 'string' ? drawn.id : null;
   }
 
@@ -95,10 +100,66 @@ export class MatchReconTrials {
    * @param {any} wave buildBossWave 的产出
    * @returns {any} 同一个 wave（没有候选时逐字返回）
    */
-  reconBossWaveFor(r, wave) {
-    const key = this.reconBossSpawnKeyFor(r);
-    if (!key || !wave || !Array.isArray(wave.spawns)) return wave;
-    return { ...wave, spawns: wave.spawns.map((s) => (s && s.tag === 'boss' ? { ...s, key } : s)) };
+  reconBossWaveFor(r, wave, areaIndex = 0) {
+    const id = this.reconTrialBossFor(r);
+    const choice = id ? choiceById(r, id) : null;
+    if (!choice || !Array.isArray(choice.keys) || !choice.keys.length || !wave || !Array.isArray(wave.spawns)) return wave;
+    // 隐秘核心模板自带的官方部件（`tag:'part'`：斩胄之剑 / 破胄之锤）属于**官方那只**首领；·重构首领自己带部件时
+    // 由下面追加。留着它们 = 场上多出两只跟·重构首领无关的官方怪（业主 2026-10-29）。
+    wave = { ...wave, spawns: wave.spawns.filter((s) => !(s && s.tag === 'part')) };
+    // 第 21 回合的多 key 组按 boss 场地分场：区域1 = 终始、区域2 = AMa-10、区域3 = 异构体（区域4+ 沿用异构体）；
+    // 岁四部位同理（业主 2026-10-29：岁 / 左爪 / 右爪 / 尾 各自只出现在 boss 区域 1 / 2 / 3 / 4，不再同场追加部位）；
+    // 洛伦茨那一组：区域1 的首领是**源阶方**（业主补），区域2/3/4 各一整对（洛伦茨 + 源阶方）。
+    if (choice.id === 'enemy_ws_recon_shp_group' && areaIndex <= 0) {
+      // 区域1 的首领就是源阶方（业主）：按 `tag:'boss'` 出，但**不吃洛伦茨那条共享池** —— match 层给区域1
+      // 单独开一条 22000000 的池（`shpArea1Pool`），所以它的血条是自己的 2200 万。
+      const bossSpawn = wave.spawns.find((s) => s && s.tag === 'boss') || null;
+      const tpl = bossSpawn || wave.spawns[0] || {};
+      const solo = {
+        ...tpl,
+        key: choice.keys[1],
+        enemyKey: choice.keys[1],
+        count: 1,
+        interval: 0,
+        tag: 'boss',
+        actionIndex: Number.isInteger(tpl.actionIndex) ? tpl.actionIndex : undefined,
+        preview: previewInfo(this.gd, choice.keys[1], tpl.route, true, true),
+      };
+      return { ...wave, spawns: [...wave.spawns.filter((s) => !(s && s.tag === 'boss')), solo] };
+    }
+    const keys = choice.id === 'enemy_ws_recon_ama_group'
+      ? [areaIndex === 0 ? choice.keys[2] : areaIndex === 1 ? choice.keys[0] : choice.keys[1]]
+      : choice.id === 'enemy_ws_recon_sui_group'
+        ? [choice.keys[Math.min(Math.max(0, areaIndex), choice.keys.length - 1)]]
+        : choice.id === 'enemy_ws_recon_shp_group'
+          ? (areaIndex >= 1 ? [...choice.keys] : [])
+          : [...choice.keys];
+    if (!keys.length) {
+      // 这个区域没有首领取：把波次里 `tag:'boss'` 的那一条去掉，护送怪 / 路线原样保留
+      return { ...wave, spawns: wave.spawns.filter((s) => !(s && s.tag === 'boss')) };
+    }
+    const key = keys[0];
+    const boss = wave.spawns.find((s) => s && s.tag === 'boss') || null;
+    // ⚠️ 出生读的是 `s.enemyKey ?? s.key`（server/sim/simdata.js）：只写 `key` 的话，首领仍然是模板里那只**官方**首领
+    // （业主 2026-10-29「20 回合的 boss 没有替换」的根因）。两个键都写，并重算预览（模型/头像/飞行按·重构记录）。
+    const spawns = wave.spawns.map((s) => (s && s.tag === 'boss'
+      ? { ...s, key, enemyKey: key, preview: previewInfo(this.gd, key, s.route, true, true) }
+      : s));
+    const extra = keys.slice(1);
+    if (!extra.length) return { ...wave, spawns };
+    const tpl = boss || wave.spawns[0] || {};
+    const companions = extra.map((k, i) => ({
+      ...tpl,
+      key: k,
+      enemyKey: k,
+      count: 1,
+      interval: 0,
+      tag: 'part',
+      countInTotal: false,
+      actionIndex: Number.isInteger(tpl.actionIndex) ? tpl.actionIndex + i + 1 : undefined,
+      preview: previewInfo(this.gd, k, tpl.route, false, true),
+    }));
+    return { ...wave, spawns: [...spawns, ...companions] };
   }
 
   reconTrialSpawnsFor(r, isBoss = false) {

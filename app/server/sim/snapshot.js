@@ -56,6 +56,10 @@ export function unitInfo(u) {
     uid: u.uid ?? undefined,
     // DESIGN §16: the equipped skill's index (the renderer / audio pick that skill's Spine clip and sound)
     skillIndex: u.side === 'ally' && Number.isInteger(d.skill?.index) ? d.skill.index : undefined,
+    // 召唤物自己那条技能（token 记录随主人技能槽解析出来的变体）：望的棋子在她 S1 / S2 / S3 下分别是
+    // `sktok_wang_1` / `_2` / `_3` —— 三条不同的官方特效。客户端只拿 `skillIndex` 的话，token 只有一条技能（index 恒 0），
+    // 永远取到默认那条（取势）；带上这个 id，render/vfx/skills.js resolveSkill 按它取那一条的官方 plan。
+    tokenSkill: u.side === 'ally' && u.kind === 'token' && typeof d.skill?.id === 'string' ? d.skill.id : undefined,
     // an ally whose skill is an ammo magazine: the renderer shows it as the segmented bar under the HP bar (b.snap `ammo`) and
     // draws no sustained skill aura for it — known from the unit's first appearance, before any snapshot or skill event
     ammoSkill: u.side === 'ally' && u.skill?.kind === 'ammo' ? true : undefined,

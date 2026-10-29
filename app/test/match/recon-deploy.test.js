@@ -13,7 +13,7 @@ function reconPrep() {
   const prev = process.env.SP_STAGE;
   process.env.SP_STAGE = 'my_map';
   try {
-    const h = makeMatch({ mode: 'recon', modeId: 'mode_recon_funny', difficulty: 'FUNNY', humans: 2, bots: 0, seed: 1, fake: true });
+    const h = makeMatch({ mode: 'recon', modeId: 'mode_recon_abyss', difficulty: 'ABYSS', humans: 2, bots: 0, seed: 1, fake: true });
     h.start();
     h.runToPhase('PREP');
     return h;

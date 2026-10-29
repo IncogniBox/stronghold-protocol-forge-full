@@ -279,7 +279,9 @@ export class PlayerState {
     this.marks = null;
     /** per-round counters (reset at round start) */
     this.round = { refreshes: 0, buys: 0, sells: 0, spent: 0, gainedChess: 0, arts: 0 };
-    this.deployCapBonus = 0;
+    // 重构模拟的基础可部署人数比官方多 1（业主 2026-10-29：8 → 9）；人事部文档（`equip_destory_deployment_cnt_change`）
+    // 再 +1（那一格在 `builtinMeta` 里是相对 +1，所以这里以 bonus 表达，两者相加）。
+    this.deployCapBonus = this.gd && this.gd.isRecon ? 1 : 0;
     this.deployCapMin = 0;
     this.deviceOverrides = {};
     this.tileOverrides = {};

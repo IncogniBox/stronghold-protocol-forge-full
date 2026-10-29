@@ -115,7 +115,7 @@ function installBashan(battle) {
   });
 }
 
-// ---- 4. 挟潮·来：优先高台；每 10 秒在自身位置召唤 2 只操戈 ------------------------------------------------
+// ---- 4. 挟潮·来：优先高台；每 10 秒在**自身所处格**召唤 2 只操戈（业主 2026-10-29：不再找周围的空格） ---------
 
 function installXiechao(battle) {
   battle.on('beforeAttack', (c) => {
@@ -132,31 +132,13 @@ function installXiechao(battle) {
       if (!e._dimoNextSummon) { e._dimoNextSummon = battle.time + 10; continue; }
       if (battle.time + 1e-9 < e._dimoNextSummon) continue;
       e._dimoNextSummon = battle.time + 10;
-      const spots = freeTilesNear(battle, e, 2);
-      for (let i = 0; i < 2 && i < spots.length; i++) {
-        const u = battle.spawnEnemy(CAOGE, { pos: spots[i], countInTotal: false });
+      const pos = { x: e.x, y: e.y };   // 自身所处格（两只都出在这里）
+      for (let i = 0; i < 2; i++) {
+        const u = battle.spawnEnemy(CAOGE, { pos, countInTotal: false });
         if (u) battle.fx('summon', { x: u.x, y: u.y, id: e.id, key: CAOGE, n: 1 });
       }
     }
   });
-}
-
-/** `e` 周围（切比雪夫距离 ≤ n）没有被任何单位站着的整数格。 */
-function freeTilesNear(battle, e, n) {
-  const taken = new Set();
-  for (const u of [...(battle.enemies || []), ...(battle.allies() || [])]) {
-    if (u && u.alive) taken.add(`${Math.round(u.x)},${Math.round(u.y)}`);
-  }
-  const out = [];
-  const cx = Math.round(e.x), cy = Math.round(e.y);
-  for (let dr = -n; dr <= n; dr++) for (let dc = -n; dc <= n; dc++) {
-    if (!dr && !dc) continue;
-    const r = cy + dr, c = cx + dc;
-    if (r < 0 || c < 0) continue;
-    if (taken.has(`${c},${r}`)) continue;
-    out.push([r, c]);
-  }
-  return out;
 }
 
 // ---- 5. 浪里玄条 / ·锈：常态隐匿 + 闪避（锈翻倍）--------------------------------------------------------
@@ -171,7 +153,7 @@ function installXuantiao(battle) {
   });
 }
 
-// ---- 6. 云中墨贼 / ·蚀：靠近干员时偷取 25%（蚀 50%）攻击与防御，仅一次 -------------------------------------
+// ---- 6. 云中墨贼 / ·蚀：靠近干员时偷取 15%（蚀 30%）攻击与防御，仅一次 ---------------------------------------
 
 const isMozei = (k) => k === MOZEI || k === MOZEI2;
 
@@ -182,7 +164,7 @@ function installMozei(battle) {
       const target = battle.allies().find((a) => a && a.alive && a.deployed !== false
         && Math.hypot((a.x || 0) - e.x, (a.y || 0) - e.y) <= 1.5);
       if (!target) continue;
-      const k = e.defId === MOZEI2 ? 0.5 : 0.25;
+      const k = e.defId === MOZEI2 ? 0.3 : 0.15;
       e._dimoStolen = true;
       battle.addBuff(target, { key: `dimo:steal:${e.id}`, persist: true, visible: true, source: e, mods: { atkPct: -k, defPct: -k } });
       battle.addBuff(e, { key: 'dimo:stolen', persist: true, visible: true, mods: { atkPct: k, defPct: k } });

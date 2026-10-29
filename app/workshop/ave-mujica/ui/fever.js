@@ -516,7 +516,7 @@ function restoreBgm() {
   if (!m.bgmMuted) return;
   const prev = m.prevBgm;
   m.bgmMuted = false;
-  if (prev != null && audio && typeof audio.playBgm === 'function') { try { audio.playBgm(prev); } catch { /* ignore */ } }
+  if (prev != null && !(audio && audio.bossMusicOn) && audio && typeof audio.playBgm === 'function') { try { audio.playBgm(prev); } catch { /* ignore */ } }
 }
 
 /** 停掉当前 Fever 曲并（默认）恢复场地 BGM。`restore=false` 用于换曲前的清理 —— 那时**保留** `prevBgm`。 */
@@ -581,6 +581,8 @@ function driveMusic(on, full) {
   const now = nowSec();
   const sel = effectiveFeverMusic();
   const vol = clamp(sel.volume, 0, 1);      // 音量来自本浏览器的设置（房间里也只听自己这份）
+  // 重构模拟的首领战斗曲接管时 Fever 曲**不被覆盖**，只压到 50%（业主 2026-10-29）
+  const duck = audio && audio.bossMusicOn ? 0.5 : 1;
   const onNow = on && vol > 0;
   // 换了曲目 / 上次解析没成（`spec` 仍为空）⇒ 重新解析；解析期间不重复发起。
   if (sel.track !== m.custom.id ? !m.custom.pending : sel.track && !m.custom.spec && !m.custom.pending) syncCustom();
@@ -631,7 +633,7 @@ function driveMusic(on, full) {
   if (m.fading) {
     const k = 1 - (now - m.fadeStart) / MUSIC_FADE;
     if (k <= 0) { stopMusic(true); return; }
-    el.volume = clamp(k, 0, 1) * vol;
+    el.volume = clamp(k, 0, 1) * vol * duck;
     return;
   }
   const pos = Number.isFinite(el.currentTime) ? el.currentTime : spec.start;
@@ -647,7 +649,7 @@ function driveMusic(on, full) {
   m.stuckSince = null;
   const fadeIn = clamp((now - m.t0) / MUSIC_FADE, 0, 1);        // 起播 1 秒淡入
   const fadeOut = clamp((spec.end - pos) / MUSIC_FADE, 0, 1);   // 末尾 1 秒淡出
-  el.volume = Math.min(fadeIn, fadeOut) * vol;
+  el.volume = Math.min(fadeIn, fadeOut) * vol * duck;
 }
 
 // ---- 每帧：定位 + 填进度 ------------------------------------------------------------------------------------

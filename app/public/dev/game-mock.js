@@ -213,6 +213,12 @@ function buildState() {
     hiddenBossId: 'boss_8', teamLp: null, bossHp: null, draft: null, sp: null, players, fields: [],
   };
   if (VARIANTS.has('boss') || VARIANTS.has('bossR')) pub.round = pub.bossRound;
+  // 重构模拟（?variant=recon）：整局标记 `pub.recon` + 自己已交的两项选择 —— 局内 EFFECTS 列下面那两行
+  // （协助 / 负载）与「装备可拆卸」的界面都靠它；回合落在非特训回合，不额外弹特训按钮。
+  if (VARIANTS.has('recon')) {
+    pub.modeId = 'mode_recon_abyss';
+    pub.recon = { choices: { [ME]: { assist: 'recon_assist_equip', load: 'recon_load_equip' } } };
+  }
   S = { stage, pub, priv, layers: {}, battle: null, pool, requests: [] };
 }
 

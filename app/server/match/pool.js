@@ -156,17 +156,29 @@ export class SharedPool {
 
   /**
    * Copy-weighted roll: one copy uniformly among remaining copies of eligible chess. Returns a base id or null.
+   * `weight(id)`（可选）把每个 id 的可用拷贝数乘上一个倍数 —— 重构模拟的「盟约倾向」用它抬高一类干员的出现占比
+   * （`Match.reconBondLeanWeights` → `PlayerState.mainPool`）。**不传时逐字节是原来那条路径**。
    * @param {Function} rng
    * @param {{ maxTier?: number, tier?: number|null, filter?: (id: string, e: object) => boolean,
-   *   extra?: Iterable<[string, { left: number, tier: number }]>|null }} [opts]
+   *   extra?: Iterable<[string, { left: number, tier: number }]>|null, weight?: (id: string) => number }} [opts]
    */
   roll(rng, opts = {}) {
     const el = this._eligible(opts);
+    const weight = typeof opts.weight === 'function' ? opts.weight : null;
+    if (!weight) {
+      let total = 0;
+      for (const [, n] of el) total += n;
+      if (total <= 0) return null;
+      let r = rng() * total;
+      for (const [id, n] of el) { r -= n; if (r < 0) return id; }
+      return el[el.length - 1][0];
+    }
+    const mass = (id, n) => n * Math.max(0, Number(weight(id)) || 0);
     let total = 0;
-    for (const [, n] of el) total += n;
+    for (const [id, n] of el) total += mass(id, n);
     if (total <= 0) return null;
     let r = rng() * total;
-    for (const [id, n] of el) { r -= n; if (r < 0) return id; }
+    for (const [id, n] of el) { r -= mass(id, n); if (r < 0) return id; }
     return el[el.length - 1][0];
   }
 

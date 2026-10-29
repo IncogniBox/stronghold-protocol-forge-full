@@ -53,7 +53,7 @@ function arena(o = {}) {
     },
   };
   return { ...makeBattle({
-    content: 'generic', seed: 11, autoFinish: false, timeLimit: 60,
+    content: 'full', seed: 11, autoFinish: false, timeLimit: 60,
     defs, bonds,
     units: [{ chessId: 't_o', row: 10, col: 4, items }, { chessId: 't_b', row: 10, col: 5 }],
     playerEffects: params ? ref(params) : [],
@@ -124,21 +124,49 @@ test('装备负载：未携带装备的干员伤害 -25%；装备阶级高于携
   assert.ok(bareBuff, '没带装备的干员挂上了伤害 -25% 的那条');
   assert.equal(bareBuff.mods.dmgDealtMul, 0.75);
 
-  // 阶级 2 的装备装在 tier 1 的干员身上 → 该装备的属性贡献减半（补偿 buff 就是那一半的反数）
+  // 阶级 2 的装备装在 tier 1 的干员身上 → 这件装备的全部数值效果减半（引擎缩放通道重装，不再挂补偿 buff）
   const g = await deployed({ params: { load: 'recon_load_equip' }, items: ['chess_item_2_03_e_a'] });
   const gear = g.unit('t_o');
-  const half = gear.findBuff('recon:load_half:chess_item_2_03_e_a');
-  assert.ok(half, '高阶级装备挂上了补偿 buff');
   const full = itemStatMods(ITEMS['chess_item_2_03_e_a']);
   assert.deepEqual(full, { atkPct: 0.2 }, '引擎给出的这件装备的属性贡献');
-  assert.equal(half.mods.atkPct, -0.1, '补偿 = 减掉一半');
+  // 100 × (1 + 0.2 × 0.5) = 110（未缩放时是 120）
+  assert.ok(Math.abs(gear.atk - 110) < 1e-6, `atk 100 → ${gear.atk}（期望 110，效果减半）`);
   assert.equal(gear.findBuff('recon:load_bare'), null, '带装备的干员不享受 -25%（两种情形互斥）');
 });
 
-test('装备阶级不高于携带者时不挂补偿（阶级 1 的装备装在 tier 1 的干员身上）', async () => {
+test('装备阶级不高于携带者时不缩放（阶级 1 的装备装在 tier 1 的干员身上）', async () => {
   const g = await deployed({ params: { load: 'recon_load_equip' }, items: ['chess_item_1_01_e_a'] });
   const gear = g.unit('t_o');
-  assert.equal(gear.findBuff('recon:load_half:chess_item_1_01_e_a'), null);
+  assert.ok(Math.abs(gear.atk - 115) < 1e-6, `atk 100 → ${gear.atk}（期望 115，维式重锤 +15% 未缩放）`);
+});
+
+test('装备效果缩放覆盖**触发类**：精准狙击镜的 damage_scale 也减半；系数恢复 1 后全额', async () => {
+  const { setItemEffectScale } = await import('../../server/sim/content/items/battle.js');
+  // 对照局：同一件装备、没交选择 ⇒ 不缩放，狙击镜按 1.3 倍结算
+  const base = await deployed({ items: ['chess_item_3_02_e_a'] });
+  const u0 = base.unit('t_o');
+  const e0 = base.spawn(SLIME, { pos: { row: 10, col: 9 }, routeIndex: 0, mods: { speedMul: 0 } });
+  const hp0 = e0.hp;
+  base.b.dealDamage(u0, e0, { amount: 1000, type: 'true' });
+  const full = (hp0 - e0.hp) / (u0.s.dmgDealtMul || 1);
+  assert.ok(Math.abs(full - 1300) < 1e-6, `1.3 倍：${full}`);
+
+  // 装备负载（装备阶级 3 > 携带者 1）⇒ 缩放通道把触发类参数一起减半：1.3 → 0.65
+  const half = await deployed({ params: { load: 'recon_load_equip' }, items: ['chess_item_3_02_e_a'] });
+  const u1 = half.unit('t_o');
+  const e1 = half.spawn(SLIME, { pos: { row: 10, col: 9 }, routeIndex: 0, mods: { speedMul: 0 } });
+  const hp1 = e1.hp;
+  half.b.dealDamage(u1, e1, { amount: 1000, type: 'true' });
+  const halved = (hp1 - e1.hp) / (u1.s.dmgDealtMul || 1);
+  assert.ok(Math.abs(halved - 650) < 1e-6, `0.65 倍：${halved}`);
+
+  // 恢复系数 1 → 下一次重装回到全额（同一件装备）
+  assert.equal(setItemEffectScale(half.b, u1, 'chess_item_3_02_e', 1), true, '系数真的变了');
+  const e2 = half.spawn(SLIME, { pos: { row: 10, col: 9 }, routeIndex: 0, mods: { speedMul: 0 } });
+  const hp2 = e2.hp;
+  half.b.dealDamage(u1, e2, { amount: 1000, type: 'true' });
+  const restored = (hp2 - e2.hp) / (u1.s.dmgDealtMul || 1);
+  assert.ok(Math.abs(restored - 1300) < 1e-6, `恢复全额：${restored}`);
 });
 
 test('没交过选择 / 别的模式：一条 buff 都不挂（playerEffects 里没有那条 ref）', async () => {

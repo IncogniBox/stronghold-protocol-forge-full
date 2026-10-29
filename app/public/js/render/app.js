@@ -424,6 +424,7 @@ export async function createFieldView(host, options = {}) {
   });
   setupCleanup.push(() => fx.destroy());
   ctx.fx = fx;
+  globalThis.__fxDebug = fx;   // TEMP DEBUG: chen3 S3 wave verification — remove after
   // the official battle effects (设置「官方特效」, render/vfx): drawn on the 3D board only (the 2D board fallback keeps the
   // procedural fx), on the battle clock; their files load on demand (data/local-fx.json)
   const ofx = new OfficialFx({ P, renderer: app.renderer, assets, cam: () => cam, heightAt, fieldRect: fx.ctx.fieldRect });
@@ -459,8 +460,39 @@ export async function createFieldView(host, options = {}) {
     },
   });
   ctx.ofx = ofx;
+  fx.ctx.ofx = ofx;   // simfx 的 _qiOfficial（赤刃明霄陈 S3 龙剑气的官方 trail）从 FxSystem 自己的 ctx 取 ofx
   // Read the index only after the existing effects path loads it; role selection never calls ready()/index().
   ctx.skillAttackIndex = () => wiring.index;
+  /**
+   * 官方特效是否已经给这个召唤物「画出了样子」：没有模型 / 头像的召唤物平时只有引擎的兜底图标可画，而客户端提取的
+   * 特效段（token 的 passive loop，如予愿安洁莉娜的「一会儿见！」= `token_aglna2_agairp_01`）装好之后，那一层就是
+   * 它本身 ⇒ 单位视图不再画兜底图标（render/units.js `_ensurePicture`，业主 2026-10-29）。
+   * 只看 kind `token`；官方特效关掉 / 2D 板 / 该 token 一个 key 都没装时返回 false（图标照旧）。
+   */
+  const officialLookMemo = new Map();   // token 的 index key → 它有没有装好的官方 key
+  ctx.officialLook = (info) => {
+    if (!info || info.kind !== 'token' || !ofx.active || !wiring.idx) return false;
+    const key = info.spine || info.defId;
+    if (!key) return false;
+    let hit = officialLookMemo.get(key);
+    if (hit === undefined) {
+      // 有模型 / 头像的召唤物只是在等它加载 —— 图标是那段时间的占位，不能拿走；没有模型的这几枚
+      // （客户端 prefab 是 EmptyAnimator，抽不出 Spine）才由官方特效段代替图标。
+      const model = assets.spineEntry ? assets.spineEntry(key, { owner: info.ownerId ?? null }) : null;
+      if (model) { officialLookMemo.set(key, false); return false; }
+      const u = wiring.idx.units?.[key] || null;
+      const keys = [];
+      const add = (k) => { if (typeof k === 'string' && k) keys.push(k.toLowerCase()); };
+      for (const ab of u?.abilities || []) {
+        for (const k of ab.effects || []) add(k);
+        for (const use of ab.uses || []) for (const k of use.keys || []) add(k);
+      }
+      for (const s of Object.values(u?.skills || {})) for (const use of s.uses || []) for (const k of use.keys || []) add(k);
+      hit = keys.some((k) => ofx.lib.has(k));
+      officialLookMemo.set(key, hit);
+    }
+    return hit;
+  };
   const pluginFx = new PluginFxPlayer({ P, layer: layers.vfxOver, assets, cam: () => cam, enabled: () => settings.officialFx !== 'off',
     record: info => info ? ctx.lookupDef(info) : null, speed: projSpeed, ofx });
   setupCleanup.push(() => pluginFx.destroy());
@@ -1422,6 +1454,10 @@ export async function createFieldView(host, options = {}) {
       if (!h) continue;
       try { if (fn(piece, h.row, h.col, { area: 'hand', idx: i })) out.push([h.row, h.col]); } catch { /* illegal */ }
     }
+    // 临时整备区那一行：装备落在上面的干员身上同样合法（`canPlace` 的 temp 分支）
+    for (let i = 0; i < G.TEMP_SIZE; i++) {
+      try { if (fn(piece, G.TEMP_ROW, G.TEMP_C0 + i, { area: 'temp', idx: i })) out.push([G.TEMP_ROW, G.TEMP_C0 + i]); } catch { /* illegal */ }
+    }
     return out;
   }
 
@@ -2279,6 +2315,7 @@ export async function createFieldView(host, options = {}) {
     if (pluginFx.source !== assets.manifest?.fx) {
       pluginFx.refresh(); ofx.clear(); wiring.clear(); wiring.idx = null;
       ofx.pool.clear(); ofx.warmQueue.length = 0; ofx.glr?.dropTextures();
+      officialLookMemo.clear();
       ofx.lib.reloadPlugins().then(() => { if (!destroyed) { syncOfficialFx(); wiring.ready(); } });
     }
     if (mode === 'prep' && lastPrep) setPrep(lastPrep.ps, lastPrep.o);

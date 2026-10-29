@@ -122,7 +122,9 @@ const ITEM_HANDLERS = {
     onEquip(ctx, ev) { ctx.addPendingFunds(int(paramsOf(ctx, ev.item).count, 2)); },
   },
   equip_destory_deployment_cnt_change: {
-    onEquip(ctx, ev) { ctx.setDeployCapAtLeast(int(paramsOf(ctx, ev.item).count, 9)); },
+    // 「人事部文档」：部署上限 **+1**（业主 2026-10-29 改口径；数据里那条官方描述仍写「变为9」，8+1 时同一结果，
+    // 重构模拟的基础 9 → 10）
+    onEquip(ctx) { ctx.addDeployCap(1); },
   },
   use_equip_upgrade_char: {
     onEquip(ctx, ev) {

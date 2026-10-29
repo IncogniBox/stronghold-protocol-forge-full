@@ -4,7 +4,7 @@
 //   h.start(); h.runToPhase('PREP'); const ps = h.ps('p_0'); …; h.invariants();
 //
 // Options: mode, difficulty, modeId (explicit — a room mode whose modeId is not `mode_<type>_<diff>`, e.g. 重构模拟's
-// 'mode_recon_normal'), humans (count) | seats (explicit), seatCap (the room's capacity when it differs from the
+// 'mode_recon_abyss'), humans (count) | seats (explicit), seatCap (the room's capacity when it differs from the
 // seat list — a 20-seat room with 4 players in it), bots, spectators (spectator seat ids, opts.spectators),
 // seed, matchNo (the room's match number: part of the battleId prefix), data (default: real data/*.json),
 // fake (true → test/match/fakeBattle.js as BattleClass), script (FakeBattle.script), registry, instant (virtual

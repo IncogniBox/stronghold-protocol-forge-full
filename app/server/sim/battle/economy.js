@@ -2,7 +2,7 @@
 // coins.
 // Installed on Battle.prototype by server/sim/Battle.js (a method container: never instantiated; `this` is the battle).
 
-import { layerGainRoom } from '../../../shared/constants.js';
+import { layerGainRoom, bondLayerCap } from '../../../shared/constants.js';
 
 export class BattleEconomy {
   addDp(playerId, n) {
@@ -25,11 +25,13 @@ export class BattleEconomy {
     if (!pp) return 0;
     const ps = this.getPlayer(playerId);
     const live = ps && ps.bonds[bondId] ? (ps.bonds[bondId].layers ?? 0) : (pp.layerGains[bondId] ?? 0);
-    if (!(layerGainRoom(live, Infinity) > 0)) return 0;
+    // 层数上限按**这一场战斗的模式**：重构模拟 2000，官方 999（业主 2026-10-29）
+    const cap = bondLayerCap(this.modeId);
+    if (!(layerGainRoom(live, Infinity, cap) > 0)) return 0;
     const source = opts.source ?? null;
     const ctx = { playerId, bondId, n, reason, source, tile: Array.isArray(opts.tile) ? opts.tile : this._sourceTile(source) };
     if (this._hooks.layerGain) { this.emit('layerGain', ctx); if (!(ctx.n > 0) || !Number.isFinite(ctx.n)) return 0; }
-    const add = layerGainRoom(live, ctx.n);
+    const add = layerGainRoom(live, ctx.n, cap);
     if (!(add > 0)) return 0;
     pp.layerGains[bondId] = (pp.layerGains[bondId] ?? 0) + add;
     if (ps && ps.bonds[bondId]) ps.bonds[bondId].layers = (ps.bonds[bondId].layers ?? 0) + add;

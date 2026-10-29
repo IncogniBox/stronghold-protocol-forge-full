@@ -21,10 +21,10 @@
 | 数据面 `content` | `[]`（**不写任何数据文件**） |
 | `overrides` | 无 |
 | `skins` | **264** 套（**168** 名干员） |
-| 素材 `assets/` | 14757 个文件 / 约 529 MB（1.4.0 起含 196 套时装的官方技能 / 攻击特效与 3 套的专属战斗音效；1.4.1 起 528 个模型条目带 `animations` / `events` / `hits` / `bounds` / `pma`） |
+| 素材 `assets/` | 15534 个文件 / 约 545 MB（1.4.0 起含时装的官方技能 / 攻击特效与 3 套的专属战斗音效；1.4.3 起 **197 套**的特效变体补齐；1.4.1 起 528 个模型条目带 `animations` / `events` / `hits` / `bounds` / `pma`） |
 | 服务端 / 客户端代码 | 无 |
 | 包公告 | 无 |
-| 文件数 | 14759（`pack.json` + `README.md` + `assets/**` 14757） |
+| 文件数 | 15536（`pack.json` + `README.md` + `assets/**` 15534） |
 
 ---
 
@@ -558,3 +558,41 @@ node server/index.js                          # 重启（pack.json 的合并发�
   时装的 `sfx`、缺哪一格落回干员本体；`audio.js unit()` 的 `_track` 记住 `UnitInfo.skin` 并随
   攻击 / 命中 / 技能三个事件传下去。
 - 回落不变：没有这套时装、或这套没带 `sfx` / 没有 `fx` 条目时，行为与 1.3.0 逐字相同。
+
+---
+
+## 10. 1.4.3：逐套复查时装特效，补上漏提的变体（126 套 / 354 个 key）
+
+业主：「有些干员的特效还是缺失，一个一个审查过去，发现缺失直接重新提取修复」。
+
+### 10.1 怎么审的
+
+对 **264 套**逐套做同一件事，不靠「默认 key 的引用表」（1.4.0 那批就是这么找变体的，也正是漏提的原因）：
+
+1. 该时装的官方 `skinId`（`skin_table.json` 的 `charSkins` → `battleSkin.skinOrPrefabId` 对上本包 `art.spine` 的
+   模型 stem）→ 特效后缀 `fx` = `@` 之后那一段（`char_103_angel@sale#8` → `sale#8`）。
+2. 在客户端的特效 prefab 索引（`battle/prefabs/effects/<短名>.ab` + `pkgrps/btl_pfb_fx_token_*.ab`）里，把
+   **以 `_<fx>` 结尾**的 key 全收下，再按「这枚 key 所在的 bundle 是不是这位干员的」筛一遍 —— 后缀是
+   `epoque#9` 这种会跨干员重名，靠 bundle 归属才不会串。
+3. 与包内 `assets/fx/index.json` 的 `prefabs` 对差集。
+
+**漏提的根因**：变体 key 与默认 key 可以**完全不同名**（`plosis_attack_start_01` ↔ 默认 `plosis_attack_01_start`、
+`radian_*` ↔ 默认 `raidian_*`），而且不少变体（`*_birth_*`、`*_buff_*`、`*_token_*`）在默认皮肤里**根本没有同名 key**
+—— 1.4.0 只按「默认 key + `_<fx>`」生成候选，这些就整批漏掉了；另外 `game-radian`、`yun-plosis` 两套有 `fx` 条目
+却一个 prefab 都没落地。
+
+### 10.2 补了什么
+
+- `assets/fx/prefabs` **+355**（3469 → **3824**）、`assets/fx/tex` **+186 个新 key**（3942 → **4128**，含半尺寸共
+  8219 个文件）、`assets/fx/mesh` 1334 → **1386**；覆盖 **126 套 / 354 个 key**（含闭包里新命名的那一枚）。
+- `assets/fx/index.json` 的 `skins` 由 196 → **197**：新增 `char_103_angel_sale_8`（能天使「音律联觉」，
+  `fx: sale#8`，挂载点从 `skinpack/char_103_angel.ab` 的时装 prefab 实测）。其余 19 个「后缀能对上但那条后缀
+  属于别的干员」的假条目没有写进去。
+- 复查后 **0 套**还有缺（每套的客户端变体都在包内），`workshop:validate` 0 error。
+
+### 10.3 仍然不带的
+
+- **召唤物自己的特效变体**（30 套 / 297 个 key，全在 `pkgrps/btl_pfb_fx_token_*.ab`，如缪缪的水人、凯尔希的
+  Mon3tr、令的龙）：本包按 §1 的口径**不含召唤物**（没有它们的模型），这些变体没有落点，收了也播不出来。
+- 官方没做变体的时装（67 套）穿上去仍播默认特效 —— 客户端本来就没有。
+

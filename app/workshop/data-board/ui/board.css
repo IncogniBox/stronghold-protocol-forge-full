@@ -14,7 +14,10 @@
 .db-slot {
   position: fixed;
   left: 0; top: 0;
-  z-index: 6;             /* 高于 .gm__hud（z-index: 3），不被战场 / HUD 遮住 */
+  /* 低于 .gm__hud（z-index: 3）：引擎的对局内弹层（盟约介绍、详情卡、设置…）都挂在 HUD 里，
+     面板压到它们上面就是「数据统计盖住盟约介绍」（业主 2026-10-26）。放 HUD 下面以后弹层一律盖住它，
+     面板本身仍高于战场（0–1），也不与左侧成员表重叠。 */
+  z-index: 2;
   pointer-events: none;
 }
 

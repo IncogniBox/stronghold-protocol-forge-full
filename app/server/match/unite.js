@@ -9,7 +9,10 @@
 // the match stage with its terrain, crates, water, devices and runes — opened to both halves (GEO.UNITE_RECT, cols
 // 0–20; the stage's right half is its left half + 8 columns), every helper's pieces on their prep tiles
 // ("按休整期位置部署在场"), the right-hand one shifted 8 columns (= the stage config's player_map_lr_offset 8): the
-// owner's knowledge of the official mode, 2026-10-07 「官服保留地形」. 0.2.0 fielded it on the escaped levels' own map,
+// owner's knowledge of the official mode, 2026-10-07 「官服保留地形」. A map whose ordinary band is a two-half one
+// (a left/right pair, the 45×60 重构战场) instead puts each helper on the map's OWN half — the right-hand one is
+// reflected through the map's mirror axis, so a player coming from the left half is mirrored rather than shifted
+// (the owner's report of 2026-10-27); its `side` is 'R' there, `colOffset` 0. 0.2.0 fielded it on the escaped levels' own map,
 // an empty road (GitHub #41) — withdrawn in 0.2.1; data/stages.json keeps those two records (kind 'unite'), which no
 // match fields. Their operators keep the HP ratio and
 // the SP (技力, stored charges included) from the end of their own combat, nothing else — a skill still running then
@@ -36,7 +39,8 @@
 // at birth (sim/battle/spawns.js) and neither uniteSurvivors nor the HUD's ×N reads it.
 
 import { buildUniteWave } from './waves.js';
-import { layerGainRoom, MAX_SEATS } from '../../shared/constants.js';
+import { layerGainRoom, bondLayerCap, MAX_SEATS } from '../../shared/constants.js';
+import { isDualLayout } from '../../shared/layout.js';
 // The 100-seat variant's per-squad planning (docs/PS100-MIGRATION.md §10-C). The two modules import each other's
 // hoisted function declarations only, never a value at module-evaluation time, so the cycle is inert.
 import { planUniteBySquad } from './unite100.mjs';
@@ -112,7 +116,7 @@ export function helperStats(m, ps, results) {
     active = true;
     const stored = Number(ps.layers && ps.layers[id]) || Number(b.layers) || 0;
     const gain = pending && Number(pending[id]);
-    const add = Number.isFinite(gain) && gain > 0 ? layerGainRoom(stored, Math.floor(gain)) : 0;
+    const add = Number.isFinite(gain) && gain > 0 ? layerGainRoom(stored, Math.floor(gain), bondLayerCap(m && m.gd && m.gd.modeId)) : 0;
     layers += stored + add;
   }
   const r = results && typeof results.get === 'function' ? results.get(ps.playerId) : null;
@@ -140,7 +144,7 @@ export function helperOrder(m, perfects, results) {
 
 /** Battle options for the unite field (without data/logger, added by the match). */
 export function uniteBattleOpts(m, plan, timeLimit) {
-  const wave = buildUniteWave(m.gd, plan.leaked, plan.helpers.length, timeLimit);
+  const wave = buildUniteWave(m.gd, plan.leaked, plan.helpers.length, timeLimit, { stageId: m.stageId });
   const players = plan.helpers.map((ps, i) => {
     const carry = new Map();
     const r = m.lastResults.get(ps.playerId);
@@ -157,10 +161,16 @@ export function uniteBattleOpts(m, plan, timeLimit) {
       // community report #34, GitHub #82)
       carry.set(u.uid, { hpPct: Number.isFinite(u.hpPct) ? Math.max(0, Math.min(1, u.hpPct)) : 1, sp });
     }
-    // 2 helpers: the first one meets the enemies first on the right-hand field (escaped_multi enters at col 18)
-    const colOffset = plan.helpers.length > 1 && i === 0 ? 8 : 0;
+    // 2 helpers: the first one meets the enemies first on the right-hand field.
+    // 单块普通带的图（官方）：官方的 +8 列平移（`player_map_lr_offset` 8，escaped_multi 在 col 18 入场）。
+    // 一张左右两半的图（45×60 重构战场）：两位帮手各站这张图自己的半场，换到对面时按地图的镜像轴**镜像**
+    // （业主 2026-10-27「左半边场地的玩家转到右半边场地时，场上的干员位置应该要镜像一下」），不再叠加平移。
+    const two = plan.helpers.length > 1;
+    const dual = isDualLayout(m.layout);
+    const side = dual && two && i === 0 ? 'R' : 'L';
+    const colOffset = dual ? 0 : (two && i === 0 ? 8 : 0);
     // the layers its own combat reached (bondsView, the round's pending gains; PRTS "以其阵地当前的状态") — see header
-    const input = ps.battleInput({ side: 'L', colOffset, carry, reached: true });
+    const input = ps.battleInput({ side, colOffset, carry, reached: true });
     const ev = { input, kind: 'unite', round: m.round, spawns: wave.spawns };
     m.dispatch(ps, 'onBattleStart', ev);
     return ev.input && typeof ev.input === 'object' ? ev.input : input;

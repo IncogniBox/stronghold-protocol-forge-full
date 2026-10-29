@@ -13,11 +13,14 @@ import { OK, fail, DELAYS } from './common.js';
 
 /** Cards of the personal choice (PRTS 卫戍协议：盟约 下半 §法术 教鞭: "于3个战术特训的悬赏任务中选择一项"). */
 const PERSONAL_OFFER_SIZE = 3;
+/** 重构决策每次给出几张（业主 2026-10-28：「每次决策选择时随机出现其中 3 个，只能选择其中 1 个」）。 */
+const RECON_DECISION_OFFER = 3;
 
 export class MatchSpDraft {
   enterSpDraft() {
-    const draft = generateDraft(this.gd, this.rngDraft, this.round, { stageId: this.stageId, bondAvailable: (bondId) => this.bondLive(bondId), itemAvailable: id => this.itemPool.canGain(id) });
     const alive = this.alivePlayers();
+    // 人手多于 6 时一人一张卡（重构模拟最多 20 人：业主 2026-10-28「超过 6 人时，每多 1 人增加 1 个选项」）
+    const draft = generateDraft(this.gd, this.rngDraft, this.round, { stageId: this.stageId, bondAvailable: (bondId) => this.bondLive(bondId), itemAvailable: id => this.itemPool.canGain(id), players: alive.length });
     if (!draft || !alive.length) { this.beforePrepOffers(); return; }
     this.phase = PHASE.SP_DRAFT;
     let order = alive.map((p) => p.playerId);
@@ -138,6 +141,38 @@ export class MatchSpDraft {
     return OK;
   }
 
+  /**
+   * 重构决策（重构模拟，业主 2026-10-28）：每回合休整期开始时给**每名玩家自己**的一次 3 选 1 —— 候选池由包的 meta
+   * 模块按回合给（`ctx.offerReconDecision`），引擎只负责洗牌（`rngMeta`）与记账。它和教鞭共用 `ps.personalChoice`
+   * （PREP 内、没有自己的计时、Ready 前必须选完），`kind: 'recon'` 区分卡形；选中后 `applyReconDecision` 把卡片交给
+   * 这一局注册表上的 `choice:<id>` / `onChoicePick`（包 meta 的 `global:recon` 认领）。
+   * @param {import('../PlayerState.js').PlayerState} ps @param {Array<{ id: string, name?: string, desc?: string, battle?: boolean }>} cards
+   */
+  offerReconDecision(ps, cards) {
+    if (this.phase !== PHASE.PREP) return fail(ERR.WRONG_PHASE);
+    if (!ps || !ps.alive) return fail(ERR.ELIMINATED);
+    if (ps.ready) return fail(ERR.WRONG_PHASE, 'ready');
+    if (ps.personalChoice) return fail(ERR.BAD_TARGET, '请先完成当前选择'); // i18n-ignore: developer error detail
+    const pool = Array.isArray(cards) ? cards.filter((c) => c && typeof c.id === 'string') : [];
+    if (!pool.length) return fail(ERR.BAD_TARGET, '当前没有可用的重构决策'); // i18n-ignore: developer error detail
+    const drawn = this.rngMeta.shuffle(pool.slice()).slice(0, RECON_DECISION_OFFER);
+    ps.personalChoice = { id: `${this.battlePrefix}.choice.${this.nextUid()}`, round: this.round, kind: 'recon', cards: drawn };
+    ps.dirty();
+    return OK;
+  }
+
+  /**
+   * 一次重构决策的落地：先走这一局注册表上的 `choice:<id>`（包的 per-decision 处理器，没有就跳过），再广播一次
+   * `onChoicePick`（`ev.kind === 'recon'`）—— 与机变卡的 `applyCard` 同一条两段式纪律。
+   */
+  applyReconDecision(ps, card) {
+    if (!card || typeof card.id !== 'string') return false;
+    const ev = { kind: 'recon', card: { ...card }, picker: ps.playerId };
+    this.dispatcher.runKey(ps, `choice:${card.id}`, 'onChoicePick', { kind: 'choice', card }, ev);
+    this.dispatch(ps, 'onChoicePick', ev, { skipKey: `choice:${card.id}` });
+    return true;
+  }
+
   /** g.choice { idx, choiceId }: the owner's pick of its open personal choice — the card becomes a bounty on its next battles. */
   pickPersonalChoice(ps, idx, choiceId) {
     if (this.phase !== PHASE.PREP) return fail(ERR.WRONG_PHASE);
@@ -146,6 +181,13 @@ export class MatchSpDraft {
     const pending = ps.personalChoice;
     if (!pending || pending.id !== choiceId || pending.round !== this.round) return fail(ERR.BAD_TARGET);
     if (!Number.isInteger(idx) || idx < 0 || idx >= pending.cards.length) return fail(ERR.BAD_TARGET);
+    if (pending.kind === 'recon') {
+      const card = pending.cards[idx];
+      ps.personalChoice = null;
+      ps.dirty();
+      this.applyReconDecision(ps, card);
+      return OK;
+    }
     if (!this.addBounty(ps, pending.cards[idx])) return fail(ERR.BAD_TARGET);
     ps.personalChoice = null;
     ps.dirty();
@@ -162,7 +204,8 @@ export class MatchSpDraft {
     const pending = ps.personalChoice;
     if (!pending) return undefined;
     const indices = pending.cards.map((c, i) => i);
-    const idx = mode === 'bot'
+    // 重构决策没有「收益」可评（包的 meta 有各自的效果），机器人与超时都按 meta rng 随机
+    const idx = mode === 'bot' && pending.kind !== 'recon'
       ? botPickCard(this, ps, pending.cards.map((c) => bountyCard(this.gd, c)), indices)
       : this.rngMeta.pick(indices);
     return this.pickPersonalChoice(ps, idx, pending.id);

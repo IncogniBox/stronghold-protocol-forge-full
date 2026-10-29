@@ -44,7 +44,7 @@
 
 import {
   num, itemRecord, itemKeyOf, buffsOf, isOp, onField, unitBonds, isMember, bondActive, isGroundOp, frontTile,
-  alliesAround, passiveBuff, fxOn, battleStore, contentInfo, itemsOf, directMods,
+  alliesAround, passiveBuff, fxOn, battleStore, contentInfo, itemsOf, directMods, bondTier,
 } from '../support/index.js';
 import { mitigate, hasHp, periodicDamage, isHpLoss } from '../../damage.js';
 import { hypot } from '../../detmath.js';
@@ -104,9 +104,8 @@ function statMods(p) {
  * 一件装备的**属性贡献**（`statMods` 那一套，与 `installItem` 实际挂到携带者身上的数是同一份）：
  * 只认属性 buff（`STAT_BUFFS` 点名的那些 bbKey），加法项相加、乘法项（`*Mul`）累乘。
  *
- * 为什么值得导出：内容层偶尔要**按条件缩放某件装备的效果**（重构模拟的「装备负载」：装备阶级高于携带者时
- * 该装备效果 -50%），而装备的属性数值只在这一模块里推导 —— 要一个包自己再推一遍，就是同一件事的第二份真相。
- * 拿到这里的 mods 之后，那条规则的做法是挂一条**补偿 buff**（把要减掉的那一半减回去）。
+ * 为什么值得导出：内容层想**读**某件装备的属性贡献时（而不是自己再推一遍），这里就是那一份。要**缩放**整件装备
+ * （属性 + 触发类一起）请用下面的 `setItemEffectScale` —— 那才是「装备效果 -50%」那条规则的通道，不必再挂补偿 buff。
  * @param {object} rec item record（`data/items.json`）
  * @returns {object|null} mods（没有属性 buff 时为 null）
  */
@@ -312,7 +311,10 @@ export function holdsUndying(battle, u) {
 function hammerMul(battle, rt, u, hs, type) {
   const own = hs.own[type];
   const steam = hs.steam > 0 && memberOf(battle, u, 'victoriaShip') && fieldHammers(battle, rt, u.ownerId).has(type) ? 1 : 0;
-  return own + steam;
+  // 重构模拟·维多利亚 9 名：「维式重锤对【维多利亚】干员提供的增益效果提升至原本的 400%」。
+  // 官方盟约最高档只有 3/6（tier ≤ 2），tier 3 只可能来自包里的重构记录（`bb.recon`），所以这一行在官方对局里恒为 1。
+  const recon = memberOf(battle, u, 'victoriaShip') && bondTier(battle, u.ownerId, 'victoriaShip') >= 3 ? 4 : 1;
+  return (own + steam) * recon;
 }
 const hammerParams = (hs, type) => hs.params[type] ?? hs.steamP ?? null;
 
@@ -922,6 +924,75 @@ export function registerItemBehaviour(key, fn) {
 }
 
 // =====================================================================================================================
+// per-unit effect scale (a content rule that halves ONE equipped item: 重构模拟的「装备负载」)
+
+/** battle → Map(unit → Map(itemKey → factor)). Absent = 1 (untouched). */
+const SCALES = new WeakMap();
+
+/** 数值参数乘以 factor（字符串 / 布尔 / 结构原样：id、tag、开关不动）。 */
+function scaleParams(o, f) {
+  const out = {};
+  for (const [k, v] of Object.entries(o || {})) out[k] = typeof v === 'number' && Number.isFinite(v) ? v * f : v;
+  return out;
+}
+
+/** 一件装备记录在 factor 下的样子：所有 buff 的数值参数乘以 factor，其余字段不变。 */
+function scaledItemRecord(rec, f) {
+  if (!rec || !Array.isArray(rec.buffs)) return rec;
+  return {
+    ...rec,
+    buffs: rec.buffs.map((b) => (b && typeof b === 'object'
+      ? {
+        ...b,
+        bb: scaleParams(b.bb, f),
+        bbStr: b.bbStr && typeof b.bbStr === 'object' ? { ...b.bbStr, ...scaleParams(b.bbStr, f) } : b.bbStr,
+      }
+      : b)),
+  };
+}
+
+/** 这一格当前的系数（缺席 = 1）。 */
+function itemScale(battle, u, key) {
+  const perUnit = SCALES.get(battle)?.get(u);
+  const f = perUnit && perUnit.get(key);
+  return typeof f === 'number' && f >= 0 && f !== 1 ? f : 1;
+}
+
+/**
+ * 缩放 `u` 身上 `key` 那件装备的**全部数值效果**（属性 buff **与**触发类效果一起）：factor = 1 原样。
+ *
+ * 为什么是「重装」而不是挂补偿 buff：装备的触发类效果（hook / 骑手伤害 / 不死窗口 …）读的是 `installItem` 时
+ * 捕进闭包的那份黑板数值，事后改不动；把数值缩放过的记录**重新装一遍**（旧 grant 先 `dispose`，其 hook / buff /
+ * 计时器一起收回）是唯一一处能同时覆盖属性与触发类的地方，也不会出现第二份「这件装备的数值」推导。
+ *
+ * 内容层（重构模拟的「装备负载」）在单位部署时调用它；系数没变时是 no-op，重复部署不会反复重装。
+ * @param {any} battle @param {any} u 我方单位 @param {string} key 装备 key（`itemKeyOf`，无 `_a` / `_b` 后缀）
+ * @param {number} factor 0 ≤ factor；1 = 恢复原样
+ * @returns {boolean} 系数真的变了
+ */
+export function setItemEffectScale(battle, u, key, factor) {
+  if (!battle || !u || !key) return false;
+  const f = Number(factor);
+  if (!(Number.isFinite(f) && f >= 0)) return false;
+  let perBattle = SCALES.get(battle);
+  if (!perBattle) { perBattle = new Map(); SCALES.set(battle, perBattle); }
+  let perUnit = perBattle.get(u);
+  if (!perUnit) { perUnit = new Map(); perBattle.set(u, perUnit); }
+  if ((perUnit.get(key) ?? 1) === f) return false;
+  if (f === 1) perUnit.delete(key); else perUnit.set(key, f);
+  const gm = runtime(battle).grants.get(u);
+  if (gm) {
+    const hits = [...gm.values()].filter((g) => !g.lent && g.key === key);
+    for (const g of hits) {
+      const id = g.id;
+      g.dispose();
+      installItem(battle, u, id);
+    }
+  }
+  return true;
+}
+
+// =====================================================================================================================
 // grants
 
 /**
@@ -936,6 +1007,9 @@ export function installItem(battle, u, itemId, { lent = false } = {}) {
   const gid = lent ? `lend:${itemId}` : `own:${itemId}:${gm.size}`;
   const S = new Scope(battle, u, `item:${itemId}${lent ? '@lend' : ''}`);
   const key = itemKeyOf(itemId);
+  // 这件装备若被内容层缩放过（setItemEffectScale），装的就是缩放后的记录 —— 触发类与属性一起缩。
+  const scale = itemScale(battle, u, key);
+  const eff = scale === 1 ? rec : scaledItemRecord(rec, scale);
   const grant = { gid, id: itemId, key, lent, scope: S, timer: null, dispose: null };
   grant.dispose = () => {
     if (S.disposed) return;
@@ -945,7 +1019,7 @@ export function installItem(battle, u, itemId, { lent = false } = {}) {
   };
   gm.set(gid, grant);
   try {
-    for (const b of buffsOf(rec)) {
+    for (const b of buffsOf(eff)) {
       if (STAT_BUFFS.has(b.bbKey)) {
         const mods = statMods(b.p);
         if (mods) S.stat(`stat:${b.bbKey}`, mods);
@@ -956,12 +1030,12 @@ export function installItem(battle, u, itemId, { lent = false } = {}) {
     if (h) {
       const hs = hammerAcquire(battle, rt, u);
       hs.own[h.type]++;
-      if (!hs.params[h.type]) hs.params[h.type] = bp(rec, h.bbKey);
+      if (!hs.params[h.type]) hs.params[h.type] = bp(eff, h.bbKey);
       hammerRefresh(battle, rt, u, hs);
       S.onDispose(() => { hs.own[h.type] = Math.max(0, hs.own[h.type] - 1); hammerRelease(battle, rt, u, hs); });
     }
     const itemFn = BY_ITEM[key] || EXTRA_ITEMS.get(key);
-    if (itemFn) itemFn(battle, u, rec, S, grant);
+    if (itemFn) itemFn(battle, u, eff, S, grant);
   } catch (e) {
     battle._handlerError?.(`item:${itemId}`, u, e);
   }

@@ -152,7 +152,11 @@ export class BattleSpawns {
     // `dmgType` null = the data's (content may arm a data-unarmed enemy: ai.js enemyAttack); `blockFree` = its 索敌不受阻挡
     // 影响 (content: 自制投石机 — targeting.js canTargetAlly / sortAllyTargets, ai.js attackTargets)
     e.profile = { noAttack: def.dmgType === 'none', maxTargets: 1, atkScale: 1, dmgType: null, blockFree: false };
-    e.route = { legs: route ? compileRoute(route, this.rect) : [], legIdx: 0, pts: null, ptIdx: 0, suffix: null, version: -1, waitLeft: null };
+    // 闭环路线（终点 = 起点，自绘地图给 boss 场地画的巡逻线）：走完一圈回到起点再走一圈，**不算漏怪**
+    // （业主 2026-10-29：重构模拟的 boss 在场上巡逻，不是走一圈就消失）。
+    const loop = !!(route && Array.isArray(route.start) && Array.isArray(route.end)
+      && route.start[0] === route.end[0] && route.start[1] === route.end[1]);
+    e.route = { legs: route ? compileRoute(route, this.rect) : [], legIdx: 0, pts: null, ptIdx: 0, suffix: null, version: -1, waitLeft: null, loop };
     if (!e.route.legs.length) {
       const end = this.grid.specialTiles('end')[0];
       if (end) e.route.legs.push({ t: 'move', r: end[0], c: end[1], final: true });

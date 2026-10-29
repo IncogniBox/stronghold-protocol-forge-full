@@ -847,6 +847,15 @@ export class UnitView {
   _ensurePicture() {
     const pic = this._pic;
     if (!pic || this.destroyed) return;
+    // 官方特效已经把这个召唤物「画出来」了（客户端提取的特效段就是它本身，如予愿安洁莉娜的「一会儿见！」—— 它没有
+    // 模型 / 头像，平时只剩引擎这张兜底图标可画）：图标让位，只留官方那一层（业主 2026-10-29）。
+    // 官方特效关掉（2D 板 / 设置 off / 没装 key）后 `ctx.officialLook` 变回 false ⇒ 下面的图标照旧画回来。
+    if (this.isToken && this.ctx.officialLook && this.ctx.officialLook(this.info)) {
+      if (this.fallback.visible) this.fallback.visible = false;
+      pic.shown = null;
+      return;
+    }
+    this.fallback.visible = true;
     let want = pic.state === 'img' ? 'img' : 'placeholder';
     // still loading: nothing new yet (a replaced picture keeps the old one meanwhile; else the placeholder after a while)
     if (pic.state === 'wait' && (pic.prev || nowMs() - pic.t0 < PIC_WAIT_MS)) want = null;

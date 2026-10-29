@@ -3,7 +3,7 @@
 // view carries) and RESULT (finish: m.result to every human still here, onEnd).
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
-import { PHASE, layerGainRoom } from '../../../shared/constants.js';
+import { PHASE, layerGainRoom, bondLayerCap } from '../../../shared/constants.js';
 import { uniteSurvivors } from '../unite.js';
 import { buildResult } from '../results.js';
 import { FLOW_TICKER_PRIORITY, DELAYS } from './common.js';
@@ -81,7 +81,7 @@ export class MatchSettle {
       for (const [bondId, n] of Object.entries(r.layerGains || {})) {
         if (!this.gd.bond(bondId) || !(n > 0)) continue;
         const before = ps.layers[bondId] || 0;
-        const add = layerGainRoom(before, Math.floor(n));
+        const add = layerGainRoom(before, Math.floor(n), bondLayerCap(this.gd.modeId));
         if (!(add > 0)) continue;
         ps.layers[bondId] = before + add;
         this.dispatch(ps, 'onLayers', { bondId, from: before, to: ps.layers[bondId], reason: 'battle' });

@@ -63,7 +63,7 @@ describe('slots & targets', () => {
     assert.deepEqual(resolveDrop({ ...base, tile: { row: 10, col: 5 } }), { kind: 'drop', target: { area: 'board', row: 10, col: 5 } });
     assert.deepEqual(resolveDrop({ ...base, tile: { row: 7, col: 6 } }), { kind: 'drop', target: { area: 'hand', idx: 6 } });
     assert.equal(resolveDrop({ ...base, tile: { row: 7, col: 2 } }).reason, 'same');
-    assert.equal(resolveDrop({ ...base, tile: { row: 8, col: 5 } }).reason, 'temp');
+    assert.equal(resolveDrop({ ...base, tile: { row: 8, col: 5 }, canPlace: (p, r, c, t) => t.area !== 'temp' }).reason, 'illegal');
     assert.equal(resolveDrop({ ...base, tile: { row: 15, col: 9 } }).reason, 'notTarget');
     assert.deepEqual(resolveDrop({ ...base, tile: null }), { kind: 'drop', target: { area: 'outside', clientX: 10, clientY: 20 } });
     assert.deepEqual(resolveDrop({ ...base, tile: { row: 10, col: 5 }, overCanvas: false }).target.area, 'outside');
@@ -76,10 +76,12 @@ describe('slots & targets', () => {
     assert.deepEqual(seen, [[GEO.HAND_ROW, 8, 'hand']]);
   });
 
-  test('isLegal: throwing callback ⇒ illegal; no callback ⇒ legal; temp/outside never', () => {
+  test('isLegal: throwing callback ⇒ illegal; no callback ⇒ legal; outside never; 临时整备区走 canPlace', () => {
     assert.equal(isLegal(() => { throw new Error('x'); }, {}, { area: 'board', row: 9, col: 3 }), false);
     assert.equal(isLegal(null, {}, { area: 'board', row: 9, col: 3 }), true);
-    assert.equal(isLegal(null, {}, { area: 'temp', idx: 0 }), false);
+    // 临时整备区：拿着装备落在上面的干员身上是合法的（canPlace 的 temp 分支说了算）
+    assert.equal(isLegal(null, {}, { area: 'temp', idx: 0 }), true);
+    assert.equal(isLegal(() => false, {}, { area: 'temp', idx: 0 }), false);
     assert.equal(isLegal(null, {}, null), false);
   });
 });

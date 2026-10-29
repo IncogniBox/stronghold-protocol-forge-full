@@ -1,4 +1,4 @@
-// Unit tests for the in-match UI's pure logic (public/js/ui/gameLogic.js): placement mirror (canPlace),
+﻿// Unit tests for the in-match UI's pure logic (public/js/ui/gameLogic.js): placement mirror (canPlace),
 // drop intents, bond sorting / tiers / members, countdown math, draft / 机变 normalisation, fields,
 // shortcuts, settings, enemies preview, result normalisation.
 
@@ -16,7 +16,8 @@ import {
   activeBubbles, sortedPlayers, tileKey, prepCapsuleLabel, prepCamera, dropFailureReason, terrainInfo,
 } from '../../public/js/ui/gameLogic.js';
 import { PHASE, GEO, DEFAULT_VOICE_LANG } from '../../shared/constants.js';
-import { normalizeLayout, bossAreaPrepRect } from '../../shared/layout.js';
+import { equipReplaces } from '../../public/js/ui/gameLogic/placement.js';
+import { normalizeLayout, bossAreaPrepRect, benchOf } from '../../shared/layout.js';
 import { setLang, setMessages } from '../../shared/i18n.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -582,7 +583,8 @@ describe('drafts', () => {
     const sp2 = normalizeSp({ cards: [{}, {}], order: ['b', 'a'], turn: 0, picks: [{ playerId: 'b', idx: 1 }, { playerId: 'x', idx: 9 }] }, players);
     assert.equal(sp2.turnPid, 'b'); assert.equal(sp2.cards[1].takenBy, 'b'); assert.equal(sp2.pickOf.has('x'), false);
     assert.equal(normalizeSp(null), null);
-    assert.equal(normalizeSp({ cards: new Array(9).fill({}) }).cards.length, 6, 'at most 6 cards');
+    // 不再截到 6：重构模拟最多 20 人，6 人以上一人一张（服务端 choices.js generateDraft）
+    assert.equal(normalizeSp({ cards: new Array(9).fill({}) }).cards.length, 9, '9 张原样保留');
   });
   test('personal choice: only the living recipient in the current PREP, independent of the public draft', () => {
     const pub = { phase: PHASE.PREP, round: 14, sp: { family: 'supply', cards: ['global'] } };
@@ -851,8 +853,8 @@ describe('prepCamera (research 09 §1.2: the Final Assault prep on the own half 
     assert.deepEqual(c.opts.layout.battle.boss, { r0: 12, r1: 22, c0: 3, c1: 15 });
     // 第 1 块也是左右并排的两半：每位棋手看自己那半（返回形状仍不带 area 键，取景矩形只到自己那半边；
     // 自定义布局的取景框还带「整体推近」的 zoom）
-    assert.deepEqual(prepCamera(p, 'a', layout), { kind: 'bossPrep', opts: { side: 'L', rect: { r0: 12, r1: 20, c0: 21, c1: 30 }, zoom: 1.5 } });
-    assert.deepEqual(prepCamera(p, 'b', layout), { kind: 'bossPrep', opts: { side: 'R', rect: { r0: 12, r1: 20, c0: 30, c1: 39 }, zoom: 1.5 } });
+    assert.deepEqual(prepCamera(p, 'a', layout), { kind: 'bossPrep', opts: { side: 'L', rect: { r0: 12, r1: 20, c0: 21, c1: 30 }, zoom: 1.2 } });
+    assert.deepEqual(prepCamera(p, 'b', layout), { kind: 'bossPrep', opts: { side: 'R', rect: { r0: 12, r1: 20, c0: 30, c1: 39 }, zoom: 1.2 } });
   });
 
   // 左右并排的两半（普通带那套）与上下叠放的两块（第 2… 块场地可以是上下两条）分别怎么取景
@@ -873,6 +875,33 @@ describe('prepCamera (research 09 §1.2: the Final Assault prep on the own half 
     assert.deepEqual(prepCamera(p, 'd', layout).opts.rect, { r0: 0, r1: 10, c0: 30, c1: 38 });
     assert.deepEqual(prepCamera(p, 'e', layout).opts.rect, bossAreaPrepRect(layout, 2), '上下叠放的两半仍整块取景');
   });
+
+  test('第 2… 块 boss 场地的镜头带上自己的 seat，整备格用这一座的（不是另一座的旧位置）', () => {
+    const layout = normalizeLayout({
+      size: [45, 60],
+      bossAreas: [
+        { battle: { r0: 14, r1: 20, c0: 21, c1: 39 }, prep: { r0: 12, r1: 20, c0: 21, c1: 39 }, deploy: [[15, 19, 22, 30], [15, 19, 30, 38]] },
+        { battle: { r0: 2, r1: 10, c0: 22, c1: 38 }, prep: { r0: 0, r1: 10, c0: 22, c1: 38 }, deploy: [[3, 9, 23, 30], [3, 9, 30, 37]] },
+      ],
+      bench: {
+        'bossA2:0': { hand: [[0, 22, 29], [1, 22, 29]], temp: [2, 22, 29] },
+        'bossA2:1': { hand: [[0, 31, 38], [1, 31, 38]], temp: [2, 31, 38] },
+      },
+    }, [45, 60]);
+    const players = [pl('a', 0), pl('b', 1), pl('c', 2), pl('d', 3)];
+    const p = { ...pub(14, players), bossPairs: [['a', 'b'], ['c', 'd']] };
+    const left = prepCamera(p, 'c', layout);
+    const right = prepCamera(p, 'd', layout);
+    assert.equal(left.opts.area, 1);
+    assert.equal(left.opts.seat, 0, '第 2 块场地的左半场（座位 0）');
+    assert.equal(right.opts.seat, 1, '右半场（座位 1）—— seat 必须跟着镜头带出去');
+    const bL = benchOf(left.opts.layout, 'bossL', left.opts.area, left.opts.seat);
+    const bR = benchOf(right.opts.layout, 'bossL', right.opts.area, right.opts.seat);
+    assert.deepEqual(bL, benchOf(layout, 'bossL', 1, 0), '座位 0 用自己那一座的整备格');
+    assert.deepEqual(bR, benchOf(layout, 'bossL', 1, 1), '座位 1 用自己那一座的整备格（不是座位 0 的旧位置）');
+    assert.notDeepEqual(bL.hand, bR.hand, '两座的整备格在列上分开');
+    assert.deepEqual(bR.hand.rows, bL.hand.rows, '两座在同一行带');
+  });
 });
 
 // user playtest #4 item 1: a dragged item drops on the tile under the pointer (render/drag.js) and goes to the unit on
@@ -886,11 +915,35 @@ describe('equipment dropped on a tile goes to the unit on it', () => {
     assert.deepEqual(dropIntent(ctx, eq.uid, { area: 'board', row: 9, col: 3 }).fields, { itemUid: eq.uid, targetUid: front.uid });
     assert.deepEqual(dropIntent(ctx, eq.uid, { area: 'board', row: 10, col: 3 }).fields, { itemUid: eq.uid, targetUid: behind.uid });
     assert.deepEqual(dropIntent(ctx, eq.uid, { area: 'hand', idx: 4 }).fields, { itemUid: eq.uid, targetUid: onBench.uid }, 'a bench operator');
+    // 临时整备区那一行同样能配给上面的干员（业主 2026-10-29：此前整段被拒）
+    const onTemp = piece(RANGED);
+    const ctxT = ctxFor(privWith({ hand: [{ idx: 0, piece: eq }], temp: [onTemp] }));
+    assert.deepEqual(dropIntent(ctxT, eq.uid, { area: 'temp', idx: 0 }).fields, { itemUid: eq.uid, targetUid: onTemp.uid }, '临时整备区上的干员');
+    assert.equal(dropIntent(ctxT, eq.uid, { area: 'temp', idx: 1 }), null, '空着的临时整备格不收装备');
+    assert.equal(dropIntent(ctxT, onBench.uid, { area: 'temp', idx: 0 }), null, '干员不能挪进临时整备区');
     // the empty tile behind `behind` (where its head is drawn) takes nothing — and the release says why
     assert.equal(dropIntent(ctx, eq.uid, { area: 'board', row: 11, col: 3 }), null);
     assert.equal(dropFailureReason(ctx, eq.uid, { row: 11, col: 3, area: 'board' }), '请将装备拖拽至干员身上');
     // an Art is used on the tile under the pointer itself
     assert.deepEqual(dropIntent(ctx, art.uid, { area: 'board', row: 11, col: 3 }), { t: 'g.art', fields: { itemUid: art.uid, row: 11, col: 3 } });
+  });
+
+  test('重构模拟：装备上限 +1；维多利亚 6 名成员再 +1（客户端替换对话框同一判据）', () => {
+    const VIC = 'chess_char_1_06_a';   // data/chess.json：bonds 含 victoriaShip
+    const CARRIED = 'chess_item_1_03_e_a';   // 已经带在身上的（与要放进来的那件不同名 ⇒ 不触发合成）
+    const INCOMING = 'chess_item_1_02_e_a';
+    const eq = item(INCOMING);
+    const target = { ...piece(VIC), items: [item(CARRIED), item(CARRIED)] };
+    const pv = privWith({ hand: [{ idx: 0, piece: eq }] });
+    pv.bonds = [{ bondId: 'victoriaShip', count: 6, active: true, tier: 2, layers: 0 }];
+    const recon = placementContext({ priv: pv, stage: STAGE, editable: true, getChess, getItem, reconMode: true });
+    assert.equal(equipReplaces(recon, eq.uid, target), false, '重构 3 格 + 维多利亚 1 格：第 3 件不弹替换');
+    const third = { ...target, items: [...target.items, item(CARRIED)] };
+    assert.equal(equipReplaces(recon, eq.uid, third), false, '第 4 件也装得下（维多利亚成员 4 格）');
+    const fourth = { ...target, items: [...target.items, item(CARRIED), item(CARRIED)] };
+    assert.equal(equipReplaces(recon, eq.uid, fourth), true, '第 5 件才替换');
+    const official = placementContext({ priv: pv, stage: STAGE, editable: true, getChess, getItem, reconMode: false });
+    assert.equal(equipReplaces(official, eq.uid, target), true, '官方对局仍是 2 格：第 3 件即弹替换');
   });
 });
 

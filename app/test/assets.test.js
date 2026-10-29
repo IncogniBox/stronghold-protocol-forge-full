@@ -16,7 +16,7 @@ import { resolveRoles, roleAnimationNames } from '../tools/assets/anim-roles.mjs
 import { normalizeAtlas, atlasInfo, parseAtlas } from '../tools/assets/atlas.mjs';
 import { pngSize, isCompletePng, isMp3, validate } from '../tools/assets/formats.mjs';
 import { encodeWoff2, decodeWoff2Tables, readSfnt, uintBase128 } from '../tools/assets/woff2.mjs';
-import { assetToPath, pickUnitSfx, indexAudio, nativeVoiceDirs } from '../tools/assets/audio.mjs';
+import { assetToPath, pickUnitSfx, indexAudio, nativeVoiceDirs, skillBanksOf } from '../tools/assets/audio.mjs';
 import { tidyVoiceTrees } from '../tools/fetch-assets.mjs';
 import { mirrorUrl, safeName, encodePath } from '../tools/assets/sources.mjs';
 import { collectEnemyIds, skillIndicesByChar, buildPlan, GUIDE_PAGES, UI_EXTRAS } from '../tools/assets/plan.mjs';
@@ -395,6 +395,37 @@ describe('audio banks and plan id sets', () => {
     assert.deepEqual(idx.skillBanks.get('skchr_x_2').get('ON_SKILL_START'), ['p/s.mp3']);
     assert.deepEqual(idx.bgm('battle.ON_GAME_READY.y'), { intro: null, loop: 'music/x_loop.mp3' });
     assert.deepEqual(pickUnitSfx(undefined), {});
+  });
+
+  // 技能音效的 bank 名是 `battle.ON_SKILL_START.<skillId>[.<子键>…]`：予愿 S3 会放一个会移动的投射物，它的发动音在
+  // `…skchr_aglna2_3.move_like_projectile.skill_start` 里。按 skillId 精确查表查不到，槽位就落回通用 b_char_atkboost
+  // （甚至完全没声，见下一条）——特训学员继承该技能时听到的就不是教官技能的音效。
+  test('a skill\'s own banks include its sub-keyed banks (予愿 S3)', () => {
+    const idx = indexAudio({ soundFXBanks: [
+      { name: 'battle.ON_SKILL_START.skchr_x_3.beta', sounds: [{ asset: 'Audio/Sound_Beta_2/P/p_skill_x_b' }] },
+      { name: 'battle.ON_SKILL_START.skchr_x_3.alpha.move', sounds: [{ asset: 'Audio/Sound_Beta_2/P/p_skill_x_a' }] },
+      { name: 'battle.ON_SKILL_FINISH.skchr_x_3', sounds: [{ asset: 'Audio/Sound_Beta_2/P/p_skill_x_end' }] },
+    ] });
+    const banks = skillBanksOf(idx.skillBanks, 'skchr_x_3');
+    assert.deepEqual(banks.get('ON_SKILL_START'), ['p/p_skill_x_a.mp3'], 'the first sub-keyed START bank in name order');
+    assert.deepEqual(banks.get('ON_SKILL_FINISH'), ['p/p_skill_x_end.mp3'], 'the exact-id bank keeps its other events');
+    assert.equal(skillBanksOf(idx.skillBanks, 'skchr_x_4'), null, 'a longer id is not a prefix match');
+    assert.equal(skillBanksOf(idx.skillBanks, null), null);
+    assert.equal(skillBanksOf(undefined, 'skchr_x_3'), null);
+    const exact = indexAudio({ soundFXBanks: [{ name: 'battle.ON_SKILL_START.skchr_y_3', sounds: [{ asset: 'Audio/Sound_Beta_2/P/p_skill_y_s' }] }] });
+    assert.deepEqual(skillBanksOf(exact.skillBanks, 'skchr_y_3').get('ON_SKILL_START'), ['p/p_skill_y_s.mp3']);
+  });
+
+  // 清单只在「两个以上槽有发动音」时才写 `skills`，把「只有 S3 有 bank」的干员（望，`skchr_wang_3` 是唯一一条）整条丢掉了：
+  // `u.skill` 是 idx[0] 那一槽的，S3 就没声——特训学员拿望当教官施放技能时自然也没有教官的音效。
+  test('an operator whose only activation bank is a non-default slot still ships it (望 S3)', () => {
+    const raw = { soundFXBanks: [{ name: 'battle.ON_SKILL_START.skchr_y_3', sounds: [{ asset: 'Audio/Sound_Beta_2/P/p_skill_y_s' }] }] };
+    const { template } = buildPlan({ assets07: { operators: { char_1_y: { skills: [{ index: 0, skillId: 'skchr_y_1' }, { index: 2, skillId: 'skchr_y_3' }] } } },
+      ops03: {}, enemies05: {}, maps05: {}, modelsData: {}, audio: indexAudio(raw) });
+    const u = template.audio.sfx.units.char_1_y;
+    assert.deepEqual(Object.keys(u.skills || {}), ['2'], 'S3 的发动音进了 skills');
+    assert.equal(u.skills['2'].alts[0].rel, 'audio/sfx/p/p_skill_y_s.mp3');
+    assert.equal(u.skill, undefined, '默认槽（S1）没有 bank，就没有通用的 skill 回落');
   });
 
   test('non-attack abilities are not used as the attack sound', () => {
@@ -783,6 +814,18 @@ describe('generated manifest data/assets.json', () => {
     for (const id of Object.keys(a07.items)) assert.ok(manifest.items[id], id);
     for (const id of Object.keys(a07.bands)) assert.ok(manifest.bands[id], id);
     for (const id of Object.keys(a07.enemies)) assert.ok(manifest.enemies[id]?.icon, id);
+  });
+
+  // 技能槽的发动音曾是两处漏掉：望唯一一条发动音 bank 就在 S3（`skchr_wang_3`，清单只在「两个槽以上」才写 skills），
+  // 予愿 S3 的 bank 带子键（`…skchr_aglna2_3.move_like_projectile.skill_start`，精确查表查不到）。特训学员继承这两个
+  // 教官技能时，听到的就不是教官技能自己的音效。
+  test('a skill slot keeps the client\'s own activation sound (望 S3 / 予愿 S3)', { skip }, () => {
+    for (const [id, slot, file] of [['char_2027_wang', '2', 'p_skill_stwctp_s.mp3'], ['char_1015_aglna2', '2', 'p_skill_arstrnstf_s.mp3']]) {
+      const u = manifest.audio.sfx.units[id];
+      assert.ok(u, `${id} in manifest`);
+      assert.ok(typeof u.skills?.[slot] === 'string' && u.skills[slot].endsWith(file), `${id} S${Number(slot) + 1}: ${u.skills?.[slot]}`);
+      assert.ok(existsSync(join(PUBLIC, u.skills[slot])), `${id} S${Number(slot) + 1} file on disk`);
+    }
   });
 
   test('DESIGN §16 loadouts: every selectable skill has its icon; a multi-skill operator model has a clip per skill index', { skip }, () => {

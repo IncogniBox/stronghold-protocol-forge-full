@@ -506,6 +506,12 @@ All paths are URL paths relative to the site root, for example `/assets/char/ava
   // the unsuffixed ability) never takes a numbered variant `attack.N` — a skill mode's, whatever its file name (银灰's S3
   // swing p_atk_silver_n, community report of 2026-10-06); one that numbers its default mode (`attack.0` …) keeps the
   // numbered order; enemies and tokens take the first attack-like bank
+  // units' skill activation (plan.mjs `skills`): each slot's own ON_SKILL_START bank, looked up by skill id and then by
+  // that id's sub-keyed banks — `battle.ON_SKILL_START.<skillId>.<sub>…` (予愿 S3:
+  // `…skchr_aglna2_3.move_like_projectile.skill_start`) — with tools/assets/audio.mjs skillBanksOf, so a bank the exact
+  // lookup missed no longer falls back to the generic b_char_atkboost. `skill` is the default slot's sound (the generic
+  // fallback for a slot without its own bank); a single entry outside the default slot ships too (`skills` used to need
+  // two, which left 望's only bank — S3 — out of the manifest). public/js/audio.js unit() plays own → mode → generic.
   fonts: { css: '/fonts/fonts.css', faces: { [name]: { family, weight, woff2?, original } } }
 }
 ```
@@ -663,7 +669,10 @@ Other renderer rules from research 07 §5.4–5.5:
   - Not extracted: the tokens whose prefab draws nothing (an `EmptyAnimator` instead of a Spine renderer; no avatar in
     either install's asset index either): 乌尔比安's 从不混淆的方向, 圣聆初雪's 保护目标（冻结状态）, 酒神's 迷狂牢笼, 贝洛内's
     牵绊 and 予愿安洁莉娜's “一会儿见！” — the last three keep the token fallback picture (`tokenAvatarUrl`: no avatar, no
-    owner in the manifest → the 召唤物 battle-card icon).
+    owner in the manifest → the 召唤物 battle-card icon). With the official battle effects extracted (DESIGN §35) such a
+    token's own effect (its prefab's passive loop — 予愿安洁莉娜's `token_aglna2_agairp_01`) is what it looks like, so
+    the view does not draw that fallback icon while the effects are installed and on (`render/units.js _ensurePicture`
+    ← `ctx.officialLook`, render/app.js: off with 设置「官方特效」 off, the 2D board or none of its keys installed).
 
 ### Other fallbacks
 

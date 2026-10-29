@@ -39,7 +39,7 @@
 
 import * as S from '../support/index.js';
 import { mitigate } from '../../damage.js';
-import { spawnYanyou } from '../tokens.js';
+import { spawnYanyou, spawnWolfLord } from '../tokens.js';
 import { kjeragColdWind } from '../devices.js';
 import * as items from '../items.js';
 import { FORCED_EXIT } from '../../constants.js';
@@ -194,6 +194,7 @@ export const ownTag = (dmg, tag) => !!dmg && Array.isArray(dmg.tags) && dmg.tags
 // 炎
 
 function installYan(battle, pid, bb, members) {
+  if (bb.recon) return installYanRecon(battle, pid, bb, members, bb.recon);
   const L = () => S.bondLayers(battle, pid, 'yanShip');
   const apply = () => {
     const mods = S.directMods({ atk: num(bb.base_atk) + num(bb.atk_per_stack) * L() });
@@ -226,6 +227,7 @@ function installYan(battle, pid, bb, members) {
 // 萨尔贡
 
 function installSargon(battle, pid, bb, members) {
+  if (bb.recon) return installSargonRecon(battle, pid, bb, members, bb.recon);
   const memberSet = new Set(members);
   const ps = S.player(battle, pid);
   const share = S.buffParams(S.bondRecord('sargonShip'), SARGON_SHARE_KEY);
@@ -319,6 +321,36 @@ function installKjerag(battle, pid, bb, members) {
   };
   for (const u of members) onUnitHit(battle, u, onHit);
   if (reached(battle, pid, 'kjeragShip', bb.power_bond_char_cnt)) kjeragColdWind(battle, pid, bb);
+  // ---- 重构模拟（`bb.recon`）：3 名寒风 / 6 名寒冷·冻结的物理与法术脆弱 / 9 名攻击寒冷·冻结的敌人叠自身攻速
+  const rk = bb.recon;
+  if (!rk) return;
+  const rt = Math.max(1, S.bondTier(battle, pid, 'kjeragShip'));
+  if (rt >= num(rk.brittleAt, 2)) {
+    const val = num(rk.brittle, 0.15);
+    battle.every(0.5, () => {
+      for (const e of battle.enemies) {
+        if (!e || !e.alive || !(e.s.flags.cold || e.s.flags.freeze)) continue;
+        if (val > 0) battle.applyStatus(e, 'physFragile', { duration: 0.6, value: val, source: null });
+        if (val > 0) battle.applyStatus(e, 'artsFragile', { duration: 0.6, value: val, source: null });
+      }
+    });
+  }
+  if (rt >= num(rk.hasteAt, 3)) {
+    const add = num(rk.hasteAspd, 2);
+    const maxStacks = Math.max(1, Math.floor(num(rk.hasteMax, 50)));
+    const dur = num(rk.hasteTime, 5);
+    if (add > 0 && dur > 0) {
+      for (const u of members) {
+        onUnitHit(battle, u, (c) => {
+          const t = c.target, dmg = c.dmg;
+          if (!dmg || !dmg.isAttack || !isEnemyTarget(t)) return;
+          if (!(t.s.flags.cold || t.s.flags.freeze)) return;
+          // 攻速 +N（可叠加，最多 maxStacks 层），每层 5 秒；`refresh:'stack'` 同时把持续时间刷回满
+          battle.addBuff(u, { key: 'bond:kjerag:haste', duration: dur, refresh: 'stack', stacks: 1, maxStacks, mods: { aspd: add }, source: u });
+        });
+      }
+    }
+  }
 }
 
 // =====================================================================================================================
@@ -342,6 +374,33 @@ function installLaterano(battle, pid, bb, members) {
     st.bonus = Math.min(cap, st.used * per);
     for (const m of members) S.passiveBuff(battle, m, 'bond:laterano:ammo', S.directMods({ atk: st.bonus }));
   });
+  // ---- 重构模拟（`bb.recon`）：6 名消耗弹药 25% 补相邻 1 发 / 9 名每发弹药附带 2% 生命上限真伤（≤20000）
+  const rl = bb.recon;
+  if (!rl) return;
+  const lt = Math.max(1, S.bondTier(battle, pid, 'lateranoShip'));
+  if (lt >= num(rl.refillAt, 2)) {
+    const chanceP = num(rl.refillChance, 0.25);
+    battle.on('ammoUsed', ({ unit }) => {
+      if (!memberSet.has(unit) || !(chanceP > 0) || !battle.rng.chance(chanceP)) return;
+      const cands = S.alliesAround(battle, unit, S.N8)
+        .filter((a) => a && a !== unit && a.kind === 'op' && a.skill && a.skill.kind === 'ammo' && a.skill.active && a.skill.ammoLeft < a.skill.ammoMax);
+      if (!cands.length) return;
+      const t = battle.rng.pick(cands);
+      if (t && t.skill.gainAmmo(1)) S.fxOn(battle, 'ammoGain', t, 'bond:lateranoShip', 'refill', { from: unit.id, n: 1 });
+    });
+  }
+  if (lt >= num(rl.hpAt, 3)) {
+    const pct = num(rl.hpPct, 0.02), hpCap = num(rl.hpCap, 20000);
+    for (const u of members) {
+      onUnitDamaged(battle, u, (c) => {
+        const t = c.target, dmg = c.dmg;
+        if (!dmg || !dmg.isAttack || !isEnemyTarget(t) || ownTag(dmg, 'bond:laterano')) return;
+        if (!(u.skill && u.skill.kind === 'ammo' && u.skill.active)) return;
+        const amount = Math.min(num(t.s.maxHp, 0) * pct, hpCap);
+        if (amount > 0) battle.dealDamage(u, t, { amount, type: 'true', canDodge: false, tags: ['bond:laterano'] });
+      });
+    }
+  }
 }
 
 // =====================================================================================================================
@@ -451,6 +510,8 @@ function devour(battle, pid, bb, members) {
     if (!mine.length) continue;
     let atk = 0, block = 0;
     for (const t of mine) { atk += num(t.base.atk, 0); block += num(t.base.blockCnt, 0); marks.push([m, t]); }
+    // 重构模拟（6 名）：吞噬到的阻挡数在战斗侧换算成「同时可攻击的敌人数量」（见 installEgir 的 recon 段）
+    if (bb.recon && block > 0) m.mem.egirBlock = num(m.mem.egirBlock, 0) + block;
     const mods = {};
     if (atk > 0) mods.atkFinal = atk; // 最终加算 (units.js _recalc)
     if (block > 0) mods.blockCnt = block;
@@ -534,6 +595,30 @@ function installEgir(battle, pid, bb, members) {
       if (--start.passes <= 0) for (const flush of start.flush.splice(0)) flush();
     }
   }, { once: true });
+  // ---- 重构模拟（`bb.recon`）：6 名同时可攻击的敌人数量 + 吞噬到的阻挡数；9 名攻击范围 = 场上所有【阿戈尔】的并集
+  const re = bb.recon;
+  if (re) {
+    const et = Math.max(1, S.bondTier(battle, pid, 'egirShip'));
+    if (et >= num(re.targetsAt, 2)) {
+      battle.every(1, () => {
+        for (const m of members) {
+          if (!S.onField(m)) continue;
+          if (m.mem.egirBaseTargets == null) m.mem.egirBaseTargets = Math.max(1, num(m.profile?.maxTargets, 1));
+          m.profile.maxTargets = m.mem.egirBaseTargets + Math.max(0, num(m.mem.egirBlock, 0));
+        }
+      });
+    }
+    if (et >= num(re.rangeAt, 3)) {
+      battle.every(0.5, () => {
+        const on = members.filter((m) => S.onField(m));
+        if (on.length < 2) return;
+        const union = new Set();
+        for (const m of on) for (const k of (m.baseRangeKeys || m.rangeKeys || [])) union.add(k);
+        const keys = [...union];
+        for (const m of on) { m.rangeKeys = keys; m.rangeKeySet = union; }
+      });
+    }
+  }
   if (!(max > 0)) return;
   const memberOps = new Set(members.filter(S.isOp));
   const knockedOut = new Set(); // members whose first knock-out of this battle has happened
@@ -587,6 +672,7 @@ function siracusaRolls(dmg) {
 }
 
 function installSiracusa(battle, pid, bb, members) {
+  if (bb.recon) return installSiracusaRecon(battle, pid, bb, members, bb.recon);
   const memberSet = new Set(members);
   const six = reached(battle, pid, 'siracusaShip', bb.power_bond_char_cnt);
   const end = num(bb.end_duration, 0);
@@ -625,6 +711,7 @@ function installSiracusa(battle, pid, bb, members) {
 // 卡西米尔
 
 function installKazimierz(battle, pid, bb, members) {
+  if (bb.recon) return installKazimierzRecon(battle, pid, bb, members, bb.recon);
   const st = { deploys: 0 };
   const apply = () => {
     const cap = num(bb.base_max_atk_when_born, 0) + num(bb.max_atk_when_born_per_stack, 0) * S.bondLayers(battle, pid, 'kazimierzShip');
@@ -665,6 +752,235 @@ function installKazimierz(battle, pid, bb, members) {
     battle.dealDamage(u, t, { amount: pure * u.s.atk, type: 'true', canDodge: false, tags: ['bond:kazimierz'] });
   };
   for (const u of members) onUnitDamaged(battle, u, onDmg);
+}
+
+// =====================================================================================================================
+// 重构模拟（`bb.recon`）：八条核心盟约的重构变体
+//
+// 数据在 `workshop/mode-recon/bonds.json`（`overrides: bonds:<id>`），所有数值写在效果 buff 的 `bb.recon` 里；本段
+// **只在 `bb.recon` 存在时**接管官方实现，所以没有那个键的房间（含全部官方模式）逐字节不变。
+// 三层档位一律按 `bondTier`（1/2/3 = 3/6/9 名）读；下面每个函数头写清哪一档做什么。
+
+/** 一档（3/6/9）下的数组取值：越界取最后一档。 */
+const tierValue = (arr, tier, fallback) => {
+  if (!Array.isArray(arr) || !arr.length) return fallback;
+  return arr[Math.min(arr.length - 1, Math.max(0, tier))] ?? fallback;
+};
+
+/** 炎·重构：3 名即召唤炎佑（25% / 2 目标 / 20% 灼燃 / 20% 元素脆弱），6 名 40% / 3 目标 / 30% / 30%，9 名 80% 且成员攻击附带 25% 攻击力元素伤害。 */
+function installYanRecon(battle, pid, bb, members, rc) {
+  const L = () => S.bondLayers(battle, pid, 'yanShip');
+  const apply = () => {
+    const mods = S.directMods({ atk: num(bb.base_atk) + num(bb.atk_per_stack) * L() });
+    for (const u of members) S.passiveBuff(battle, u, 'bond:yan', mods);
+  };
+  apply();
+  onLayers(battle, pid, 'yanShip', apply);
+  const tier = Math.max(1, S.bondTier(battle, pid, 'yanShip'));
+  const share = tierValue(rc.shares, tier, 0.25);
+  const targets = tierValue(rc.targets, tier, 2);
+  const burn = tierValue(rc.burn, tier, 0.2);
+  const frag = tierValue(rc.frag, tier, 0.2);
+  battle.on('battleStart', () => {
+    let atk = 0, hp = 0;
+    for (const u of S.playerOps(battle, pid, { fieldOnly: true })) {
+      if (!S.unitBonds(u).includes('yanShip')) continue;
+      atk += num(u.s.atk, 0);
+      hp += num(u.s.maxHp, 0);
+    }
+    if (!(hp > 0)) return;
+    spawnYanyou(battle, pid, { atk: atk * share, hp: hp * share, count: 1, maxTargets: targets, burn, frag });
+  }, { once: true });
+  // 9 名：成员每次攻击额外造成自身 25% 攻击力的元素伤害（灼燃；自己这条伤害不再触发）
+  if (tier >= num(rc.elemAt, 3)) {
+    const scale = num(rc.elemScale, 0.25);
+    const onHit = (c) => {
+      const t = c.target, dmg = c.dmg;
+      if (!isEnemyTarget(t) || !dmg || !dmg.isAttack || ownTag(dmg, 'bond:yan')) return;
+      if (dmg.type === 'element' || dmg.type === 'elemental') return;
+      if (scale > 0) battle.dealDamage(c.source, t, { type: 'element', element: 'burn', amount: num(c.source?.s?.atk, 0) * scale, canDodge: false, tags: ['bond:yan'] });
+    };
+    for (const u of members) onUnitDamaged(battle, u, onHit);
+  }
+}
+
+/** 萨尔贡·重构：攻速 +15 / 最多 50 层 / 5 + 0.25×层数 秒；3 名每层 +15% 攻击；6 名自身层数无限；9 名开技能给相邻【萨尔贡】25% 技力。 */
+function installSargonRecon(battle, pid, bb, members, rc) {
+  const memberSet = new Set(members);
+  const tier = Math.max(1, S.bondTier(battle, pid, 'sargonShip'));
+  const maxStacks = Math.max(1, Math.floor(num(rc.maxStacks, 50)));
+  const atkStacks = tier >= num(rc.atkAt, 1);
+  const infiniteSelf = tier >= num(rc.infiniteAt, 2);
+  const spAt = tier >= num(rc.spAt, 3);
+  const perAtk = num(rc.atkPerStack, 0.15);
+  const syncAtk = (u) => {
+    if (!atkStacks) return;
+    let n = 0;
+    for (const b of u.buffs) if (b.key === 'bond:sargon') n++;
+    if (n > 0 && u.alive) battle.addBuff(u, { key: 'bond:sargon:atk', mods: S.directMods({ atk: perAtk * n }) });
+    else battle.removeBuff(u, 'bond:sargon:atk');
+  };
+  battle.on('skillStart', ({ unit }) => {
+    if (!memberSet.has(unit)) return;
+    const L = S.bondLayers(battle, pid, 'sargonShip');
+    const dur = num(rc.baseTime, 5) + num(rc.timePerLayer, 0.25) * L;
+    if (dur > 0) {
+      for (const m of members) {
+        if (!S.onField(m)) continue;
+        // 6 名：「对自身的持续时间无限」——只有施放者自己那一份用 Infinity
+        const lifetime = infiniteSelf && m === unit ? Infinity : dur;
+        battle.addBuff(m, {
+          key: 'bond:sargon', duration: lifetime, refresh: 'independent', maxStacks,
+          mods: { aspd: num(rc.aspd, 15) },
+          onExpire: ({ unit: u }) => syncAtk(u), onRemove: ({ unit: u }) => syncAtk(u),
+        });
+        syncAtk(m);
+      }
+    }
+    // 9 名：相邻【萨尔贡】立即获得 25% 技力
+    if (spAt) {
+      const pct = num(rc.spPct, 0.25);
+      for (const a of S.alliesAround(battle, unit, S.N8)) {
+        if (a === unit || !memberSet.has(a) || !a.skill || a.skill.noSkill) continue;
+        const gain = Math.max(0, Math.round(num(a.skill.spCost, 0) * pct));
+        if (!(gain > 0)) continue;
+        a.skill.gainSp(gain, 'bond:sargon');
+        S.fxOn(battle, 'spGain', a, 'bond:sargonShip', 'skill', { n: gain, from: unit.id });
+      }
+    }
+  });
+}
+
+/** 叙拉古·重构：攻速 +25 + 层数、持续 40 + 0.5×层数；3 名隐匿；6 名 3% 真伤（5000 + 50×层数）+ 恐惧；9 名召唤狼之主。 */
+function installSiracusaRecon(battle, pid, bb, members, rc) {
+  const memberSet = new Set(members);
+  const tier = Math.max(1, S.bondTier(battle, pid, 'siracusaShip'));
+  const stealth = tier >= num(rc.stealthAt, 1);
+  const proc = tier >= num(rc.procAt, 2);
+  const wolf = tier >= num(rc.wolfAt, 3);
+  const end = num(bb.end_duration, 10);
+  battle.on('deploy', ({ unit }) => {
+    if (!memberSet.has(unit)) return;
+    const L = S.bondLayers(battle, pid, 'siracusaShip');
+    const dur = num(rc.durBase, 40) + num(rc.durPerLayer, 0.5) * L;
+    if (!(dur > 0)) return;
+    battle.addBuff(unit, { key: 'bond:siracusa', duration: dur, mods: { aspd: num(rc.aspdBase, 25) + num(rc.aspdPerLayer, 1) * L } });
+    if (!stealth) return;
+    unit.mem.siraStealthEnd = Infinity;
+    const off = ({ unit: u }) => { u.mem.siraStealthEnd = battle.time; };
+    battle.addBuff(unit, { key: 'bond:siracusa:stealth', duration: dur, flags: { stealth: true }, status: 'stealth', onExpire: off, onRemove: off });
+  });
+  if (proc) {
+    const c = prdConstant(num(rc.prob, 0.03));
+    if (c > 0) {
+      const st = { n: 0 };
+      const onDmg = (ctx) => {
+        const u = ctx.source, t = ctx.target, dmg = ctx.dmg;
+        if (!isEnemyTarget(t) || !siracusaRolls(dmg)) return;
+        const hidden = u.s.flags.stealth || battle.time <= num(u.mem.siraStealthEnd, -Infinity) + end + 1e-9;
+        if (!hidden) return;
+        st.n++;
+        if (!(battle.rng() < Math.min(1, c * st.n))) return;
+        st.n = 0;
+        const amount = num(rc.dmgBase, 5000) + num(rc.dmgPerLayer, 50) * S.bondLayers(battle, pid, 'siracusaShip');
+        S.fxOn(battle, 'bondProc', t, 'bond:siracusaShip', 'assassin', { from: u.id, amount });
+        if (amount > 0) battle.dealDamage(u, t, { amount, type: 'true', canDodge: false, tags: ['bond:siracusa'] });
+        if (t.alive && num(rc.fear, 3) > 0) battle.applyStatus(t, 'fear', { duration: num(rc.fear, 3), source: u });
+      };
+      for (const u of members) onUnitDamaged(battle, u, onDmg);
+    }
+  }
+  if (!wolf) return;
+  // 9 名：狼之主（[ASSUMED] 用狼群召唤物承接；属性 = 开战时【叙拉古】攻 / 血总和的 30%，并挂同款攻速加成）
+  const share = num(rc.wolfShare, 0.3);
+  let lord = null;
+  const wolfBuff = () => {
+    if (!lord || !lord.alive) return;
+    const L = S.bondLayers(battle, pid, 'siracusaShip');
+    S.passiveBuff(battle, lord, 'bond:siracusa:wolf', { aspd: num(rc.aspdBase, 25) + num(rc.aspdPerLayer, 1) * L });
+  };
+  battle.on('battleStart', () => {
+    let atk = 0, hp = 0;
+    for (const u of S.playerOps(battle, pid, { fieldOnly: true })) {
+      if (!S.unitBonds(u).includes('siracusaShip')) continue;
+      atk += num(u.s.atk, 0);
+      hp += num(u.s.maxHp, 0);
+    }
+    if (!(hp > 0) || !members.length) return;
+    lord = spawnWolfLord(battle, members[0], { atk: atk * share, hp: hp * share });
+    wolfBuff();
+  }, { once: true });
+  onLayers(battle, pid, 'siracusaShip', wolfBuff);
+}
+
+/** 卡西米尔·重构：每次部署 +20% + 1%×层数（无上限，按文本）；3 名再部署 −25%；6 名脉冲 / 未阻挡真伤；9 名半血替换（[ASSUMED] 近似为暂退 10 秒后原干员回场）。 */
+function installKazimierzRecon(battle, pid, bb, members, rc) {
+  const st = { deploys: 0 };
+  const apply = () => {
+    const L = S.bondLayers(battle, pid, 'kazimierzShip');
+    const step = num(rc.atkPerDeploy, 0.2) + num(rc.atkPerLayer, 0.01) * L;
+    const bonus = st.deploys * step;
+    if (!(bonus > 0)) return;
+    for (const u of members) S.passiveBuff(battle, u, 'bond:kazimierz', S.directMods({ atk: bonus }));
+  };
+  battle.on('deploy', ({ unit }) => {
+    if (!S.isOp(unit) || unit.ownerId !== pid) return;
+    st.deploys++;
+    apply();
+  });
+  onLayers(battle, pid, 'kazimierzShip', apply);
+  const tier = Math.max(1, S.bondTier(battle, pid, 'kazimierzShip'));
+  if (tier >= num(rc.redeployAt, 1)) {
+    for (const u of members) S.passiveBuff(battle, u, 'bond:kazimierz:redeploy', { redeployMul: num(rc.redeployMul, 0.75) });
+  }
+  if (tier >= num(rc.pulseAt, 2)) {
+    const iv = num(rc.interval, 2), radius = num(bb.range_radius, 0.8), scale = num(rc.scale, 1.2), stun = num(rc.stun, 0.1);
+    if (iv > 0 && scale > 0) {
+      battle.every(iv, () => {
+        for (const m of members) {
+          if (!S.onField(m) || !m.blocking || !m.blocking.length) continue;
+          const hits = battle.foesInRadius(m.x, m.y, radius);
+          if (!hits.length) continue;
+          for (const e of hits) {
+            if (!e.alive) continue;
+            battle.dealDamage(m, e, { amount: scale * m.s.atk, type: 'true', canDodge: false, isSplash: true, tags: ['bond:kazimierz'] });
+            if (e.alive && stun > 0) battle.applyStatus(e, 'stun', { duration: stun, source: m });
+          }
+          S.fxOn(battle, 'aoe', m, 'bond:kazimierzShip', 'pulse', { radius, dmgType: 'true', n: hits.length });
+        }
+      });
+    }
+    const pure = num(rc.pure, 0.3);
+    if (pure > 0) {
+      const onDmg = (ctx) => {
+        const u = ctx.source, t = ctx.target, dmg = ctx.dmg;
+        if (!dmg || !dmg.isAttack || !isEnemyTarget(t) || ownTag(dmg, 'bond:kazimierz')) return;
+        if (u.blocking && u.blocking.length) return;
+        battle.dealDamage(u, t, { amount: pure * u.s.atk, type: 'true', canDodge: false, tags: ['bond:kazimierz'] });
+      };
+      for (const u of members) onUnitDamaged(battle, u, onDmg);
+    }
+  }
+  if (tier < num(rc.swapAt, 3)) return;
+  // 9 名：场上阶级最高的成员生命值低于 50% → 暂退，10 秒后回场（引擎没有「整备区干员中途上场」的通道，[ASSUMED]）
+  const hpLine = num(rc.swapHp, 0.5), back = num(rc.swapBack, 10);
+  battle.every(1, () => {
+    const onField = members.filter((m) => S.onField(m) && !m.mem.kazSwap);
+    if (!onField.length) return;
+    let top = null;
+    for (const m of onField) {
+      const t = num(m.def?.tier, 0);
+      if (!top || t > num(top.def?.tier, 0)) top = m;
+    }
+    if (!top || !(top.hpRatio < hpLine)) return;
+    top.mem.kazSwap = true;
+    S.fxOn(battle, 'swap', top, 'bond:kazimierzShip', 'swap', { back });
+    battle.retreat(top, { reason: 'swap' });
+    battle.after(back, () => {
+      if (!top.alive && !top.removed) battle.redeploy(top, { free: true });
+      top.mem.kazSwap = false;
+    });
+  });
 }
 
 // =====================================================================================================================
@@ -721,6 +1037,17 @@ export function payHammers(ctx) {
   const p = S.buffParams(ctx.data?.bonds?.victoriaShip ?? S.bondRecord('victoriaShip'), VICTORIA_REWARD_KEY);
   const step = Math.floor(num(p?.layer, 0));
   if (!p || !(step > 0)) return 0;
+  // 重构模拟：每回合最多 `rewardPerRound` 次（写在同一个 buff 的 `bb.rewardPerRound`，官方记录没有这个键）
+  const perRound = Math.max(0, Math.floor(num(p.rewardPerRound, 0)));
+  const roundKey = 'bond:victoria:hammers:round';
+  const countKey = 'bond:victoria:hammers:round.n';
+  if (perRound > 0) {
+    if (num(ctx.counter(roundKey), -1) !== num(ctx.round, -2)) {
+      ctx.setCounter(roundKey, num(ctx.round, 0));
+      ctx.setCounter(countKey, 0);
+    }
+    if (num(ctx.counter(countKey), 0) >= perRound) return 0;
+  }
   const due = Math.floor(ctx.layers('victoriaShip') / step);
   // [ASSUMED] DESIGN §34.5: each milestone pays at most the official `count` cap. Official count is 1.
   const count = Math.min(bbCap('count'), Math.max(0, Math.floor(num(p.count, 1))));
@@ -730,12 +1057,16 @@ export function payHammers(ctx) {
   for (let guard = 0; guard < 100; guard++) {
     const paid = ctx.counter(VICTORIA_COUNTER);
     if (paid >= due) break;
+    if (perRound > 0 && num(ctx.counter(countKey), 0) >= perRound) break;
     ctx.setCounter(VICTORIA_COUNTER, paid + 1);
     for (let i = 0; i < count; i++) {
       const id = ctx.rollItem({ pool: p.pool });
       // onPrepEnd: grantItem stows this and does not merge until the next prep start, so a second copy does not
       // take an equipped hammer off for the fight (effectsMeta _deferItemMerge). [ASSUMED] every item that hook grants.
-      if (id && ctx.grantItem(id, { source: 'bond:victoriaShip' })) granted++;
+      if (id && ctx.grantItem(id, { source: 'bond:victoriaShip' })) {
+        granted++;
+        if (perRound > 0) ctx.setCounter(countKey, num(ctx.counter(countKey), 0) + 1);
+      }
     }
   }
   if (granted && typeof ctx.toast === 'function') ctx.toast(msg('【维多利亚】获得{n}件维式重锤', { n: granted }), 'info');

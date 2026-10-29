@@ -159,11 +159,33 @@ export default {
     const groundFoeOn = (battle, r, c) => battle.enemies.some((e) => e.alive && !e.hidden && !e.isFlying && bodyOnTile(e, r, c));
     const anyFoeOn = (battle, r, c) => battle.enemies.some((e) => e.alive && !e.hidden && bodyOnTile(e, r, c));
 
+    /** 跟子的 kit：装饰性 token —— 不攻击、不可选中、不占格；它存在的意义是**有模型**（业主 2026-10-29）。 */
+    const followerKit = (f) => ({
+      skill: null,
+      trait: { noAttack: true },
+      install(battle, t) {
+        // 先打标记：`spawnToken` 的 `deploy` 事件在 `install` 之后发出，那条「跟子所在格进行部署 ⇒ 跟子消失」的钩子
+        // 要认出这是跟子自己落地（否则它一出现就把自己删掉）。
+        t.mem.wangFollow = f;
+        battle.addBuff(t, { key: 'trait:wangStone', flags: { untargetable: true, disarm: true }, persist: true, allowDead: true });
+      },
+    });
+    /** A 跟子 gone: its token leaves too (the model must vanish with it). */
+    const dropFollowerUnit = (battle, f) => {
+      const t = f && f.unit;
+      f && (f.unit = null);
+      if (t && t.alive) battle.retreat(t, { reason: 'expired', permanent: true });
+    };
     /** Place a 跟子 on (r, c) (the caller checked the tile). */
     const addFollower = (battle, unit, r, c) => {
       const w = unit.mem.wang;
-      const f = { r, c, seq: ++w.seq, act: false, h: false, v: false, stacks: 0, follower: true };
+      const f = { r, c, seq: ++w.seq, act: false, h: false, v: false, stacks: 0, follower: true, unit: null };
       w.followers.push(f);
+      // 模型：官方把跟子当「望自己的投射物」（不占格、不可选中），所以它不是一个占格单位 —— 用 `noTile` 生成一个装饰
+      // token（快照里出现 ⇒ 客户端画出棋子模型；它的技能随主人的技能槽解析成 sktok_wang_1/2/3 ⇒ 三种官方特效）。
+      // 生成失败（格子/数据）时退回纯数据：行为照旧，只是没有模型。
+      const t = battle.spawnToken(unit, STONE, r, c, { anySource: true, noTile: true, kit: followerKit(f) });
+      if (t) f.unit = t;
       battle.fx('summon', { x: c, y: r, id: unit.id, src: unit.id, token: STONE, follower: true });
       return f;
     };
@@ -215,6 +237,7 @@ export default {
         // (a 跟子 on its tile goes: "跟子所在格进行部署…时，该跟子会随之消失")
         const w = unit.mem.wang;
         const before = w.followers.length;
+        for (const f of w.followers) if (f.r === r && f.c === c) dropFollowerUnit(b, f);
         w.followers = w.followers.filter((f) => f.r !== r || f.c !== c);
         if (!b.redeploy(stone, { free: false })) { if (w.followers.length !== before) b.fx('disappear', { x: c, y: r, id: unit.id }); return; }
         sched.cancel();
@@ -307,6 +330,20 @@ export default {
         } },
         { install() {} },   // 料敌机先 — the pieces' stacks (kit install)
       ],
+      /**
+       * 特训学员的召唤物层（业主 2026-10-29）：`content/index.js installTraineeSummons` 在学员技能期间部署出一枚棋子后
+       * 调这里 —— 把它登记成她的一片棋子（`mem.wangNode`），于是本 kit 的 tick 扫描照常给它算激活 / 料敌机先层数、
+       * 按**学员选的这个技能**（S1 / S2 / S3）触发伤害与 `explode` 特效（`fire`，攻击力借用学员自己的）。
+       * 学员的叠放没有库存 / 再部署那一套：它不加减 `w.stock`、不 scheduleReturn（打掉即退场，技能结束时由那一层清掉），
+       * 部署时即为「激活」状态（棋子就直接落在敌人所在格 / 它旁边，与望自己部署 + 铸子跟子激活同一条观感）。
+       * 同样给它棋子的特性：不可选中、不普攻。
+       */
+      tokenSummon(battle, unit, t) {
+        const w = unit.mem?.wang;
+        if (!w || !t) return;
+        t.mem.wangNode = { seq: ++w.seq, act: true, h: false, v: false, stacks: 0 };
+        battle.addBuff(t, { key: 'trait:wangStone', flags: { untargetable: true, disarm: true }, persist: true, allowDead: true });
+      },
       install(battle, unit) {
         const sid = unit.skill?.id;
         const tok = battle.tokenDef(STONE, unit);
@@ -358,15 +395,17 @@ export default {
         const spend = (n) => {
           n.gone = true;
           if (n.stone) { if (n.stone.alive) battle.retreat(n.stone, { reason: 'expired', permanent: true }); return; }
+          dropFollowerUnit(battle, n);
           const w = unit.mem.wang;
           w.followers = w.followers.filter((f) => f !== n);
         };
         // "跟子所在格进行部署（或进行类似部署的行为）时，该跟子会随之消失" (PRTS 铸子 备注): any ally deploying on a 跟子's tile
-        // (priority 50: before that piece's own 铸子 drop)
+        // (priority 50: before that piece's own 铸子 drop). 跟子自己那枚装饰 token 的部署不算（否则它一落地就把自己删了）。
         battle.on('deploy', (ctx) => {
           const a = ctx.unit, w = unit.mem.wang;
-          if (!a || a.side !== 'ally' || !w || !w.followers.length) return;
+          if (!a || a.side !== 'ally' || !w || !w.followers.length || a.mem?.wangFollow) return;
           const n0 = w.followers.length;
+          for (const f of w.followers) if (f.r === a.tileR && f.c === a.tileC) dropFollowerUnit(battle, f);
           w.followers = w.followers.filter((f) => f.r !== a.tileR || f.c !== a.tileC);
           if (w.followers.length !== n0) battle.fx('disappear', { x: a.tileC, y: a.tileR, id: unit.id });
         }, { owner: unit, priority: 50 });

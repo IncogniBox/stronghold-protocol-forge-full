@@ -65,6 +65,8 @@ function ensure() {
   // 引擎每次 playBgm 都会先问这里：有曲目且没播坏 ⇒ 引擎淡出，自定曲目接管
   audio.battleMusicOverride = (key) => isBattleKey(key) && !!saved && !failed;
   store.subscribe(() => sync());
+  // 重构模拟的首领战斗曲接管（audio.setBossMusic）：自定曲目让路，首领曲结束后再回来
+  audio.subscribeBossMusic?.(() => sync());
   document.addEventListener('visibilitychange', sync);
   window.addEventListener('pointerdown', () => { audio._unlock?.(); sync(); }, { passive: true });
   sync();
@@ -74,7 +76,7 @@ function ensure() {
 
 function sync() {
   if (!installed || !media) return;
-  const want = battleNow() && !!saved && !failed && !audio.bgmSilent && !document.hidden;
+  const want = battleNow() && !!saved && !failed && !audio.bgmSilent && !document.hidden && !audio.bossMusicOn;
   if (!want) {
     if (!media.paused) media.pause();
     return;

@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "hash": "08607a5f3b78",
+  "hash": "f6b710255266",
   "generator": "tools/fetch-assets.mjs",
   "stats": {
-    "files": 14018,
-    "bytes": 688870746,
+    "files": 16716,
+    "bytes": 758848190,
     "chars": 210,
     "charsWithBack": 207,
     "enemies": 252,
@@ -17,7 +17,7 @@
     "bands": 40,
     "skills": 525,
     "modules": 131,
-    "ui": 639,
+    "ui": 640,
     "sfxUnits": 484,
     "voiceChars": 192,
     "voiceLangs": {
@@ -73689,6 +73689,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_010_chen.attack",
             "hit": "battle.ON_ABILITY_HIT.char_010_chen.attack"
+          },
+          "skills": {
+            "1": "/assets/audio/sfx/player/p_skill/p_skill_chixiaobadao.mp3"
           }
         },
         "char_017_huang": {
@@ -73785,7 +73788,8 @@
           "skill": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3",
           "skills": {
             "0": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3",
-            "1": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3"
+            "1": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3",
+            "2": "/assets/audio/sfx/player/p_skill/p_skill_arstrnstf_s.mp3"
           },
           "attacks": {
             "0": "/assets/audio/sfx/player/p_atk/p_atk_arstrnstf_d.mp3",
@@ -74033,6 +74037,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_1033_swire2.attack",
             "hit": "battle.ON_ABILITY_HIT.char_1033_swire2.attack"
+          },
+          "skills": {
+            "2": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3"
           },
           "attacks": {
             "0": "/assets/audio/sfx/player/p_atk/p_atk_richfan_d.mp3",
@@ -74290,6 +74297,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_1045_svash2.attack.0.1",
             "hit": "battle.ON_ABILITY_HIT.char_1045_svash2.attack.0.1"
+          },
+          "skills": {
+            "2": "/assets/audio/sfx/player/p_skill/p_skill_snwlprdg_s.mp3"
           },
           "attacks": {
             "2": "/assets/audio/sfx/player/p_atk/p_atk_snwlprdg_s.mp3"
@@ -74589,6 +74599,9 @@
           "hit": "/assets/audio/sfx/player/p_imp/p_imp_spear_n.mp3",
           "pools": {
             "hit": "battle.ON_ABILITY_HIT.char_172_svrash.combat"
+          },
+          "skills": {
+            "1": "/assets/audio/sfx/battle/b_char/b_char_defboost.mp3"
           }
         },
         "char_173_slchan": {
@@ -74613,6 +74626,9 @@
           "attack": "/assets/audio/sfx/player/p_atk/p_atk_heal_l.mp3",
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_179_cgbird.attack"
+          },
+          "skills": {
+            "2": "/assets/audio/sfx/player/p_skill/p_field_elefield_loop.mp3"
           }
         },
         "char_180_amgoat": {
@@ -74636,6 +74652,9 @@
           "attack": "/assets/audio/sfx/player/p_atk/p_atk_darkmag_n.mp3",
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_183_skgoat.attack"
+          },
+          "skills": {
+            "1": "/assets/audio/sfx/player/p_skill/p_field_calcinosis.mp3"
           }
         },
         "char_188_helage": {
@@ -74666,6 +74685,9 @@
           "hit": "/assets/audio/sfx/player/p_imp/p_imp_pot_n.mp3",
           "pools": {
             "hit": "battle.ON_ABILITY_HIT.char_196_sunbr.attack"
+          },
+          "skills": {
+            "1": "/assets/audio/sfx/battle/b_char/b_char_healboost.mp3"
           }
         },
         "char_197_poca": {
@@ -74823,6 +74845,9 @@
             "attack": "battle.ON_ABILITY_START.char_2025_shu.attack",
             "hit": "battle.ON_ABILITY_HIT.char_2025_shu.attack"
           },
+          "skills": {
+            "2": "/assets/audio/sfx/player/p_skill/p_skill_drgndfmrhl.mp3"
+          },
           "attacks": {
             "1": "/assets/audio/sfx/player/p_atk/p_atk_drgndfmr_h.mp3",
             "2": "/assets/audio/sfx/player/p_atk/p_atk_drgndfmr_s.mp3"
@@ -74882,6 +74907,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_2027_wang.attack.1",
             "hit": "battle.ON_PROJECTILE_HIT.projectile_chr_wang"
+          },
+          "skills": {
+            "2": "/assets/audio/sfx/player/p_skill/p_skill_stwctp_s.mp3"
           }
         },
         "char_202_demkni": {
@@ -75261,6 +75289,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_311_mudrok.attack",
             "hit": "battle.ON_ABILITY_HIT.char_311_mudrok.attack"
+          },
+          "skills": {
+            "2": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3"
           },
           "attacks": {
             "2": "/assets/audio/sfx/player/p_atk/p_atk_bighammer_s.mp3"
@@ -75771,6 +75802,9 @@
             "attack": "battle.ON_ABILITY_START.char_4054_malist.attack",
             "hit": "battle.ON_PROJECTILE_HIT.projectile_chr_malist"
           },
+          "skills": {
+            "0": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3"
+          },
           "attacks": {
             "0": "/assets/audio/sfx/player/p_atk/p_atk_staffcannon_d.mp3"
           },
@@ -76027,6 +76061,9 @@
             "attack": "battle.ON_ABILITY_START.char_4098_vvana.attack.0",
             "hit": "battle.ON_ABILITY_HIT.char_4098_vvana.attack.0"
           },
+          "skills": {
+            "1": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3"
+          },
           "attacks": {
             "1": "/assets/audio/sfx/player/p_atk/p_atk_dblswrd_h.mp3",
             "2": "/assets/audio/sfx/player/p_atk/p_atk_shdswrd_s.mp3"
@@ -76113,6 +76150,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_4121_zuole.attack.0",
             "hit": "battle.ON_ABILITY_HIT.char_4121_zuole.attack.0"
+          },
+          "skills": {
+            "1": "/assets/audio/sfx/player/p_skill/p_skill_wrrsldisk.mp3"
           },
           "attacks": {
             "1": "/assets/audio/sfx/player/p_atk/p_atk_wrrsrd_h.mp3"
@@ -76274,6 +76314,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_ON.char_4139_papyrs.attack.0"
           },
+          "skills": {
+            "1": "/assets/audio/sfx/battle/b_char/b_char_healboost.mp3"
+          },
           "attacks": {
             "1": "/assets/audio/sfx/player/p_atk/p_atk_ctschlar_h.mp3"
           },
@@ -76404,6 +76447,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_4179_monstr.attack.0",
             "hit": "battle.ON_PROJECTILE_HIT.projectile_chr_monstr"
+          },
+          "skills": {
+            "2": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3"
           },
           "attacks": {
             "1": "/assets/audio/sfx/player/p_atk/p_atk_kxdtctm_h.mp3",
@@ -76554,6 +76600,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_4204_mantra.attack.0",
             "hit": "battle.ON_PROJECTILE_HIT.projectile_chr_mantra"
+          },
+          "skills": {
+            "2": "/assets/audio/sfx/player/p_skill/p_skill_mtelrncpnt.mp3"
           },
           "attacks": {
             "1": "/assets/audio/sfx/player/p_atk/p_atk_mtelrncpnt_h.mp3",
@@ -76886,6 +76935,9 @@
           "pools": {
             "attack": "battle.ON_ABILITY_START.char_431_ashlok.attack.1",
             "hit": "battle.ON_PROJECTILE_HIT.projectile_chr_ashlok"
+          },
+          "skills": {
+            "1": "/assets/audio/sfx/battle/b_char/b_char_atkboost.mp3"
           },
           "attacks": {
             "1": "/assets/audio/sfx/player/p_atk/p_atk_heavygun_h.mp3"

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseRichText, richTextPlain, rtClassName, formatPlaceholder, fillPlaceholders, formatBondEffect } from '../../public/js/ui/richText.js';
+import { parseRichText, richTextPlain, rtClassName, formatPlaceholder, fillPlaceholders, formatBondEffect, formatBondDesc } from '../../public/js/ui/richText.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const load = (f) => JSON.parse(readFileSync(path.join(ROOT, 'data', f), 'utf8'));
@@ -125,5 +125,39 @@ describe('placeholders', () => {
     assert.equal(richTextPlain(formatBondEffect(capped, 208)), '降低80%（至多80%）');
     // an unknown / non-finite cap key changes nothing (every bond without `cap` is untouched)
     assert.equal(richTextPlain(formatBondEffect({ ...capped, effectDescParams: [{ index: 0, format: '0%', base: 'slow', perStack: 'slow_per_stack', cap: 'nope' }] }, 208)), '降低114%（至多{1:0%}）');
+  });
+  test('formatBondDesc fills the same placeholders in `descRaw`（报告 / 局内「盟约效果」）', () => {
+    const bond = {
+      desc: '攻击+{0:0%}（每层+{1:0%}）',
+      descRaw: '攻击<@ba.vup>+{0:0%}</>（每层<@ba.vup>+{1:0%}</>）',
+      effectDescParams: [
+        { index: 0, format: '0%', base: 'atk', perStack: 'per' },
+        { index: 1, format: '0%', base: 'per' },
+      ],
+      bb: { atk: 0.25, per: 0.01 },
+    };
+    assert.equal(formatBondDesc(bond, 0), '攻击<@ba.vup>+25%</>（每层<@ba.vup>+1%</>）');
+    assert.equal(richTextPlain(formatBondDesc(bond, 10)), '攻击+35%（每层+1%）');
+    // 没有占位符的说明（全部官方盟约）逐字不变
+    const official = load('bonds.json').egirShip;
+    assert.equal(formatBondDesc(official, 25), official.descRaw);
+    assert.equal(formatBondDesc(null), '');
+  });
+  test('重构盟约（包内 8 条）的说明：描金 + 随层数实时算，且 descRaw / effectDescRaw 同值', () => {
+    const pack = JSON.parse(readFileSync(path.join(ROOT, 'workshop/mode-recon/bonds.json'), 'utf8'));
+    const ids = ['yanShip', 'sargonShip', 'victoriaShip', 'kjeragShip', 'lateranoShip', 'egirShip', 'siracusaShip', 'kazimierzShip'];
+    for (const id of ids) {
+      const b = pack[`recon_${id}`];
+      assert.ok(b, `recon_${id}`);
+      assert.ok(b.effectDescParams.length, `${id}: 有实时的 {i} 参数`);
+      assert.ok(/<@ba\.vup>/.test(b.descRaw), `${id}: 关键词描金`);
+      const l0 = richTextPlain(formatBondDesc(b, 0));
+      for (const layers of [0, 25, 100]) {
+        const txt = richTextPlain(formatBondDesc(b, layers));
+        assert.ok(!/\{\d+(:[^}]*)?\}/.test(txt), `${id} @${layers} 层留下占位符: ${txt}`);
+        assert.equal(txt, richTextPlain(formatBondEffect(b, layers)), `${id}: descRaw 与 effectDescRaw 同值（@${layers} 层）`);
+      }
+      assert.notEqual(richTextPlain(formatBondDesc(b, 100)), l0, `${id}: 数字随层数变化`);
+    }
   });
 });

@@ -23,7 +23,7 @@
 
 import { RAW, joinUrl, safeName, urlBase, urlDir } from './sources.mjs';
 import { kindOf } from './formats.mjs';
-import { pickUnitSfx, assignSkillModeSfx, UI_SFX, BATTLE_SFX, resolveSpec, indexVoice, nativeVoiceDirs, VOICE_DIRS, VOICE_CUSTOM_DIR, VOICE_BATTLE_SLOTS } from './audio.mjs';
+import { pickUnitSfx, assignSkillModeSfx, skillBanksOf, UI_SFX, BATTLE_SFX, resolveSpec, indexVoice, nativeVoiceDirs, VOICE_DIRS, VOICE_CUSTOM_DIR, VOICE_BATTLE_SLOTS } from './audio.mjs';
 import { literal } from './manifest.mjs';
 import { EMOTE_CATALOG } from '../../shared/constants.js';
 
@@ -472,7 +472,7 @@ export function buildPlan({ assets07, ops03, enemies05, maps05, audio, modelsDat
     for (const i of idx) {
       const s = (o.skills || []).find((k) => k.index === i);
       if (!s) continue;
-      const start = s.skillId ? audio.skillBanks.get(s.skillId)?.get('ON_SKILL_START') : null;
+      const start = skillBanksOf(audio.skillBanks, s.skillId)?.get('ON_SKILL_START') ?? null;
       const linked = cm && s.skillId ? cm.skillMode.get(s.skillId) : undefined;
       skillRows.push({
         index: i, skillId: s.skillId ?? null,
@@ -491,7 +491,7 @@ export function buildPlan({ assets07, ops03, enemies05, maps05, audio, modelsDat
       const iconId = s.iconId || s.skillId;
       if (s.icon?.url && !skills[iconId]) skills[iconId] = leaf(alt(`skill/${safeName(iconId)}.png`, s.icon.url, s.icon.bytes));
       if (s.skillId) skillsById[s.skillId] = iconId;
-      const ss = audio.skillBanks.get(s.skillId)?.get('ON_SKILL_START');
+      const ss = skillBanksOf(audio.skillBanks, s.skillId)?.get('ON_SKILL_START');
       if (ss?.length) skillSfx[String(i)] = soundLeaf(ss);
       const ak = assigned.attacks[String(i)];
       if (ak) {
@@ -512,7 +512,11 @@ export function buildPlan({ assets07, ops03, enemies05, maps05, audio, modelsDat
     }
     const primarySkill = skillSfx[String(idx[0])];
     if (primarySkill) u.skill = primarySkill;
-    if (Object.keys(skillSfx).length > 1) u.skills = skillSfx;
+    // `skills` used to ship only for two or more slots, so an operator with ONE skill sound outside its generic slot
+    // lost it: 望's only activation bank is S3's (`skchr_wang_3`), and `u.skill` is the idx[0] slot — her S3 (and every
+    // 特训学员 inheriting her skill) was silent. A single entry that is not the generic slot now ships too.
+    const skillKeys = Object.keys(skillSfx);
+    if (skillKeys.length > 1 || (skillKeys.length === 1 && skillKeys[0] !== String(idx[0]))) u.skills = skillSfx;
     if (Object.keys(attacks).length) u.attacks = attacks;
     if (Object.keys(hits).length) u.hits = hits;
     if (Object.keys(attackMix).length) u.attackMix = attackMix;
@@ -682,6 +686,12 @@ export function buildPlan({ assets07, ops03, enemies05, maps05, audio, modelsDat
     }
   }
   for (const [group, key, path] of UI_EXTRAS) addUi(group, key, joinUrl(RAW.aa2, path));
+  // 用户提供的图：`ui/enemyTypeIcon/dimo_icon.png` 是「特训敌人·涤墨」的类型图标（CHANGELOG「涤墨类型图标换成用户提供的
+  // 图」；`workshop/dimo-enemies/factions.json` 的 icon，`data/large-assets.json` 记着它的字节），社区转储里没有它，
+  // 所以没有可下载的源（`urls: []`）：文件在磁盘上就照常发布，缺失时这条和别的 leaf 一样留空重试。不记它，下一次重建
+  // 就会把这条从 data/assets.json 掉出去，客户端的涤墨图标随之消失（`--prune` 也会把它当孤儿删掉）。
+  const DIMO_ICON = 'ui/enemyTypeIcon/dimo_icon.png';
+  if (!ui['enemyTypeIcon/dimo_icon']) ui['enemyTypeIcon/dimo_icon'] = { alts: [{ rel: DIMO_ICON, urls: [], kind: kindOf(DIMO_ICON) }] };
   for (const { name, ...job } of statsTemplate) ui[`statistics/${name}`] = { alts: [job] };
 
   // --- audio ----------------------------------------------------------------

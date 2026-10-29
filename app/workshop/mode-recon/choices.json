@@ -1,0 +1,257 @@
+{
+  "reconDecisions": {
+    "id": "reconDecisions",
+    "cards": [],
+    "rounds": {
+      "1": [
+        {
+          "id": "recon_decision_funds",
+          "name": "重构决策·资金F",
+          "desc": "进入休整期时，额外获得2资金",
+          "meta": { "funds": 2, "fundsEachRound": true }
+        },
+        {
+          "id": "recon_decision_assault",
+          "name": "重构决策·攻势F",
+          "desc": "战斗中，场上的干员攻击力+25%（决策专属独立乘区）",
+          "battle": { "ally": { "atkMul": 1.25 } }
+        },
+        {
+          "id": "recon_decision_bond",
+          "name": "重构决策·盟约F",
+          "desc": "获得干员时，该干员身上的对应盟约层数+3（无需激活盟约，每回合最多触发10次）",
+          "meta": { "bondLayers": 3 }
+        },
+        {
+          "id": "recon_decision_guard",
+          "name": "重构决策·守备F",
+          "desc": "战斗中，场上的干员生命上限+25%、防御力+25%、法术抗性+10%（最少10点）（决策专属独立乘区）",
+          "battle": { "ally": { "hpMul": 1.25, "defMul": 1.25, "resPct": 0.1, "resMin": 10 } }
+        },
+        {
+          "id": "recon_decision_revive",
+          "name": "重构决策·复苏F",
+          "desc": "玩家生命值+3",
+          "meta": { "lp": 3 }
+        },
+        {
+          "id": "recon_decision_weaken",
+          "name": "重构决策·削弱F",
+          "desc": "战斗中，敌人造成的伤害-25%（决策专属独立乘区）",
+          "battle": { "enemy": { "dmgDealtMul": 0.75 } }
+        }
+      ],
+      "4": [
+        {
+          "id": "recon_decision_funds_e",
+          "name": "重构决策·资金E",
+          "desc": "进入休整期时，额外获得4资金",
+          "meta": { "funds": 4, "fundsEachRound": true }
+        },
+        {
+          "id": "recon_decision_assault_e",
+          "name": "重构决策·攻势E",
+          "desc": "战斗中，场上的干员造成的伤害+25%（决策专属独立乘区）",
+          "battle": { "ally": { "dmgDealtMul": 1.25 } }
+        },
+        {
+          "id": "recon_decision_bond_e",
+          "name": "重构决策·盟约E",
+          "desc": "获得干员时，该干员身上的对应盟约层数+5（无需激活盟约，每回合最多触发10次）",
+          "meta": { "bondLayers": 5 }
+        },
+        {
+          "id": "recon_decision_guard_e",
+          "name": "重构决策·守备E",
+          "desc": "战斗中，场上的干员物理/法术伤害减免+25%（决策专属独立乘区）",
+          "battle": { "ally": { "physTakenMul": 0.75, "artsTakenMul": 0.75 } }
+        },
+        {
+          "id": "recon_decision_revive_e",
+          "name": "重构决策·复苏E",
+          "desc": "玩家生命值+6",
+          "meta": { "lp": 6 }
+        },
+        {
+          "id": "recon_decision_weaken_e",
+          "name": "重构决策·削弱E",
+          "desc": "战斗中，敌人的防御力-25%、法术抗性-25%（最少10点）（决策专属独立乘区）",
+          "battle": { "enemy": { "defMul": 0.75, "resPct": -0.25, "resMin": 10 } }
+        }
+      ],
+      "8": [
+        {
+          "id": "recon_decision_funds_d",
+          "name": "重构决策·资金D",
+          "desc": "进入休整期时，额外获得7资金",
+          "meta": { "funds": 7, "fundsEachRound": true }
+        },
+        {
+          "id": "recon_decision_assault_d",
+          "name": "重构决策·攻势D",
+          "desc": "战斗中，场上的干员攻击时附带25%攻击力的真实伤害",
+          "battle": { "ally": { "attackTruePct": 0.25 } }
+        },
+        {
+          "id": "recon_decision_bond_d",
+          "name": "重构决策·盟约D",
+          "desc": "获得干员时，该干员身上的对应盟约层数+10（无需激活盟约，每回合最多触发10次）",
+          "meta": { "bondLayers": 10 }
+        },
+        {
+          "id": "recon_decision_guard_d",
+          "name": "重构决策·守备D",
+          "desc": "战斗中，场上的干员每5秒获得等于生命上限10%屏障（最多叠加2层）",
+          "battle": { "ally": { "shieldEvery": 5, "shieldPct": 0.1, "shieldMaxStacks": 2 } }
+        },
+        {
+          "id": "recon_decision_revive_d",
+          "name": "重构决策·复苏D",
+          "desc": "玩家生命值+10",
+          "meta": { "lp": 10 }
+        },
+        {
+          "id": "recon_decision_weaken_d",
+          "name": "重构决策·削弱D",
+          "desc": "战斗中，敌人的攻击力-25%（决策专属独立乘区）",
+          "battle": { "enemy": { "atkMul": 0.75 } }
+        }
+      ],
+      "12": [
+        {
+          "id": "recon_decision_funds_c",
+          "name": "重构决策·资金C",
+          "desc": "进入休整期时，额外获得10资金",
+          "meta": { "funds": 10, "fundsEachRound": true }
+        },
+        {
+          "id": "recon_decision_assault_c",
+          "name": "重构决策·攻势C",
+          "desc": "战斗中，场上的干员攻击伤害类型替换为敌人的弱点伤害",
+          "battle": { "ally": { "attackWeakness": true } }
+        },
+        {
+          "id": "recon_decision_bond_c",
+          "name": "重构决策·盟约C",
+          "desc": "获得干员时，该干员身上的对应盟约层数+15（无需激活盟约，每回合最多触发10次）",
+          "meta": { "bondLayers": 15 }
+        },
+        {
+          "id": "recon_decision_guard_c",
+          "name": "重构决策·守备C",
+          "desc": "战斗中，场上的干员受到的伤害-25%（决策专属独立乘区）",
+          "battle": { "ally": { "dmgTakenMul": 0.75 } }
+        },
+        {
+          "id": "recon_decision_revive_c",
+          "name": "重构决策·复苏C",
+          "desc": "玩家生命值+15",
+          "meta": { "lp": 15 }
+        },
+        {
+          "id": "recon_decision_weaken_c",
+          "name": "重构决策·削弱C",
+          "desc": "战斗中，敌人的攻击速度-25%、所有技能首次释放和冷却的时间+25%（决策专属独立乘区）",
+          "battle": { "enemy": { "batPct": 0.3333333333333333, "skillCdMul": 1.25 } }
+        }
+      ],
+      "16": [
+        {
+          "id": "recon_decision_funds_b",
+          "name": "重构决策·资金B",
+          "desc": "进入休整期时，额外获得20资金",
+          "meta": { "funds": 20, "fundsEachRound": true }
+        },
+        {
+          "id": "recon_decision_assault_b",
+          "name": "重构决策·攻势B",
+          "desc": "战斗中，场上的干员每次攻击都会使敌人的防御力与法术抗性-2.5%（最多叠加20层）（决策专属独立乘区）",
+          "battle": { "ally": { "attackDebuffPct": 0.025, "attackDebuffStacks": 20 } }
+        },
+        {
+          "id": "recon_decision_bond_b",
+          "name": "重构决策·盟约B",
+          "desc": "获得干员时，该干员身上的对应盟约层数+20（无需激活盟约，每回合最多触发10次）",
+          "meta": { "bondLayers": 20 }
+        },
+        {
+          "id": "recon_decision_guard_b",
+          "name": "重构决策·守备B",
+          "desc": "战斗中，场上的干员每秒恢复生命上限2.5%的生命",
+          "battle": { "ally": { "regenPctPerSec": 0.025 } }
+        },
+        {
+          "id": "recon_decision_revive_b",
+          "name": "重构决策·复苏B",
+          "desc": "玩家生命值+25",
+          "meta": { "lp": 25 }
+        },
+        {
+          "id": "recon_decision_weaken_b",
+          "name": "重构决策·削弱B",
+          "desc": "战斗中，敌人攻击时，自身会受到攻击伤害5000%的固定伤害",
+          "battle": { "enemy": { "selfDamageAtkPct": 5000 } }
+        }
+      ],
+      "20": [
+        {
+          "id": "recon_decision_funds_a",
+          "name": "重构决策·资金A",
+          "desc": "进入休整期时，额外获得40资金",
+          "meta": { "funds": 40, "fundsEachRound": true }
+        },
+        {
+          "id": "recon_decision_assault_a",
+          "name": "重构决策·攻势A",
+          "desc": "战斗中，场上的干员每次攻击都会使自身攻击速度+5%（最多叠加100层）（决策专属独立乘区）",
+          "battle": { "ally": { "attackAspd": 5, "attackAspdStacks": 100 } }
+        },
+        {
+          "id": "recon_decision_bond_a",
+          "name": "重构决策·盟约A",
+          "desc": "获得干员时，该干员身上的对应盟约层数+30（无需激活盟约，每回合最多触发10次）",
+          "meta": { "bondLayers": 30 }
+        },
+        {
+          "id": "recon_decision_guard_a",
+          "name": "重构决策·守备A",
+          "desc": "战斗中，场上的干员受到的所有伤害数值-1000",
+          "battle": { "ally": { "flatDamageCut": 1000 } }
+        },
+        {
+          "id": "recon_decision_revive_a",
+          "name": "重构决策·复苏A",
+          "desc": "玩家生命值+40",
+          "meta": { "lp": 40 }
+        },
+        {
+          "id": "recon_decision_weaken_a",
+          "name": "重构决策·削弱A",
+          "desc": "战斗中，敌人每10秒获得以下效果中的随机一项：50%脆弱、3层麻痹、50%虚弱（持续10秒）（决策专属独立乘区）",
+          "battle": { "enemy": { "randomDebuffEvery": 10, "randomDebuffDuration": 10, "fragile": 0.5, "palsy": 3, "weaken": 0.5 } }
+        }
+      ],
+      "21": [
+        {
+          "id": "recon_decision_logistics_x",
+          "name": "重构决策·后勤整合X",
+          "desc": "立刻获得100资金；获得干员时，该干员身上的对应盟约层数+50（无需激活盟约，最多触发20次）",
+          "meta": { "funds": 100, "bondLayers": 50, "bondTriggerLimit": 20, "bondTriggerScope": "match" }
+        },
+        {
+          "id": "recon_decision_frontline_x",
+          "name": "重构决策·战线整合X",
+          "desc": "战斗中，场上的干员最终造成的伤害+已激活盟约层数总和×1%（决策专属独立乘区）；场上的干员最终受到的伤害-50%（决策专属独立乘区）",
+          "battle": { "ally": { "bondLayerDamagePct": 0.01, "dmgTakenMul": 0.5 } }
+        },
+        {
+          "id": "recon_decision_aid_x",
+          "name": "重构决策·援助整合X",
+          "desc": "玩家生命值+60；战斗中，敌人最终受到的伤害+已激活盟约层数总和的×1%（决策专属独立乘区）",
+          "meta": { "lp": 60 },
+          "battle": { "enemy": { "bondLayerDamagePct": 0.01 } }
+        }
+      ]
+    }
+  }
+}

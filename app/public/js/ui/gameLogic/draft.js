@@ -47,7 +47,8 @@ export function normalizeSp(sp, players = []) {
   if (!isObj(sp)) return null;
   const ids = (Array.isArray(players) ? players : []).filter(isObj).map((p) => p.playerId);
   const order = Array.isArray(sp.order) && sp.order.length ? sp.order.filter((x) => typeof x === 'string') : ids;
-  const cards = (Array.isArray(sp.cards) ? sp.cards : []).slice(0, 6).map((c, idx) => {
+  // 卡数不再截到 6：重构模拟最多 20 人，6 人以上一人一张（服务端 choices.js generateDraft）
+  const cards = (Array.isArray(sp.cards) ? sp.cards : []).map((c, idx) => {
     const card = typeof c === 'string' ? { id: c } : isObj(c) ? { ...c } : {};
     return { ...card, idx, takenBy: typeof card.takenBy === 'string' ? card.takenBy : null };
   });
@@ -81,6 +82,14 @@ export function normalizePersonalChoice(pub, priv, myId) {
   const choice = priv?.personalChoice;
   if (pub?.phase !== PHASE.PREP || !priv || priv.playerId !== myId || priv.alive === false
     || !choice || choice.round !== pub.round) return null;
+  // 重构模拟的「重构决策」（kind 'recon'，每名玩家私密 3 选 1）：同一个私密选择通道，只是卡片的家族不同
+  if (choice.kind === 'recon') {
+    return {
+      ...normalizeSp({ family: 'recon', name: t('重构决策'), desc: t('从候选中选择一项重构决策'),
+        cards: choice.cards, turn: myId, order: [myId], picks: {} }),
+      id: choice.id,
+    };
+  }
   return {
     ...normalizeSp({ family: 'bounty', name: t('教鞭 · 战术特训'), desc: t('请选择一项战术特训'),
       cards: choice.cards, turn: myId, order: [myId], picks: {} }),

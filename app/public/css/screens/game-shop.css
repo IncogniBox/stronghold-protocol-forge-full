@@ -17,6 +17,8 @@
 .gm__hud > .shopbar { pointer-events: none; }
 .shopbar__row, .shopbar__tools > button { pointer-events: auto; }
 .shopbar__tools { display: grid; grid-template-columns: auto auto; justify-content: end; align-items: center; gap: .06rem .12rem; }
+/* 重构模拟的工具行多一枚「特训」：那一行要放三枚按钮（特训 / 冻结 / 刷新）——多给一列，别让刷新折到第二行 */
+.shopbar__tools.is-train { grid-template-columns: auto auto auto; }
 .shopbar__remain {
   grid-column: 1 / -1; justify-self: end; pointer-events: none;
   font-size: .16rem; color: var(--text-md); padding: .04rem .14rem; background: rgba(8, 11, 10, .78);

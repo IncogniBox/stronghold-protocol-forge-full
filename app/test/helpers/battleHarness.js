@@ -254,6 +254,7 @@ export function makeBattle(opts = {}) {
     seed: opts.seed ?? 1, kind, modeId: opts.modeId ?? 'mode_multi_normal', round: opts.round ?? 1, stage, rect: opts.rect,
     timeLimit: timeLimit ?? (kind === 'boss' || kind === 'hidden' ? Infinity : 60), players, spawns, routes,
     sharedBoss: opts.sharedBoss ?? null, flags: { startOpCooldown: 0, ...opts.flags }, fieldId: opts.fieldId ?? 'test', data,
+    reconChannel: opts.reconChannel,
     content: opts.content ?? 'full', recordEvents: opts.recordEvents !== false, logger: opts.logger ?? quietLogger(opts.verbose),
     quiet: opts.verbose ? false : true, devices: opts.devices,
     autoFinish: opts.autoFinish ?? spawns.length > 0, kits: opts.kits, extraContent: opts.extraContent,
@@ -353,8 +354,9 @@ export function checkInvariants(b) {
         if (sk.active && sk.kind === 'duration' && !Number.isFinite(sk.timeLeft)) bad(`skill timeLeft ${sk.timeLeft}`, u);
         if (sk.active && sk.kind === 'ammo' && !Number.isFinite(sk.ammoLeft)) bad(`skill ammoLeft ${sk.ammoLeft}`, u);
       }
-      // occupancy map consistency: a living deployed ally is what its tile says it is
-      if (u.side === 'ally' && u.deployed && b._occ[u.tileR * COLS + u.tileC] !== u) bad(`occupancy map out of sync at ${u.tileR},${u.tileC}`, u);
+      // occupancy map consistency: a living deployed ally is what its tile says it is — except a `noTile` decoration
+      // (望的跟子：官方「不占格」的投射物，spawnToken noTile), which is deliberately in no `_occ` slot at all
+      if (u.side === 'ally' && u.deployed && !u.noTile && b._occ[u.tileR * COLS + u.tileC] !== u) bad(`occupancy map out of sync at ${u.tileR},${u.tileC}`, u);
     } else if (u.removeReason === 'killed' && u.hp !== 0 && !u.bossPool) bad(`killed with hp ${u.hp}`, u);
     else if (u.hp < 0) bad(`negative hp ${u.hp}`, u);
     if (u.side === 'enemy' && u.blockedBy && !u.blockedBy.blocking.includes(u)) bad('block link broken', u);

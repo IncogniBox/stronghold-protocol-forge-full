@@ -2,7 +2,8 @@
 // data/choices.json).
 //
 // Generation (generateDraft): the family is a weighted pick from choices.schedule[modeId].rounds[r].families; the card
-// count is `cards` (co-op 6, solo 3):
+// count is `cards` (co-op 6, solo 3) and, from 6 players up, one more per player beyond 6 (`players` option — 重构模拟
+// seats up to 20, so its 7 SP rounds offer as many cards as there are players drafting):
 //   bounty  悬赏决策  six distinct cards.bounty entries (solo: 3 of them) built like the official draft of the round
 //                     (`bountyDraftCards`; player feedback after 0.1.0, report #2 — late bounty enemies in the early
 //                     drafts; 66 official screenshots of 22 matches, tools/build-data.mjs BOUNTY_INITIAL_SETS): schedule
@@ -64,7 +65,7 @@
 import { weightedPick } from './waves.js';
 import { PLUGIN_GAIN_COUNT_MAX } from '../../shared/plugins/limits.js';
 
-export const FAMILY_NAMES = { bounty: '悬赏决策', supply: '道具补给', shop: '机密商店', tactic: '战术决策' }; // i18n-ignore: = choices.json families (the client shows the localized record)
+export const FAMILY_NAMES = { bounty: '悬赏决策', supply: '道具补给', shop: '机密商店', tactic: '战术决策', recon: '重构决策' }; // i18n-ignore: = choices.json families (the client shows the localized record)
 
 /**
  * Battles a multi-round bounty card lasts (data `rounds` 99, official text "之后 / 后续的<@ba.vdown>每场</>作战":
@@ -98,10 +99,98 @@ export function bountyText(text, c) {
     .replace(/(?:之后的|后续的?)每场作战/g, `接下来${battles}`);
 }
 
+/**
+ * 重构模拟的 SP 回合家族权重（业主 2026-10-28：「把官方的悬赏决策 / 机密商店 / 战术决策这些也准备一下，因为一共有
+ * 7 个 SP 决策」）：官方终极多人 R11 的那一组 [ASSUMED — 重构的 7 个 SP 回合（R3/6/9/12/15/18/20）与官方 R3/R9/R11
+ * 对不上，官方的另一档只有悬赏 100，所以七个回合都用这一组权重]。
+ */
+const RECON_SP_FAMILIES = Object.freeze([{ family: 'bounty', weight: 14 }, { family: 'shop', weight: 4 }, { family: 'tactic', weight: 4 }]);
+/** 重构决策（`choices.reconDecisions`，业主 2026-10-28：重构模拟专属的 SP 决策）在家族权重里的份额 [ASSUMED]。 */
+const RECON_DECISION_WEIGHT = 3;
+/** 重构家族表与事件表照抄的官方模式（终极多人；官方四档里只有它有混排回合）。 */
+const RECON_SCHEDULE_BASE = 'mode_multi_abyss';
+
+/**
+ * 重构决策的候选池：`choices.reconDecisions` 的一条记录（工坊包 `choices.json`），`cards` 里每一项是一个
+ * 效果 id，或 `{ id, name?, desc?, team? }` —— `id` 就是 `effects.json` 的 `effectId`（也是 `choice:<id>` 注册键），
+ * 所以效果落地后卡面文字与效果都从那份记录来，引擎这里不用改。没有这条记录 / `cards` 为空 ⇒ 空数组。
+ * @returns {Array<{ id: string, name?: string, desc?: string, descRaw?: string, team?: boolean }>}
+ */
+export function reconDraftEntries(gd) {
+  const rec = gd && gd.choices ? gd.choices.reconDecisions : null;
+  const list = rec && Array.isArray(rec.cards) ? rec.cards : [];
+  const out = [];
+  const seen = new Set();
+  for (const c of list) {
+    const id = typeof c === 'string' ? c : c && typeof c === 'object' && typeof c.id === 'string' ? c.id : null;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(typeof c === 'object' ? c : { id });
+  }
+  return out;
+}
+
+/**
+ * 重构决策的卡（家族 `recon`）：每次抽 `n` 张不同的，池子不够 n 张时重复抽（人多时一人一张）。
+ * 卡按 `tactic` 形状交给 `applyCard` —— 选中后先走 `choice:<id>` 处理器，再走默认的 EffectRef 效果（与战术决策同一条路）。
+ */
+export function reconDraftCards(gd, rng, n) {
+  const pool = reconDraftEntries(gd);
+  if (!pool.length || n <= 0) return [];
+  const drawn = [];
+  for (const c of rng.shuffle(pool.slice())) { // loop-cap: n and pool
+    if (drawn.length >= n) break;
+    drawn.push(c);
+  }
+  while (drawn.length < n) drawn.push(rng.pick(pool));
+  return drawn.map((c) => {
+    const eff = typeof gd.effect === 'function' ? gd.effect(c.id) : null;
+    return {
+      kind: 'tactic',
+      id: c.id,
+      name: (typeof c.name === 'string' && c.name) || (eff && eff.name) || c.id,
+      desc: (typeof c.desc === 'string' && c.desc) || (eff && eff.desc) || '',
+      descRaw: c.descRaw || (eff && eff.descRaw) || null,
+      tier: null,
+      team: c.team === true,
+      tacticKind: 'recon',
+    };
+  });
+}
+
+/** 一回合的家族权重：官方的三条 +（有候选时）重构决策。 */
+export function reconFamilies(gd) {
+  const fams = RECON_SP_FAMILIES.map((f) => ({ ...f }));
+  if (reconDraftEntries(gd).length) fams.push({ family: 'recon', weight: RECON_DECISION_WEIGHT });
+  return fams;
+}
+
+/**
+ * 重构模拟一回合的机变家族条目：官方 `choices.schedule` 没有 `mode_recon_abyss`（模式是运行时合成的），所以按官方
+ * 终极多人的 SP 回合合成 —— 悬赏种类按回合（R8 前 initial / R8–R10 boss / R11 起 hunter，`bountyDraftKind`），
+ * 事件表借官方同种类的那一回合；道具档位随回合放宽（同非官方回合的兜底口径）。
+ */
+export function reconScheduleEntry(gd, round) {
+  const base = gd.choices.schedule && gd.choices.schedule[RECON_SCHEDULE_BASE];
+  const kind = bountyDraftKind(round);
+  const src = base && base.rounds ? base.rounds[String(kind === 'initial' ? 3 : kind === 'boss' ? 9 : 11)] || null : null;
+  const first = base && base.rounds ? Object.values(base.rounds).find((r) => r && typeof r === 'object') || null : null;
+  const ev = (k) => (src && src.events && Array.isArray(src.events[k]) ? src.events[k] : first && first.events && Array.isArray(first.events[k]) ? first.events[k] : []);
+  return {
+    families: reconFamilies(gd),
+    cards: 6,
+    supplyTiers: [1, Math.min(6, 1 + Math.floor(round / 3))],
+    bountyDraft: kind,
+    events: { bounty: ev('bounty'), supply: ev('supply'), shop: ev('shop'), tactic: ev('tactic') },
+    assumed: true,
+  };
+}
+
 function scheduleFor(gd, round) {
   const sch = gd.choices.schedule && gd.choices.schedule[gd.modeId];
   const r = sch && sch.rounds && sch.rounds[String(round)];
   if (r && typeof r === 'object') return r;
+  if (gd.isRecon) return reconScheduleEntry(gd, round);
   // fallback: a supply draft
   return { families: [{ family: 'supply', weight: 1 }], cards: gd.isSolo ? 3 : 6, supplyTiers: [1, Math.min(6, 1 + Math.floor(round / 3))] };
 }
@@ -135,13 +224,16 @@ function itemCard(gd, id) {
 
 /**
  * Build the draft cards for an SP round.
+ * `players`: how many players draft this round — from 6 up, one card per player (重构模拟's seats go to 20), so every
+ * picker can still take a card of their own; 6 or fewer keep the official 6 (solo 3).
  * @returns {{ family: string, name: string, desc: string, eventId: string|null, cards: object[] } | null}
  */
-export function generateDraft(gd, rng, round, { stageId = null, bondAvailable = null, itemAvailable = null } = {}) {
+export function generateDraft(gd, rng, round, { stageId = null, bondAvailable = null, itemAvailable = null, players = null } = {}) {
   const sch = scheduleFor(gd, round);
   const fams = Array.isArray(sch.families) && sch.families.length ? sch.families.map((f) => [f.family, f.weight]) : [['supply', 1]];
   let family = weightedPick(rng, fams) || 'supply';
-  const n = Number.isInteger(sch.cards) && sch.cards > 0 ? Math.min(sch.cards, 6) : formatCount(gd);
+  const base = Number.isInteger(sch.cards) && sch.cards > 0 ? Math.min(sch.cards, 6) : formatCount(gd);
+  const n = Number.isInteger(players) && players > base ? players : base;
   const opts = { stageId, bondAvailable, round, itemAvailable };
   let cards = buildCards(gd, rng, family, n, sch, opts);
   if (!cards.length && family !== 'supply') { family = 'supply'; cards = buildCards(gd, rng, family, n, sch, opts); }
@@ -320,6 +412,9 @@ function bountyDraftCards(gd, rng, n, sch, round) {
   const out = spec ? structuredBounty(rng, kind, spec, byId) : [];
   const taken = new Set(out);
   if (out.length < n) out.push(...drawDistinct(rng, eligible, n - out.length, taken));
+  // 人多（>6）时悬赏卡池不一定有 n 张不同的卡（boss 池恰好 20 条，再被敌人表刷掉几条）：重复抽，保证每个选牌位都有卡
+  // [ASSUMED — 官方一桌 6 张，从没有 20 人的抽签]；6 张以内的抽签照旧不重复（测试夹具用窄卡池时也只出池里那些）
+  while (out.length < n && eligible.length && n > 6) out.push(rng.pick(eligible));
   return rng.shuffle(out).slice(0, n).map((c) => bountyCard(gd, c));
 }
 
@@ -403,6 +498,7 @@ function buildCards(gd, rng, family, n, sch, { stageId = null, bondAvailable = n
     return out;
   }
   if (family === 'tactic') return tacticDraftCards(gd, rng, n, { stageId, bondAvailable, round });
+  if (family === 'recon') return reconDraftCards(gd, rng, n);
   return [];
 }
 

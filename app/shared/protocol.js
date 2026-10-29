@@ -1010,7 +1010,9 @@ export const C2S = {
   'g.reconContinue': {},
   // 重构协议·特训（模式扩展-重构模拟，PHASE.PREP 的特训回合）：从**场上与待部署区**各点一名干员——前者教官、
   // 后者学员。学员本局永久继承教官的技能 / 特质 / 天赋（sim 的 traineeOf 组成通道，simdata.js getTrainee）并
-  // 攻 / 防 / 生命 = 学员 + 教官 ×0.5（shared/reconModes.js RECON_TRAINEE_STAT_RATIO，固定不叠加）、获授附加盟约 bond_recon。
+  // 攻 / 防 / 生命 = 学员 + 教官 ×0.5（shared/reconModes.js RECON_TRAINEE_STAT_RATIO；链式：教官自己也是学员时
+  // 先在它那一层组成，逐层 ×0.5 —— A + B×0.5 + C×0.25，见 PlayerState.battleInput 的 reconTrainee.chain）、
+  // 获授附加盟约 bond_recon；学员召唤的 token 也吃教官的天赋 / 特质 installer。
   // 归属 / 回合 / 就绪 / 同人两角在处理器（PlayerState.reconTrain）判；非重构对局回 WRONG_PHASE。新增 C2S 类型
   // ⇒ `PROTOCOL_VERSION` 不动（先例 `g.reconChoice`）。
   'g.reconTrain': { mentor: isUid, trainee: isUid },

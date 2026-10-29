@@ -23,6 +23,12 @@ let el = null;
 let on = false;
 let prevBgm = null;
 let fadeTimer = 0;
+let lastTarget = 0;   // 上一次淡入 / 淡出的目标音量（首领曲接管时改成 50%，见 targetVolume）
+
+/** 目标音量：重构模拟的首领战斗曲接管时**不被覆盖**，只压到 50%（业主 2026-10-29）。 */
+function targetVolume() {
+  return VOLUME * (audio.bossMusicOn ? 0.5 : 1);
+}
 
 function player() {
   if (!el) {
@@ -57,15 +63,17 @@ function start() {
   const a = player();
   a.volume = 0;
   try { const p = a.play(); if (p && typeof p.catch === 'function') p.catch(() => { /* 自动播放门：下一次手势再试 */ }); } catch { /* ignore */ }
-  fadeTo(VOLUME);
+  lastTarget = targetVolume();
+  fadeTo(lastTarget);
 }
 function stop() {
   if (!on) return;
   on = false;
+  lastTarget = 0;
   fadeTo(0);
   const prev = prevBgm;
   prevBgm = null;
-  if (prev != null) { try { audio.playBgm(prev); } catch { /* ignore */ } }
+  if (prev != null && !audio.bossMusicOn) { try { audio.playBgm(prev); } catch { /* ignore */ } }
 }
 
 /** 这一帧的「场上是否 4 名」：从本包战斗模块的同一个实例读 `DOS_LIVE`。 */
@@ -92,9 +100,14 @@ export function mount() {
     if (!live) return;
     if (yes && !on) start();
     else if (!yes && on) stop();
-    // 自动播放门兜底：该响却没在往前走 ⇒ 下一次轮询再点一次 `play()`（战斗里玩家一直在操作，很快就会放行）。
-    else if (yes && on && el && el.paused) {
-      try { const p = el.play(); if (p && typeof p.catch === 'function') p.catch(() => {}); } catch { /* ignore */ }
+    else if (yes && on) {
+      // 首领曲接管 ⇒ 压到 50%；首领曲结束再回到原音量（`targetVolume` 现算）
+      const tv = targetVolume();
+      if (tv !== lastTarget) { lastTarget = tv; fadeTo(tv); }
+      // 自动播放门兜底：该响却没在往前走 ⇒ 下一次轮询再点一次 `play()`（战斗里玩家一直在操作，很快就会放行）。
+      else if (el && el.paused) {
+        try { const p = el.play(); if (p && typeof p.catch === 'function') p.catch(() => {}); } catch { /* ignore */ }
+      }
     }
   };
   tick();
