@@ -692,6 +692,66 @@ export function loadImageElement(url) {
   });
 }
 
+/**
+ * Cache Storage name holding the heavy local-client art (the board textures every match downloads).
+ * Bump the `-vN` to invalidate every copy stored by an earlier page (`pruneCaches` drops the others).
+ */
+export const PERSISTENT_ART_CACHE = 'sp-local-art-v1';
+const PERSISTENT_ART_PREFIX = 'sp-local-art-';
+
+/** Drop the copies of earlier cache versions (best effort: a failure just leaves them on disk). */
+async function pruneCaches(store, keep) {
+  try {
+    if (typeof store.keys !== 'function') return;
+    for (const k of await store.keys()) if (k.startsWith(PERSISTENT_ART_PREFIX) && k !== keep) await store.delete(k);
+  } catch { /* best effort */ }
+}
+
+/**
+ * An image element through Cache Storage instead of the HTTP cache.
+ *
+ * The art CDN answers the board textures with `Cache-Control: public, max-age=60, s-maxage=60` (gh-proxy →
+ * raw.githubusercontent, measured 2026-10-31), i.e. the ~2 MB a match needs is downloaded AGAIN on every page load —
+ * a 14 s wait each time the player reloads. Here one copy is kept on disk and read back as a blob URL: the first
+ * visit still downloads it, every later page load is a local read (that is why `assets.image(url, { persist: true })`
+ * exists — render/boardArt.js and render/board3d/load.js, the map art).
+ *
+ * Returns null when Cache Storage is unavailable (plain http, Safari private mode, a Node test), the fetch is refused
+ * (CORS / offline / a 404) or the entry cannot be stored (quota) — the caller then loads the image the normal way.
+ * @param {string} url
+ * @param {{ caches?: any, fetch?: any, loadImage?: (u: string) => Promise<any>, cacheName?: string }} [opts]
+ */
+export async function imageFromCache(url, opts) {
+  const o = opts && typeof opts === 'object' ? opts : {};
+  const store = o.caches || globalThis.caches;
+  const doFetch = o.fetch || globalThis.fetch;
+  const load = typeof o.loadImage === 'function' ? o.loadImage : loadImageElement;
+  const s = str(url);
+  if (!s || !store || typeof store.open !== 'function' || typeof doFetch !== 'function') return null;
+  const name = str(o.cacheName) || PERSISTENT_ART_CACHE;
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
+  let objectUrl = null;
+  try {
+    const cache = await store.open(name);
+    void pruneCaches(store, name);
+    let res = await cache.match(s);
+    if (!res) {
+      res = await doFetch(s, { mode: 'cors', credentials: 'omit' });
+      if (!res || !res.ok) return null;
+      try { await cache.put(s, res.clone()); } catch { /* full / refused: the network copy still loads */ }
+    }
+    const blob = await res.blob();
+    objectUrl = URL.createObjectURL(blob);
+    const img = await load(objectUrl);
+    // decoded before the blob URL goes away (an async-decoding element must not lose its source)
+    try { if (img && typeof img.decode === 'function') await img.decode(); } catch { /* already decoded */ }
+    return img && (img.width || img.naturalWidth) > 0 ? img : null;
+  } catch { return null; } finally {
+    if (objectUrl) try { URL.revokeObjectURL(objectUrl); } catch { /* ignore */ }
+  }
+}
+
+
 /** Default Spine loader: PIXI.Assets.load(skel) → spineData (needs globalThis.PIXI + PIXI.spine). */
 export async function loadSpineData(entry, opts) {
   const PIXI = globalThis.PIXI;
@@ -1002,18 +1062,25 @@ export function createAssets(options) {
    */
   const failed = (u) => { try { return !!layers?.fail?.(u); } catch { return false; } };
 
-  /** Image element (cached; failures resolve to null — a cosmetic plugin's image that failed falls back: `failed`). */
-  function image(u, { retry = false } = {}) {
+  /**
+   * Image element (cached; failures resolve to null — a cosmetic plugin's image that failed falls back: `failed`).
+   * `persist: true` reads the CDN's `max-age=60` art through Cache Storage first (imageFromCache: the board textures
+   * stay on disk, so a page reload does not download the same ~2 MB again); the plain load is the fallback.
+   */
+  function image(u, { retry = false, persist = false } = {}) {
     const s = str(u);
     if (!s) return Promise.resolve(null);
     let e = images.get(s);
     if (retry && e?.done && !e.value) { images.delete(s); e = null; }
     if (!e) {
       e = { value: null, done: false, promise: null };
-      e.promise = Promise.resolve().then(() => loadImage(s)).then(
-        (img) => { e.value = img; e.done = true; if (!img) failed(s); return img; },
-        () => { e.done = true; failed(s); return null; },
-      );
+      e.promise = Promise.resolve()
+        .then(() => (persist ? imageFromCache(s, { loadImage }) : null))
+        .then((img) => img || loadImage(s))
+        .then(
+          (img) => { e.value = img; e.done = true; if (!img) failed(s); return img; },
+          () => { e.done = true; failed(s); return null; },
+        );
       images.set(s, e);
     }
     return e.promise;

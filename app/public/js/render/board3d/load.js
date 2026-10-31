@@ -160,7 +160,7 @@ export function loadBoardPack(assets, themeId = DEFAULT_BOARD_THEME) {
     await Promise.all(Object.entries(slots).map(async ([k, [g, n]]) => {
       const u = url(g, n);
       if (!u) return;
-      const img = await assets.image(u, { retry: true }).catch(() => null);
+      const img = await assets.image(u, { retry: true, persist: true }).catch(() => null);
       if (img && (img.width || img.naturalWidth) > 0) images[k] = img;
     }));
     if (!images.D) return null;

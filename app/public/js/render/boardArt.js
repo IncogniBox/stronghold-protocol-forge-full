@@ -50,7 +50,7 @@ export function loadBoardArt(assets) {
     await Promise.all(Object.entries(tiles.source).map(async ([k, s]) => {
       const url = isObj(s) && typeof s.path === 'string' && s.path ? sourceUrl(assets, s.path) : null;
       if (!url) return;
-      const img = await assets.image(url).catch(() => null);
+      const img = await assets.image(url, { persist: true }).catch(() => null);
       if (img && img.width > 0) images[k] = img;
     }));
     if (!images.D) return null;

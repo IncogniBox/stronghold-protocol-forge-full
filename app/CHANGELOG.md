@@ -13,6 +13,21 @@
 
 `APP_VERSION`（`0.19.1`）与 `PROTOCOL_VERSION`（`2`）未动；新增 C2S `room.card` 与 `room.state.seats[].card` 都是**可缺省**的加性字段，老页面不认时不发、不读，既有帧逐字节不变。服务端改动需**重启**生效（无对局时）。
 
+### 棋盘贴图常驻本地缓存：重新打开页面不再重复下载（2026-11-01）
+
+- **根因**：素材 CDN 给本地客户端素材（`/assets/local/**`，棋盘贴图全在这里）的响应头是
+  `Cache-Control: public, max-age=60, s-maxage=60`（gh-proxy → raw.githubusercontent，2026-10-31 实测）——
+  **每次重新打开页面**那 ~2 MB 棋盘贴图都要再下一次（0.8 Mbps 下约 14 s）。这和换源、压缩都无关，是缓存时效。
+- `public/js/assets.js` 新增 `imageFromCache(url)`：先查 `caches.open('sp-local-art-v1')` 里的那份，没有才
+  `fetch`（CORS）并把响应 `put` 进缓存，再经 blob URL 解码成图片（解码完成后才 `revokeObjectURL`）。棋盘图集与
+  3D 棋盘包（`render/boardArt.js`、`render/board3d/load.js`）改用 `assets.image(url, { persist: true })`。
+- **只缓存这两份**（棋盘图集 6 张 + 3D 棋盘包合计 ≈2.2 MB），逐关的场景贴图不进来，配额不会被越铺越大。
+- 任何一步失败都回落到原来的 `new Image()` 加载：没有 Cache Storage（纯 http、Safari 无痕）、跨域被拒、
+  配额满、图片坏掉 —— 只是「这一张没进缓存」，界面照旧。
+- 缓存名带版本号（`sp-local-art-v1`）：换素材时把后缀 +1，上一版的整个缓存目录会被清掉。
+- 回归：新增 `test/render/artcache.test.js`（miss→存→二次命中不再请求 / 无 Cache Storage 时返回 null /
+  fetch 被拒不落盘 / 旧版本目录被清）。
+
 ### 棋盘素材预热：等待室里就开始下载（2026-10-31）
 
 - **地图贴图从前是进对局那一刻才开始拉的**：战场视图（`render/app.js` 的 `createFieldView`）在「进入对局」时
