@@ -18,7 +18,7 @@ import {
 } from '../../public/js/ui/loadoutModel.js';
 import { installLoadoutSync, SYNC_DEBOUNCE_MS, RETRY_MS, applyLoadoutEntries, setEntries, loadoutStore } from '../../public/js/ui/loadoutSync.js';
 import { createStore } from '../../public/js/store.js';
-import { shouldAutoClose } from '../../public/js/screens/loadout.js';
+import { shouldAutoClose, codexItems, notSold } from '../../public/js/screens/loadout.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CHESS = JSON.parse(readFileSync(path.join(ROOT, 'data/chess.json'), 'utf8'));
@@ -196,6 +196,22 @@ test('roster and filters: 112 visible chess in shop order; tier / class / bond /
   const bondName = getBond(bond).name;
   assert.ok(filterRoster(roster, { query: bondName }, {}, get, getBond).some((c) => c.chessId === INSIDE), 'search matches bond names');
   assert.deepEqual(filterRoster(roster, { changedOnly: true }, { [INSIDE]: { skill: 0 }, [SWIRE]: { skill: SB.skill.index } }, get, getBond).map((c) => c.chessId), [INSIDE]);
+});
+
+test('道具图鉴列出全部装备 —— 包括特质获得（hideInShop）的多索雷斯 / 哥伦比亚装备', () => {
+  const OFFICIAL = JSON.parse(readFileSync(path.join(ROOT, 'data/items.json'), 'utf8'));
+  const DOS = JSON.parse(readFileSync(path.join(ROOT, 'workshop/dossoles/items.json'), 'utf8'));
+  const COL = JSON.parse(readFileSync(path.join(ROOT, 'workshop/columbia/items.json'), 'utf8'));
+  const all = { ...OFFICIAL, ...DOS, ...COL };
+  const list = codexItems(all);
+  assert.equal(list.length, 56 + 6 + 4, '官方 56 + 多索雷斯 6 + 哥伦比亚 4 件基础装备');
+  assert.ok(list.every((x) => !x.isGolden && x.itemType === 'EQUIP'), '每件一个基础形态；法术画卷不在装备图鉴');
+  assert.ok(list.some((x) => x.id === 'chess_item_ws_dos_tourbadge_a'), '多索雷斯的游客章在列表里');
+  assert.ok(list.some((x) => x.id === 'chess_item_6_13_e_a'), '哥伦比亚的源石辅助仪在列表里');
+  for (let i = 1; i < list.length; i++) assert.ok(list[i - 1].tier <= list[i].tier, '按阶级排');
+  assert.ok(notSold(all['chess_item_ws_dos_tourbadge_a']), '商店不售：标「特殊获取」');
+  assert.ok(notSold(all['chess_item_2_03_e_a']), '官方 shopExcluded 的战栗维式重锤同样标');
+  assert.equal(notSold(all['chess_item_1_01_e_a']), false, '普通商店装备不标');
 });
 
 test('重构模拟干员开关：关闭时隐藏 recon_*，打开后替换有重构版的干员并追加新增干员', () => {

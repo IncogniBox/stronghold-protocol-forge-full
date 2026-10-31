@@ -1547,7 +1547,7 @@
   "「筛选」按职业、盟约、名字查找，或切换为列表视图；「更多」里导出 / 导入调配、全部恢复默认。": "Filter searches by class, bond or name, or switches to the list view; More holds export / import loadout and reset all.",
   "5阶、6阶末尾的卡片即自选编队：持有的 6★ 干员或原型干员，只出现在你自己的商店。": "The cards at the end of tier 5 and 6 are the custom squad: 6★ or prototype Operators you own, shown only in your own shop.",
   "按阶级横向排列；点干员卡在左侧打开详情：技能、模组、潜能与练度、局内数值、皮肤与语音。←/→ 切换干员。": "Lined up by tier; click a card to open its detail on the left: skills, modules, potential and development, in-match values, skins and voice. ←/→ switches Operator.",
-  "本游戏商店出售的全部装备，点开查看基础 / 进阶效果；两件同名装备合成进阶。": "Every item this shop sells; open one to read its base / advanced effects — two items with the same name combine into the advanced one.",
+  "本游戏的全部装备（商店出售与特质获得），点开查看基础 / 进阶效果；两件同名装备合成进阶。": "Every item of this game — shop stock and trait-granted alike; open one to read its base / advanced effects — two items with the same name combine into the advanced one.",
   "标记未持有的干员，开局时由官方替补干员上场；局外设置，下一局生效。": "Marks Operators you do not own; the official stand-in takes the field instead. A lobby setting, effective next match.",
   "部分节点暂未连通，当前列表可能不完整。": "Some nodes are not reachable right now; this list may be incomplete.",
   "持久鏖战": "Endurance",

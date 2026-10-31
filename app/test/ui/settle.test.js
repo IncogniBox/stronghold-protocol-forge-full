@@ -131,6 +131,36 @@ test('the card helpers: elite level by tier, the ace, time and date, a row\'s ow
   assert.equal(S.rowCleared(null, { left: true }, true), false);
 });
 
+test('a recon lineup entry falls back to the pack\'s recon_ record (new operators have no formal id in the data)', async () => {
+  const G = await import('../../public/js/ui/gameComponents.js');
+  const pack = JSON.parse(readFileSync(path.join(ROOT, 'workshop/mode-recon/chess.json'), 'utf8'));
+  const base = 'chess_char_5_23_a';
+  assert.ok(pack[`recon_${base}`], 'the pack carries the new operator as recon_<formal id>');
+  assert.equal(pack[base], undefined, 'and not under the formal id the battle fields');
+  // the browser table as the settlement sees it (the recon alias is cleared once the game screen unmounts)
+  const gd = { chess: (id) => pack[id] || null };
+  const rec = G.chessForPiece(gd, base);
+  assert.equal(rec?.name, '录武官');
+  assert.equal(rec?.charId, 'char_4196_reckpr', 'the borrowed operator supplies the portrait');
+  assert.equal(G.chessForPiece(gd, 'chess_char_1_1'), null, 'an id in neither table stays null');
+  assert.equal(G.chessForPiece(gd, 'recon_chess_char_5_23_a').name, '录武官', 'the recon id itself still resolves');
+  assert.equal(G.chessForPiece(gd, ''), null);
+});
+
+test('the leaders under 模拟完成 resolve to the one met: an official boss, or the recon pack\'s enemy key', () => {
+  const bosses = JSON.parse(readFileSync(path.join(ROOT, 'data/bosses.json'), 'utf8'));
+  const packEnemies = JSON.parse(readFileSync(path.join(ROOT, 'workshop/mode-recon/enemies.json'), 'utf8'));
+  const gd = { boss: (id) => bosses[id] || null, enemy: (k) => packEnemies[k] || null };
+  assert.deepEqual(S.leaderOf(gd, 'boss_1'), { name: '假想敌：胄', icon: 'enemy_9013_acstmk' }, 'official: the boss record\'s enemyKey is the portrait');
+  assert.deepEqual(S.leaderOf(gd, 'enemy_ws_recon_shchmr'), { name: '玻利瓦尔，症结之核·重构', icon: 'enemy_2150_shchmr' },
+    'recon: the enemy key it fields is not in bosses.json, and its iconId is the art key the manifest carries');
+  assert.equal(S.leaderOf(gd, 'enemy_ws_recon_nope'), null, 'neither table knows it: no box');
+  assert.equal(S.leaderOf(gd, null), null);
+  assert.equal(S.leaderOf(gd, ''), null);
+  const js = readFileSync(path.join(ROOT, 'public/js/screens/settle.js'), 'utf8');
+  assert.match(js, /cleared \&\& r\.hiddenReached \&\& r\.hiddenBossId/, 'the Hidden Core box only once that round was entered');
+});
+
 test('the stylesheet keeps to the project\'s rules', () => {
   const css = readFileSync(path.join(ROOT, 'public/css/screens/settle.css'), 'utf8');
   assert.doesNotMatch(css, /!important/);

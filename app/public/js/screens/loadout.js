@@ -468,7 +468,8 @@ function Filters({ m, filters, onFilters, bonds }) {
 // sideways (two rows a group, a tall tier marker before each), the 甄选 (自选编队) slots closing tiers 5 and 6, a bottom bar
 // (干员 / 道具, jump to a tier) and 快速配置 (skills, modules, or this game's 潜能 · 练度 beside every card). A card opens the
 // same Detail as the list, in a drawer over the left of the deck. The list view (RosterRow) stays one toggle away in 筛选.
-// 道具 is a codex of this game's equipment (data/items.json: what its shop sells and its sim runs).
+// 道具 is a codex of this game's equipment (data/items.json): what its shop sells and the pieces a trait grants
+// (`hideInShop`, e.g. the 多索雷斯 / 哥伦比亚 packs' equipment) — those carry the 「特殊获取」 tag.
 
 const VIEW_PREF = 'loadout.view';
 /** 'deck' (cards by tier, the default) or 'list' (the aligned rows of 0.2.2). */
@@ -635,10 +636,20 @@ function DeckView({ m, list, getChess, st, selId, quick, onPick, onChange, onOps
   </div>`;
 }
 
-/** The equipment of the codex: this game's shop items (data/items.json), base forms, by tier then shop order. */
+/**
+ * Whether no shop sells this piece: a trait grants it (`hideInShop`) or the official shop pool never stocks it
+ * (`shopExcluded`, the 维式重锤 variants / 突变细胞). The codex marks both 「特殊获取」.
+ */
+export const notSold = (it) => !!(it && !it.isGolden && (it.hideInShop || it.shopExcluded));
+
+/**
+ * The equipment of the codex: this game's EQUIP items (data/items.json), base forms, by tier then shop order.
+ * `hideInShop` pieces (a trait grants them — the 多索雷斯 / 哥伦比亚 packs' gear) stay in: the codex lists every piece
+ * the game can put on an operator, marking the ones no shop sells 「特殊获取」.
+ */
 export function codexItems(items) {
   return Object.values(items || {})
-    .filter((x) => x && !x.isGolden && x.itemType === 'EQUIP' && !x.hideInShop)
+    .filter((x) => x && !x.isGolden && x.itemType === 'EQUIP')
     .sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0) || (a.shopSortId ?? 0) - (b.shopSortId ?? 0));
 }
 
@@ -675,7 +686,7 @@ function ItemCodex({ m, items, deckRef, onOpen, onTier }) {
           <span class="lo-item__head"><${TierChip} tier=${it.tier} size="sm" /><b class="lo-item__name">${it.name}</b></span>
           <${RichText} class="lo-item__desc" text=${it.descRaw || it.desc || ''} />
         </span>
-        ${it.shopExcluded ? html`<span class="lo-item__tag">${t('特殊获取')}</span>` : null}
+        ${notSold(it) ? html`<span class="lo-item__tag">${t('特殊获取')}</span>` : null}
         <span class="lo-item__zoom" aria-hidden="true"><${Icon} name="search" /></span>
       </button>`; })}</div>
     </section>`)}
@@ -695,7 +706,7 @@ function ItemDetail({ m, items, index, all, onIndex, onClose }) {
       <button type="button" class="lo-idetail__close" onClick=${onClose} aria-label=${t('关闭')}><${Icon} name="close" /></button>
       <header class="lo-idetail__head"><${TierChip} tier=${it.tier} size="md" /><h3>${it.name}</h3>
         <span class="lo-idetail__price">${t('售价')} <b class="num">${it.price ?? '—'}</b></span>
-        ${it.shopExcluded ? html`<span class="lo-item__tag">${t('特殊获取')}</span>` : null}</header>
+        ${notSold(it) ? html`<span class="lo-item__tag">${t('特殊获取')}</span>` : null}</header>
       <div class="lo-idetail__main">
         <span class="lo-idetail__icon"><${Img} src=${itemIconUrl(m, it)} fallback=${html`<${Icon} name="box" />`} /></span>
         <div class="lo-idetail__text">
@@ -744,7 +755,7 @@ function DeckHelp({ onClose }) {
     [t('快速配置'), t('在每张卡旁直接切换技能、模组，或潜能·练度；改动即时保存，点「确认配置」收起。')],
     [t('干员持有'), t('标记未持有的干员，开局时由官方替补干员上场；局外设置，下一局生效。')],
     [t('甄选干员'), t('5阶、6阶末尾的卡片即自选编队：持有的 6★ 干员或原型干员，只出现在你自己的商店。')],
-    [t('道具'), t('本游戏商店出售的全部装备，点开查看基础 / 进阶效果；两件同名装备合成进阶。')],
+    [t('道具'), t('本游戏的全部装备（商店出售与特质获得），点开查看基础 / 进阶效果；两件同名装备合成进阶。')],
     [t('筛选与导入导出'), t('「筛选」按职业、盟约、名字查找，或切换为列表视图；「更多」里导出 / 导入调配、全部恢复默认。')],
     [t('重构模拟干员'), t('右下角的开关：把有重构版的干员换成重构记录（阶级、特质、数值），并补上没有官方记录的干员；技能、模组、潜能与练度照常修改。')],
   ];

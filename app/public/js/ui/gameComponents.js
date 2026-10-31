@@ -7,6 +7,7 @@ import { data, useData, localAsset } from '../data.js';
 import { useStore } from '../store.js';
 import { parseRichText, rtClassName } from './richText.js';
 import { t as tr } from '../../../shared/i18n.js';
+import { RECON_PREFIX } from '../../../shared/reconModes.js';
 import {
   uiUrl, itemIconUrl, tokenAvatarUrl, enemyIconUrl, bondIconUrl, bandIconUrl,
 } from './assetUrls.js';
@@ -103,6 +104,18 @@ export function RichText({ text, class: cls, as = 'span' }) {
 
 /** Golden (elite) chess? */
 export const isGoldenPiece = (piece, chess) => !!(piece?.golden || chess?.isGolden || (typeof piece?.id === 'string' && /_b$/.test(piece.id) && piece.kind !== 'item'));
+
+/**
+ * A chess record for a piece / lineup entry id. A recon match fields the formal id (`recon_` 前缀在建局时去掉，
+ * shared/reconModes.js 的 `reconChessAlias`）—— 浏览器那份 `chess` 只有包里 `recon_<正式 id>` 的记录，
+ * 所以给重构模拟新增的干员（官方没有这个 id）补一次前缀回查；官方数据里不存在这种 id，普通对局读到的还是同一条。
+ * @param {{ chess: (id: string) => any }} gd
+ * @param {string} id
+ */
+export function chessForPiece(gd, id) {
+  if (typeof id !== 'string' || !id || !gd) return null;
+  return gd.chess(id) || gd.chess(`${RECON_PREFIX}${id}`) || null;
+}
 
 /**
  * Square unit thumbnail for a piece / chess / item / token / enemy: art + tier chip + elite frame.

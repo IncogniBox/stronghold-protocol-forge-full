@@ -17,7 +17,7 @@
 
 import { useEffect } from '../../vendor/hooks.module.js';
 import { html, Button, Icon, MicroLabel, DifficultyTag } from '../ui/components.js';
-import { useGameData, Img, UnitThumb, BandIcon, PlayerAvatar, BondGlyph, LpTower, Sprite } from '../ui/gameComponents.js';
+import { useGameData, Img, UnitThumb, BandIcon, PlayerAvatar, BondGlyph, LpTower, Sprite, chessForPiece } from '../ui/gameComponents.js';
 import { normalizeResult, fmtNum, diyRecordFor, cardStandIn, standInForText } from '../ui/gameLogic.js';
 import { MatchRecordsButton } from './records.js';
 import { data } from '../data.js';
@@ -58,10 +58,10 @@ export function resultBonds(bonds, bondRec = () => null) {
  * 「替补」 mark — the title names the chess it fielded for.
  */
 export function LineupThumb({ u, gd }) {
-  const chess = u.kind === 'token' ? null : gd.chess(u.id);
+  const chess = u.kind === 'token' ? null : chessForPiece(gd, u.id);
   const dr = u.diy && chess ? diyRecordFor(chess, u.diy, { chess: data.get('chess'), backups: data.get('backups') }) : null;
   const si = !dr && chess ? cardStandIn(chess, { unit: u, backups: gd.backups }) : null;
-  return html`<${UnitThumb} kind=${u.kind === 'token' ? 'token' : 'chess'} id=${u.id} golden=${!!u.golden} tier=${u.tier} size="sm" rec=${dr || si}
+  return html`<${UnitThumb} kind=${u.kind === 'token' ? 'token' : 'chess'} id=${u.id} golden=${!!u.golden} tier=${u.tier} size="sm" rec=${dr || si || chess}
     title=${si ? t('{name}（{note}）', { name: si.name, note: standInForText(chess.name) }) : undefined} />`;
 }
 

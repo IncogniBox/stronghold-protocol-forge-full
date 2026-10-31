@@ -11,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { reconChessAlias, reconData } from '../../shared/reconModes.js';
 import { DATA, makeMatch, give, giveItem } from './harness.js';
 import { makeBattle } from '../helpers/battleHarness.js';
+import { normalizeChess } from '../../server/sim/simdata.js';
+import { kitOf } from '../../server/sim/content/index.js';
 import { PHASE } from '../../shared/constants.js';
 import { createRegistry } from '../../server/match/effectsMeta.js';
 
@@ -86,13 +88,41 @@ test('真实数据：5 名重构干员的阶级 / 特质，2 名新增干员', (
   assert.equal(z.tier, 6);
   assert.deepEqual(z.bonds, ['yanShip', 'swiftShip'], '盟约：炎、迅捷');
   assert.deepEqual(c['recon_chess_ws_recon_zuole_b'].bonds, ['yanShip', 'swiftShip']);
+  assert.equal(z.kitRef, 'char_4121_zuole', '技能本体借官方自选 kit');
+  assert.equal(c['recon_chess_ws_recon_zuole_b'].kitRef, 'char_4121_zuole', '精锐同 kit');
 
   const ch = c['recon_chess_ws_recon_chen3_a'];
   assert.ok(ch, '赤刃明霄陈是新增干员');
   assert.equal(ch.tier, 7, '7 阶');
   assert.deepEqual(ch.bonds, ['yanShip']);
+  assert.equal(ch.kitRef, 'char_1050_chen3', '技能本体借官方自选 kit');
+  assert.equal(c['recon_chess_ws_recon_chen3_b'].kitRef, 'char_1050_chen3', '精锐同 kit');
   assert.equal(g['recon_garrison_chen3_a'].bb.hp_pct, 0.00001, '0.001% 当前生命');
   assert.equal(g['recon_garrison_chen3_b'].bb.hp_pct, 0.00002, '精锐 0.002%');
+});
+
+test('真实数据：四名新增干员的 kitRef 命中官方 kit（技能与天赋随 kit 安装）', () => {
+  const c = DATA.chess;
+  const pairs = [
+    ['zuole', 'char_4121_zuole'],
+    ['chen3', 'char_1050_chen3'],
+    ['narant', 'char_4138_narant'],
+    ['zumama', 'char_416_zumama'],
+  ];
+  for (const [code, ref] of pairs) {
+    for (const form of ['a', 'b']) {
+      const rec = c[`recon_chess_ws_recon_${code}_${form}`];
+      assert.ok(rec, `${code}_${form} 存在`);
+      assert.equal(rec.kitRef, ref, `${code}_${form} 的 kitRef`);
+      const def = normalizeChess(rec);
+      const build = kitOf(def);
+      assert.equal(typeof build, 'function', `${code}_${form} 应能查到官方 kit`);
+      const kit = build(rec.trait?.bb ?? {}, rec, def);
+      assert.notEqual(kit?.generic, true, `${code}_${form} 不退回 generic kit`);
+      assert.ok(kit?.skills && Object.keys(kit.skills).length > 0, `${code}_${form} 的技能在`);
+      assert.ok(Array.isArray(kit?.talents) && kit.talents.length > 0, `${code}_${form} 的天赋在`);
+    }
+  }
 });
 
 test('真实数据：萨尔贡三名新增干员（娜仁图亚 / 森蚺 / 狮蝎）与三名重构干员', () => {
@@ -104,6 +134,8 @@ test('真实数据：萨尔贡三名新增干员（娜仁图亚 / 森蚺 / 狮�
   assert.equal(n.tier, 6);
   assert.equal(n.price, 4);
   assert.deepEqual(n.bonds, ['sargonShip', 'preciShip', 'visiShip'], '盟约：萨尔贡、精准、远见');
+  assert.equal(n.kitRef, 'char_4138_narant', '技能本体借官方自选 kit');
+  assert.equal(c['recon_chess_ws_recon_narant_b'].kitRef, 'char_4138_narant', '精锐同 kit');
   assert.equal(g['recon_garrison_narant_a'].bb.tiles, 4, '普通：相邻四格');
   assert.equal(g['recon_garrison_narant_b'].bb.tiles, 8, '精锐：周围八格');
   assert.equal(g['recon_garrison_narant_a'].bb.duration, 60);
@@ -114,6 +146,8 @@ test('真实数据：萨尔贡三名新增干员（娜仁图亚 / 森蚺 / 狮�
   assert.equal(z.tier, 7, '7 阶');
   assert.equal(z.price, 5);
   assert.deepEqual(z.bonds, ['sargonShip', 'steadShip'], '盟约：萨尔贡、坚守');
+  assert.equal(z.kitRef, 'char_416_zumama', '技能本体借官方自选 kit');
+  assert.equal(c['recon_chess_ws_recon_zumama_b'].kitRef, 'char_416_zumama', '精锐同 kit');
   assert.equal(g['recon_garrison_zumama_a'].bb.layers, 6, '每开启 1 次技能 +6 层');
   assert.equal(g['recon_garrison_zumama_a'].bb.casts, 20, '≥20 次给黄沙罗盘');
   assert.equal(g['recon_garrison_zumama_a'].bb.count, 1);

@@ -4798,6 +4798,7 @@
   },
   "recon_chess_ws_recon_zuole_a": {
     "chessId": "recon_chess_ws_recon_zuole_a",
+    "kitRef": "char_4121_zuole",
     "baseId": "recon_chess_ws_recon_zuole_a",
     "goldenId": "recon_chess_ws_recon_zuole_b",
     "isGolden": false,
@@ -5156,6 +5157,7 @@
   },
   "recon_chess_ws_recon_zuole_b": {
     "chessId": "recon_chess_ws_recon_zuole_b",
+    "kitRef": "char_4121_zuole",
     "baseId": "recon_chess_ws_recon_zuole_a",
     "goldenId": "recon_chess_ws_recon_zuole_b",
     "isGolden": true,
@@ -5694,6 +5696,7 @@
   },
   "recon_chess_ws_recon_chen3_a": {
     "chessId": "recon_chess_ws_recon_chen3_a",
+    "kitRef": "char_1050_chen3",
     "baseId": "recon_chess_ws_recon_chen3_a",
     "goldenId": "recon_chess_ws_recon_chen3_b",
     "isGolden": false,
@@ -6210,6 +6213,7 @@
   },
   "recon_chess_ws_recon_chen3_b": {
     "chessId": "recon_chess_ws_recon_chen3_b",
+    "kitRef": "char_1050_chen3",
     "baseId": "recon_chess_ws_recon_chen3_a",
     "goldenId": "recon_chess_ws_recon_chen3_b",
     "isGolden": true,
@@ -6827,6 +6831,7 @@
   },
   "recon_chess_ws_recon_narant_a": {
     "chessId": "recon_chess_ws_recon_narant_a",
+    "kitRef": "char_4138_narant",
     "baseId": "recon_chess_ws_recon_narant_a",
     "goldenId": "recon_chess_ws_recon_narant_b",
     "isGolden": false,
@@ -7174,6 +7179,7 @@
   },
   "recon_chess_ws_recon_narant_b": {
     "chessId": "recon_chess_ws_recon_narant_b",
+    "kitRef": "char_4138_narant",
     "baseId": "recon_chess_ws_recon_narant_a",
     "goldenId": "recon_chess_ws_recon_narant_b",
     "isGolden": true,
@@ -7680,6 +7686,7 @@
   },
   "recon_chess_ws_recon_zumama_a": {
     "chessId": "recon_chess_ws_recon_zumama_a",
+    "kitRef": "char_416_zumama",
     "baseId": "recon_chess_ws_recon_zumama_a",
     "goldenId": "recon_chess_ws_recon_zumama_b",
     "isGolden": false,
@@ -7970,6 +7977,7 @@
   },
   "recon_chess_ws_recon_zumama_b": {
     "chessId": "recon_chess_ws_recon_zumama_b",
+    "kitRef": "char_416_zumama",
     "baseId": "recon_chess_ws_recon_zumama_a",
     "goldenId": "recon_chess_ws_recon_zumama_b",
     "isGolden": true,

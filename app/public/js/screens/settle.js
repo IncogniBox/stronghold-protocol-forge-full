@@ -17,7 +17,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, Icon, DifficultyIcon, Spinner } from '../ui/components.js';
-import { useGameData, Img, Sprite, PlayerAvatar, BondGlyph, BandIcon } from '../ui/gameComponents.js';
+import { useGameData, Img, Sprite, PlayerAvatar, BondGlyph, BandIcon, chessForPiece } from '../ui/gameComponents.js';
 import { normalizeResult, diyRecordFor, cardStandIn, standInForText } from '../ui/gameLogic.js';
 import { data } from '../data.js';
 import { chessPortraitUrl, chessAvatarUrl, itemIconUrl, enemyIconUrl, titleIconUrl } from '../ui/assetUrls.js';
@@ -307,7 +307,7 @@ function Rays({ lose }) {
 /** One unit of a lineup as the cards draw it (自选 pick / 补位 stand-in resolved as on the report's thumbnails). */
 function unitView(u, gd) {
   const m = gd.m;
-  const chess = u.kind === 'token' ? null : gd.chess(u.id);
+  const chess = u.kind === 'token' ? null : chessForPiece(gd, u.id);
   const dr = u.diy && chess ? diyRecordFor(chess, u.diy, { chess: data.get('chess'), backups: data.get('backups') }) : null;
   const si = !dr && chess ? cardStandIn(chess, { unit: u, backups: gd.backups }) : null;
   const rec = dr || si || chess;
@@ -395,14 +395,30 @@ function LevelStrip({ prog, milestones }) {
   </div>`;
 }
 
-/** One defeated leader on the report: the official medal (the 隐秘核心 one for the Hidden Core). */
+/**
+ * The leader a result's boss id names: the official `bosses` record (its enemyKey is the icon), or — a 重构模拟 match
+ * fields the pack's enemy key (`enemy_ws_recon_*`, shared/reconModes.js RECON_TRIAL_BOSSES) — the pack's enemy record,
+ * whose `iconId` is the official art key the manifest carries. Null when neither table knows the id.
+ * @param {{ boss: (id: string) => any, enemy: (key: string) => any }} gd
+ * @param {string|null|undefined} id
+ * @returns {{ name?: string, icon: string }|null}
+ */
+export function leaderOf(gd, id) {
+  if (typeof id !== 'string' || !id || !gd) return null;
+  const boss = gd.boss(id);
+  if (boss) return { name: boss.name, icon: boss.enemyKey || id };
+  const enemy = gd.enemy(id);
+  return enemy ? { name: enemy.name, icon: enemy.iconId || id } : null;
+}
+
+/** One defeated leader on the report: the official medal (the 隐秘核心 one for the Hidden Core), its portrait the leader met. */
 function Medal({ m, i }) {
   const sp = m.kind === 'hidden' ? '_sp' : '';
   const label = m.kind === 'boss' ? t('敌方领袖') : t('隐秘核心');
-  return html`<span class=${cx('smedal', `smedal--${m.kind}`, m.done ? 'is-done' : 'is-miss')} style=${`--i:${i}`} title=${m.rec?.name ? `${label} · ${m.rec.name}` : label}>
+  return html`<span class=${cx('smedal', `smedal--${m.kind}`, m.done ? 'is-done' : 'is-miss')} style=${`--i:${i}`} title=${m.name ? `${label} · ${m.name}` : label}>
     <${Sprite} k=${`settle/round_info_boss_bg${sp}`} class="smedal__bg" />
-    <${Sprite} k=${`settle/round_info_boss_icon${sp}`} class="smedal__icon"
-      fallback=${html`<${Img} src=${enemyIconUrl(m.gd.m, m.rec?.enemyKey)} class="smedal__icon" fallback=${html`<${Icon} name="crown" class="smedal__icon" />`} />`} />
+    <${Img} src=${enemyIconUrl(m.gd.m, m.icon)} class="smedal__icon"
+      fallback=${html`<${Sprite} k=${`settle/round_info_boss_icon${sp}`} class="smedal__icon" fallback=${html`<${Icon} name="crown" class="smedal__icon" />`} />`} />
     ${m.done ? html`<${Sprite} k=${`settle/round_info_boss_complete${sp}`} class="smedal__check" fallback=${html`<i class="smedal__check"><${Icon} name="check" /></i>`} />`
       : html`<i class="smedal__check is-miss"><${Icon} name="close" /></i>`}
   </span>`;
@@ -419,9 +435,11 @@ function SelfPage({ r, res, raw, self, gd, prog, content, onNext }) {
   const [leaving, setLeaving] = useState(false);
   const nextRef = useRef(null);
   const rounds = useCountUp(self.roundsPassed, { ms: 700, delay: 350 });
-  const boss = cleared && r.bossId ? gd.boss(r.bossId) : null;
-  const hidden = cleared && r.hiddenReached && r.hiddenBossId ? gd.boss(r.hiddenBossId) : null;
-  const medals = [boss && { kind: 'boss', rec: boss, done: true, gd }, hidden && { kind: 'hidden', rec: hidden, done: r.hiddenCleared, gd }].filter(Boolean);
+  // the boxes stand under 模拟完成 only for the leaders this run actually met: the leader round (always fought by a
+  // cleared run) and the Hidden Core (r.hiddenReached) — a run that never entered one shows no box for it
+  const boss = cleared && r.bossId ? leaderOf(gd, r.bossId) : null;
+  const hidden = cleared && r.hiddenReached && r.hiddenBossId ? leaderOf(gd, r.hiddenBossId) : null;
+  const medals = [boss && { kind: 'boss', ...boss, done: true, gd }, hidden && { kind: 'hidden', ...hidden, done: r.hiddenCleared, gd }].filter(Boolean);
   const slots = Array.from({ length: 10 }, (_, i) => self.lineup[i] || null);
   const milestones = gd.config?.rewards?.milestones;
   useEffect(() => {

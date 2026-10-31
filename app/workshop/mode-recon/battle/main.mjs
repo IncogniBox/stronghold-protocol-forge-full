@@ -662,6 +662,304 @@ S.registerGarrisonInstaller(HIGHMO_COPY, (battle, list) => {
   }
 });
 
+// ---------------------------------------------------------------------------------------------------------------
+// 本机没有官方 kit 的八名新增干员的**天赋**（业主 2026-10-31「新增干员的特质和天赋都没有生效」）。
+// 特质走 `garrisons.json`（上面各段）；天赋本应写在官方 kit 的 `talents[].install` 里 —— 这八名干员没有 kit
+// （`content/index.js kitOf` 落到 generic），而 generic kit 只装「写死成属性行」的天赋（`generic.js genericTalents`，
+// 且只对 stand-in / 自选生效），所以这些天赋一直没有落地。下面按 `def.charId` 认人（与 `installCourierSkills`
+// 按棋子 id 认人是同一类做法），每条只作用于自己的普通 / 精锐形态（charId 相同）。
+//
+// 数据里的 bb 就是官方那张表（`chess.json` 记录上的 `talents[].bb`），这里不重抄数值：
+//   狮蝎 `{delay, atk}` · 极光 `{hp_recovery_per_sec_by_max_hp_ratio, sp_ratio}` · 讯使 `{cnt, def}`
+//   空构 `{prob, stun, def_penetrate}` · 白金 `{attack@min_delta, attack@max_delta, attack@min_atk_scale, attack@max_atk_scale}`
+//   海沫 `{value}` · 深海色 `{cnt, tokenKey}` · 安哲拉 `{attack_speed}`
+// 海沫的第二条天赋「罹患，浸染」是【水月与深蓝之树】专属（本模式不生效），不实现。
+// ---------------------------------------------------------------------------------------------------------------
+
+const ADDED_NO_KIT = Object.freeze({
+  MANTIC: 'char_215_mantic',
+  AURORA: 'char_422_aurora',
+  COURIER: 'char_198_blackd',
+  SPURIA: 'char_4015_spuria',
+  PLATNM: 'char_204_platnm',
+  HIGHMO: 'char_4066_highmo',
+  DEEPCL: 'char_110_deepcl',
+  CUTTLE: 'char_218_cuttle',
+});
+
+/** 场上 / 编成里的干员中 charId 为 `charId` 的那些（普通与精锐同 charId）。 */
+function addedOps(battle, charId) {
+  const out = [];
+  for (const u of battle.allyUnits || []) {
+    if (u && u.kind === 'op' && u.def && u.def.charId === charId) out.push(u);
+  }
+  return out;
+}
+
+/** 这名干员天赋里第一个满足 `pick(bb)` 的那一条（`def.talents[].bb` 是 `simdata` 归一后的黑板）。 */
+function talentWithBb(u, pick) {
+  for (const t of u.def?.talents || []) if (t && t.bb && pick(t.bb)) return t;
+  return null;
+}
+
+/**
+ * 狮蝎「隐匿的杀手·中级」：平时隐匿；攻击时解除隐匿且**当次**攻击力 +29%（精锐 +33%），停止攻击 6 秒后重新隐匿。
+ * `attack` 事件在全部命中结算之后触发，所以 `hit` 里读到的 `hidden` 仍是这次攻击开始时的状态；解除只由她自己的攻击触发
+ * （敌人的攻击不解除 —— 与上面 `recon_garrison_mantic_*` 那条「受到敌人攻击后解除」的特质各自独立）。
+ */
+function installManticTalent(battle) {
+  for (const u of addedOps(battle, ADDED_NO_KIT.MANTIC)) {
+    const t = talentWithBb(u, (bb) => typeof bb.atk === 'number' && typeof bb.delay === 'number');
+    const bonus = S.num(t?.bb.atk, 0);
+    const delay = Math.max(0, S.num(t?.bb.delay, 6));
+    if (!(bonus > 0)) continue;
+    const key = `recon:mantic:talent:${u.id}`;
+    let hidden = false;
+    let lastAttackAt = -Infinity;
+    const hide = () => {
+      if (!u.alive || !u.deployed) return;
+      battle.addBuff(u, { key, duration: Infinity, flags: { stealth: true }, status: 'stealth', refresh: 'replace', tags: ['talent'] });
+      hidden = true;
+    };
+    const unhide = () => {
+      if (!hidden) return;
+      hidden = false;
+      battle.removeBuff(u, key);
+    };
+    battle.on('deploy', ({ unit }) => { if (unit === u) hide(); }, { owner: u });
+    battle.on('battleStart', hide, { owner: u });
+    battle.on('hit', ({ source, target, dmg }) => {
+      if (source !== u || !dmg || !dmg.isAttack || !hidden) return;
+      if (!target || target.side !== 'enemy') return;
+      dmg.amount = S.num(dmg.amount, 0) * (1 + bonus);
+    }, { owner: u });
+    battle.on('attack', ({ attacker }) => {
+      if (attacker !== u) return;
+      lastAttackAt = battle.time;
+      unhide();
+    }, { owner: u });
+    battle.every(0.5, () => {
+      if (hidden || !u.alive || !u.deployed) return;
+      if (battle.time - lastAttackAt >= delay) hide();
+    }, { owner: u });
+  }
+}
+
+/**
+ * 极光「低温休憩」：未开技能且技力 ≤ 最大值一半时停止攻击并每秒回复 3.5% 最大生命（精锐 4%）。
+ * 「停止攻击」走引擎的 `disarm` 旗标（普通攻击停、技能照常）；治疗走 `battle.heal`（自身治疗，不受禁疗以外的东西影响）。
+ */
+function installAuroraTalent(battle) {
+  for (const u of addedOps(battle, ADDED_NO_KIT.AURORA)) {
+    const t = talentWithBb(u, (bb) => typeof bb.hp_recovery_per_sec_by_max_hp_ratio === 'number');
+    const ratio = S.num(t?.bb.hp_recovery_per_sec_by_max_hp_ratio, 0);
+    const spRatio = Math.max(0, S.num(t?.bb.sp_ratio, 0.5));
+    if (!(ratio > 0)) continue;
+    const key = `recon:aurora:talent:${u.id}`;
+    const resting = () => {
+      const sk = u.skill;
+      if (!u.alive || !u.deployed || !sk || sk.active || !(sk.spCost > 0)) return false;
+      return sk.sp <= sk.spCost * spRatio + 1e-9;
+    };
+    battle.every(0.5, () => {
+      if (!resting()) {
+        if (u.findBuff(key)) battle.removeBuff(u, key);
+        return;
+      }
+      battle.addBuff(u, { key, duration: Infinity, flags: { disarm: true }, refresh: 'replace', tags: ['talent'] });
+    }, { owner: u });
+    battle.every(1, () => {
+      if (!resting()) return;
+      battle.heal(u, u, u.s.maxHp * ratio, { self: true });
+    }, { owner: u });
+  }
+}
+
+/** 讯使「雪境巡逻员」：阻挡 ≥2 名敌人时防御力 +11%（精锐 +13%）。按**人数**（`u.blocking.length`）判定。 */
+function installCourierTalent(battle) {
+  for (const u of addedOps(battle, ADDED_NO_KIT.COURIER)) {
+    const t = talentWithBb(u, (bb) => typeof bb.cnt === 'number' && typeof bb.def === 'number');
+    const need = Math.max(1, Math.floor(S.num(t?.bb.cnt, 2)));
+    const pct = S.num(t?.bb.def, 0);
+    if (!(pct > 0)) continue;
+    const key = `recon:courier:talent:${u.id}`;
+    battle.every(0.5, () => {
+      const n = u.alive && u.deployed && Array.isArray(u.blocking) ? u.blocking.length : 0;
+      if (n < need) {
+        if (u.findBuff(key)) battle.removeBuff(u, key);
+        return;
+      }
+      battle.addBuff(u, { key, mods: S.directMods({ def: pct }), duration: Infinity, refresh: 'replace', tags: ['talent'] });
+    }, { owner: u });
+  }
+}
+
+/**
+ * 空构「装弹对比实验」：每次攻击 50% 概率三选一 —— 二连击 / 目标晕眩 1 秒 / 无视目标 60% 防御。
+ * 每个 `attackId` 只掷一次（同一攻击的多目标共用结果）。二连击是**第二次命中**（照常走减伤），不是把这一击的数值乘 2。
+ */
+function installSpuriaTalent(battle) {
+  for (const u of addedOps(battle, ADDED_NO_KIT.SPURIA)) {
+    const t = talentWithBb(u, (bb) => typeof bb.prob === 'number');
+    const prob = Math.max(0, Math.min(1, S.num(t?.bb.prob, 0.5)));
+    const stun = Math.max(0, S.num(t?.bb.stun, 1));
+    const pierce = Math.max(0, Math.min(1, S.num(t?.bb.def_penetrate, 0.6)));
+    let curId = -1;
+    let mode = 0; // 0 没有触发 · 1 二连击 · 2 晕眩 · 3 穿甲
+    battle.on('hit', ({ source, target, dmg }) => {
+      if (source !== u || !dmg || !dmg.isAttack) return;
+      if (!target || target.side !== 'enemy') return;
+      if (Array.isArray(dmg.tags) && dmg.tags.includes('recon:spuria:double')) return; // 追击的那一笔不再掷
+      const id = dmg.attackId ?? 0;
+      if (id !== curId) {
+        curId = id;
+        mode = 0;
+        if (prob > 0 && battle.rng.chance(prob)) mode = 1 + battle.rng.int(3);
+      }
+      if (mode === 1) {
+        const copy = { amount: dmg.amount, type: dmg.type, mul: dmg.mul, canDodge: dmg.canDodge, isSkill: dmg.isSkill, defIgnorePct: dmg.defIgnorePct, resIgnorePct: dmg.resIgnorePct };
+        battle.after(0, () => {
+          if (!u.alive || !target.alive || !target.deployed) return;
+          battle.dealDamage(u, target, { ...copy, isAttack: true, tags: ['garrison', 'addition', 'recon:spuria:double'] });
+        }, { owner: u });
+      } else if (mode === 2) {
+        if (stun > 0) battle.applyStatus(target, 'stun', { duration: stun, source: u });
+      } else if (mode === 3) {
+        if (pierce > 0) dmg.defIgnorePct = S.num(dmg.defIgnorePct, 0) + pierce;
+      }
+    }, { owner: u });
+  }
+}
+
+/**
+ * 白金「蓄力攻击」：距上次攻击越久，这一击的攻击力越高 —— 1 秒时 100%，2.5 秒时 190%（精锐 200%），中间线性。
+ * 每个 `attackId` 只算一次倍率；`lastAt` 记的是**上一次攻击第一次命中**的时间（正式攻击间隔，`bat` 的射击也照此）。
+ */
+function installPlatnmTalent(battle) {
+  for (const u of addedOps(battle, ADDED_NO_KIT.PLATNM)) {
+    const t = talentWithBb(u, (bb) => typeof bb['attack@max_atk_scale'] === 'number');
+    if (!t) continue;
+    const minD = Math.max(0, S.num(t.bb['attack@min_delta'], 1));
+    const maxD = Math.max(minD, S.num(t.bb['attack@max_delta'], 2.5));
+    const minS = Math.max(0, S.num(t.bb['attack@min_atk_scale'], 1));
+    const maxS = Math.max(minS, S.num(t.bb['attack@max_atk_scale'], 1.9));
+    let lastAt = null;
+    let curId = -1;
+    let scale = 1;
+    // 蓄力从**部署完成**起算（「距离上次攻击的间隔」：还没攻击过就是从部署算）—— 部署时把起点写成当时的时间
+    battle.on('deploy', ({ unit }) => { if (unit === u) { lastAt = battle.time; curId = -1; } }, { owner: u });
+    battle.on('hit', ({ source, target, dmg }) => {
+      if (source !== u || !dmg || !dmg.isAttack) return;
+      if (!target || target.side !== 'enemy') return;
+      const id = dmg.attackId ?? 0;
+      if (id !== curId) {
+        curId = id;
+        const delta = lastAt == null ? minD : Math.max(0, battle.time - lastAt);
+        const k = maxD > minD ? Math.max(0, Math.min(1, (delta - minD) / (maxD - minD))) : 0;
+        scale = minS + (maxS - minS) * k;
+        lastAt = battle.time;
+      }
+      if (scale > 1) dmg.amount = S.num(dmg.amount, 0) * scale;
+    }, { owner: u });
+  }
+}
+
+/** 海沫「收割，给养」：每攻击到一个敌人回复自身 35 点元素损伤，最大生效数 = 阻挡数。 */
+function installHighmoTalent(battle) {
+  for (const u of addedOps(battle, ADDED_NO_KIT.HIGHMO)) {
+    const t = talentWithBb(u, (bb) => typeof bb.value === 'number' && !bb.tokenKey);
+    const value = S.num(t?.bb.value, 0);
+    if (!(value > 0)) continue;
+    let curId = -1;
+    let hit = 0;
+    battle.on('hit', ({ source, target, dmg }) => {
+      if (source !== u || !dmg || !dmg.isAttack) return;
+      if (!target || target.side !== 'enemy') return;
+      const id = dmg.attackId ?? 0;
+      if (id !== curId) { curId = id; hit = 0; }
+      const cap = Math.max(0, Math.floor(S.num(u.s.blockCnt, 0)));
+      if (hit >= cap) return;
+      hit++;
+      battle.reduceElement(u, value);
+    }, { owner: u });
+  }
+}
+
+/**
+ * 深海色「召唤触手」：三个触手召唤物（`token_10001_deepcl_tentac`，包内 `tokens.json` 的 `placeable: false`，
+ * 所以不是手牌召唤物，只能在战斗里由这条天赋放下）。部署完成后在自身周围（由近到远、行优先）找空位放下，
+ * 最多 `bb.cnt` 个；`spawnToken` 自己拒绝已占格。
+ */
+function installDeepclTalent(battle) {
+  const TOKEN = 'token_10001_deepcl_tentac';
+  for (const u of addedOps(battle, ADDED_NO_KIT.DEEPCL)) {
+    const t = talentWithBb(u, (bb) => typeof bb.cnt === 'number');
+    const cnt = Math.max(0, Math.floor(S.num(t?.bb.cnt, 3)));
+    if (!(cnt > 0)) continue;
+    const tokenId = t && typeof t.tokenKey === 'string' && t.tokenKey ? t.tokenKey : TOKEN;
+    const spawn = () => {
+      if (!u.alive || !u.deployed) return;
+      // 已经有了的不再补（`deploy` 与 `battleStart` 各跑一次；再部署 / 多次触发同样只补到 `cnt` 个）
+      let need = cnt;
+      for (const t of battle.allyUnits || []) {
+        if (t && t.kind === 'token' && t.ownerUnit === u && t.defId === tokenId && t.alive) need--;
+      }
+      if (need <= 0) return;
+      const spots = [];
+      for (let dr = -2; dr <= 2; dr++) {
+        for (let dc = -2; dc <= 2; dc++) {
+          if (!dr && !dc) continue;
+          const r = u.tileR + dr, c = u.tileC + dc;
+          if (!battle.grid.inRect(r, c) || !battle.grid.canStand(r, c)) continue;
+          spots.push([r, c, Math.abs(dr) + Math.abs(dc), dr * 10 + dc]);
+        }
+      }
+      spots.sort((a, b) => a[2] - b[2] || a[3] - b[3]);
+      let made = 0;
+      for (const [r, c] of spots) {
+        if (made >= need) break;
+        if (battle.spawnToken(u, tokenId, r, c, { anySource: true })) made++;
+      }
+    };
+    battle.on('battleStart', spawn, { owner: u });
+    battle.on('deploy', ({ unit }) => { if (unit === u) spawn(); }, { owner: u });
+  }
+}
+
+/** 安哲拉「深海直觉」：编入队伍时所有【深海猎人】干员攻击速度 +8（精锐 +10）。本模式按 `egirShip` 盟约判定。 */
+function installCuttleTalent(battle) {
+  const cuttles = addedOps(battle, ADDED_NO_KIT.CUTTLE);
+  if (!cuttles.length) return;
+  let aspd = 0;
+  for (const c of cuttles) {
+    const t = talentWithBb(c, (bb) => typeof bb.attack_speed === 'number');
+    aspd = Math.max(aspd, S.num(t?.bb.attack_speed, 0));
+  }
+  if (!(aspd > 0)) return;
+  const apply = (a, c) => {
+    if (!a || !S.isOp(a) || a.ownerId !== c.ownerId) return;
+    if (!S.isMember(battle, a, AEGIR_BOND)) return;
+    S.passiveBuff(battle, a, 'talent:cuttle:aspd', { aspd }, { tags: ['talent'] });
+  };
+  for (const c of cuttles) for (const a of S.playerOps(battle, c.ownerId)) apply(a, c);
+  battle.on('deploy', ({ unit }) => {
+    if (!unit || !S.isOp(unit)) return;
+    for (const c of cuttles) apply(unit, c);
+  });
+}
+
+/** 八名「本机没有官方 kit」的新增干员的天赋（`install(battle)` 里调用；引擎的 generic kit 推导不出这些）。 */
+function installAddedTalents(battle) {
+  installManticTalent(battle);
+  installAuroraTalent(battle);
+  installCourierTalent(battle);
+  installSpuriaTalent(battle);
+  installPlatnmTalent(battle);
+  installHighmoTalent(battle);
+  installDeepclTalent(battle);
+  installCuttleTalent(battle);
+}
+
 /** 与 `meta/main.mjs` 的 `EFFECT_KEY` 必须是同一个字符串（meta 写、这里读）。 */
 
 const EFFECT_KEY = 'effect:recon_protocol';
@@ -1077,6 +1375,8 @@ export function install(battle) {
   installReconBosses(battle);
   // 讯使 S2 的两处补数（特质记录是休整期的，不进战斗特质表）
   installCourierSkills(battle);
+  // 八名没有官方 kit 的新增干员的天赋（generic kit 只装无条件属性行，推导不出这些）
+  installAddedTalents(battle);
   // 【重构】盟约的 4 人档属性加成：与预重构的两条选择无关，任何重构对局都要挂
   installReconBondStats(battle);
   // 战斗音乐：每 tick 认一次场上有没有带专属曲目的·重构首领（面板读 RECON_MUSIC）

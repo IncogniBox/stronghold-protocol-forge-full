@@ -330,6 +330,19 @@ export function createDataStore(opts = {}) {
     return out;
   }
   /**
+   * 记录里的 `recon_` 前缀一并去掉（`baseId` / `goldenId` / `upgradeChessId`）—— 与服务器
+   * `shared/reconModes.js reconChessAlias` 逐字同一条口径。`baseId` 留着前缀时，**金色形态**的 kit 查不到
+   * （`content/index.js kitKeyOf` 只认 `baseId` / `id` / 去后缀的 id，三处都会带着 `recon_` 落空），
+   * 浏览器跑的战斗里精英干员就会退回 generic kit：技能 / 特质 / 天赋整块不见。
+   */
+  function stripReconIds(rec) {
+    const out = { ...rec };
+    for (const k of ['baseId', 'goldenId', 'upgradeChessId']) {
+      if (typeof out[k] === 'string' && out[k].startsWith('recon_')) out[k] = out[k].slice('recon_'.length);
+    }
+    return out;
+  }
+  /**
    * `get('chess')` 的那一份（对象表）：丢掉 `recon_*`；官方记录有别名就用重构版（`chessId` 保持官方 id）；
    * 别名指向一个**官方没有的 id** 时就是重构对局的新增干员，直接加进来（`chessId` 用正式 id）。
    */
@@ -340,10 +353,10 @@ export function createDataStore(opts = {}) {
     for (const [id, rec] of Object.entries(file)) {
       if (isReconId(id)) continue;
       const to = chessAlias[id];
-      out[id] = to && file[to] ? { ...file[to], chessId: id } : rec;
+      out[id] = to && file[to] ? { ...stripReconIds(file[to]), chessId: id } : rec;
     }
     for (const [base, to] of Object.entries(chessAlias)) {
-      if (!file[base] && to && file[to]) out[base] = { ...file[to], chessId: base };
+      if (!file[base] && to && file[to]) out[base] = { ...stripReconIds(file[to]), chessId: base };
     }
     const table = Object.freeze(out);
     chessAliasView = { raw: file, map: chessAlias, table };

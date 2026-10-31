@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS } from '../../../shared/constants.js';
 import { html, Icon, MicroLabel, Spinner, Button, confirmDialog } from '../ui/components.js';
-import { useGameData, makeLookups, BandIcon, BondGlyph, Img } from '../ui/gameComponents.js';
+import { useGameData, makeLookups, BandIcon, BondGlyph, Img, chessForPiece } from '../ui/gameComponents.js';
 import { data, useData } from '../data.js';
 import { fmtNum, diyRecordFor, cardStandIn } from '../ui/gameLogic.js';
 import { useDocClass } from '../ui/device.js';
@@ -229,7 +229,7 @@ export function RecordHeading({ title, manifest, class: cls }) {
 }
 
 function AchievementOperator({ unit, gd }) {
-  const base = gd.chess(unit.id);
+  const base = chessForPiece(gd, unit.id);
   const backups = data.get('backups');
   const chess = unit.diy && base ? diyRecordFor(base, unit.diy, { chess: data.get('chess'), backups })
     : base ? cardStandIn(base, { unit, backups }) || base : null;
