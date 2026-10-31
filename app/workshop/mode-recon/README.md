@@ -811,3 +811,20 @@ bondTriggerLimit / bondTriggerScope`、`battle.ally / battle.enemy` 的修正原
 - 入口与建房在服务端有本地闸：非本机（loopback / 私网）客户端建不了重构模拟房间。
 - **装备拆卸是「一个人」的规则**：本包**不再**声明包级 `unequip: "allow"`（那会让整间房都能拆）。选了「装备重构」的玩家在回合开始时拿到一条玩家级 EffectRef（`effects[].unequip = true`，`meta/main.mjs publishChoice`），引擎 `PlayerState.unequip` 只对这类玩家放行；客户端按自己的 `pub.recon.choices` 画「卸下」。
 - 元载荷只在**本模式**的房间闹事：`ctx.recon()` 为 null 时它一个动作都不做（非重构房间照旧）。
+
+## 2026-11-01 修复：`server.meta.registers` 漏了三个键，整包 meta 被回滚
+
+业主「重构模拟每 4 回合应该弹出的策略选择没了」—— 指的是 **重构决策**（R1 / R4 / R8 / R12 / R16 / R20 的私密 3 选 1，
+标题「重构决策」）。根因不在引擎、也不在数据：
+
+- `server/match/metaPack.js` 的受限注册表把 `registers` 当**白名单**：`registerMeta()` 里注册一个没声明的键就抛
+  `META_UNDECLARED_KEY`，而且**这次装配注册过的键一并回滚**（DESIGN §29「没声明就等于不许」）。
+- `293c4fff` 往 `meta/main.mjs` 的 `registerMeta` 里加了三条注册（卡西米尔的骑士储蓄罐 `item:chess_item_3_12_e`
+  与阿戈尔的两条 `garrison:RECON_DEEPCL_SOLD` / `garrison:RECON_CUTTLE_REPLACE`），`pack.json` 的
+  `server.meta.registers` 却仍只有 `global:recon` ⇒ 第一条注册就抛、整包回滚 —— **`global:recon` 的
+  `onPrepStart` 根本没装上**，于是重构决策不再弹（连带重构协助 / 熔芯负载 / 盟约 / 那两条 garrison 一起失效）。
+- 修法：`registers` 补齐这四条（`global:recon` + 三个按 id 的键；不用通配符，免得这个包能在别的同族键上顶掉官方）。
+  包版本 0.19.35 → 0.19.36（`pack.json` 的字节变了，房间内容摘要跟着换，客户端会按既有流程重新对齐）。
+- 回归：新增 `test/packMetaBuiltin.test.js`（把仓库里**全部内置包**按房间那条路装一遍，要求零错误，并断言
+  `global:recon` 在册）—— 这类「包自己声明漏了键」的问题从今往后由测试点名，而不是等玩家发现。
+

@@ -13,6 +13,21 @@
 
 `APP_VERSION`（`0.19.1`）与 `PROTOCOL_VERSION`（`2`）未动；新增 C2S `room.card` 与 `room.state.seats[].card` 都是**可缺省**的加性字段，老页面不认时不发、不读，既有帧逐字节不变。服务端改动需**重启**生效（无对局时）。
 
+### 修复：重构模拟的「重构决策」弹窗不再出现（2026-11-01）
+
+- **现象**（业主）：每 4 回合（R1 / R4 / R8 / R12 / R16 / R20）该弹出的重构决策没了。
+- **根因**：`workshop/mode-recon/pack.json` 的 `server.meta.registers` 只有 `global:recon`，而
+  `meta/main.mjs` 的 `registerMeta()` 从 `293c4fff` 起还注册了 `item:chess_item_3_12_e`（骑士储蓄罐）与
+  `garrison:RECON_DEEPCL_SOLD` / `garrison:RECON_CUTTLE_REPLACE`（阿戈尔）。受限注册表把 `registers` 当
+  **白名单**：注册未声明的键抛 `META_UNDECLARED_KEY` 并**回滚整包**（DESIGN §29「没声明就等于不许」）——
+  于是 `global:recon` 的 `onPrepStart` 根本没装上，重构决策（连同重构协助 / 熔芯负载 / 盟约 / 那两条 garrison）
+  全部静默失效。数据与引擎都没问题，是**包的声明漏了三个键**。
+- **修**：`registers` 补齐四条（按 id，不用通配符 —— 通配符会让这个包在同族其它键上顶掉官方）；包版本
+  0.19.35 → 0.19.36（`pack.json` 的字节变了，房间内容摘要随包哈希更新，客户端按既有流程重新对齐）。
+- **回归**：新增 `test/packMetaBuiltin.test.js`（把仓库里全部内置包按房间那条路装一遍、要求零错误，并断言
+  `global:recon` 在册）；`test/match/recon-decisions.test.js` 由 8/12 回到 12/12，`recon-train` / `draft` /
+  `packMetaAssembly` 一并全绿。包自检 `node tools/workshop-validate.mjs workshop/mode-recon` 0 error。
+
 ### 棋盘贴图常驻本地缓存：重新打开页面不再重复下载（2026-11-01）
 
 - **根因**：素材 CDN 给本地客户端素材（`/assets/local/**`，棋盘贴图全在这里）的响应头是
