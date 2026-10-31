@@ -11,9 +11,9 @@
 // 且不因目标阵亡 / 转移而重置。「持续攻击」同祥子的做法，在 `battle/main.mjs` 的盟约安装器里按 `s.interval`
 // 出手（自省句柄 `battle._avemujicaAmoris`）。
 //
-// 每段倍率（逐段取自各技能的 `bb`；缺键回落旧的单一 `atk_scale`）：
-//   S1：段 1 = `first_scale` 1.3，段 2–3 = `sub_scale` 0.2  ⇒ 合计 1.7 × atk
-//   S2：段 1 **与段 5** = `main_scale` 1.0，其余 6 段 = `sub_scale` 0.1 ⇒ 合计 2.6 × atk
+// 每段倍率（逐段取自各技能的 `bb`；缺键回落旧的单一 `atk_scale`；普通 = 技能 4 级，精锐 = 技能 7 级）：
+//   S1：段 1 = `first_scale` 1.38（精锐 1.47），段 2–3 = `sub_scale` 0.2  ⇒ 合计 1.78 × atk
+//   S2：段 1 **与段 5** = `main_scale` 1.07（精锐 1.15），其余 6 段 = `sub_scale` 0.1 ⇒ 合计 2.74 × atk
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
@@ -82,7 +82,7 @@ const watch = (h, e) => {
 const segAtk = (u) => u.s.atk * u.s.atkScaleMul;
 const closeTo = (a, b, msg, eps = 0.02) => assert.ok(Math.abs(a - b) <= eps * Math.abs(b), `${msg}（实测 ${a}，期望 ≈${b}）`);
 
-test('S2「如麦般生长」：8 段，段 1 与段 5 = 100%、其余 6 段 = 10%（合计 ≈ 2.6× atk）', () => {
+test('S2「如麦般生长」：8 段，段 1 与段 5 = 107%、其余 6 段 = 10%（合计 ≈ 2.74× atk）', () => {
   const { h, u } = field(S2);
   u.skill.activate('test', { free: true });
   h.step(1);
@@ -92,36 +92,36 @@ test('S2「如麦般生长」：8 段，段 1 与段 5 = 100%、其余 6 段 = 1
   const t = rangeTiles(u);
   assert.ok(t.length >= 1, `S2 范围扩大后至少 1 个可选格（${JSON.stringify(t)}）`);
   const atk = segAtk(u);
-  assert.ok(Math.abs(prof.atkScale - 1) < 1e-9, `段 1 的倍率 = main_scale 1.0（prof.atkScale=${prof.atkScale}）`);
+  assert.ok(Math.abs(prof.atkScale - 1.07) < 1e-9, `段 1 的倍率 = main_scale 1.07（prof.atkScale=${prof.atkScale}）`);
   const e = engage(h, u, 1e9, t[0]);
   const hits = watch(h, e);
   performAttack(h.b, u, prof, [e]);
   assert.equal(hits.length, 8, `一套动作 8 段，实测 ${hits.length}`);
-  closeTo(hits[0], atk * 1.0, '段 1 = 100%');
-  closeTo(hits[4], atk * 1.0, '段 5 = 100%（其余 10% 那几段里唯一的大段）');
-  assert.equal(hits.filter((x) => Math.abs(x - atk) <= 0.02 * atk).length, 2, '「100% 段」恰好 2 段');
+  closeTo(hits[0], atk * 1.07, '段 1 = 107%');
+  closeTo(hits[4], atk * 1.07, '段 5 = 107%（其余 10% 那几段里唯一的大段）');
+  assert.equal(hits.filter((x) => Math.abs(x - atk * 1.07) <= 0.02 * atk * 1.07).length, 2, '「107% 段」恰好 2 段');
   assert.equal(hits.filter((x) => Math.abs(x - atk * 0.1) <= 0.02 * atk).length, 6, '「10% 段」恰好 6 段');
-  closeTo(hits.reduce((a, b) => a + b, 0), atk * 2.6, '合计 = 1 + 6×0.1 + 1 = 2.6 × atk');
+  closeTo(hits.reduce((a, b) => a + b, 0), atk * 2.74, '合计 = 1.07×2 + 6×0.1 = 2.74 × atk');
   assert.ok(e.alive, '靶子扛得住（1e9）⇒ 8 段全落在它身上（单目标无溅射）');
   h.invariants();
 });
 
-test('S1「如焰般热烈」：3 段，段 1 = 130%、段 2–3 = 20%（合计 ≈ 1.7× atk）', () => {
+test('S1「如焰般热烈」：3 段，段 1 = 138%、段 2–3 = 20%（合计 ≈ 1.78× atk）', () => {
   const { h, u } = field(S1);
   u.skill.activate('test', { free: true });
   h.step(1);
   const prof = effectiveProfile(u);
   const t = rangeTiles(u);
   const atk = segAtk(u);
-  assert.ok(Math.abs(prof.atkScale - 1.3) < 1e-9, `段 1 = first_scale 1.3（prof.atkScale=${prof.atkScale}）`);
+  assert.ok(Math.abs(prof.atkScale - 1.38) < 1e-9, `段 1 = first_scale 1.38（prof.atkScale=${prof.atkScale}）`);
   const e = engage(h, u, 1e9, t[0]);
   const hits = watch(h, e);
   performAttack(h.b, u, prof, [e]);
   assert.equal(hits.length, 3, `一套动作 3 段，实测 ${hits.length}`);
-  closeTo(hits[0], atk * 1.3, '段 1 = 130%');
+  closeTo(hits[0], atk * 1.38, '段 1 = 138%');
   closeTo(hits[1], atk * 0.2, '段 2 = 20%');
   closeTo(hits[2], atk * 0.2, '段 3 = 20%');
-  closeTo(hits.reduce((a, b) => a + b, 0), atk * 1.7, '合计 = 1.3 + 2×0.2 = 1.7 × atk');
+  closeTo(hits.reduce((a, b) => a + b, 0), atk * 1.78, '合计 = 1.38 + 2×0.2 = 1.78 × atk');
   h.invariants();
 });
 

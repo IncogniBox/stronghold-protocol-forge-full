@@ -20,7 +20,7 @@ export default (bb, chess) => {
   const b1 = skillBbOf(chess, S1);
   const b2 = skillBbOf(chess, S2);
   const b3 = skillBbOf(chess, S3);
-  const scales = Array.isArray(b1.scales) && b1.scales.length ? b1.scales : [0.5, 0.46, 0.38, 0.29, 0.21, 0.17, 0.08, 0.03];
+  const scales = Array.isArray(b1.scales) && b1.scales.length ? b1.scales : [0.65, 0.6, 0.49, 0.38, 0.27, 0.22, 0.11, 0.04];
   const s1 = {
     kind: 'charges',
     charges: num(b1.charges, 2),
@@ -36,14 +36,14 @@ export default (bb, chess) => {
   };
   const s2 = {
     kind: 'toggle',
-    mods: { atkMul: num(b2.atkMul, 1.4), aspd: num(b2.aspd, 60) },
+    mods: { atkMul: num(b2.atkMul, 1.6), aspd: num(b2.aspd, 80) },
     attack: { hits: Math.max(1, Math.floor(num(b2.hits, 2))), dmgType: 'arts', atkScale: 1 },
   };
   const s3 = {
     kind: 'duration',
     duration: num(b3.duration, 25),
     targeting: { rangeExtend: Math.max(1, Math.floor(num(b3.rangeExtend, 1))) },
-    attack: { hits: Math.max(1, Math.floor(num(b3.hits, 4))), dmgType: 'arts', atkScale: num(b3.atk_scale, 1.4) },
+    attack: { hits: Math.max(1, Math.floor(num(b3.hits, 4))), dmgType: 'arts', atkScale: num(b3.atk_scale, 1.55) },
   };
   return {
     skill: s1,

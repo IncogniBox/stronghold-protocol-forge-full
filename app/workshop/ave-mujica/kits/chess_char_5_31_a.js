@@ -1,7 +1,8 @@
 // workshop/ave-mujica/kits/chess_char_5_31_a.js — 祐天寺若麦/Amoris（颂乐人偶 mod）
 // 撼地者 (WARRIOR hammer): 近战, 物伤, 溅射 1.0 / 50%（professions.js hammer）。
-// S1 如焰般热烈 (duration): 攻击变为三连击（首击溅射）；段 1 = atk×first_scale（130%），段 2–3 = atk×sub_scale（20%）。
-// S2 如麦般生长 (duration): 攻击范围扩大，攻击变为八连击；**段 1 与段 5** = atk×main_scale（100%）、其余 6 段
+// S1 如焰般热烈 (duration): 攻击变为三连击（首击溅射）；段 1 = atk×first_scale（普通 138% / 精锐 147%），
+//   段 2–3 = atk×sub_scale（20%）。
+// S2 如麦般生长 (duration): 攻击范围扩大，攻击变为八连击；**段 1 与段 5** = atk×main_scale（普通 107% / 精锐 115%）、其余 6 段
 //   = atk×sub_scale（10%）；每段在攻击范围内**随机**选目标（数据原文「随机攻击范围内的目标」）。
 // T1 双利手: 「进行持续攻击」由本包盟约安装器（battle/main.mjs 的 installAveMujica，与祥子同款）实现；
 //   攻击时 prob 概率使敌人获得 fragile 脆弱，持续 fragile_dur 秒。
@@ -18,9 +19,9 @@ export default (bb, chess) => {
   const b2 = skillBbOf(chess, S2);
   // 每段倍率（**逐段取自该技能自己的黑板**；缺 `first_scale` / `main_scale` / `sub_scale` 的键一律回落到
   // 旧的单一 `atk_scale` ⇒ 数据没写这几个键的技能行为与改动前逐字一致）：
-  //   S1：段 1 = first_scale，段 2–3 = sub_scale（记录里 1.3 / 0.2；合计 ≈ 1.7×atk）
-  //   S2：段 1 与段 5 = main_scale，其余 6 段 = sub_scale（记录里 1 / 0.1；合计 ≈ 2.6×atk）
-  const atk1 = num(b1.atk_scale, 1.0), atk2 = num(b2.atk_scale, 1.0);
+  //   S1：段 1 = first_scale，段 2–3 = sub_scale（记录普通 1.38 / 精锐 1.47，sub_scale 0.2；合计 ≈ 1.78×atk）
+  //   S2：段 1 与段 5 = main_scale，其余 6 段 = sub_scale（记录普通 1.07 / 精锐 1.15，sub_scale 0.1；合计 ≈ 2.74×atk）
+  const atk1 = num(b1.atk_scale, 1.38), atk2 = num(b2.atk_scale, 1.07);
   const s1Hits = Math.max(1, Math.floor(num(b1.hits, 3)));
   const s2Hits = Math.max(1, Math.floor(num(b2.hits, 8)));
   const s1Scales = Array.from({ length: s1Hits }, (_, i) => num(i === 0 ? b1.first_scale : b1.sub_scale, atk1));
