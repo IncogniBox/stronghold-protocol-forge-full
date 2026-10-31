@@ -90,8 +90,8 @@
   `ctx.rollChess({ maxTier })` → `ctx.rollChess({ tier })`（此前会随机给到低于等级的干员）；包版本 1.8.28。
 - **休整期看得到同场地队友**：`m.private` 新增 `normalMate`（`server/match/match/views.js normalMateView` /
   `server/match/player/views.js`），把配对队友的整备区棋子按它那一半带下来（右半镜像、朝向翻转）；
-  `public/js/render/app.js setPrep` 把它画成只读棋子，`public/js/ui/gameLogic/camera.js` 在配对两人都存活时
-  **整条普通带一起取景**（不再推近到只剩自己那半）。
+  `public/js/render/app.js setPrep` 把它画成只读棋子。**相机仍只取自己那半场**（含板凳行、推近 20%）——
+  2026-10-31 复核：重构模拟休整期要的是自己半场的视角，整条普通带一起取景已经撤掉。
 - **时装在观战里显示为默认模型**：`public/js/render/units.js` 的三处 `spineEntry` 调用（`_modelEntry`、Back 的
   待命帧判断、倒下时长）都把 `info.skin` 递给清单，Spine 模型与头像现在读同一份 `room.skins` 选择。
 - **右半场玩家的怪物等待区**：`public/js/render/app.js setPenList` 固定按**自己那一半**排布（`side: at`，

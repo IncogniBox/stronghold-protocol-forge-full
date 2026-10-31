@@ -832,17 +832,16 @@ describe('prepCamera (research 09 §1.2: the Final Assault prep on the own half 
     // solo / a lone last player: the left half
     assert.deepEqual(prepCamera(pub(14, [pl('a', 0)]), 'a'), { kind: 'bossPrep', opts: { side: 'L' } });
   });
-  // 普通带左右两半（业主 2026-10-31「同场地的玩家在休整期看不到对方场地的情况」）：配对的两个人都还在时整条普通带
-  // 一起取景（`battle.prep` 本来就横跨两半，队友那半也看得到），此时不推近；落单 / 队友淘汰 ⇒ 回到自己那半
-  test('普通带左右两半：配对同场时整条带一起取景，落单回到自己那半', () => {
+  // 普通带左右两半：休整期只看自己那半（业主 2026-10-31 重构模拟反馈：全场视角不对，应是自己半场）；配对同场也一样推近
+  test('普通带左右两半：休整期只取自己那半场', () => {
     const layout = normalizeLayout({
       size: [45, 60],
       deployRects: { normalLeft: [34, 38, 20, 30], normalRight: [34, 38, 30, 40], bossLeft: [1, 5, 22, 30], bossRight: [1, 5, 30, 38] },
       battle: { normal: { r0: 34, r1: 38, c0: 20, c1: 40 }, prep: { r0: 31, r1: 38, c0: 18, c1: 42 } },
     }, [45, 60]);
     const pair = [pl('a', 0), pl('b', 1)];
-    assert.deepEqual(prepCamera(pub(6, pair), 'a', layout).opts, { rect: { r0: 31, r1: 38, c0: 18, c1: 42 }, side: 'L' });
-    assert.deepEqual(prepCamera(pub(6, pair), 'b', layout).opts, { rect: { r0: 31, r1: 38, c0: 18, c1: 42 }, side: 'R' });
+    assert.deepEqual(prepCamera(pub(6, pair), 'a', layout).opts, { rect: { r0: 31, r1: 38, c0: 18, c1: 30 }, side: 'L', zoom: 1.2 });
+    assert.deepEqual(prepCamera(pub(6, pair), 'b', layout).opts, { rect: { r0: 31, r1: 38, c0: 30, c1: 42 }, side: 'R', zoom: 1.2 });
     assert.deepEqual(prepCamera(pub(6, [pl('a', 0), pl('b', 1, false)]), 'a', layout).opts, { rect: { r0: 31, r1: 38, c0: 18, c1: 30 }, side: 'L', zoom: 1.2 });
   });
   // 第 2… 块 boss 场地：整备镜头取**这块场地的整备矩形**（地图声明的绿框，含战斗矩形并向整备行/整备列多出一圈）

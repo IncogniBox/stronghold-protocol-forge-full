@@ -85,24 +85,10 @@ export function prepCamera(pub, myId, layout = null) {
   }
   // 普通带的左右两半（shared/layout.js `isDualLayout`）：同一套按座位两两一组的配对，第 1 位 'R'（与服务器
   // Match.normalSideOf 同一条规则）。单块普通带的图恒 'L'，revert 到历史那条 `{ rect: battle.prep, side: 'L' }`。
-  // 配对里两个人都还在（同场地的队友）：整条普通带一起取景（`battle.prep` 本来就横跨两半），队友那半也看得到
-  // （业主 2026-10-31「同场地的玩家在休整期看不到对方场地的情况」）—— 此时不推近（zoom 1.2 会把另一半挤出画面）。
+  // 休整期一律只取自己那半场（含板凳行），队友的半场不在画面里 —— 2026-10-31 的「整条普通带一起取景」已经撤掉
+  // （业主：重构模拟休整期应是自己的半场视角，不是全场）。要看另一半用战斗期的 ‹ › 切换。
   const side = ordinarySide(pub, myId, layout);
-  if (pairedNormal(pub, myId, layout)) {
-    return { kind: 'prep', opts: { rect: mapRectOf(layout || OFFICIAL_LAYOUT, 'prep'), side } };
-  }
   return { kind: 'prep', opts: { rect: ordinaryPrepRect(layout, side), side, ...(framed || {}) } };
-}
-
-/** Whether this player's ordinary-band pair has both members alive (the seat pairing of `ordinarySide`; dual layouts only). */
-function pairedNormal(pub, myId, layout) {
-  if (!isDualLayout(layout) || !myId) return false;
-  const alive = (Array.isArray(pub?.players) ? pub.players : []).filter((p) => isObj(p) && p.alive !== false);
-  const ids = alive.slice().sort((a, b) => int(a.seat, 99) - int(b.seat, 99)).map((p) => p.playerId);
-  const i = ids.indexOf(myId);
-  if (i < 0) return false;
-  const mate = i % 2 === 0 ? i + 1 : i - 1;
-  return mate >= 0 && mate < ids.length;
 }
 
 /** The seat-order pairing of a two-half ordinary band: the 1st alive player by seat → 'L', the 2nd → 'R' (per field). */
