@@ -13,6 +13,56 @@
 
 `APP_VERSION`（`0.19.1`）与 `PROTOCOL_VERSION`（`2`）未动；新增 C2S `room.card` 与 `room.state.seats[].card` 都是**可缺省**的加性字段，老页面不认时不发、不读，既有帧逐字节不变。服务端改动需**重启**生效（无对局时）。
 
+### 部署：官方素材走 downcdn，工坊包素材走 GitHub 镜像（2026-10-31）
+
+- **工坊包自带素材可以单独挂到第二个源**：`server/http/static.js` 新增 `SP_WORKSHOP_CDN` —— 响应里的
+  `/workshop-assets/<pack>/<rel>` 改写成 `<前缀><pack>/<rel>`（前缀原样拼，可指向 ghfast.top 这类 GitHub 镜像），
+  官方 `/assets/…`、`/fonts/…` 仍走 `SP_ASSET_CDN`。没设它 ⇒ 沿旧契约（包素材进 `<SP_ASSET_CDN>packs/<pack>/…`）；
+  两个都没设 ⇒ 清单一个字节都不改。
+- **CSP 同步**：`server/http/csp.js` 把 `SP_WORKSHOP_CDN` 的 origin（以及 `SP_ASSET_CDN`，`SP_CDN_BASE` 缺席时）
+  并进 `img-src` / `media-src` / `font-src` / `connect-src`，`script-src` 等可执行类型一个都不加。`font-src` 是新补的：
+  `/fonts/…` 同样按 `SP_ASSET_CDN` 改写，没有这一条远端字体落回 `default-src 'self'` 会被拒。
+- 部署口径（云服务器启动时设置）：`SP_CDN_BASE` / `SP_ASSET_CDN` 指向**真的在发字节**的镜像
+  （`https://ghfast.top/https://raw.githubusercontent.com/jingjiangze/Stronghold-Protocol-CDN/assets-raw/`，实测 200 +
+  正确 MIME）；`SP_WORKSHOP_CDN=https://ghfast.top/https://raw.githubusercontent.com/IncogniBox/stronghold-protocol-forge-full/main/app/workshop/`。
+  **`https://downcdn.jiangjiangze.icu` 是 CDN 的控制面**（只发 `/cdn/v1/mirrors.json`、`index.json`、`pick.js`），
+  它没有 `/assets/…` 的字节，未命中的路径回门户 HTML（实测 200 `text/html` 30567 字节），所以不能直接当 `SP_ASSET_CDN`。
+- 回归：新增 `test/plugins/assetCdn.test.js`（两个都没设 / 只有官方 / 只有工坊 / 两个都设 / 坏前缀五个情形）
+  与 `test/plugins/csp.test.js` 的「独立前缀」一条；`docs/ASSETS.md` 的 CDN 一节同步。
+
+### 颂乐人偶：技能数值按记录的技能等级取值（2026-10-31）
+
+- **祐天寺若麦 / 八幡海铃 / 丰川祥子 的普通与精锐技能一直用的是 1 级黑板**：`workshop/ave-mujica/chess.json` 的
+  `skchr_amoris_1/2`、`skchr_tmoris_1/2`、`skchr_oblvns_1/2/3` 记录里 `level` 已经写了 4（普通）/ 7（精锐），
+  但 `bb` / `spCost` / `initSp` / `desc` 仍是 1 级的数。现在按本机 `skill_table` 对应档重写：若麦首击 138% / 147%、
+  第一与第五段 107% / 115%（SP 23/21、40/36）；海铃连击 61% / 65%、每秒 78% / 88%（SP 5/5、46/42）；
+  祥子 8 音符 65…4% / 80…4%、攻击 +60%/+80 与 +75%/+110、残月 155% / 180%（SP 4/5/47、4/5/46）。
+  描述里的 `%%` 一并改回单个 `%`；顶层 `skill`（默认技能副本）与 `skills[]` 同步。
+- 三个 kit 的回落值与注释改成普通档：`kits/chess_char_5_31_a.js`（1.38 / 1.07）、`chess_char_5_32_a.js`（0.61 / 0.78）、
+  `chess_char_6_30_a.js`（音符数组 0.65…0.04 / 1.6 / 80 / 1.55）。
+- 回归：`test/content/avemujica_amoris.test.js`（S1 1.38、合计 1.78×atk；S2 1.07、合计 2.74×atk）通过；
+  5 个工坊包 148 条记录、348 条技能的 `skills[]` 逐条对照官方表 —— 普通取 L4、精锐取 L7 全部一致，
+  其余四个包 0 处不一致；`node tools/workshop-validate.mjs workshop/ave-mujica` VALID（0 error）。包版本 `ave-mujica` 1.8.30。
+
+### 重构模拟：新增干员的特质与天赋生效（2026-10-31）
+
+- **左乐 / 赤刃明霄陈 / 娜仁图亚 / 森蚺 的技能、特质与天赋整块不见**：包内 `chess.json` 的 8 条记录（普通 / 精锐）
+  漏了 `kitRef` —— 这四名干员在本机有官方自选 kit（`op-zuole` / `op-chen3` / `op-narant` / `op-zumama`），
+  `content/index.js kitOf` 只有在记录写着 `kitRef` 时才把官方 kit 借过来，否则落到 generic（generic 不装天赋）。
+  现补上 `kitRef = 官方 charId`；技能 3 条、天赋 2 条与特质随 kit 一起装上。
+- **浏览器战斗里被覆盖的官方棋子（含金色）退回 generic kit**：`public/js/data.js` 的 `aliasChess` 只换了 `chessId`，
+  `baseId` / `goldenId` / `upgradeChessId` 仍带 `recon_` 前缀，`kitKeyOf` 的三个键一个都命中不了。新增
+  `stripReconIds` 逐字段去掉前缀，与服务器 `shared/reconModes.js reconChessAlias` 同口径。
+- **本机没有官方 kit 的八名新增干员天赋从未落地**（讯使 / 深海色 / 空构 / 安哲拉 / 极光 / 狮蝎 / 白金 / 海沫）：
+  引擎只从 kit 的 `talents[].install` 装天赋，generic kit 只认「攻击力+8%」这类无条件属性行（且只对
+  stand-in / 自选生效）。包侧 `workshop/mode-recon/battle/main.mjs` 新增 `installAddedTalents`（按 `def.charId` 认人）：
+  狮蝎隐匿 / 攻击 +29%、极光低温休憩（停攻 + 每秒 3.5% 生命）、讯使阻挡 ≥2 防御 +11%、空构三选一（二连击 /
+  晕眩 / 无视 60% 防御）、白金蓄力攻击、海沫命中回 35 元素损伤、深海色三个触手、安哲拉【深海猎人】攻速 +8。
+  数值全部读记录里的 `talents[].bb`，不重抄。
+- 回归：新增 `test/content/recon-added-talents.test.js`（八条天赋）与 `test/ui/recon-chess-alias.test.js`
+  （别名后普通 / 金色仍命中官方 kit、撤销别名后回到官方表）；`test/match/recon-chess.test.js` 新增 kitRef 与
+  「kitRef 命中官方 kit」两条。
+
 ### 重构模拟：新增干员进盟约 / 出场，整备区右侧 6 格可拖放（2026-10-31）
 
 - **盟约里的新增干员不再显示成 `recon_ch…` + 「?」**：`shared/workshop.js` 的 `reconBondMembers` 按棋子自身的
@@ -31,6 +81,37 @@
 - 回归：`test/workshopReconMembers.test.js`、`test/match/recon-chess.test.js`（新增「重构对局读别名后的棋子 /
   官方模式一处都不别名」两条）、`test/recon-bench.test.js`（新增 1920×1080 两行手牌 + 临时行逐格在 HUD 带内）、
   `test/render/projection.test.js` 通过；`test/render/bigmap-client.test.js` 的 `boardArea` 是既有失败（HEAD 上同样失败）。
+
+### 干员调配：道具图鉴补齐全部装备（2026-10-31）
+
+- **多索雷斯 / 哥伦比亚的装备回到「道具」页**：`screens/loadout.js` 的 `codexItems` 原来过滤掉 `hideInShop` 的装备，
+  而这两个包的装备正是**由特质获得、商店不售**的那一类（`hideInShop: true`），于是整批在图鉴里不可见。现在列出
+  全部 `itemType: 'EQUIP'` 的基础形态（官方数据没有 `hideInShop` 的装备 ⇒ 官方 56 件一件不多、一件不少）。
+- 不售的装备（`hideInShop` 或官方的 `shopExcluded`：战栗 / 坚固 / 加速 / 灼燃维式重锤、突变细胞）统一标
+  「特殊获取」（新助手 `notSold`，卡片与详情页共用）；调度手册里的道具说明也改成「全部装备（商店出售与特质获得）」。
+- 回归：`test/ui/loadout.test.js` 新增一条（56 + 多索雷斯 6 + 哥伦比亚 4 件基础装备都在、按阶级排、`notSold` 的三种口径）。
+
+### 重构模拟：结算页「模拟完成」下方的两个首领框（2026-10-31）
+
+- **重构对局的结算页不再漏掉首领框**：`screens/settle.js` 的两个奖章框（敌方领袖 / 隐秘核心）原来只按
+  `gd.boss(r.bossId)` 取记录，而重构模拟的 `bossId` / `hiddenBossId` 被 `_planBossWaves` 换成了包内的
+  `enemy_ws_recon_*` 键（不在 `bosses.json` 里）⇒ 整块不渲染。新增 `leaderOf(gd, id)`：先查首领表（官方对局
+  仍走这一条，图标取 `enemyKey`），查不到再查敌人表并用记录的 `iconId`（那正是资源清单里有图的那个键）。两个框
+  现在画**实际遇到的那一只**首领，而不是通用的 `round_info_boss_icon` 徽记（徽记降为图标缺失时的兜底）。
+  未遇到隐秘核心（`hiddenReached` 为假）仍不显示第二个框；未打赢（不是「模拟完成」）两个框都不显示。
+- 回归：`test/ui/settle.test.js` 新增一条（官方首领按 `enemyKey` 取图、重构 key 按 `iconId` 取图、两表都没有时
+  为 null、隐秘核心框仍由 `hiddenReached` 门控）。
+
+### 重构模拟：结算页里新增干员的立绘（2026-10-31）
+
+- **战斗结算 / 数据详情 / 战绩页不再把重构新增干员画成「?」**：对局里的棋子用的是**正式 id**（建局时
+  `reconChessAlias` 去掉 `recon_` 前缀），而对局结束、结算页渲染时那一次别名已随对局屏卸载撤销 ——
+  浏览器那份 `chess` 只剩包里 `recon_<正式 id>` 的记录，官方没有这个 id 的新增干员查不到记录，于是名字、立绘、
+  头像全走了占位。`public/js/ui/gameComponents.js` 新增 `chessForPiece(gd, id)`：先按 id 查，查不到再补查
+  `recon_<id>`；`screens/settle.js`（个人战报的十格手牌、同盟页的主将立绘）、`screens/result.js`（数据详情的
+  阵容缩略图）、`screens/stats.js`（战绩页的成就干员）改用它。官方对局的数据里不存在这种 id ⇒ 输出与从前逐字相同。
+- 回归：`test/ui/settle.test.js` 新增一条（用包内真实记录 `recon_chess_char_5_23_a` 断言名字、借用立绘的
+  `charId`、两表都没有时仍为 null）。
 
 ### 模组管理器：全部停用只关面板上的模组 / 六格移出清单（2026-10-31）
 

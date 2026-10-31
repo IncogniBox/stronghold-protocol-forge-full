@@ -16,6 +16,10 @@ export const SIM_WORKER_CSP = "default-src 'none'; script-src 'self' 'unsafe-eva
  * the server's own `SP_ASSET_CDN` does the same in response) — so the browser then fetches the art, audio and the
  * spine files from that origin, and the policy below has to name it.
  *
+ * `SP_WORKSHOP_CDN`（可选）是工坊包素材的独立前缀（`server/http/static.js` 把它拼给 `/workshop-assets/…`，可以指向
+ * GitHub / ghfast.top 这类镜像）。它也是一个**被动资源**的源，所以 `siteCsp` 把它的 origin 同样并进 `img-src` /
+ * `media-src` / `connect-src`，绝不进 `script-src` 等可执行类型。
+ *
  * Anything other than a clean absolute `http(s)` URL — unset, empty, `ftp:`, a typo — returns `null`, and the policy
  * falls back to exactly what it is today, so a clean install and a CDN-less deployment are unchanged.
  * @param {string} [base] defaults to `process.env.SP_CDN_BASE`
@@ -28,7 +32,11 @@ export function assetCdnOrigin(base = process.env.SP_CDN_BASE) {
   return u.protocol === 'http:' || u.protocol === 'https:' ? u.origin : null;
 }
 
-export function siteCsp(publicDir, cdnBase = process.env.SP_CDN_BASE) {
+export function siteCsp(
+  publicDir,
+  cdnBase = process.env.SP_CDN_BASE || process.env.SP_ASSET_CDN,
+  workshopBase = process.env.SP_WORKSHOP_CDN,
+) {
   const hashes = new Set();
   for (const rel of ['index.html', 'studio/index.html', 'studio/console.html', 'dev/game-mock.html', 'dev/render-demo.html', 'dev/battle-perf.html', 'dev/uikit.html']) {
     let html;
@@ -42,12 +50,16 @@ export function siteCsp(publicDir, cdnBase = process.env.SP_CDN_BASE) {
   // a CDN mp3 was refused with "Connects to … violates connect-src 'self'").
   // It must NEVER reach `script-src` / `style-src` / `frame-src` / `object-src`: those would let a poisoned CDN run
   // code or load a frame, which is the whole point of the policy. `script-src` stays self + the importmap hashes.
-  const cdn = assetCdnOrigin(cdnBase);
-  const imgSrc = `img-src 'self' data: blob:${cdn ? ` ${cdn}` : ''};`;
-  const connectSrc = `connect-src 'self'${cdn ? ` ${cdn}` : ''};`;
+  const cdnOrigins = [...new Set([assetCdnOrigin(cdnBase), assetCdnOrigin(workshopBase)].filter(Boolean))];
+  const cdn = cdnOrigins.length ? ` ${cdnOrigins.join(' ')}` : '';
+  const imgSrc = `img-src 'self' data: blob:${cdn};`;
+  const connectSrc = `connect-src 'self'${cdn};`;
   // `media-src` 显式放行 `blob:`：本地上传的大厅音乐与「工坊曲目整段 fetch 成 Blob」的 Fever 音乐都靠它播放。
   // 没有这一条时它们落回 `default-src 'self'`，浏览器直接拒播（实测报错：Loading media from 'blob:…' violates
   // default-src 'self'）。音频与图片同属**被动**资源，所以 CDN 源也照 `img-src` 那条规矩进这里。
-  const mediaSrc = `media-src 'self' blob:${cdn ? ` ${cdn}` : ''};`;
-  return `default-src 'self'; script-src 'self'${hashes.size ? ' ' + [...hashes].join(' ') : ''}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; ${imgSrc} ${mediaSrc} ${connectSrc} worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'`;
+  const mediaSrc = `media-src 'self' blob:${cdn};`;
+  // `font-src` 同理：`/fonts/…` 也按 `SP_ASSET_CDN` 改写（`docs/ASSETS.md` 的 CDN 契约），远端字体没有这一条会落回
+  // `default-src 'self'` 被拒，界面整块换字体。字体同样是被动资源，与其他三处同一口径。
+  const fontSrc = `font-src 'self' https://fonts.gstatic.com${cdn};`;
+  return `default-src 'self'; script-src 'self'${hashes.size ? ' ' + [...hashes].join(' ') : ''}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ${fontSrc} ${imgSrc} ${mediaSrc} ${connectSrc} worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'`;
 }

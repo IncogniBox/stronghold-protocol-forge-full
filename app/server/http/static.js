@@ -131,6 +131,10 @@ const CS_FILE = /^\/cs\/([0-9a-f]{16})\/([A-Za-z0-9._\/-]{1,200})$/;
  *     `packs/` 三个顶层前缀，官方素材已占用前两个，包素材因此落在 `packs/<pack>/…` 命名空间下，不会与官方键冲突
  *     （例如 rimbilliton 复用了官方干员 id，落在 `/assets/…` 就会撞上上游同名键）。
  *
+ * `SP_WORKSHOP_CDN`（可选）把**工坊包素材**单独指到另一个前缀：给了它 ⇒ `/workshop-assets/<pack>/<rel>` 直接改写成
+ * `<workshopBase><pack>/<rel>`（前缀原样拼，所以可以指向 GitHub 原始树 / ghfast.top 这类镜像），官方素材仍走
+ * `SP_ASSET_CDN`。两个变量都没设 ⇒ 这一段完全不执行，与从前逐字节相同。
+ *
  * 三条纪律（与素材 CDN 一侧的契约一致）：
  *   * **只在响应层改写** —— 磁盘上的清单一个字节都不动：服务器自己也要读它做完整性校验，改文件会破坏更新与自检；
  *   * **不改代码与容器前缀** —— 包自己的 `/workshop-kits/…`、`/workshop-panels/…`、`/workshop-resources/…` 一律原样
@@ -151,16 +155,20 @@ function normalizeAssetCdnBase(raw) {
 }
 
 /** 深度改写清单里的素材地址（见文件头的两张映射）；其余字符串原样。 */
-function assetCdnRewrite(value, base) {
+function assetCdnRewrite(value, base, workshopBase) {
   if (typeof value === 'string') {
-    if (value.startsWith('/assets/') || value.startsWith('/fonts/')) return base + value.slice(1);
-    if (value.startsWith(WORKSHOP_ASSET_PREFIX)) return base + WORKSHOP_ASSET_CDN_NAMESPACE + value.slice(WORKSHOP_ASSET_PREFIX.length);
+    if (value.startsWith('/assets/') || value.startsWith('/fonts/')) return base ? base + value.slice(1) : value;
+    if (value.startsWith(WORKSHOP_ASSET_PREFIX)) {
+      const rest = value.slice(WORKSHOP_ASSET_PREFIX.length);
+      if (workshopBase) return workshopBase + rest;
+      return base ? base + WORKSHOP_ASSET_CDN_NAMESPACE + rest : value;
+    }
     return value;
   }
-  if (Array.isArray(value)) return value.map((x) => assetCdnRewrite(x, base));
+  if (Array.isArray(value)) return value.map((x) => assetCdnRewrite(x, base, workshopBase));
   if (value && typeof value === 'object') {
     const out = {};
-    for (const [k, v] of Object.entries(value)) out[k] = assetCdnRewrite(v, base);
+    for (const [k, v] of Object.entries(value)) out[k] = assetCdnRewrite(v, base, workshopBase);
     return out;
   }
   return value;
@@ -281,6 +289,8 @@ export function createStaticHandler({
   const gzipCache = new CompressCache(); // brotli and gzip bodies (files.js)
   /** 素材 CDN 基址（`SP_ASSET_CDN`）——启动时读一次；null = 没设这个开关。 */
   const assetCdnBase = normalizeAssetCdnBase(process.env.SP_ASSET_CDN);
+  /** 工坊包素材的独立前缀（`SP_WORKSHOP_CDN`，可选）——前缀原样拼，可指向 GitHub / ghfast 镜像。 */
+  const workshopCdnBase = normalizeAssetCdnBase(process.env.SP_WORKSHOP_CDN);
   const dataDirAbs = path.resolve(dataDir);
 
   return async function serveStatic(req, res, rawPath, query) {
@@ -306,10 +316,10 @@ export function createStaticHandler({
       res.end(req.method === 'HEAD' ? undefined : shimBody);
       return;
     }
-    // 素材 CDN（`SP_ASSET_CDN`）：三张素材清单里的 `/assets/…`、`/fonts/…` 在**响应里**改写成 CDN 绝对地址。
-    // 清单来源与下面 `/data/*.json` 逐字相同（有包触及就走合并体），只是出门前改写一次；读不到 / 解析不了就落回
-    // 下面的原路径。没设这个变量 ⇒ 这一段完全不执行，与从前逐字节相同。
-    if (assetCdnBase && decoded.startsWith('/data/') && decoded.endsWith('.json')) {
+    // 素材 CDN（`SP_ASSET_CDN` / `SP_WORKSHOP_CDN`）：三张素材清单里的 `/assets/…`、`/fonts/…` 与包素材在**响应里**
+    // 改写成 CDN 绝对地址。清单来源与下面 `/data/*.json` 逐字相同（有包触及就走合并体），只是出门前改写一次；读不到 /
+    // 解析不了就落回下面的原路径。两个变量都没设 ⇒ 这一段完全不执行，与从前逐字节相同。
+    if ((assetCdnBase || workshopCdnBase) && decoded.startsWith('/data/') && decoded.endsWith('.json')) {
       const name = decoded.slice('/data/'.length, -'.json'.length);
       const merged = name && !name.includes('/') && ASSET_CDN_MANIFESTS.has(name) && workshopJson && workshopJson.size
         ? workshopJson.get(name) : null;
@@ -320,7 +330,7 @@ export function createStaticHandler({
       let rec = null;
       if (raw) { try { rec = JSON.parse(raw.toString('utf8')); } catch { rec = null; } }
       if (rec !== null && typeof rec === 'object') {
-        const buf = Buffer.from(JSON.stringify(assetCdnRewrite(rec, assetCdnBase)), 'utf8');
+        const buf = Buffer.from(JSON.stringify(assetCdnRewrite(rec, assetCdnBase, workshopCdnBase)), 'utf8');
         const tag = `"cdn-${createHash('sha1').update(buf).digest('hex').slice(0, 20)}"`;
         const headers = { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache', ETag: tag, 'Content-Length': buf.length };
         if (isNotModified(req, tag, new Date(0))) { delete headers['Content-Length']; res.writeHead(304, headers); res.end(); return; }

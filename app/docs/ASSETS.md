@@ -253,14 +253,44 @@ SP_ASSET_CDN=https://cdn.example.com/ node server/index.js
     operator ids — under `/assets/…` those would hit an upstream key of the same name).
 - A pack's **code** and **container** prefixes (`/workshop-kits/…`, `/workshop-panels/…`, `/workshop-resources/…`) are left
   alone: they are ES modules / archive containers and the CDN refuses executable content.
+
+**Pack art from a second host (`SP_WORKSHOP_CDN`).** The official art and a pack's own art do not have to come from the
+same place: `SP_WORKSHOP_CDN` is an independent **prefix** for `/workshop-assets/<pack>/<rel>` only, so a deployment can
+put the official art on the asset CDN and the packs' bytes on a GitHub mirror. The prefix is concatenated verbatim —
+`/workshop-assets/<pack>/<rel>` → `<prefix><pack>/<rel>` — so it must end where the pack directories begin.
+
+```bash
+# official art from a byte-serving mirror, pack art from the repository's own GitHub mirror (ghfast.top in front of
+# raw.githubusercontent). NOTE: https://downcdn.jiangjiangze.icu is the CDN's *control plane* (it publishes
+# /cdn/v1/mirrors.json, /cdn/v1/index.json and /cdn/v1/pick.js) and not a byte host — a path it does not serve, such as
+# /assets/…, comes back as its HTML portal page, so it cannot be used as SP_ASSET_CDN until the bytes are actually there.
+SP_CDN_BASE=https://ghfast.top/https://raw.githubusercontent.com/jingjiangze/Stronghold-Protocol-CDN/assets-raw/ \
+SP_ASSET_CDN=https://ghfast.top/https://raw.githubusercontent.com/jingjiangze/Stronghold-Protocol-CDN/assets-raw/ \
+SP_WORKSHOP_CDN=https://ghfast.top/https://raw.githubusercontent.com/IncogniBox/stronghold-protocol-forge-full/main/app/workshop/ \
+node server/index.js
+```
+
+- Set it **instead of** relying on the `packs/` mapping above; with both variables set, `/assets/…` and `/fonts/…` still use
+  `SP_ASSET_CDN`, and only the pack paths move to `SP_WORKSHOP_CDN`. Setting `SP_WORKSHOP_CDN` alone is also valid (the
+  official art then stays on this box).
+- Unset, or not `http(s)://…` ⇒ the pack paths keep the old mapping (`<SP_ASSET_CDN>packs/<pack>/<rel>`, else unchanged).
+- Assets in a pack that are **not** in the mirror tree 404 (the client falls back to its placeholder); only the packs the
+  mirror actually carries should be moved over. A pack's **code** and **container** paths stay on this server; so do the
+  lists that are **not** one of the three rewritten manifests (the pack BGM list from `/api/music`, the battle-fx
+  manifests served by `/api/...`) — this variable moves the art in `data/assets.json` / `local-assets.json` /
+  `emotes.json`, which is the bulk of the bytes.
+- The mirror must send `Access-Control-Allow-Origin` and honour `Range` for the browser to use the bytes (ghfast.top does;
+  see the CDN's own `mirrors.json` notes).
 - Unset ⇒ the branch never runs and every response is byte-for-byte what it was before.
 - The CDN must send `Access-Control-Allow-Origin` (the client loads art with `img.crossOrigin='anonymous'`) — otherwise
   the WebGL textures are tainted and the map/board render empty.
-- **The page's CSP names that origin too, in the passive types only, and takes it from `SP_CDN_BASE`.**
-  `server/http/csp.js` adds `new URL(SP_CDN_BASE).origin` to `img-src` (art, WebGL spine textures) and `connect-src`
-  (audio is `fetch`ed, never played through `<audio src>`; so are the spine `.skel`/`.atlas`) — never to `script-src` /
-  `style-src` / `frame-src` / `object-src`, so a poisoned CDN can never run code or load a frame. An unset or malformed
-  `SP_CDN_BASE` leaves the policy byte-for-byte as it was, so a clean install and a CDN-less deployment are unchanged.
+- **The page's CSP names those origins too, in the passive types only, and takes them from `SP_CDN_BASE` / `SP_ASSET_CDN`
+  and `SP_WORKSHOP_CDN`.** `server/http/csp.js` adds every configured `http(s)` origin to `img-src` (art, WebGL spine
+  textures), `media-src`, `font-src` (`/fonts/…` is rewritten as well, so a remote font would otherwise fall back to
+  `default-src 'self'` and be refused) and `connect-src` (audio is `fetch`ed, never played through `<audio src>`; so are
+  the spine `.skel`/`.atlas`) — never to `script-src` / `style-src` / `frame-src` / `object-src`, so a poisoned CDN can
+  never run code or load a frame. Unset or malformed values leave the policy byte-for-byte as it was, so a clean install
+  and a CDN-less deployment are unchanged.
 
 The pack bytes are pushed to the CDN by an agent upload channel (`POST /api/cdn/upload/begin` → direct `PUT` to the bucket's
 S3 endpoint → `POST /api/cdn/upload/commit`); the source of truth for what is live is the CDN's `hosted-index.json` /

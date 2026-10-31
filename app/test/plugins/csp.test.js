@@ -49,10 +49,11 @@ test('the asset CDN origin (SP_CDN_BASE) enters the passive types only — never
   const cdn = 'https://speedcdn.jiangjiangze.icu';
   const plain = siteCsp(publicDir, '');            // '' ⇒ unset, today's policy
   const withCdn = siteCsp(publicDir, cdn);
-  // ① a legal base: the origin appears in img-src / media-src / connect-src, and in no other directive
+  // ① a legal base: the origin appears in font-src / img-src / media-src / connect-src, and in no other directive
   const dirs = Object.fromEntries(withCdn.split('; ').map((s) => { const sp = s.indexOf(' '); return [s.slice(0, sp), s.slice(sp + 1)]; }));
   const carrying = Object.entries(dirs).filter(([, v]) => v.includes(cdn)).map(([k]) => k).sort();
-  assert.deepEqual(carrying, ['connect-src', 'img-src', 'media-src'], 'the CDN origin only in the passive-ish types');
+  assert.deepEqual(carrying, ['connect-src', 'font-src', 'img-src', 'media-src'], 'the CDN origin only in the passive-ish types');
+  assert.equal(dirs['font-src'], `'self' https://fonts.gstatic.com ${cdn}`);
   assert.equal(dirs['img-src'], `'self' data: blob: ${cdn}`);
   assert.equal(dirs['media-src'], `'self' blob: ${cdn}`);
   assert.equal(dirs['connect-src'], `'self' ${cdn}`);
@@ -74,6 +75,37 @@ test('the asset CDN origin (SP_CDN_BASE) enters the passive types only — never
   // the origin extractor
   assert.equal(assetCdnOrigin(`${cdn}/a/b?x=1`), cdn);
   for (const bad of ['', '   ', 'nope', 'ftp://x', 'javascript:alert(1)']) assert.equal(assetCdnOrigin(bad), null, JSON.stringify(bad));
+});
+
+test('工坊包素材的独立前缀（SP_WORKSHOP_CDN）同样只进被动类型，并与官方 CDN 的来源并存', () => {
+  const cdn = 'https://downcdn.jiangjiangze.icu';
+  const mirror = 'https://ghfast.top/https://raw.githubusercontent.com/IncogniBox/stronghold-protocol-forge-full/main/app/workshop/';
+  // ① 只设工坊前缀：`ghfast.top` 只出现在 font-src / img-src / media-src / connect-src
+  const onlyWorkshop = siteCsp(publicDir, null, mirror);
+  const dirs = Object.fromEntries(onlyWorkshop.split('; ').map((s) => { const sp = s.indexOf(' '); return [s.slice(0, sp), s.slice(sp + 1)]; }));
+  assert.deepEqual(Object.entries(dirs).filter(([, v]) => v.includes('ghfast.top')).map(([k]) => k).sort(), ['connect-src', 'font-src', 'img-src', 'media-src']);
+  assert.equal(dirs['font-src'], "'self' https://fonts.gstatic.com https://ghfast.top");
+  assert.equal(dirs['img-src'], "'self' data: blob: https://ghfast.top");
+  for (const d of ['script-src', 'style-src', 'frame-src', 'object-src']) assert.ok(!dirs[d].includes('ghfast.top'), `${d} must never carry the mirror origin`);
+  // ② 两个都设：两个 origin 都进被动类型（官方的在前）
+  const both = siteCsp(publicDir, cdn, mirror);
+  const bothDirs = Object.fromEntries(both.split('; ').map((s) => { const sp = s.indexOf(' '); return [s.slice(0, sp), s.slice(sp + 1)]; }));
+  assert.equal(bothDirs['img-src'], `'self' data: blob: ${cdn} https://ghfast.top`);
+  assert.equal(bothDirs['connect-src'], `'self' ${cdn} https://ghfast.top`);
+  for (const d of ['script-src', 'style-src', 'frame-src', 'object-src']) assert.ok(!bothDirs[d].includes('ghfast.top'), `${d} must never carry the mirror origin`);
+  // ③ 只设 SP_ASSET_CDN（没有 SP_CDN_BASE）也够：官方素材的 origin 同样进策略
+  const saved = { asset: process.env.SP_ASSET_CDN, workshop: process.env.SP_WORKSHOP_CDN, base: process.env.SP_CDN_BASE };
+  try {
+    delete process.env.SP_CDN_BASE; delete process.env.SP_WORKSHOP_CDN;
+    process.env.SP_ASSET_CDN = `${cdn}/`;
+    assert.ok(siteCsp(publicDir).includes(`connect-src 'self' ${cdn};`), 'SP_ASSET_CDN alone names its origin');
+    process.env.SP_WORKSHOP_CDN = mirror;
+    assert.ok(siteCsp(publicDir).includes('ghfast.top'), 'SP_WORKSHOP_CDN alone names its mirror origin');
+  } finally {
+    for (const [k, v] of [['SP_ASSET_CDN', saved.asset], ['SP_WORKSHOP_CDN', saved.workshop], ['SP_CDN_BASE', saved.base]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
 });
 
 test('native script HTTP routes serve exact descriptor bytes and JavaScript MIME under site CSP',async t=>{
