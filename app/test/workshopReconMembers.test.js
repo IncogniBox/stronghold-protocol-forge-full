@@ -31,6 +31,12 @@ const reconPack = {
         members: ['chess_official'], visibleMembers: ['chess_official'],
       },
     },
+    // 重构棋子：`recon_<官方 id>` 是覆盖记录（和官方那同一条干员），`recon_<新 id>` 是新增干员 —— 名册要用
+    // **正式 id**（client 的 data.lookup 只认正式 id），覆盖记录与官方记录换回同一个 id 后要去重（业主 2026-10-31）
+    chess: {
+      recon_chess_official: { chessId: 'recon_chess_official', bonds: ['yanShip'], visible: true },
+      recon_chess_new: { chessId: 'recon_chess_new', bonds: ['yanShip'], visible: true },
+    },
   },
 };
 
@@ -40,15 +46,15 @@ test('重构盟约的名册包含所有携带该盟约的棋子（含其它包�
     files: { chess: { chess_mod: { chessId: 'chess_mod', bonds: ['yanShip'], visible: true } } },
   };
   const { data } = applyWorkshop(base, [reconPack, modPack]);
-  assert.deepEqual(data.bonds.recon_yanShip.members, ['chess_official', 'chess_hidden', 'chess_mod'], '非黄金形态的携带者全在');
-  assert.deepEqual(data.bonds.recon_yanShip.visibleMembers, ['chess_official', 'chess_mod'], '隐藏棋子不进名册');
+  assert.deepEqual(data.bonds.recon_yanShip.members, ['chess_official', 'chess_hidden', 'chess_new', 'chess_mod'], '非黄金形态的携带者全在，写正式 id 且去重');
+  assert.deepEqual(data.bonds.recon_yanShip.visibleMembers, ['chess_official', 'chess_new', 'chess_mod'], '隐藏棋子不进名册');
   assert.deepEqual(data.bonds.recon_yanShip.thresholds, [3, 6, 9], '其余字段原样保留');
   assert.deepEqual(data.bonds.yanShip.members, ['chess_official'], '官方盟约记录逐字节不动');
 });
 
 test('没有 chess 表 / 没有 recon 记录时什么都不改（普通合并逐字节相同）', () => {
   const onlyBonds = { bonds: base.bonds };
-  const { data } = applyWorkshop(onlyBonds, [reconPack]);
+  const { data } = applyWorkshop(onlyBonds, [{ id: 'mode-recon', files: { bonds: reconPack.files.bonds } }]);
   assert.deepEqual(data.bonds.recon_yanShip.members, ['chess_official'], '没有 chess 表就不重算');
   const { data: plain } = applyWorkshop(base, []);
   assert.equal(plain.bonds.recon_yanShip, undefined);

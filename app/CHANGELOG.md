@@ -13,6 +13,25 @@
 
 `APP_VERSION`（`0.19.1`）与 `PROTOCOL_VERSION`（`2`）未动；新增 C2S `room.card` 与 `room.state.seats[].card` 都是**可缺省**的加性字段，老页面不认时不发、不读，既有帧逐字节不变。服务端改动需**重启**生效（无对局时）。
 
+### 重构模拟：新增干员进盟约 / 出场，整备区右侧 6 格可拖放（2026-10-31）
+
+- **盟约里的新增干员不再显示成 `recon_ch…` + 「?」**：`shared/workshop.js` 的 `reconBondMembers` 按棋子自身的
+  `bonds` 重算名册时，原来直接抄了 `c.chessId`（包里新增的干员是 `recon_chess_ws_recon_*`）——浏览器 `data.js`
+  在重构对局里把 `get('bonds')` 换成别名后的正式 id 表，`lookup('chess', 'recon_…')` 永远是 `null`，于是成员行
+  回退成原始 id、头像走占位。现在名册只写正式 id（去掉 `recon_` 前缀）并去重，新增干员与官方干员一样显示名字与头像。
+- **新增干员在战斗里出场（模型不再消失）**：`server/sim/Battle.js` 的 `this.data` 也叠一份 `reconData` 别名后的
+  棋子表。此前 `withGameData` 只把别名压进内容 / 支援那一条作用域（盟约、道具、特质），单位自己的 `getChess`
+  （`battle/players.js` 建人、召唤物按主人取变体）读的是未别名的表 —— 包里新增、官方没有的 `chess_ws_recon_*`
+  查不到记录，整名干员不出场；覆盖记录（星熊 / 诗怀雅 …）也仍按官方数值开打。现在服务端复算、浏览器战斗、
+  试玩与重放共用同一份别名数据；非重构对局逐字节走原路。
+- **整备区第一排右侧 6 格能主动拖入**：`public/js/render/projection.js` 的 `presetCamera` 在非官方布局（重构 45×60
+  战场）走 `fitCamera` 时也调 `clearHud`。那一条此前不避让 HUD，而 `.shopbar` 是右对齐的绝对定位块，正好压住整备区
+  右侧 6 格 —— 指针命中的是商店栏，拖拽永远落不到格子上。`keepBand` 改为按这张图自己的整备区（`benchOf` / `benchTileOf`）
+  算上 / 下两条边界，官方布局的数值逐位不变（有测试钉住）。
+- 回归：`test/workshopReconMembers.test.js`、`test/match/recon-chess.test.js`（新增「重构对局读别名后的棋子 /
+  官方模式一处都不别名」两条）、`test/recon-bench.test.js`（新增 1920×1080 两行手牌 + 临时行逐格在 HUD 带内）、
+  `test/render/projection.test.js` 通过；`test/render/bigmap-client.test.js` 的 `boardArea` 是既有失败（HEAD 上同样失败）。
+
 ### 模组管理器：全部停用只关面板上的模组 / 六格移出清单（2026-10-31）
 
 - **「全部停用」只关清单里显示出来的模组**：`workshop/mod-manager/ui/manager.js` 的 `LOCKED` 增补六格 ——

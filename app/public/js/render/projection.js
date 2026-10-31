@@ -39,7 +39,7 @@
 // three.js camera stay the official ones.
 
 import { GEO } from '../../../shared/constants.js';
-import { OFFICIAL_LAYOUT, isOfficialLayout, viewRectOf } from '../../../shared/layout.js';
+import { OFFICIAL_LAYOUT, isOfficialLayout, isDualLayout, viewRectOf, benchOf, fieldTileOf } from '../../../shared/layout.js';
 
 export const DEG = Math.PI / 180;
 /** Arknights' standard battle camera (see header). */
@@ -468,7 +468,7 @@ export function presetCamera(kind, viewport, options) {
     const cfg = opts.config && typeof opts.config === 'object' ? opts.config : null;
     const param = (cfg && parseCameraParam(cfg[key])) || parseCameraParam(OFFICIAL_PARAMS[key]);
     const cam = officialCamera(param, { width: W, height: H }, opts);
-    return preset.keep && opts.hud ? clearHud(cam, opts.hud, keepBand(preset, layout), { width: W, height: H }) : cam;
+    return preset.keep && opts.hud ? clearHud(cam, opts.hud, keepBand(preset, layout, k === 'bossPrep' ? 'bossPrep' : 'prep', opts), { width: W, height: H }) : cam;
   }
   if (!rect) {
     // the map's own rect for that kind (official → the preset's own numbers, so nothing moves for an official stage)
@@ -494,21 +494,42 @@ export function presetCamera(kind, viewport, options) {
   // 所以取景框边缘会被裁掉一部分 —— 调用方给多少就裁多少，本函数不替它做取舍。
   const zoom = finite(opts.zoom, 1);
   if (zoom > 0 && zoom !== 1) { cam.scale *= zoom; cam.update(); }
+  // 一张声明了自己 `size` / `layout` 的图（45×60 重构战场）走的是这条 fitCamera（官方分支不用），而它同样要把
+  // 整备区留在 HUD 带之间 —— 此前只有官方分支调 `clearHud`，重构战场的整备区因此被**右对齐的商店栏**压住
+  // （业主 2026-10-31「整备区第一排从右往左前 6 个格子无法移动干员和装备」：商店栏正好盖住右边 6 格）。
+  // 官方布局（含竖屏 / `fit` 的官方图）一个像素不动：这里只补非官方布局。
+  if (preset.keep && opts.hud && !isOfficialLayout(layout)) {
+    return clearHud(cam, opts.hud, keepBand(preset, layout, k === 'bossPrep' ? 'bossPrep' : 'prep', opts), { width: W, height: H });
+  }
   return cam;
 }
 
 /**
- * The `keep` band of a prep preset, in the map's own rows: the bench's near edge is one row below the map's own normal
- * field (`viewRectOf(layout, 'prep').r0`), the field's back edge its own `normal.r1`. The official numbers (6.5 / 12.5)
- * come out of the official layout unchanged, and a big map keeps its own bench and field clear of the HUD.
+ * The `keep` band of a prep preset, in the map's own rows: the bench's near edge (the outermost of its hand rows and
+ * its temp row — `benchOf`, so a map that puts the temp row in front of the hand rows keeps it clear too), and the
+ * field's back edge (`viewRectOf(layout, 'normal' | 'bossPrep').r1`). The official numbers (6.5 / 12.5, −0.5 / 5.5) come
+ * out of the official layout unchanged, and a big map keeps its own bench and field clear of the HUD.
  */
-function keepBand(preset, layout) {
+function keepBand(preset, layout, kind = 'prep', opts = {}) {
   const keep = preset.keep;
   if (!keep) return keep;
-  const prep = viewRectOf(layout, 'prep');
-  const normal = viewRectOf(layout, 'normal');
-  const shift = keep.far - (normal.r1 + 0.5); // official: 12.5 − 12.5 = 0 — the band is anchored on the field's back edge
-  return { ...keep, near: prep.r0 - 0.5 + shift, far: normal.r1 + 0.5 + shift };
+  const L = layout || OFFICIAL_LAYOUT;
+  const side = opts.side === 'R' ? 'R' : 'L';
+  const boss = kind === 'bossPrep';
+  // 这块场地（**地图**键）的整备区声明：普通带左右两半各自一份，boss 半场 bossL / bossR；第 2… 块 boss 场地的
+  // 布局（bossAreaLayout）已把整备区挂在自己的 bossL 上，所以场名照旧即可。
+  const field = boss
+    ? (side === 'R' ? 'bossR' : 'bossL')
+    : (isDualLayout(L) ? (side === 'R' ? 'normalR' : 'normalL') : 'normal');
+  const bench = benchOf(L, field, Number.isInteger(opts.area) ? opts.area : 0, Number.isInteger(opts.seat) ? opts.seat : 0);
+  // 整备区（含手牌各行与临时行）最靠外的那一行（棋盘行）→ 地图行：官方 = 手牌行 7（临时行 8 在它里面），
+  // 45×60 重构战场 = 临时行 30（它画在手牌行 31/32 的前面）—— 一行都不能落在 HUD 底下。
+  const rows = [...bench.hand.rows, ...(bench.temp ? [bench.temp.row] : [])];
+  const nearRow = Math.min(...rows);
+  const near = fieldTileOf(L, field, nearRow, bench.hand.c0)[0] - 0.5;
+  const far = viewRectOf(L, boss ? 'bossPrep' : 'normal').r1 + 0.5;
+  // 官方布局的结果与旧公式（`prep.r0 − 0.5 + shift` / `normal.r1 + 0.5 + shift`）逐位相同
+  return { ...keep, near, far };
 }
 
 /**

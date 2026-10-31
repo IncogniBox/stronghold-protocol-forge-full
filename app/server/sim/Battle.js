@@ -51,11 +51,11 @@ import { createRng } from './rng.js';
 import { Grid } from './grid.js';
 import { ProjectileSystem } from './projectiles.js';
 import { remainingDistance } from './ai.js';
-import { toDataSource, normalizeRoute, normalizeStage } from './simdata.js';
+import { toDataSource, normalizeRoute, normalizeStage, DataSource, withUnitLoadouts } from './simdata.js';
 import { installContent } from './content/index.js';
 import { withGameData, withMorphPairing } from './content/support/index.js';
 // 重构模拟的盟约别名（`recon_<官方 id>` → 官方 id；服务端复算、浏览器战斗、试玩与重放共用这一份口径）
-import { reconData } from '../../shared/reconModes.js';
+import { reconData, isReconModeId } from '../../shared/reconModes.js';
 import { BattlePlayers } from './battle/players.js';
 import { BattleLifecycle } from './battle/lifecycle.js';
 import { BattleHooks } from './battle/hooks.js';
@@ -118,7 +118,31 @@ export class Battle {
      * option is byte-for-byte the old battle (server/sim/damage.js leaderHitCancelled reads this field).
      */
     this.bossHitLimit = opts.bossHitLimit;
-    this.data = toDataSource(opts.data);
+    /**
+     * 本场战斗的数据源。重构模拟（`mode_recon_*`）要在这一层也换成**别名后**的棋子表（业主 2026-10-31
+     * 「新增的干员战斗开始后模型消失」）：`withGameData` 只把别名压进内容 / 支援那一条作用域（盟约、道具、
+     * 特质），而单位自己的 `getChess`（`players.js` 的 `_createAllyFromInput`、召唤物按主人取变体）读的是
+     * `this.data` —— 那里还是未别名的表，`chess_ws_recon_*`（包里新增、官方没有的 id）查不到记录，
+     * 整名干员不出场；覆盖用的记录（星熊 / 诗怀雅 …）则仍按官方数值开打。这里把棋盘表换成同一份别名对象
+     * （`reconData` 按数据对象只建一次，与 `withGameData` 共用），并保留原来的 `forms` 口径视图与每场
+     * 技能 / 模组视图（`withUnitLoadouts`）。非重构对局（`reconData` → null）逐字节走原路。
+     *
+     * 别名表只有**正式 id**，而包里那份记录自己的键是 `recon_*`（内容测试与旧重放直接按它出人）——
+     * 这里把两张表并起来：正式 id 用别名后的那份，`recon_*` 键留着原记录，同一条记录两种 id 都查得到。
+     */
+    const reconRaw = isReconModeId(this.modeId) && opts.data
+      ? (opts.data.source && typeof opts.data.source === 'object' ? opts.data.source : opts.data)
+      : null;
+    const reconSource = reconRaw ? reconData(reconRaw, this.modeId) : null;
+    if (reconSource) {
+      const base = toDataSource(opts.data);
+      const source = reconSource.chess && reconRaw.chess
+        ? { ...reconSource, chess: { ...reconRaw.chess, ...reconSource.chess } }
+        : reconSource;
+      this.data = withUnitLoadouts(new DataSource(source, base.fallback ?? null, { forms: base.forms ?? null }), opts.players);
+    } else {
+      this.data = toDataSource(opts.data);
+    }
     let stage = opts.stage ?? (opts.stageId ? this.data.getStage(opts.stageId) : null);
     if (stage && !stage._norm) stage = normalizeStage(stage.id ?? opts.stageId, stage);
     this.stage = stage || { id: 'empty', rows: [], devices: [] };

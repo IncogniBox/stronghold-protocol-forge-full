@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { reconChessAlias, reconData } from '../../shared/reconModes.js';
 import { DATA, makeMatch, give, giveItem } from './harness.js';
+import { makeBattle } from '../helpers/battleHarness.js';
 import { PHASE } from '../../shared/constants.js';
 import { createRegistry } from '../../server/match/effectsMeta.js';
 
@@ -528,6 +529,29 @@ test('Match：重构对局读到别名后的棋子，官方模式仍是原记录
   assert.equal(plain.m.gd.chess('chess_ws_recon_clemnt_a'), null, '官方模式读不到克莱门莎');
   assert.equal(plain.m.gd.chess('chess_ws_recon_highmo_a'), null, '官方模式读不到海沫');
   assert.equal(plain.m.gd.chess('chess_ws_recon_cuttle_a'), null, '官方模式读不到安哲拉');
+});
+
+test('重构对局的战斗读别名后的棋子：新增干员能出场，覆盖干员用重构记录', () => {
+  // 业主 2026-10-31「新增的干员战斗开始后模型消失」：`withGameData` 的别名只到内容作用域，单位自己的
+  // `Battle.data.getChess` 仍读未别名的表 ⇒ `chess_ws_recon_*`（官方没有的 id）查不到，整名干员不出场；
+  // 覆盖记录（星熊 …）则仍用官方数值。Battle 现在把棋盘表也换成同一份别名对象（shared/reconModes.js）。
+  const added = ['chess_ws_recon_clemnt_a', 'chess_ws_recon_highmo_a', 'chess_ws_recon_deepcl_a', 'chess_ws_recon_cuttle_a'];
+  const units = added.map((id, i) => ({ chessId: id, row: 10, col: 3 + i }));
+  units.push({ chessId: 'chess_char_4_17_a', row: 11, col: 3 });
+  const h = makeBattle({ modeId: 'mode_recon_abyss', data: DATA, autoFinish: false, units });
+  h.runUntil(() => h.allies().length >= units.length, 30);
+  for (const id of added) {
+    const u = h.unit(id);
+    assert.ok(u, `${id} 出场`);
+    assert.equal(u.def.spine, DATA.chess[`recon_${id}`].assets.spine, `${id} 用包里的模型`);
+  }
+  assert.equal(h.unit('chess_char_4_17_a').def.tier, 3, '星熊·重构 3 阶（官方记录是 4 阶）');
+});
+
+test('官方模式（modeId 不是 mode_recon_*）一场都不别名：新增干员照旧不在场', () => {
+  const h = makeBattle({ modeId: 'mode_multi_normal', data: DATA, autoFinish: false, units: [{ chessId: 'chess_ws_recon_clemnt_a', row: 10, col: 3 }] });
+  h.runUntil(() => h.allies().length >= 1, 30);
+  assert.equal(h.allies().length, 0, '官方对局读不到包里的新增干员');
 });
 
 test('深海色·重构：售出时获得 1 件（精锐 2 件）随机 2 阶装备', async () => {

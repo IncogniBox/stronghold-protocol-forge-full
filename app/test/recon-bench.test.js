@@ -8,6 +8,7 @@ import { GEO } from '../shared/constants.js';
 import { layoutOf, benchOf, benchTileOf, benchBottomRow, bossAreaLayout, OFFICIAL_LAYOUT } from '../shared/layout.js';
 import { boardGeo } from '../public/js/render/drag.js';
 import { prepFieldOf } from '../public/js/render/app/view.js';
+import { presetCamera } from '../public/js/render/projection.js';
 
 const STAGE = JSON.parse(fs.readFileSync(new URL('../workshop/mode-recon/stage-specs/my_map.json', import.meta.url), 'utf8'));
 const L = layoutOf(STAGE);
@@ -94,6 +95,31 @@ describe('重构战场 my_map：整备区 16 + 临时 8（按地图格子）', (
       hand: { rows: [GEO.HAND_ROW], c0: 0, cols: GEO.HAND_SIZE, size: GEO.HAND_SIZE },
       temp: { row: GEO.TEMP_ROW, c0: GEO.TEMP_C0, size: GEO.TEMP_SIZE },
     });
+  });
+});
+
+describe('重构战场的休整期相机把整备区放在 HUD 带之间', () => {
+  // 业主 2026-10-31「整备区第一排从右往左前 6 个格子无法主动移动干员和装备」：声明了自己 layout 的图走
+  // fitCamera，那一条此前不调 clearHud ⇒ 右对齐的商店栏正好压住整备区右边 6 格。普通带这一份在这里钉住。
+  const H = 1080;
+  const hud = { top: 216, bottom: 267 };
+  const n = L.deployRects.normalLeft, p = L.battle.prep;
+  const rect = { r0: Math.min(p.r0, n[0] - 2), r1: Math.max(p.r1, n[1]), c0: Math.min(p.c0, n[2] - 2), c1: n[3] };
+
+  test('1920×1080：两行手牌 + 临时行的每一格都在 HUD 带里（不在商店栏后面）', () => {
+    const cam = presetCamera('prep', { width: 1920, height: H }, { rect, layout: L, side: 'L', zoom: 1.2, hud });
+    for (const row of [30, 31, 32]) {
+      for (let col = 21; col <= 28; col++) {
+        const pt = cam.project(col, row, 0.16, { x: 0, y: 0 });
+        assert.ok(pt.y > hud.top && pt.y < H - hud.bottom, `(${row},${col}) → y ${pt.y.toFixed(1)}`);
+      }
+    }
+  });
+
+  test('官方布局不受这条补丁影响：带 hud 时仍走官方分支（与不带 layout 逐位相同）', () => {
+    const a = presetCamera('prep', { width: 1920, height: H }, { hud });
+    const b = presetCamera('prep', { width: 1920, height: H }, { hud, layout: OFFICIAL_LAYOUT });
+    assert.deepEqual(b.params(), a.params());
   });
 });
 

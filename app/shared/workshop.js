@@ -30,7 +30,7 @@
 import { parseVariantsDecl, isVariantAxis, VARIANT_AXIS_NAMES, variantValue, mergeVariantDecls } from './variants.js';// 行为开关层（DESIGN §28.43）：与口径**同一形状、不同一张表**，判据只有一份在 `shared/behaviour.js`。同样不在这里
 // 重判一遍闭枚举 —— 这里只调它的解析器（`parseBehaviourDecl`）与**具名读取器**（`behaviourValue`）。那张表今天有
 // 5 格（`shopBias` / `prepLoadout` / `morphPairing` / `unequip` / `diyPoolOverlap`）。
-import { ensureReconModes } from './reconModes.js';
+import { ensureReconModes, RECON_PREFIX } from './reconModes.js';
 import { parseBehaviourDecl, behaviourValue } from './behaviour.js';
 // 启用声明（DESIGN §28.50）：装好 ≠ 生效。判据只有一份在 `shared/enabled.js`（`parseEnabledDecl`）。
 import { parseEnabledDecl } from './enabled.js';
@@ -3908,10 +3908,17 @@ function reconBondMembers(data) {
     const base = id.slice('recon_'.length);
     const holders = Object.values(chess).filter((c) => isPlainObj(c) && !c.isGolden
       && typeof c.chessId === 'string' && Array.isArray(c.bonds) && c.bonds.includes(base));
+    // 名册写**正式 id**（业主 2026-10-31「重构模拟新增的干员在盟约中显示成 `recon_ch…` 加占位头像」）：
+    // 包的棋子记录自己的 `chessId` 是 `recon_<正式 id>`，而客户端的 `data.lookup('chess', id)` 只认正式 id
+    // （`recon_*` 从别名表里去掉）—— 直接抄 `chessId` 会让名册里的新增干员查不到记录（名字退回原始 id、
+    // 头像占位）。覆盖用的重构记录与官方记录是同一名干员（两个都携带这条盟约）⇒ 换回正式 id 后要去重。
+    const baseOf = (c) => (c.chessId.startsWith(RECON_PREFIX) && c.chessId.length > RECON_PREFIX.length
+      ? c.chessId.slice(RECON_PREFIX.length) : c.chessId);
+    const unique = (list) => [...new Set(list)];
     (next ||= { ...bonds })[id] = {
       ...rec,
-      members: holders.map((c) => c.chessId),
-      visibleMembers: holders.filter((c) => c.visible !== false).map((c) => c.chessId),
+      members: unique(holders.map(baseOf)),
+      visibleMembers: unique(holders.filter((c) => c.visible !== false).map(baseOf)),
     };
   }
   return next;
