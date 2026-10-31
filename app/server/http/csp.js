@@ -50,7 +50,11 @@ export function siteCsp(
   // a CDN mp3 was refused with "Connects to … violates connect-src 'self'").
   // It must NEVER reach `script-src` / `style-src` / `frame-src` / `object-src`: those would let a poisoned CDN run
   // code or load a frame, which is the whole point of the policy. `script-src` stays self + the importmap hashes.
-  const cdnOrigins = [...new Set([assetCdnOrigin(cdnBase), assetCdnOrigin(workshopBase)].filter(Boolean))];
+  const cdnOrigins = [...new Set([
+    assetCdnOrigin(cdnBase),
+    assetCdnOrigin(process.env.SP_ASSET_CDN),
+    assetCdnOrigin(workshopBase),
+  ].filter(Boolean))];
   const cdn = cdnOrigins.length ? ` ${cdnOrigins.join(' ')}` : '';
   const imgSrc = `img-src 'self' data: blob:${cdn};`;
   const connectSrc = `connect-src 'self'${cdn};`;

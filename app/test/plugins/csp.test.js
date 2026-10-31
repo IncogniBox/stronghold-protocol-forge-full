@@ -108,6 +108,25 @@ test('工坊包素材的独立前缀（SP_WORKSHOP_CDN）同样只进被动类�
   }
 });
 
+test('官方源与浏览器用的素材源可以不同：SP_CDN_BASE 与 SP_ASSET_CDN 的 origin 都进被动类型', () => {
+  const raw = 'https://raw.githubusercontent.com/IncogniBox/stronghold-assets/main';
+  const gh = 'https://ghfast.top/https://raw.githubusercontent.com/jingjiangze/Stronghold-Protocol-CDN/assets-raw/';
+  const saved = { asset: process.env.SP_ASSET_CDN, workshop: process.env.SP_WORKSHOP_CDN, base: process.env.SP_CDN_BASE };
+  try {
+    process.env.SP_CDN_BASE = raw;
+    process.env.SP_ASSET_CDN = gh;
+    delete process.env.SP_WORKSHOP_CDN;
+    const csp = siteCsp(publicDir);
+    assert.match(csp, /connect-src 'self' https:\/\/raw\.githubusercontent\.com https:\/\/ghfast\.top;/, '两个 origin 都在 connect-src');
+    assert.match(csp, /font-src 'self' https:\/\/fonts\.gstatic\.com https:\/\/raw\.githubusercontent\.com https:\/\/ghfast\.top;/);
+    assert.ok(!/script-src[^;]*ghfast\.top/.test(csp), 'script-src 一个都不加');
+  } finally {
+    for (const [k, v] of [['SP_ASSET_CDN', saved.asset], ['SP_WORKSHOP_CDN', saved.workshop], ['SP_CDN_BASE', saved.base]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
 test('native script HTTP routes serve exact descriptor bytes and JavaScript MIME under site CSP',async t=>{
   const f=scriptFixture(t);
   f.put('native',"import {kit} from 'sp:sdk@1'; export default sp => {};",
