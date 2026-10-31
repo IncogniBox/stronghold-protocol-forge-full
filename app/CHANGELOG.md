@@ -13,6 +13,20 @@
 
 `APP_VERSION`（`0.19.1`）与 `PROTOCOL_VERSION`（`2`）未动；新增 C2S `room.card` 与 `room.state.seats[].card` 都是**可缺省**的加性字段，老页面不认时不发、不读，既有帧逐字节不变。服务端改动需**重启**生效（无对局时）。
 
+### 棋盘素材预热：等待室里就开始下载（2026-10-31）
+
+- **地图贴图从前是进对局那一刻才开始拉的**：战场视图（`render/app.js` 的 `createFieldView`）在「进入对局」时
+  才请求棋盘图集与 3D 棋盘包，而房间 → 简报 → 预重构 → 首轮准备是一段根本没有棋盘的空闲窗口。新模块
+  `public/js/render/boardWarmup.js` 在房间界面（`screens/room.js` 的 `RoomScreen`）挂载时就用同一套加载器预热：
+  先 2D 棋盘图集（6 张贴图约 1.7 MB，3D 包的 D 用的也是这一张 ⇒ 先画出 2D 棋盘，3D 包随后跟上），再（仅 WebGL2）
+  `loadThree()` + `loadBoardPack()`。
+- **幂等，不重复下载**：`loadBoardArt` / `loadBoardPack` 本来就是页面级缓存（`boardArt.js` 的 `cached`、
+  `board3d/load.js` 的 `packs`），预热与进战斗那一次拿到的是同一个 promise；任何一步失败只让预热停下，
+  进战斗照旧按需下载 —— 预热永远不影响界面。
+- `navigator.connection.saveData` 开着（省流模式）时不预热。
+- 实测（当天，本机 → 各源）：`TX_autochessi_D.webp` 685 KB 在 gh-proxy 上 6.7 s、云服务器同源 24.5 s；6 张棋盘
+  贴图并行 1.69 MB 约 14 s。瓶颈是出口带宽（≈0.5–1 Mbps）而不是压缩，所以做法是把这段等待挪到等待室。
+
 ### 部署：官方素材走 downcdn，工坊包素材走 GitHub 镜像（2026-10-31）
 
 - **工坊包自带素材可以单独挂到第二个源**：`server/http/static.js` 新增 `SP_WORKSHOP_CDN` —— 响应里的

@@ -67,6 +67,7 @@ import { difficultyInfo, ProtoCard, LAYER_TEXT, serverSeatMaxOf } from './lobby.
 import { ProtocolScene } from '../ui/protocolScene.js';
 import { SearchPanel, FoundPanel } from '../ui/matchFlow.js';
 import { usePresence, useRise, afterLeave } from '../ui/transitions.js';
+import { warmBoard } from '../render/boardWarmup.js';
 import { t, tc } from '../../../shared/i18n.js';
 
 const MAX_SEATS = Number(SEAT_CONST.MAX_SEATS) || 4;
@@ -733,6 +734,9 @@ export function RoomScreen() {
   const prevEmpty = useRef(null);
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 1000); return () => { clearInterval(id); alive.current = false; }; }, []);
+  // 棋盘素材预热（render/boardWarmup.js）：等待室是进对局前唯一的空闲窗口 —— 地图贴图与 3D 棋盘包在这里就开始
+  // 下载，进战斗时 createFieldView 直接命中同一份页面级缓存（业主 2026-10-31：地图资源进对局才拉，看着慢）。
+  useEffect(() => { warmBoard(); }, []);
   useData('chess', 'assets');
   const m = data.get('assets');
   // 名片干员: the pickable operators, the default pool (5★/6★ by charId, the same order on every client), one's pick
