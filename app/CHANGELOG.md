@@ -23,6 +23,10 @@
 - **CSP 同步**：`server/http/csp.js` 把 `SP_WORKSHOP_CDN` 的 origin（以及 `SP_ASSET_CDN`，`SP_CDN_BASE` 缺席时）
   并进 `img-src` / `media-src` / `font-src` / `connect-src`，`script-src` 等可执行类型一个都不加。`font-src` 是新补的：
   `/fonts/…` 同样按 `SP_ASSET_CDN` 改写，没有这一条远端字体落回 `default-src 'self'` 会被拒。
+- **包素材响应改走 `serveFile`**：`/workshop-assets/<pack>/<path>` 从前是 `readFile` 后原样 `writeHead`，不压缩、无
+  ETag。重构模拟的战斗特效树里有 `fx/manifest.json`（368 KB）、`fx/textures.json`（416 KB）与 743 份 prefab JSON
+  （合计 19.7 MB），实测未压缩一次要 2.3–2.6 s。现在与其余静态文件同一条通道（brotli / gzip、ETag / 304、Range），
+  Content-Type 仍取包素材自己的扩展表（`.webp` / `.skel` / `.atlas` 一个都不改）。
 - 部署口径（云服务器启动时设置，2026-10-31 实际值）：`SP_ASSET_CDN` 指向
   `https://gh-proxy.com/https://raw.githubusercontent.com/IncogniBox/stronghold-assets/main/`（GitHub 加速前缀 +
   官方素材镜像树），`SP_WORKSHOP_CDN=https://gh-proxy.com/https://raw.githubusercontent.com/IncogniBox/stronghold-protocol-forge-full/main/app/workshop/`；

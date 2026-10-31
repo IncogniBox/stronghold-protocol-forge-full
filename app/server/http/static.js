@@ -684,18 +684,20 @@ export function createStaticHandler({
         abs = path.join(dir, ...segments);
         if (abs !== dir && !abs.startsWith(dir + path.sep)) { sendError(req, res, 403, '禁止访问 · Forbidden'); return; }
       }
-      let body;
+      let st;
       try {
-        const st = await fsp.stat(abs);
+        st = await fsp.stat(abs);
         if (!st.isFile()) throw new Error('not a file');
-        body = await fsp.readFile(abs);
       } catch { sendError(req, res, 404, '页面不存在 · Not found'); return; }
       // a pack's art is immutable in practice (a repack ships a new version) and can be large: cache it like /assets/
-      res.writeHead(200, {
-        'Content-Type': WORKSHOP_ASSET_TYPES.get(ext) || 'application/octet-stream', 'Content-Length': body.length,
-        'Cache-Control': 'public, max-age=86400',
+      // 走 serveFile 而不是 readFile + writeHead：包素材里有整棵战斗特效树（`fx/manifest.json` 368 KB、
+      // `fx/textures.json` 416 KB、743 份 prefab JSON），实测未压缩时要 2.3–2.6 s；同一份走 brotli 后只剩几十 KB。
+      // serveFile 还给 ETag / 304 与 Range，重复进入同一场重构对局时不必再下一次。Content-Type 仍取包素材自己的表
+      // （`.webp` / `.skel` / `.atlas` 这些 MIME 表里没有的扩展一个都不改）。
+      await serveFile(req, res, abs, st, 'workshop-assets', segments, query, gzipCache, log, {
+        cacheControl: 'public, max-age=86400',
+        headers: { 'Content-Type': WORKSHOP_ASSET_TYPES.get(ext) || 'application/octet-stream' },
       });
-      res.end(req.method === 'HEAD' ? undefined : body);
       return;
     }
     // Content packs (server/packs.js): the live index, and only the files a pack's manifest names
