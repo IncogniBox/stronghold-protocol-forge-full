@@ -167,13 +167,12 @@ import { BoardScene } from './board3d/scene.js';
 import { layoutPen, penSignature } from './pen.js';
 import { IDENTITY, bossPrepField, normalPrepField, tilesToDisp, leaderStand } from './prepfield.js';
 import { pickOnTile, pickBattle, hitTiles } from './pick.js';
-import { isDualLayout } from '../../../shared/layout.js';
 import { promotionsOf } from './promote.js';
 import { ensurePixi } from './app/pixi.js';
 import { advanceEffectClock } from './app/playback.js';
 import { pieceDirOf, pickUnitOf } from './app/pick.js';
 import { CAMERA_MS, BOARD3D_STABLE_MS, BOARD3D_RETRY_MS, PEN_CAMERA_MS, RANGE_GROUPS, LEADER_HIT_STYLE, DRAG_HOLD_TILES, CHAIN_KINDS, DROP_PENDING_MS, DEPLOY_REPLAY_MS } from './app/tune.js';
-import { boardPreference, switchableBox, bandFor, fieldRows, boardArea, viewKind, restView, flightView } from './app/view.js';
+import { boardPreference, switchableBox, bandFor, fieldRows, boardArea, viewKind, prepFieldOf, restView, flightView } from './app/view.js';
 import { renderInfo, FORCED_EXIT, showsDeathFx } from './app/info.js';
 import { resolveAssets, makeData, withTimeout, QUALITY_RES, BOARD_RES, releaseGl } from './app/host.js';
 import { t } from '../../../shared/i18n.js';
@@ -517,18 +516,17 @@ export async function createFieldView(host, options = {}) {
   // 这张图**棋盘本身**的几何（drag.boardGeo：整备行 / 临时整备区行 / 棋盘矩形，棋盘坐标）：官方图就是 `GEO` 那一套
   // （7 / 8 / 9–12 × 2–10），一张把部署区放大到 5×11 的图则整块跟着走。`field` 是**当前显示的那个部署场** ——
   // boss 回合的休整期看的是它的半场（那里整备行仍是官方的 7），普通休整期看的是普通棋盘。
-  const prepSideNow = () => (camKind === 'prep' && camOpts.side === 'R' ? 'R' : 'L');
   const camLayout = () => camOpts.layout || layout();
-  const prepFieldNow = () => {
-    // 显示的那个部署场：boss 回合的休整期是它的半场，一张左右两半的图（`normalL`/`normalR`）的普通休整期是它那一半
-    if (camKind !== 'prep') return 'normal';
-    if (viewKind(camKind, camOpts, layout()) === 'bossPrep') {
-      // 第 2… 块 boss 场地：每人一条自己的矩形，`camOpts.layout` 里它就是 bossLeft（没有左右半场）
-      return camOpts.area > 0 ? 'bossL' : prepSideNow() === 'R' ? 'bossR' : 'bossL';
-    }
-    if (!isDualLayout(layout())) return 'normal';
-    return prepSideNow() === 'R' ? 'normalR' : 'normalL';
-  };
+  // 显示的那个部署场（`prepFieldOf`）：boss 回合的休整期是**自己的那半块 boss 场地**（'bossL' / 'bossR'，第 2… 块 boss
+  // 场地读它自己的布局、恒 'bossL'），普通休整期是普通带（一张左右两半的图是自己那一半 'normalL' / 'normalR'）。
+  // ⚠️ 不能因为 `camKind !== 'prep'` 就退回 'normal'：重构战场这类图普通带比 boss 半场大（5×11 / 4×9，16+8 格板凳 /
+  // 隐式的 10+5 格），那样棋盘窗口与整备格都读成普通带的 —— 超出可见 10+5 格的干员/装备看不见、拖拽落到错的格子
+  // （业主 2026-10-29：boss 区域的休整期获得干员/装备超出整备区上限后出问题）。
+  const prepFieldNow = () => prepFieldOf(camKind, camOpts, layout());
+  // 敌人预览笔架摆在哪一侧：跟着相机自己的半场（普通带的左右两半各一份，笔架相机 `'pen'` 也是从前一个相机带过来的
+  // 半场）—— 从前只在 `camKind === 'prep'` 时读 side，玩家点开笔架（`'pen'`）后任何一次重排都会把右半场的人摆回左半场
+  // （业主 2026-10-31「右半边场地的玩家，休整期查看怪物等待区显示的是左半边的」）。
+  const prepSideNow = () => (camOpts.side === 'R' ? 'R' : 'L');
   const boardGeoNow = () => boardGeo(camLayout(), prepFieldNow(),
     Number.isInteger(camOpts.area) && camOpts.area > 0 ? camOpts.area : 0,
     Number.isInteger(camOpts.seat) ? camOpts.seat : (camOpts.side === 'R' ? 1 : 0));
@@ -1112,8 +1110,11 @@ export async function createFieldView(host, options = {}) {
       // 我自己在地图上的预备单位（外勤医疗等）也是我的 —— 与棋子同样盖上 `ownerId`，好让时装跟着来
       return { unit: u, display: { ...u, x: p.col, y: p.row, dir, facing: dir === 'LEFT' ? -1 : 1, ownerId: ownOwnerId } };
     }).filter(Boolean) : [];
-    const mate = prepXf.kind === 'bossPrep' && src.bossMate && Array.isArray(src.bossMate.units) ? src.bossMate.units : [];
-    syncReadOnlyPrepUnits([...prepMapChars.map((e) => e.display), ...mate]);
+    // a boss round's prep partner (`bossMate`) and a normal round's pair partner (`normalMate`, a two-half ordinary band):
+    // both arrive already placed on the partner's half in field coordinates, so they are drawn as they are
+    const mate = prepXf.kind === 'bossPrep' ? src.bossMate : src.normalMate;
+    const mateUnits = mate && Array.isArray(mate.units) ? mate.units : [];
+    syncReadOnlyPrepUnits([...prepMapChars.map((e) => e.display), ...mateUnits]);
     prepPieces = list.filter((e) => e.key && views.has(e.key));
     if (dragState && !views.has(dragState.key)) { drag.reset(); endDragVisual(false); }
     holdScene(false); // the prep pieces reference their models now (a battle's hold ends here)
@@ -1234,9 +1235,13 @@ export async function createFieldView(host, options = {}) {
 
   // ---- enemy preview pen (render/pen.js) -----------------------------------------------------------------------
 
-  /** Show a preview list (m.private.nextEnemies shape) in the pen; null / [] empties it. Unchanged lists are kept. */
-  function setPenList(list) {
-    const sig = Array.isArray(list) && list.length ? penSignature(list) : '';
+  /** Show a preview list (m.private.nextEnemies shape) in the pen; null / [] empties it. Unchanged lists are kept.
+   *  `side` (optional): the pen band of a board being scouted — the scouted player's own half, read before the camera
+   *  switch (see prepSideNow). */
+  function setPenList(list, side = null) {
+    const at = side === 'R' || side === 'L' ? side : prepSideNow();
+    const listSig = Array.isArray(list) && list.length ? penSignature(list) : '';
+    const sig = listSig ? `${at}:${listSig}` : '';
     if (sig === penSig) return;
     clearPen();
     penSig = sig;
@@ -1245,7 +1250,7 @@ export async function createFieldView(host, options = {}) {
     // the leader with a spawn tile stands on the boss field (setLeader), not in the pen
     const stand = leaderStand(list, (k) => data.enemy(k)?.hitArea ?? null, hitTiles);
     setLeader(stand);
-    const pen = layoutPen(stand ? list.filter((e) => e !== stand.entry) : list, { stage: stageRec, side: prepSideNow() });
+    const pen = layoutPen(stand ? list.filter((e) => e !== stand.entry) : list, { stage: stageRec, side: at });
     for (const f of pen.figures) {
       const rec = data.enemy(f.enemyKey);
       const rank = rec?.rank;
@@ -1706,7 +1711,9 @@ export async function createFieldView(host, options = {}) {
     battleMeta = { fieldId: meta.fieldId ?? null, kind: meta.kind || 'normal', rect, stageId: meta.stageId ?? null, prep: meta.prep === true };
     // a scouted teammate's board shows THEIR pen (m.field nextEnemies; without it the shared wave composition of the
     // own preview, bounties excluded); a real battle empties the pen (the enemies are about to spawn)
-    if (battleMeta.prep) setPenList(Array.isArray(meta.nextEnemies) ? meta.nextEnemies : (ownPen || []).filter((x) => x && x.source !== 'bounty' && x.source !== 'effect'));
+    // 侦察的笔架用**被侦察者**自己的半场（`meta.side`，普通带左右两半）：相机还没切过来，不能读 `camOpts.side`
+    // （那还是自己的半场 / 上一个相机）。
+    if (battleMeta.prep) setPenList(Array.isArray(meta.nextEnemies) ? meta.nextEnemies : (ownPen || []).filter((x) => x && x.source !== 'bounty' && x.source !== 'effect'), meta.side === 'R' || meta.side === 'L' ? meta.side : null);
     else setPenList(null);
     if (meta.stageId && (!stageRec || stageRec.id !== meta.stageId)) {
       const st = data.stage(meta.stageId);

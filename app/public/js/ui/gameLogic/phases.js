@@ -62,7 +62,9 @@ export function phaseBanner(phase, pub, { alive = true, spectator = false } = {}
       sub: spectator || alive === false ? t('观战中') : t('资金已到账') };
     case PHASE.SP_DRAFT: return { title: t('机变阶段'), micro: 'CONTINGENCY', tone: 'gold', sub: t('依次选择机变') };
     case PHASE.PREP: return { title: t('休整期'), micro: `ROUND ${String(r).padStart(2, '0')} // REST`, tone: 'mint', sub: t('部署干员，准备迎敌') };
-    case PHASE.COMBAT: return { title: t('作战开始'), micro: 'COMBAT', tone: 'orange', sub: t('各自行动阶段') };
+    // no banner: the footage has none at 作战开始 (video 8:31; the owner, 2026-10-29) — only the top bar's own scene
+    // (ui/hud.js CapsuleScene 'clash': the robot, the enemy, ✕ 开始作战) marks it
+    case PHASE.COMBAT: return null;
     case PHASE.UNITE: {
       const names = new Map(sortedPlayers(pub).map((p) => [p.playerId, p.name || t('博士')]));
       const helpers = Array.isArray(pub?.unite?.helpers) ? pub.unite.helpers.map((id) => names.get(id)).filter(Boolean) : [];
@@ -124,15 +126,16 @@ export function battleOverSfx(cost, uniteLoss = null) {
 
 /**
  * The official round result dialog for the viewer's own LP charge `loss`: 「作战结束」 + 「全员无伤！」 (mint) at 0, else
- * 「生命值减少 −N」 (red).
+ * 「生命值减少 −N」 (red). `kind` (official-pages.css 30: the teal border and the grinning face, or the skull) and `loss`
+ * are what the official plate (ui/matchPopups.js BattleOverPopup) draws from.
  * @param {number} loss
- * @returns {{ title: string, micro: string, tone: string, sub: string, duration: number }}
+ * @returns {{ title: string, micro: string, tone: string, sub: string, kind: 'perfect'|'loss', loss: number, duration: number }}
  */
 export function roundResultBox(loss) {
   const n = Math.max(0, Math.trunc(Number(loss) || 0));
   return n === 0
-    ? { title: t('作战结束'), micro: 'BATTLE OVER', tone: 'mint', sub: t('全员无伤！'), duration: RESULT_BOX_MS }
-    : { title: t('作战结束'), micro: 'BATTLE OVER', tone: 'red', sub: t('生命值减少 −{n}', { n }), duration: RESULT_BOX_MS };
+    ? { title: t('作战结束'), micro: 'BATTLE OVER', tone: 'mint', sub: t('全员无伤！'), kind: 'perfect', loss: 0, duration: RESULT_BOX_MS }
+    : { title: t('作战结束'), micro: 'BATTLE OVER', tone: 'red', sub: t('生命值减少 −{n}', { n }), kind: 'loss', loss: n, duration: RESULT_BOX_MS };
 }
 
 /**
@@ -159,7 +162,7 @@ export function uniteResultBox(res, selfId) {
   const loss = Number.isFinite(raw) ? Math.max(0, Math.trunc(raw)) : null;
   if (loss != null && loss > 0) return roundResultBox(loss);
   if (loss != null && through === 0) return roundResultBox(0);
-  return { title: t('作战结束'), micro: 'BATTLE OVER', tone: 'orange', sub: '', duration: RESULT_BOX_MS };
+  return { title: t('作战结束'), micro: 'BATTLE OVER', tone: 'orange', sub: '', kind: 'plain', loss: 0, duration: RESULT_BOX_MS };
 }
 
 /**

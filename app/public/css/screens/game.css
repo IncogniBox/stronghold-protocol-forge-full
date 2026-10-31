@@ -1033,37 +1033,12 @@
 .pauseov__plate h2 { font-size: calc(.5 * var(--t)); font-weight: 900; letter-spacing: .3em; color: #fff; text-shadow: 0 0 .2rem rgba(0, 0, 0, .8); }
 .pauseov__note { font-size: calc(.17 * var(--t)); color: var(--text-md); text-shadow: 0 1px 2px #000; }
 .pauseov__btns { display: flex; gap: .2rem; }
-/* 协议已失效 (ui/downedPlate.js): the project's Modal restyled as the event's panel (video 10:56–10:58) — the official map
-   behind, the knocked-out face, the title, and the two buttons under the panel; design px ÷ 100 [ASSUMED: measured from
-   that footage]. The face turns from calm to knocked out after .5 s with a shake; with reduced motion it simply shows. */
-/* the footage dims the field but keeps it sharp: no blur behind this one */
-.modal.downm-veil { background: rgba(3, 5, 4, .6); -webkit-backdrop-filter: none; backdrop-filter: none; }
-.modal__box.downm { --bk-c: transparent; width: min(13.8rem, 96vw); max-height: none; background: none; border: 0; box-shadow: none; overflow: visible; }
-.downm .modal__stripe { display: none; }
-.downm .modal__body { padding: 0; overflow: visible; }
-.downm__panel { position: relative; height: 3.45rem; overflow: hidden; background: rgba(5, 11, 13, .9); box-shadow: 0 0 .5rem .25rem rgba(5, 11, 13, .7); }
-/* the official map is an opaque square: its edges fade into the panel */
-.downm__map { position: absolute; left: 1.6rem; top: -2.6rem; width: 8.67rem; max-width: none; opacity: .55;
-  -webkit-mask-image: radial-gradient(closest-side, #000 55%, transparent); mask-image: radial-gradient(closest-side, #000 55%, transparent); }
-.downm__x { position: absolute; width: .24rem; height: .24rem; opacity: .6;
-  background: linear-gradient(var(--red), var(--red)) center / 100% 2px no-repeat, linear-gradient(var(--red), var(--red)) center / 2px 100% no-repeat; }
-.downm__x--tl { left: 3.2rem; top: .5rem; }
-.downm__x--tr { right: 3.2rem; top: .5rem; }
-.downm__x--bl { left: 3.2rem; bottom: .5rem; }
-.downm__x--br { right: 3.2rem; bottom: .5rem; }
-.downm__face { position: absolute; left: 4.79rem; top: 1.05rem; width: 1.12rem; height: 1.04rem; color: #c9cccc; }
-.downm__face.is-out { animation: downm-shake 360ms steps(6, end); }
-.downm__pix { display: block; width: 100%; height: 100%; }
-.downm__title { position: absolute; left: 6.3rem; top: 1.2rem; margin: 0; color: #f0353b; font-size: calc(.6 * var(--t)); font-weight: 900; letter-spacing: .04em;
-  line-height: 1.1; white-space: nowrap; animation: downm-in 260ms 120ms var(--ease-out) both; }
-.downm__sub { position: absolute; left: 6.3rem; top: 2.05rem; color: #6d7779; font-family: var(--font-display); font-size: calc(.2 * var(--t)); letter-spacing: .08em; }
-.downm__btns { display: flex; justify-content: center; gap: 2rem; margin-top: .8rem; }
-.downm__btn { min-width: 3.06rem; min-height: .75rem; font-size: calc(.24 * var(--t)); }
-/* the footage's button glyphs are about as tall as the text block */
-.downm__btn .btn__icon { width: 1.5em; height: 1.5em; }
-.downm__btn--watch { background: #e9ecec; color: #15191a; border-color: #e9ecec; }
-@keyframes downm-shake { 0%, 100% { transform: none; } 20%, 60% { transform: translateX(-.06rem); } 40%, 80% { transform: translateX(.06rem); } }
-@keyframes downm-in { from { opacity: 0; transform: translateX(.3rem); } }
-@media (prefers-reduced-motion: reduce) {
-  .downm__face.is-out, .downm__title { animation: none; }
-}
+/* 协议已失效 (ui/downedPlate.js): the event's own plate — css/screens/official-pages.css section 33 (the map on
+   settle/settlemen_personal_fail, its tone filter, the teal grid, robo_head and icon_dead, btn_continue / btn_end). */
+
+/* 全局作战目标 (ui/goalBanner.js, css/screens/goal-banner.css): the HUD stands down behind the band for the one round-1
+   showing — only 离开 and the latency pill stay, as on the official footage. Pointer events follow visibility, so a hidden
+   HUD cannot swallow a tap; the band itself is pointer-events: none. */
+.gm.is-goal .gm__hud, .gm.is-goal .gm__hud * { visibility: hidden; }
+.gm.is-goal .gtop__exit, .gm.is-goal .gtop__exit *, .gm.is-goal .gtop__net, .gm.is-goal .gtop__net * { visibility: visible; }
+

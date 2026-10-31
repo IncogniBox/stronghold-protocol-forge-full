@@ -148,6 +148,26 @@ export function maxSeatsFrom(env) {
 }
 
 /**
+ * 重构模拟（room mode 'recon'）对公网开放 (业主 2026-10-29「把重构模拟在云服务器开放，可以实际游玩」)。
+ *
+ * 缺省 **false**：这个模式本来是本地实验模式 —— `room.create` 只认回环 / 私网会话（`session.local`），
+ * `welcome.devAllowed` 也只发给这种会话，于是公网服务器上的入口一个字都不画。业主要在线上收集玩家反馈，
+ * 就把这台服务器的 `SP_RECON_PUBLIC=1` 打开：`room.create` 收任何会话的 `mode:'recon'`，并在 `welcome` 里补
+ * `reconAllowed: true` 让客户端画出入口（「全量模拟」仍按 `devAllowed` 本地门控，不受这一格影响）。
+ *
+ * 与 `maxSeatsFrom` 同一纪律：`shared/` 被浏览器加载，所以这里是**纯函数**，环境由调用方传进来
+ * （`server/lobby.js` 的 `LOBBY_DEFAULTS` 读 `process.env`）。缺省 / 空 / 写错 ⇒ false，线上行为一个字不变。
+ *
+ * @param {Record<string, string|undefined>|null|undefined} env the environment to read (absent ⇒ false)
+ * @returns {boolean} 这台服务器允不允许任何会话开重构房
+ */
+export function reconPublicFrom(env) {
+  const raw = env ? env.SP_RECON_PUBLIC : undefined;
+  if (raw == null) return false;
+  return ['1', 'true', 'yes', 'on'].includes(String(raw).trim().toLowerCase());
+}
+
+/**
  * 本房座位数的**下限** (业主裁决 B5, 2026-10-11): the fewest seats a co-op room may be created with.
  *
  * 依据 (why 2 and not 1): the official room's player range is 1–4 (`MAX_SEATS` above), and the ONE-seat shape
@@ -235,6 +255,17 @@ export const MAX_ROOM_MODS = 64;
 export const DIFFICULTIES = ['FUNNY', 'NORMAL', 'HARD', 'ABYSS'];
 export const DIFFICULTY_NAMES = { FUNNY: N_('标准模拟'), NORMAL: N_('险境模拟'), HARD: N_('绝境模拟'), ABYSS: N_('终极模拟') };
 export const DIFFICULTY_COLORS = { FUNNY: '#f6a329', NORMAL: '#e85a1a', HARD: '#e73118', ABYSS: '#ff0024' };
+/**
+ * 重构模拟的难度名（业主 2026-10-31）：房间模式 'recon' 的 ABYSS 显示成「重构模拟·终极」，官方的「终极模拟」一个字节
+ * 不动（其它模式的同难度仍叫终极模拟）。`mode` 收 room.mode ('recon') 或 modeId ('mode_recon_abyss')。
+ */
+export const RECON_DIFFICULTY_NAME = N_('重构模拟·终极');
+export const isReconMode = (mode) => mode === 'recon' || (typeof mode === 'string' && /^mode_recon(_|$)/.test(mode));
+export const difficultyLabel = (mode, difficulty) => {
+  const d = String(difficulty || '').toUpperCase();
+  if (isReconMode(mode) && d === 'ABYSS') return RECON_DIFFICULTY_NAME;
+  return DIFFICULTY_NAMES[d] || null;
+};
 
 // modeId in data/config.json = `mode_${type}_${difficulty.toLowerCase()}` with type single|multi; the 重构模拟 mode
 // (room mode 'recon', 模式扩展-重构模拟) maps to its own generated `mode_recon_<difficulty>` entries (tools/build-data.mjs).

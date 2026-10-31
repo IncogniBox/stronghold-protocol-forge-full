@@ -48,8 +48,10 @@ export const PANEL_RIGHT_GAP = 0.9;
 export const PANEL_RIGHT_BOTTOM = 1.02;
 export const PANEL_RIGHT_BOTTOM_SHOP = 3.78;
 
-/** Bond popup geometry (rem; keep in sync with css/screens/game-panels.css .bpop / .bpop--*). */
-export const BPOP = Object.freeze({ width: 5.4, top: 2.1, bottomGap: 0.3, left: 2.3, beside: 7.32, besideR: 5.92, right: 0.9 });
+/** Bond popup geometry (rem; keep in sync with css/screens/game-panels.css .bpop / .bpop--*, and official-pages.css
+ *  §15 .bpop--center: 8.76 × 5.7 wide at 1.965 from the top, the official 盟约详情 plate). */
+export const BPOP = Object.freeze({ width: 5.4, top: 2.1, bottomGap: 0.3, left: 2.3, beside: 7.32, besideR: 5.92, right: 0.9,
+  centerWidth: 8.76, centerTop: 1.965, centerHeight: 5.7 });
 
 /**
  * Where the bond popup opens (css .bpop--<place>) so it neither hides the open detail card nor covers the selected
@@ -61,7 +63,7 @@ export const BPOP = Object.freeze({ width: 5.4, top: 2.1, bottomGap: 0.3, left: 
  * @param {{ width: number, height: number, left?: number, top?: number }} vp the HUD layer's box (see panelSlots)
  * @param {number} rem root font size (px)
  * @param {'left'|'right'|null} card side of the open detail card (null: none)
- * @returns {'left'|'beside'|'besideR'|'right'}
+ * @returns {'center'|'left'|'beside'|'besideR'|'right'}
  */
 export function bondPopupPlace(uf, vp, rem, card = null) {
   const W = Number(vp?.width) || 1920;
@@ -72,12 +74,18 @@ export function bondPopupPlace(uf, vp, rem, card = null) {
   const top = Y + R * BPOP.top;
   const bottom = Y + Math.max(R * BPOP.top + R, H - R * BPOP.bottomGap);
   const rectOf = (p) => {
+    if (p === 'center') {
+      const cl = X + (W - R * BPOP.centerWidth) / 2;
+      const ct = Y + R * BPOP.centerTop;
+      return { left: cl, right: cl + R * BPOP.centerWidth, top: ct, bottom: ct + R * BPOP.centerHeight };
+    }
     const left = X + (p === 'left' ? R * BPOP.left : p === 'beside' ? R * BPOP.beside
       : p === 'besideR' ? W - R * (BPOP.besideR + BPOP.width) : W - R * (BPOP.right + BPOP.width));
     return { left, right: left + R * BPOP.width, top, bottom };
   };
-  // last resort: over the card it was opened from (closing the popup shows the card again)
-  const order = card === 'left' ? ['beside', 'right', 'left'] : card === 'right' ? ['besideR', 'left', 'right'] : ['left', 'right'];
+  // last resort: over the card it was opened from (closing the popup shows the card again); with no card, the official
+  // centered plate (official-pages.css §15 .bpop--center) first
+  const order = card === 'left' ? ['beside', 'right', 'left'] : card === 'right' ? ['besideR', 'left', 'right'] : ['center', 'left', 'right'];
   if (!isObj(uf)) return order[0];
   const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
   return order.find((p) => !hit(uf, rectOf(p))) || order[0];

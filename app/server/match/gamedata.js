@@ -35,10 +35,15 @@ const posIntOr = (v, d) => (Number.isInteger(v) && v > 0 ? v : d);
 export const DEFAULTS = Object.freeze({
   income: [0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12],
   incomeCap: 12,
-  chessPrice: { 1: 2, 2: 3, 3: 3, 4: 3, 5: 4, 6: 4 },
+  // 7 阶（业主 2026-10-30）：官方数据只有 1–6 阶，7 阶记录由后续内容补。
+  //   * `poolCopies[7]` = 7 阶**库存**（每名 7 阶干员在一局里的拷贝数，4 份）；
+  //   * `tier7Share` = 7 级商店**每一格**先摇一次的概率（5%），与池里的拷贝数无关 ——
+  //     这样无论后续补进来几名 7 阶干员，7 级商店每格出 7 阶的概率都稳定在 5% 左右。
+  chessPrice: { 1: 2, 2: 3, 3: 3, 4: 3, 5: 4, 6: 4, 7: 5 },
   sellPrice: 1,
   refreshPrice: 1,
-  poolCopies: { 1: 12, 2: 14, 3: 18, 4: 16, 5: 8, 6: 5 },
+  poolCopies: { 1: 12, 2: 14, 3: 18, 4: 16, 5: 8, 6: 5, 7: 4 },
+  tier7Share: 0.05,
   mergeCount: 3,
   goldenCopies: 3,
   itemMergeCount: 2,
@@ -193,12 +198,14 @@ export class GameData {
     // Fixed operator gifts are unlimited outputs, but every produced normal/advanced item still occupies 1/2 copies
     // (card-pool experiment BV1eLXXBqEgF, maintainer-confirmed 2026-10-11). Random subset gifts are not exempt.
     this._fixedGiftItems = new Set(Object.values(this.raw.garrisons || {})
-      .filter(g => g.effectKey === 'SERVER_GAIN_EQUIP').map(g => g.bbStr?.chess).filter(id => this._items[id]));
+      .filter(g => g.effectKey === 'SERVER_GAIN_EQUIP')
+      .flatMap(g => String(g.bbStr?.chess ?? '').split(',').map(s => s.trim()))
+      .filter(id => this._items[id]));
     this._bonds = this.raw.bonds && typeof this.raw.bonds === 'object' ? this.raw.bonds : {};
-    /** visible, shop-eligible base (normal) chess ids */
+    /** visible, shop-eligible base (normal) chess ids（`recon_*` 是重构对局的覆盖 / 新增记录，永不直接进池） */
     this.visibleChess = Object.keys(chess).filter((id) => {
       const c = chess[id];
-      return c && c.visible && !c.isGolden && !c.isDiy && !c.isHidden && Number.isInteger(c.tier);
+      return !id.startsWith('recon_') && c && c.visible && !c.isGolden && !c.isDiy && !c.isHidden && Number.isInteger(c.tier);
     }).sort();
     /**
      * Shop item ids by tier (sim/simdata.js isShopItem: normal EQUIP, not hidden, not effect-only — the special
@@ -508,6 +515,11 @@ export class GameData {
   get bossRound() { return Number.isInteger(this.mode.bossRound) && this.mode.bossRound > 0 ? this.mode.bossRound : this.lastRound; }
   get hiddenRound() { return Number.isInteger(this.mode.hiddenRound) && this.mode.hiddenRound > 0 ? this.mode.hiddenRound : null; }
   get maxShopLevel() { return posIntOr(this.mode.maxShopLevel, DEFAULTS.maxShopLevel); }
+  /** 7 级商店每一格先摇 7 阶的概率（缺省 5%；模式可用 `tier7Share` 覆盖，只在有 7 阶记录时生效）。 */
+  get tier7Share() {
+    const v = numOr(this.mode.tier7Share, DEFAULTS.tier7Share);
+    return Math.max(0, Math.min(1, v));
+  }
 
   roundCfg(r) {
     const rounds = this.mode.rounds;

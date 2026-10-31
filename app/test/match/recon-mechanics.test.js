@@ -34,6 +34,7 @@ const A_EQUIP = RECON_RULES.ASSIST_EQUIP; // 'recon_assist_equip'
 const A_DATA = 'recon_assist_data';       // RECON_RULES 未导出，逐字照抄
 const L_BOND = RECON_RULES.LOAD_BOND;     // 'recon_load_bond'
 const L_EQUIP = RECON_RULES.LOAD_EQUIP;   // 'recon_load_equip'
+const L_DATA = 'recon_load_data';         // RECON_RULES 未导出，逐字照抄
 
 const EQUIP3 = 'chess_item_3_01_e_a';     // tier 3 EQUIP
 const EQUIP_EXEMPT = 'chess_item_6_09_e_a'; // 变形同构体（豁免，tier 6）
@@ -222,7 +223,8 @@ test('装备重构: 每销毁一件 EQUIP 补一件 tier >= 被销毁者的装�
 
 test('装备负载: 装备阶级高于携带者 → 记 round+3，到点销毁（reason recon_load）', () => {
   const { m, ps, registry } = setup();
-  m.reconChoices = { p_0: { load: L_EQUIP } };
+  // 业主 2026-10-30：交上去的是「被排除的那一条」—— 排除数据负载 ⇒ 装备负载生效
+  m.reconChoices = { p_0: { load: L_DATA } };
   const reasons = [];
   registry.item(EQUIP3, { onDestroy(ctx, ev) { reasons.push(ev.reason); } });
 
@@ -246,7 +248,7 @@ test('装备负载: 豁免的两件不记倒计时、不会被销毁（变形同
   assert.equal(RECON_RULES.LOAD_EQUIP_EXEMPT.includes('chess_item_6_09_e'), true);
   assert.equal(RECON_RULES.LOAD_EQUIP_EXEMPT.includes('chess_item_6_13_e'), true, '哥伦比亚包那件也在名单里');
   const { m, ps } = setup();
-  m.reconChoices = { p_0: { load: L_EQUIP } };
+  m.reconChoices = { p_0: { load: L_DATA } };
   const { item } = equipOnHand(m, ps, EQUIP_EXEMPT, chessOfTier(1)[0]); // tier 6 > 携带者 tier 1，但在豁免名单
   const key = `recon.doom.${item.uid}`;
   m.dispatch(ps, 'onRoundStart', { round: m.round });
@@ -259,7 +261,7 @@ test('装备负载: 豁免的两件不记倒计时、不会被销毁（变形同
 
 test('装备负载: 条件不再成立（装备阶级不高于携带者）→ 已记的倒计时被清零、不销毁', () => {
   const { m, ps } = setup();
-  m.reconChoices = { p_0: { load: L_EQUIP } };
+  m.reconChoices = { p_0: { load: L_DATA } };
   const { item } = equipOnHand(m, ps, EQUIP3, chessOfTier(3)[0]); // tier 3 装备装到 tier 3 携带者：不满足 `tier > 携带者`
   const key = `recon.doom.${item.uid}`;
   ps.counters[key] = m.round + RECON_RULES.LOAD_EQUIP_ROUNDS; // 假装它曾被记过一次
@@ -271,17 +273,20 @@ test('装备负载: 条件不再成立（装备阶级不高于携带者）→ �
   m.dispose();
 });
 
-test('装备负载: load 不是 recon_load_equip → 既不记倒计时也不销毁', () => {
-  const { m, ps } = setup();
-  m.reconChoices = { p_0: { load: L_BOND } };
-  const { item } = equipOnHand(m, ps, EQUIP3, chessOfTier(1)[0]);
-  const key = `recon.doom.${item.uid}`;
-  m.dispatch(ps, 'onRoundStart', { round: m.round });
-  assert.equal(ps.counters[key] || 0, 0, '不记');
-  m.round += 5;
-  m.dispatch(ps, 'onRoundStart', { round: m.round });
-  assert.ok(ps.find(item.uid), '不销毁');
-  m.dispose();
+// 业主 2026-10-30：交上去的是「被排除的那一条」，所以「装备负载不生效」= 交的正是它，或者什么都没交（不指定）
+test('装备负载: 交的就是 recon_load_equip（被排除）/ 不指定 → 既不记倒计时也不销毁', () => {
+  for (const choice of [{ load: L_EQUIP }, {}, { load: 'nope' }]) {
+    const { m, ps } = setup();
+    m.reconChoices = { p_0: choice };
+    const { item } = equipOnHand(m, ps, EQUIP3, chessOfTier(1)[0]);
+    const key = `recon.doom.${item.uid}`;
+    m.dispatch(ps, 'onRoundStart', { round: m.round });
+    assert.equal(ps.counters[key] || 0, 0, `${JSON.stringify(choice)} ⇒ 不记`);
+    m.round += 5;
+    m.dispatch(ps, 'onRoundStart', { round: m.round });
+    assert.ok(ps.find(item.uid), `${JSON.stringify(choice)} ⇒ 不销毁`);
+    m.dispose();
+  }
 });
 
 // ---------------------------------------------------------------------------------------------

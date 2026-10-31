@@ -1,0 +1,12 @@
+/* Round 16 (2026-10-28): the fonts the official 盟约 client ships, taken out of its fontdata (pack 字体必须接入/可用字体).
+   CJK faces are subset to the characters the front end, i18n, data and server text use + GB2312 level 1 (scripts-r16/charset.py);
+   anything outside falls back per glyph to the system stack. Families are scoped names: only the components that the video
+   was compared against use them (official-pages.css section 25). Each face declares a weight range, so no faux bold. */
+@font-face { font-family: 'ArkCN'; font-style: normal; font-weight: 100 749; font-display: swap; src: url('ark-cn-medium.woff2') format('woff2'); }      /* NotoSansHans-Medium */
+@font-face { font-family: 'ArkCN'; font-style: normal; font-weight: 750 1000; font-display: swap; src: url('ark-cn-heavy.woff2') format('woff2'); }    /* SourceHanSansCN-Heavy */
+@font-face { font-family: 'ArkWide'; font-style: normal; font-weight: 100 449; font-display: swap; src: url('ark-wide-400.woff2') format('woff2'); }    /* Novecento Wide Normal */
+@font-face { font-family: 'ArkWide'; font-style: normal; font-weight: 450 649; font-display: swap; src: url('ark-wide-500.woff2') format('woff2'); }    /* Novecento Wide Medium */
+@font-face { font-family: 'ArkWide'; font-style: normal; font-weight: 650 1000; font-display: swap; src: url('ark-wide-700.woff2') format('woff2'); }   /* Novecento Wide Bold */
+@font-face { font-family: 'ArkBender'; font-style: normal; font-weight: 100 1000; font-display: swap; src: url('ark-bender.woff2') format('woff2'); }   /* JovannyLemonad Bender */
+@font-face { font-family: 'ArkOpenSans'; font-style: normal; font-weight: 100 1000; font-display: swap; src: url('ark-opensans-600.woff2') format('woff2'); } /* Open Sans Semibold */
+@font-face { font-family: 'ArkWunder'; font-style: normal; font-weight: 100 1000; font-display: swap; src: url('ark-wunder.woff2') format('woff2'); }   /* AAA Wunder UI */

@@ -9,10 +9,10 @@ import { TEST_PUBLIC_LOG } from '../../../shared/testMode.js';
 import { boardOrder, pieceDir, handRow, tempRow } from '../board.js';
 import { bondList, offBondCounts } from '../bondsMeta.js';
 import { cardView } from '../choices.js';
-import { bountySpawns, previewOf, stageRoutesOf, routeSpawn } from '../waves.js';
+import { bountySpawns, previewOf, stageRoutesOf, stageBossRoutesOf, routeSpawn } from '../waves.js';
 import { timelineAt } from '../fields.js';
 import { bossFieldPlacement } from '../finalAssault.js';
-import { fieldTileOf as layoutFieldTile, benchOf, benchTileOf } from '../../../shared/layout.js';
+import { fieldTileOf as layoutFieldTile, benchOf, benchTileOf, bossAreaBattleRect } from '../../../shared/layout.js';
 import { battleProgress } from '../../sim/spec.js';
 
 /** Milliseconds since the match started. A stamp before the start, or a bad stamp, is 0. The stored log keeps the epoch. */
@@ -342,7 +342,11 @@ export class MatchViews {
     if (this.bossWaves) {
       const g = this.bossGroupOf(ps);
       if (!g) return [];
-      return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side, mid: typeof this.bossAreaMidOf === 'function' ? this.bossAreaMidOf(ps) : this.layout.mirrorCol / 2 }), ...dev]);
+      // 地图自己画了**这块 boss 场地**的路线：等待区上下两批按这块场地的上下出生点分（官方图不传 rect，行为不变）
+      const area = typeof this.bossAreaOf === 'function' ? this.bossAreaOf(ps) : null;
+      const ownBossRoutes = area && stageBossRoutesOf(this.gd, this.stageId, area.index).length > 0;
+      const bossRect = ownBossRoutes ? bossAreaBattleRect(this.layout, area.index) : null;
+      return previewOf([...g.wave.spawns, ...bountySpawns(this.gd, this.round, g.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side: g.side, mid: typeof this.bossAreaMidOf === 'function' ? this.bossAreaMidOf(ps) : this.layout.mirrorCol / 2 }), ...dev], bossRect);
     }
     if (!this.wave) return [];
     // 地图自己画了路线：等待区只列**这一半场**的那一份，起点/空中标志也跟着那一侧的路线走
@@ -357,7 +361,8 @@ export class MatchViews {
     const bounty = bountySpawns(this.gd, this.round, this.wave, ps.bounties, ps.playerId, { solo: this.isSolo, side, mid });
     // 重构模拟的「试炼首领」（reconTrials.js）：这一回合追加的·重构首领也进预览（与战场同一份列表，见 combat.js _normalOpts）
     const trial = Array.isArray(this.reconTrialSpawns) ? this.reconTrialSpawns : [];
-    return previewOf([...base, ...bounty, ...dev, ...trial]);
+    // 自定义路线的地图：等待区上下两批按这条场地自己的上下出生点分（官方图不传 rect，行为不变）
+    return previewOf([...base, ...bounty, ...dev, ...trial], stageRoutes ? this.layout.battle.normal : null);
   }
 
   /** A 自选 piece's pick (like the sim's UnitInfo.diy): a scout's card composes the operator from it (shared/diy.js). */
@@ -447,6 +452,44 @@ export class MatchViews {
     return { playerId: m.mate.playerId, side: m.side, units: this._prepBoardUnits(m.mate).map((u) => this._onBossHalf(u, m.side, m.mate)) };
   }
 
+  /**
+   * A normal round's prep on a map whose ordinary band is a mirrored pair (dualNormal): the other player of `ps`'s pair
+   * as { mate: PlayerState, side: its half 'L' | 'R' }, else null (a lone player, a boss round, a single-band map).
+   */
+  _normalMateOf(ps) {
+    if (!ps || this.bossWaves || this.fields.length || !this.dualNormal) return null;
+    const g = this.normalGroups().find((grp) => grp.some((x) => x.ps.playerId === ps.playerId));
+    if (!g || g.length < 2) return null;
+    const own = g.find((x) => x.ps.playerId === ps.playerId);
+    const other = g.find((x) => x.ps.playerId !== ps.playerId);
+    return own && other ? { mate: other.ps, side: own.side === 'R' ? 'L' : 'R' } : null;
+  }
+
+  /**
+   * m.private `normalMate`（业主 2026-10-31「同场地的玩家在休整期看不到对方场地的情况」）：普通回合的配对队友，它的
+   * 棋子在它那一半普通带上的 UnitInfo（右半场镜像，与战场落位同一套）—— 自己的休整期视图把它画在旁边，只读。
+   * 单块普通带的图 / boss 回合 / 没有队友时是 null。
+   * @returns {{ playerId: string, side: 'L'|'R', units: object[] } | null}
+   */
+  normalMateView(ps) {
+    const m = ps && ps.alive ? this._normalMateOf(ps) : null;
+    if (!m) return null;
+    return { playerId: m.mate.playerId, side: m.side, units: this._prepBoardUnits(m.mate).map((u) => this._onNormalHalf(u, m.side, m.mate)) };
+  }
+
+  /** A prep UnitInfo placed on the normal band's other half: the map's own board → field mapping (the right half mirrored). */
+  _onNormalHalf(u, side, ps = null) {
+    const L = ps && typeof this.deployLayoutOf === 'function' ? this.deployLayoutOf(ps) : this.layout;
+    const [row, col] = layoutFieldTile(L, side === 'R' ? 'normalR' : 'normalL', u.y, u.x);
+    const v = { ...u, x: col, y: row };
+    // the mirrored right half flips RIGHT ↔ LEFT (as PlayerState's deploy field does); the bench has no stored facing
+    if (u.dir) {
+      const dir = side === 'R' ? (u.dir === 'LEFT' ? 'RIGHT' : u.dir === 'RIGHT' ? 'LEFT' : u.dir) : u.dir;
+      v.dir = dir; v.facing = dir === 'LEFT' ? -1 : 1;
+    }
+    return v;
+  }
+
   /** UnitInfo list of a player's board and hand (prep scouting): board pieces on their tiles, held pieces on the
    *   hand row (row 7) — the scout renders like the own prep bench. */
   prepFieldMeta(ps) {
@@ -509,7 +552,8 @@ export class MatchViews {
     try { nextEnemies = this.nextEnemiesFor(ps); } catch (e) { this.reportError('nextEnemies', e); }
     // the scouted player's effects column (策略 / 机变 / 悬赏 …), display-ready (user playtest #2: while scouting, the
     // right column shows the watched player's effects, not one's own)
-    const meta = { t: 'm.field', fieldId: `n:${ps.playerId}`, kind: 'normal', rect: { ...this.layout.battle.normal }, stageId: this.stageId, units, effects: ps.effectsView(), prep: true, nextEnemies };
+    const meta = { t: 'm.field', fieldId: `n:${ps.playerId}`, kind: 'normal', rect: { ...this.layout.battle.normal }, stageId: this.stageId, units, effects: ps.effectsView(), prep: true, nextEnemies, // 普通带左右两半：这位棋手自己那一半，客户端的笔架摆在他的那一侧（左半场的玩家侦察右半场的人时也如此）
+      side: typeof this.normalSideOf === 'function' ? this.normalSideOf(ps) : null };
     // 最终攻势 / 隐秘核心 prep: the pieces stand on the player's half of the boss field — the scout shows them there (rows
     // − 7, the right half mirrored with RIGHT ↔ LEFT: finalAssault.js bossFieldPlacement, as the own prep view), with the
     // round's leader at its spawn tile (nextEnemies `start`), framed by the boss-field prep camera of the player's side

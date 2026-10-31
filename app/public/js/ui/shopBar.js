@@ -35,6 +35,7 @@ import { itemIconUrl, profIconUrl, uiUrl, skillIconUrl, skillRecordIconUrl, modu
 import { portraitUrlOf, currentAppearanceLookup } from './portraitChain.js';
 import { data } from '../data.js';
 import { hotkeyLabelOf } from './settings.js';
+import { ShopUpFigure } from './shopUpFigure.js';
 // 组件级改写（DESIGN §28.19）：`game.shopCard` 是引擎的具名组件之一（每一张干员卡：商店、晋升奖励、定向投放），
 // 包声明的 wraps 就长在它上面。
 import { modComponent } from './modComponents.js';
@@ -357,7 +358,10 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   if (collapsed) {
     return html`<div class="shopbar-tab" ref=${barRef}>
       <div class="shopbar-tab__funds"><${CoinGlyph} /><b class="num">${funds}</b></div>
-      <button type="button" class="shopbar-tab__btn" onClick=${() => onCollapse(false)}><${Icon} name="chevronLeft" />${t('展开商店')}</button>
+      <span class="shopbar-tab__label">${t('目前资金')}</span>
+      <${ShopUpFigure} />
+      <span class="shopbar-tab__lv" aria-label=${t('调度中心等级 {lv}', { lv: shop.level ?? 1 })}><b class="num">${shop.level ?? 1}</b></span>
+      <button type="button" class="shopbar-tab__btn" onClick=${() => onCollapse(false)} aria-label=${t('展开商店')} title=${t('展开商店')}><${Icon} name="chevronLeft" />${t('展开商店')}</button>
     </div>`;
   }
 

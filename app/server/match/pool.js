@@ -112,6 +112,8 @@ export class SharedPool {
 
   /** Whether a base chess is part of this match's pool (visible, not banned — or brought as 助战). */
   has(baseId) { return this.entries.has(baseId); }
+  /** Whether any chess **of this tier** is still drawable (left > 0) —— 7 级商店每格的那一枚骰子先问这一句。 */
+  hasTier(tier) { return this._eligible({ tier }).length > 0; }
   /** Whether this chess is in the pool because somebody brought it as 助战. */
   isSupport(baseId) { return this.entries.get(baseId)?.support === true; }
   cap(baseId) { return this.entries.get(baseId)?.cap ?? 0; }

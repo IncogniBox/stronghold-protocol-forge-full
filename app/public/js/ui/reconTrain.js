@@ -13,12 +13,13 @@ import { ownDiyRecord } from './gameLogic.js';
 import { data } from '../data.js';
 import { t } from '../../../shared/i18n.js';
 
-/** 弹窗里一枚可选的干员瓦片（选中态按角着色：教官金 / 学员青）。 */
+/** 弹窗里一枚可选的干员瓦片（选中态按角着色：教官金 / 学员青，角上是业主给的学员 / 教官图标）。 */
 function TraineeChip({ m, p, rec, role, onPick }) {
+  const roleLabel = role ? (role === 'mentor' ? t('教官') : t('学员')) : '';
   return html`<button type="button" class="rt-pick ${role ? `is-${role}` : ''}" data-uid=${p.uid} onClick=${() => onPick(p.uid)}>
     <span class="rt-pick__pic"><${Img} src=${chessAvatarUrl(m, rec)} fallback=${html`<${Icon} name="warn" />`} /></span>
     <b class="rt-pick__name">${rec?.name || p.id}</b>
-    ${role ? html`<i class="rt-pick__tag">${role === 'mentor' ? t('教官') : t('学员')}</i>` : null}
+    ${role ? html`<i class="rt-pick__tag" title=${roleLabel} aria-label=${roleLabel}><span class=${`rt-ico rt-ico--${role}`}></span></i>` : null}
   </button>`;
 }
 
@@ -68,12 +69,12 @@ export function ReconTrainModal({ m, pub, priv, gd, round, busy, onClose }) {
       <p class="rt-modal__hint">${t('从场上、待部署区与手牌里各点一名干员：前者成为教官，后者成为学员。学员本局永久叠加教官的技能效果、特质与天赋，攻击 / 防御 / 生命上限 = 学员基础值 + 教官的 50%，并获得盟约【重构】。')}</p>
       <div class="rt-modal__cols">
         <section class="rt-modal__col">
-          <div class="rt-modal__chead"><${MicroLabel} tone="gold">${t('教官 · 点选一名')}<//>
+          <div class="rt-modal__chead"><span class="rt-ico rt-ico--mentor" aria-hidden="true"></span><${MicroLabel} tone="gold">${t('教官 · 点选一名')}<//>
             ${mentorPiece ? html`<b>${recOf(mentorPiece)?.name || ''}</b>` : html`<b class="is-empty">${t('未选择')}</b>`}</div>
           <div class="rt-picks">${pieces.map((p) => html`<${TraineeChip} key=${p.uid} m=${m} p=${p} rec=${recOf(p)} role=${p.uid === mentorUid ? 'mentor' : null} onPick=${pickMentor} />`)}</div>
         </section>
         <section class="rt-modal__col">
-          <div class="rt-modal__chead"><${MicroLabel} tone="ice">${t('学员 · 点选一名')}<//>
+          <div class="rt-modal__chead"><span class="rt-ico rt-ico--trainee" aria-hidden="true"></span><${MicroLabel} tone="ice">${t('学员 · 点选一名')}<//>
             ${traineePiece ? html`<b>${recOf(traineePiece)?.name || ''}</b>` : html`<b class="is-empty">${t('未选择')}</b>`}</div>
           <div class="rt-picks">${pieces.map((p) => html`<${TraineeChip} key=${p.uid} m=${m} p=${p} rec=${recOf(p)} role=${p.uid === traineeUid ? 'trainee' : null} onPick=${pickTrainee} />`)}</div>
         </section>

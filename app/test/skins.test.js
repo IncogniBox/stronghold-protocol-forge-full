@@ -399,6 +399,25 @@ describe('皮肤: the own prep view carries the choice (render/app.js)', () => {
     const line = body.split('\n').find((l) => l.includes('const sig = `${info.defId}'));
     assert.ok(line && line.includes("|${info.skin || ''}"), 'a partner switching mid-match rebuilds the piece');
   });
+
+  test('the Spine model asks the manifest for the unit\'s skin (render/units.js _modelEntry)', () => {
+    // 业主 2026-10-31「干员换上时装后，其他玩家观战时显示的还是默认」：`room.skins` 选了时装，服务端把它放在
+    // `UnitInfo.skin` 上，但模型的解析器（render/units.js `_modelEntry` → assets.js `spineEntry`）只问了
+    // `appearanceSpineFor`（`room.appearance` 那一套）—— 不把 `info.skin` 递下去，`chars[<charId>].skins` 里的
+    // 时装模型永远加载不到，任何人的对局单位（包括自己的）都是默认模型。
+    const src = readFileSync(path.join(ROOT, 'public/js/render/units.js'), 'utf8');
+    const i = src.indexOf('_modelEntry(back = this._wantsBack()) {');
+    assert.ok(i > 0, 'render/units.js still declares _modelEntry');
+    const end = src.indexOf('\n  }', i);
+    assert.ok(end > i, '_modelEntry is not closed at method indentation');
+    const body = src.slice(i, end);
+    assert.ok(body.includes("...(this.info.skin ? { skin: this.info.skin } : {})"), 'the resolved appearance rides along');
+    // 同一个模型别的问法（Back 的待命帧 / 倒下时长）也得问时装，否则换装的模型用的却是默认模型的片段长度
+    for (const line of src.split('\n')) {
+      if (!line.includes('a.spineEntry(') || line.includes('typeof a.spineEntry')) continue;
+      assert.ok(line.includes('this.info.skin'), `every spineEntry call forwards the skin: ${line.trim()}`);
+    }
+  });
 });
 
 describe('皮肤: the client never sends more than the wire accepts', () => {

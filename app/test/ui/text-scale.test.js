@@ -84,7 +84,10 @@ const notScaled = (selector) => NOT_SCALED.some((re) => re.test(selector));
  * ui/fieldHost.js HUD_REM), and the 干员调配 / 统计 screens, whose text is already px-floored (`max(.15rem, 11px)`) and
  * therefore readable on a phone as it is. Scaling them is step 2/3 of the change, not a forgotten line.
  */
-const NOT_SCALED_FILES = [`${CSS}/screens/game-shop.css`, `${CSS}/screens/loadout.css`, `${CSS}/screens/stats.css`];
+const NOT_SCALED_FILES = [`${CSS}/screens/game-shop.css`, `${CSS}/screens/loadout.css`, `${CSS}/screens/stats.css`,
+  // the official skin overlays: rules measured off the event's own 1280 recording (one --p = one px of it), so their
+  // type sits where the footage puts it — a text step would move the skin off the art it covers
+  `${CSS}/screens/official-pages.css`];
 
 /** A font-size value that is neither scaled nor an exclusion: a plain `rem`, or `max(<rem>, …)`. */
 function plainRem(value) {

@@ -41,7 +41,7 @@ test('roundsToBoss: the red strip from three rounds before the final assault, no
 
 test("phasePopupOf: 联防 gets the plate (the official faces) with the banner's words; the others keep the banner", () => {
   const b = { title: 'T', sub: 'S', micro: 'M' };
-  assert.deepEqual(P.phasePopupOf('UNITE', b), { tone: 'orange', faces: true, chev: true, duration: 2600, title: 'T', sub: 'S' });
+  assert.deepEqual(P.phasePopupOf('UNITE', b), { tone: 'orange', faces: true, chev: true, duration: 2630, title: 'T', sub: 'S' });
   for (const ph of ['ROUND_START', 'SP_DRAFT', 'HIDDEN_CORE', 'PREP', 'COMBAT', 'BATTLE_CHECK', 'FINAL_ASSAULT', 'SETTLE']) assert.equal(P.phasePopupOf(ph, b), null, ph);
   assert.equal(P.phasePopupOf('UNITE', null), null);
 });

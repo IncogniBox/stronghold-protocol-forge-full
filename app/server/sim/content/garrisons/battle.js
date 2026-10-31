@@ -43,6 +43,8 @@
 import * as S from '../support/index.js';
 import { mitigate } from '../../damage.js';
 import { frontOf } from '../../dir.js';
+// 重构盟约（`bond_recon`，工坊包 mode-recon）：2 人档「特质额外触发 1 次」的战斗内一半
+import { RECON_BOND_ID } from '../../../../shared/reconModes.js';
 
 const ids = (s) => String(s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const EMPTY = Object.freeze([]);
@@ -226,6 +228,8 @@ function fireGainRaw(battle, it) {
 export function fireGain(battle, it) {
   const added = fireGainRaw(battle, it);
   if (!(added > 0)) return added;
+  // 重构盟约 2 人档的额外触发（没有放大器时也要走，所以放在放大器那道提前 return 之前）
+  reconTraitExtra(battle, it);
   const amps = battle && battle._rbAmplifiers;
   if (!amps || !amps.length) return added;
   const src = it.unit;
@@ -245,6 +249,27 @@ export function fireGain(battle, it) {
     } catch (e) { battle._handlerError?.('garrison:amp', src, e); }
   }
   return added;
+}
+
+/**
+ * 重构盟约 2 人档（业主 2026-10-30，记录 `bb.recon_trait_extra`）：场上 ≥2 名【重构】干员时，**每名【重构】干员每场
+ * 战斗第一次触发特质**额外触发一次。同一次战斗里这名干员的后续触发不再加（`_reconTraitExtra` 记 unit）；换一场战斗
+ * 是新的 battle 对象，自动从 0 起算。非重构对局 / 包缺席（记录里没有这个键）⇒ 什么都不做。
+ */
+function reconTraitExtra(battle, it) {
+  try {
+    const rec = S.bondRecord(RECON_BOND_ID);
+    const n = rec && rec.bb ? Math.floor(S.num(rec.bb.recon_trait_extra, 0)) : 0;
+    if (!(n > 0)) return;
+    const u = it.unit;
+    if (!u || u.ownerId == null) return;
+    if (S.bondTier(battle, u.ownerId, RECON_BOND_ID) < 1) return;
+    if (!S.isMember(battle, u, RECON_BOND_ID)) return;
+    if (!battle._reconTraitExtra) battle._reconTraitExtra = new Set();
+    if (battle._reconTraitExtra.has(u.id)) return;
+    battle._reconTraitExtra.add(u.id);
+    for (let j = 0; j < n; j++) fireGainRaw(battle, it);
+  } catch (e) { battle?._handlerError?.('garrison:recon', it && it.unit, e); }
 }
 
 export const byUnit = (list) => {

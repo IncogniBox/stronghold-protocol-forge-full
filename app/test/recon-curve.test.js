@@ -62,6 +62,18 @@ test('曲线逐回合生效：hp / atk / 战斗时限 / 休整 / SP', () => {
   assert.deepEqual([mode.enemyScale[21].hp, mode.enemyScale[21].atk, mode.rounds[21].levelMaxPlayTime], [20, 5, 240]);
 });
 
+test('调度中心 7 级（只服务重构模拟）：6→7 升价 14，第 7 级 6 张干员 + 2 件装备', () => {
+  const mode = reconModeFor('abyss', MODES);
+  assert.equal(mode.maxShopLevel, 7);
+  assert.deepEqual(mode.upgradePrices, [5, 8, 11, 12, 13, 14]);
+  assert.deepEqual(mode.shopSlots['6'], MODES.mode_multi_abyss.shopSlots['6'], '6 级前的槽位照抄官方');
+  assert.deepEqual(mode.shopSlots['7'], { chess: 6, item: 2 });
+  // 官方 abyss 仍是 6 级 / 5 档升价 / 没有第 7 级
+  assert.equal(MODES.mode_multi_abyss.maxShopLevel, 6);
+  assert.equal(MODES.mode_multi_abyss.upgradePrices.length, 5);
+  assert.equal(MODES.mode_multi_abyss.shopSlots['7'], undefined);
+});
+
 test('官方四档一个字节都不动（曲线只活在重构模式里）', () => {
   const before = JSON.stringify(['mode_multi_funny', 'mode_multi_normal', 'mode_multi_hard', 'mode_multi_abyss'].map((k) => MODES[k]));
   reconModeFor('abyss', MODES);

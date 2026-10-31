@@ -5158,7 +5158,7 @@
    "phase": 2,
    "level": 60,
    "skillLevel": 7,
-   "equipLevel": 0
+   "equipLevel": 3
   },
   "stats": {
    "maxHp": 2216,
@@ -5337,7 +5337,7 @@
    "id": null,
    "name": null,
    "type": null,
-   "level": 0,
+   "level": 3,
    "active": false
   },
   "assets": {
@@ -5633,7 +5633,8 @@
     "overrideTokenKey": null,
     "isDefault": true
    }
-  ]
+  ],
+  "modules": []
  },
  "chess_char_6_22_a": {
   "chessId": "chess_char_6_22_a",

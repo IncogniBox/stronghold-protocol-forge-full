@@ -13,6 +13,302 @@
 
 `APP_VERSION`（`0.19.1`）与 `PROTOCOL_VERSION`（`2`）未动；新增 C2S `room.card` 与 `room.state.seats[].card` 都是**可缺省**的加性字段，老页面不认时不发、不读，既有帧逐字节不变。服务端改动需**重启**生效（无对局时）。
 
+### 模组管理器：全部停用只关面板上的模组 / 六格移出清单（2026-10-31）
+
+- **「全部停用」只关清单里显示出来的模组**：`workshop/mod-manager/ui/manager.js` 的 `LOCKED` 增补六格 ——
+  `dimo-enemies`（特训敌人·涤墨）/ `enemy-ext`（新增敌人扩展）/ `mode-recon`（模式扩展-重构模拟）/
+  `profession-expansion`（职业分支扩展）/ `server-ext`（服务器功能扩展）/ `side-story`（故事集）。
+  它们不再占大厅与房间清单的一行，并始终写进「本房点名的清单」，所以右上「全部停用」只关掉清单里能看见的那些，
+  没有开关、没显示的模组保持启用。包版本 1.3.1。
+- 回归：`node tools/workshop-validate.mjs` 0 error（17 个包，365 条既有 warning）。
+
+### 干员模组等级按阶级归位（2026-10-31）
+
+- **原版模式**（官方阶级表，`docs/DATA.md` §2.2）：1–5 阶普通无模组 / 精锐 **1 级**；6 阶普通无模组 / 精锐 **3 级**。
+  `workshop/ave-mujica/chess.json` 的 4 条精锐（三角初华 / 若叶睦 / 八幡海铃 / 丰川祥子）、`workshop/dossoles/chess.json`
+  的 4 条、`workshop/rimbilliton/chess.json` 的 1 条原来把 `status.equipLevel` 写成 0（面板显示「模组等级 0」，与烘进
+  数值的 1 级模组不一致）；现在按上表补齐，`stats` / `trait` / `talents` / `modules[]` 用本机 `character_table` /
+  `battle_equip_table` 在同一 status 上重算（6 阶精锐从 1 级模组升到 3 级）。颂乐人偶的模组 id 在包里写作
+  `uniequip_002_doloris/timoris/oblivionis`，与客户端 `dolris/tmoris/oblvns` 不同名，重算按名字匹配到真实模组。
+- **重构模拟**（业主 2026-10-31 的阶级表，`workshop/mode-recon/README.md`）：1–3 阶普通无 / 精锐 1 级；4–5 阶
+  普通 1 级 / 精锐 2 级；6–7 阶普通 1 级 / 精锐 3 级。`workshop/mode-recon/chess.json` 的 36 条记录按表归位：
+  4 阶起的普通记录带上默认模组 1 级（`module.active: true`，不列 `modules[]`），精锐的模组从 1/2/3 级统一到该阶级的
+  2 或 3 级并同步重算数值；克莱门莎、归溟幽灵鲨在本机客户端没有模组数据，只写等级（`module.id: null`），数值不动。
+- 包版本：`ave-mujica` 1.8.29、`dossoles` 1.2.1、`rimbilliton` 1.3.1、`mode-recon` 0.19.34。
+- 回归：`workshop-validate` 0 error；`test/workshopOperators.test.js`、`test/chessModules.test.js`、
+  `test/content/avemujica_amoris.test.js`、`test/match/recon-chess.test.js`、`test/match/tier7.test.js` 全通过；
+  `golden matches` 的 10 条快速场景不变（金色战报只用核心 `data/chess.json`）。
+
+### 重构模拟：借用干员技能图标 / 涤墨限定 / 难度名（2026-10-31）
+
+- **8 名借用干员的技能图标**：官方素材清单只为 `assets07` 与 `data/backups.json` 里的干员生成 `skills`，
+  workshop 借用干员没有 ⇒ 干员详情 / 调配面板的技能行是空图标。`tools/local-extract/operators.py` 新增
+  `export_skill_icons`（`spritepack/skill_icons_*.ab` 按 `skill_icon_<iconId>` 找 Sprite；颂乐人偶的 `skchr_am_*`
+  还有去掉 `am_` 的候选名），`extract.py --skill-icons` 把 32 个图标导出到 `public/assets/local/skill/` 并写进
+  `data/local-assets.json` 的 `skills` / `skillsById`（`groups.skill` 32 条，清单 1890 条 / 115 组）。
+  `server/plugins/artReferences.js` 的 `mergeLocalChars` 把本地 `skills` / `skillsById` 并进下发的
+  `/data/assets.json`（官方条目优先，插件素材校验读同一份视图），`skillIconUrl` / `skillRecordIconUrl` 的两级查找
+  （`skills[iconId]` → `skillsById[skillId]`）因此都能命中。
+- **涤墨只出现在重构模拟**：`data/factions.json` 的 `types.DIMO` 改为 `involveRandom: false` + `reconOnly: true`，
+  `generation.typeSlots` 删掉 `DIMO` —— 官方模式的随机类型池回到 6 个官方类型，涤墨不会再抽到；
+  `server/match/waves.js` 的 `factionSetup.forceTypes` 过滤改为「本局可用 &&（在随机池里 || 标了 `reconOnly`）」，
+  重构对局仍每局必选涤墨（`fixedRounds` 的 6 个回合不变）。
+- **重构模拟的难度名**：`shared/constants.js` 新增 `RECON_DIFFICULTY_NAME` / `isReconMode` / `difficultyLabel`；
+  lobby（创建 / 匹配 / 最近同盟）、room（邀请、简报、难度按钮、搜索标签）、hud、matchChrome、result、settle 的
+  难度标签都按房间模式取名 —— `roomMode='recon'`（或 `mode_recon_*`）的 `ABYSS` 显示「重构模拟·终极」，
+  官方「终极模拟」一字不改；`public/i18n/{en,zh-TW,ja,ko}.json` 各补一条词条。
+- 回归：`test/match/waves.test.js`、`test/recon-wave-templates.test.js`、`test/render/plugin-official-art.test.js`
+  （新增本地 `skills` 合并用例）、`test/i18n.test.js` 全通过；`workshop-validate` 0 error。
+  `node tools/i18n.mjs check --all --strict` 仍报 ja / ko / zh-TW 既有的 123 条未翻译（与本轮无关）；
+  `test/data.test.js` 仍是 HEAD 上的 `entries 85 ≠ 67`（`typeSlots` 的断言已通过）。
+
+### 重构模拟：借用干员素材补全 / 时装扩展包 1.4.4（2026-10-31）
+
+- **8 名借用干员的立绘 / 头像 / 模型**：讯使 `char_198_blackd`、深海色 `char_110_deepcl`、空构 `char_4015_spuria`、
+  安哲拉 `char_218_cuttle`、极光 `char_422_aurora`、狮蝎 `char_215_mantic`、白金 `char_204_platnm`、海沫
+  `char_4066_highmo` 在官方素材清单里没有 charId ⇒ 干员卡只剩单字占位。用 `tools/local-extract/operators.py` 从本机
+  客户端（`D:\Hypergryph\…\StreamingAssets\AB\Windows`）导出 80 个文件（头像 / 头像 E2 / 立绘 / 立绘 E2 + 正面 / 背面
+  战斗模型），写进 `public/assets/local/**` 与 `data/local-assets.json` 的 `chars`（`mergeLocalChars` 合并，官方
+  `data/assets.json` 不动）；清单 1858 条 / 114 组 / `chars` 8 个。
+- **特效**：`tools/local-extract/fx.py` 的 `game_data` 现在也合并 `workshop/*/chess.json`（此前只读官方
+  `data/chess.json`，包内新增干员永远不在 `--fx-set used` 的闭包里）；`export_fx` 新增 `--fx-units` 定向抓取
+  （`extract.py --only fx --fx-units <charId,…>`）。本次先定向导出这 8 名干员的攻击 / 技能特效（8 units / 15 skills /
+  186 prefab / 608 条目），再按 `--fx-set used` 全量重跑恢复本机特效集：**637 units / 685 projectiles / 640 skills /
+  5890 prefab / 3950 texture / 1488 mesh，11330 条目，约 245.8 MB**（`data/local-fx.json` + `public/assets/local/fx`）。
+- **时装**：这 8 名干员的 **11 套官方时装**并进 `workshop/skin-supplement`（1.4.4）—— 新航线 / 寒武纪（讯使）、
+  无言狂响 / 音律联觉（讯使）、无形悼挽 / 面纱之下（狮蝎）、极昼捕手（极光）、灿阳朝露 SD05（白金）、搁浅 /
+  及山海（海沫）、绘声绘影（深海色）、暗矢（安哲拉）、慵怠哼唱（空构）；每套含立绘 / 头像 / 正面与背面模型，
+  包内 **176 名 / 275 套**。
+- 回归：`test/workshopSkins.test.js` 18 通过、`workshop-validate` 0 error；`test/assets.test.js` /
+  `test/static-local-art.test.js` / `test/local-extract-operators.test.js` 全通过（88 项）。
+  `test/local-extract-fx.test.js` 仅剩一条**本机数据**断言：`enemy_1582_suisho` / `enemy_1593_musnake` 的挂点
+  不在「脚下 0 点」范围内（客户端 prefab 自己把 Graphic 摆在 −2.2），与本轮 8 名干员无关。
+
+### 重构模拟：已知问题修复（2026-10-31）
+
+- **颂乐人偶·无忧梦呓**（`workshop/ave-mujica/meta/main.mjs`）：按描述改为**等于**当前调度中心等级 ——
+  `ctx.rollChess({ maxTier })` → `ctx.rollChess({ tier })`（此前会随机给到低于等级的干员）；包版本 1.8.28。
+- **休整期看得到同场地队友**：`m.private` 新增 `normalMate`（`server/match/match/views.js normalMateView` /
+  `server/match/player/views.js`），把配对队友的整备区棋子按它那一半带下来（右半镜像、朝向翻转）；
+  `public/js/render/app.js setPrep` 把它画成只读棋子，`public/js/ui/gameLogic/camera.js` 在配对两人都存活时
+  **整条普通带一起取景**（不再推近到只剩自己那半）。
+- **时装在观战里显示为默认模型**：`public/js/render/units.js` 的三处 `spineEntry` 调用（`_modelEntry`、Back 的
+  待命帧判断、倒下时长）都把 `info.skin` 递给清单，Spine 模型与头像现在读同一份 `room.skins` 选择。
+- **右半场玩家的怪物等待区**：`public/js/render/app.js setPenList` 固定按**自己那一半**排布（`side: at`，
+  不再受当前相机种类影响），`enterBattle` 的 prep 分支带上 `meta.side`。
+- **等待区的上下两批**：`server/match/waves.js previewOf(spawns, rect)` 在地图自己画了路线时按**这块场地自己的
+  纵向中线**重判（普通带 rows 34–38 ⇒ 中线 36），my_map 起点 35 = lower / 37 = upper。
+- **炎佑与狼之主落在自己半场**：`server/sim/content/tokens.js` 新增 `halfColSpan`，`airTile` 与
+  `spawnWolfLord` 的满场回退都只取召唤者自己那半边的列（双人 boss 场地不再把召唤物丢到对面）。
+- **浮士德·重构的隐匿**：`workshop/mode-recon/battle/main.mjs installFaust` 在梅菲斯特阵亡时同时
+  `removeBuff(recon:faust_stealth)`，隐匿立刻结束（+攻速照旧保留）；包版本 0.19.33。
+- **设置项**：`public/js/ui/settings.js` 暴露「部署时收起商店」（`prepDeployFold`），可关闭拖拽选干员时
+  拉近视角 / 收起调度中心；i18n 词条沿用既有条目。
+- 回归：`test/content/avemujica_amoris.test.js`（等级等于）、`test/match/recon-routes.test.js`
+  （上下两批 + `normalMate`）、`test/match/recon-bonds.test.js`（炎佑 / 狼之主两侧各落半场）、
+  `test/match/recon-bosses.test.js`（浮士德隐匿）、`test/ui/gameLogic.test.js`（配对取景）、
+  `test/skins.test.js`（模型读 `info.skin`）、`test/ui/issue602-deploy-fold.test.js`（设置行）均通过；
+  `workshop-validate` 0 error。
+
+### 重构模拟：阿戈尔·新增干员（2026-10-31）
+
+- **新增四名干员**（`workshop/mode-recon/chess.json` + `garrisons.json`，只在重构对局生效）：
+  * **克莱门莎**（7 阶，阿戈尔）：每次攻击额外附带「自身生命上限 1% × 【阿戈尔】层数」的元素伤害（精锐 2%），
+    并使敌人的侵蚀损伤冷却减少 25%（精锐 50%）—— 包侧 `RECON_CLEMNT_AEGIR`：`hit` 里追加一笔 `type: 'elemental'`、
+    元素 `erosion` 的伤害，并把敌人 `erosionBurst` 的剩余时间按比例缩短。
+  * **海沫**（4 阶，阿戈尔 / 灵巧）：`<战斗开始时>` 使身后一格（精锐两格）干员获得身前一格干员的特质 ——
+    `RECON_HIGHMO_COPY` 只复制 `IN_BATTLE` 特质，经 `battle.rbAddGarrison`（与莱伊「复制身前干员的战斗中类效果」同一通道）。
+  * **深海色**（1 阶，阿戈尔 / 独行）：`<售出时>` 获得 1 件随机 2 阶装备（精锐 2 件）；触手
+    `token_10001_deepcl_tentac` 随包提供 —— `meta/main.mjs` 的 `DEEPCL_SELL`（`ctx.rollItem({ tier: 2 })` + `ctx.grantItem`）。
+  * **安哲拉**（2 阶，阿戈尔 / 精准）：`<进入休整期时>` 携带的装备 ≥2（精锐 ≥1）时，随机取 2 件（精锐 1 件）
+    **阶级最低**的装备，按 70% / 20% / 10% 替换为阿戈尔重刃 / 突变细胞 / 海沟实验体 —— `CUTTLE_SWAP`：
+    `ctx.destroyItem` → `ctx.grantItem` → `ctx.equipDirect` 装回同一名干员。
+- 新干员的记录由本机缓存按既定练度推导（克莱门莎 `char_4231_clemnt`、海沫 `char_4066_highmo`、深海色 `char_110_deepcl`、
+  安哲拉 `char_218_cuttle`）；克莱门莎借官方自选 kit（`kitRef`），其余三名走 generic kit；检索名沿用
+  `recon_chess_ws_recon_<name>_a/b`，官方模式读不到。
+- 回归：新增 `test/content/recon-aegir.test.js` 3 条（元素伤害与侵蚀冷却 / 精锐数值 / 海沫特质复制）；
+  `test/match/recon-chess.test.js` 补 3 条（真实数据、深海色售出 1 / 2 件 2 阶装备、安哲拉最低阶替换与精锐只换 1 件）；
+  `workshop-validate` 0 error。
+
+### 重构模拟：炎·新增与重构干员（2026-10-30）
+
+- **引擎级 `recon_` 棋子别名**（只在重构对局生效）：`shared/reconModes.js` 新增 `reconChessAlias` / `reconData` ——
+  `recon_<id>` 的棋子记录在 `mode_recon_*` 的 `Match` / `Battle` 里覆盖到正式 id（`chessId` / `baseId` / `goldenId` /
+  `upgradeChessId` 的 `recon_` 前缀一并去掉）；正式 id 原本不存在 ⇒ 就是一名新增干员。官方数据与 `data/*.json`
+  一个字节不动，官方模式读不到这些记录（`GameData.visibleChess` 排除 `recon_*`，客户端 `public/js/data.js` 的
+  `setChessAlias` 与 `screens/game.js` 的 useEffect 同一份口径）。
+- **新增两名干员**（数值按官方原始表按既定练度推导，`workshop/mode-recon/chess.json`）：左乐（6 阶，炎 / 迅捷，
+  `<进入休整期时>` 获得 1 件天师古鼎；精锐再加 1 件炎国短刀 —— 复用 `SERVER_GAIN_EQUIP`，该处理器现已支持逗号分隔的
+  多件装备）、赤刃明霄陈（7 阶，炎，`<战斗中>` 攻击附带「已激活【炎】层数 × 敌方当前生命值」的固定真实伤害；
+  普通 0.001% / 精锐 0.002%，包侧 `battle/main.mjs` 用 `registerGarrisonInstaller` 挂 `hit` 追加一笔 `type: 'true'`
+  的伤害，带 `garrison` 标签防递归）。
+- **五名重构**（只在重构对局覆盖官方记录）：录武官 → 4 阶（炎 4 / 奇迹 2，精锐 8 / 4）、星熊 → 3 阶（自身盟约
+  +6 / 精锐 +12）、诗怀雅 → 2 阶（其余不变）、烛煌 → 4 阶（炎 / 维多利亚 +4 / 精锐 +8）、仇白 → 5 阶（伤害提升
+  0.5% / 精锐 1%）。
+- ⚠️ **覆盖是整条记录**：重构版会盖掉其它工坊包对同一棋子的改动（例如多索雷斯给星熊 / 诗怀雅加的盟约）。
+- **干员调配右下角的「重构模拟干员」开关**（业主 2026-10-30）：开关关闭时 `recon_*` 记录从名单里隐藏（干员持有
+  同理）；打开后 5 名重构干员的卡片与详情换成重构记录（阶级 / 特质 / 数值），并补上 2 名新增干员；技能 / 模组 /
+  潜能 / 练度照常修改（`public/js/ui/loadoutModel.js` 的 `rosterWithRecon`）。条目以 `recon_<id>` 保存，重构对局里
+  `PlayerState.setLoadout` 按 `Match.reconLoadoutAlias` 落到正式棋子 id（官方模式不做别名）。开关状态存在本浏览器
+  （`loadout.recon`）。
+- 回归：新增 `test/match/recon-chess.test.js` 5 条（别名函数、`reconData` 缓存、真实数据、`Match` 两种模式、
+  左乐休整期给装备）与 `test/content/recon-chen3.test.js` 2 条（真 sim 上的追加真实伤害 / 未激活 0 层不追加）；
+  `test/match/tier7.test.js` 的 7 阶比例断言改成「这一格出了 7 阶」（池里有多枚 7 阶时按记录分摊，不再钉死某一条）；
+  `workshop-validate` 0 error。
+
+### 重构模拟：萨尔贡·新增与重构干员（2026-10-30）
+
+- **新增三名干员**（`workshop/mode-recon/chess.json`，记录取自官方表：娜仁图亚 `chess_char_6_05`、森蚺
+  `chess_char_4_05`、狮蝎 `chess_char_1_12` —— 这三格在本机官方数据里是别人，所以照左乐的先例用
+  `recon_chess_ws_recon_<name>_a/b`，不占用其它 id）：
+  * **娜仁图亚**（6 阶，萨尔贡 / 精准 / 远见）：`【萨尔贡】干员技能开启后，携带装备的效果共享至相邻四格
+    （精锐周围八格）【萨尔贡】干员（持续60秒）` —— 包侧 `RECON_NARANT_SHARE`：`skillStart` 时把**开启技能的那名
+    萨尔贡干员自己携带的装备**借给相邻的萨尔贡干员，走引擎的 `lendItemEffects`（同一件重复借只刷新计时器）。
+  * **森蚺**（7 阶，萨尔贡 / 坚守）：`<战斗中>【萨尔贡】干员每开启1次技能，使已激活的【萨尔贡】【坚守】层数+6`，
+    本场开启次数 ≥20 时 `<进入休整期时>` 获得 1 件黄沙罗盘（精锐 2 件）—— 战斗侧 `RECON_ZUMAMA_LAYERS`，休整期
+    由包 `meta/main.mjs` 的 `sargonPrepRewards`。
+  * **狮蝎**（3 阶，萨尔贡 / 独行）：`<战斗开始时>使自身与相邻四格（精锐周围8格）的干员获得隐匿（持续999秒，
+    受到敌人攻击后解除）`；`<进入休整期时>`按上回合战斗结束时持有隐匿的干员数获得最多 2 件（精锐 4 件）盟约之币 ——
+    战斗侧 `RECON_MANTIC_STEALTH`，休整期同一处 `sargonPrepRewards`。
+- **战斗 → 休整期的两个标记**（引擎既有的通用通道）：战斗侧 `setBattleMark(battle, pid, 'reconSargonCasts' |
+  'reconStealthHolders', n)`，休整期 `ctx.mark(key)` 读 —— 每场战斗结束整体替换，所以「上一场没写」就是 0。
+- **三名重构**（只在重构对局覆盖官方记录）：**佩佩 → 5 阶**、**莎草 → 1 阶且购买资金 2**、**至简 → 2 阶**，其余不变。
+- **SDK**：`@battle/mod.js` 补导出 `lendItemEffects`（引擎里本来就为「萨尔贡 × 娜仁图亚」而写，包侧此前拿不到）。
+- 回归：新增 `test/content/recon-sargon.test.js` 5 条（装备共享与 60 s 收回 / 森蚺 +6 层与计数标记 / 森蚺不在场不加层 /
+  隐匿与受击解除及持有数标记 / 休整期发黄沙罗盘与盟约之币）；`test/match/recon-chess.test.js` 补 2 条（真实数据、
+  休整期发奖，含装备自动合并为进阶）；`workshop-validate` 0 error。
+
+### 重构模拟：维多利亚·新增与重构干员（2026-10-30）
+
+- **新增三名干员**（`workshop/mode-recon/chess.json`）：澄闪 `recon_chess_ws_recon_gdglow`（5 阶，维多利亚 / 灵巧 /
+  奥术，记录取自官方表 `chess_char_6_08`；本机官方数据这一格是焰影苇草，所以用新 id）、死芒
+  `recon_chess_ws_recon_necras`（7 阶，维多利亚 / 迅捷 / 独行，取自 `chess_char_6_10`）、傀影
+  `recon_chess_ws_recon_phatom`（4 阶，维多利亚 / 突袭）—— 傀影在两版 chess 数据里都没有记录，由
+  `data/backups.json` 的两份形态（`2/1/4/0` normal / `2/60/7/1` elite，含精英的 `statsBase` / `traitBase` /
+  `talentsBase` / `modules` / `potDown`）组合成完整记录。
+- **技能本体借官方自选 kit**（`kitRef` = 官方 charId，`content/index.js kitOf`）：三名干员在重构对局里的正式 id
+  （`chess_ws_recon_*`）不是官方棋子，按 `baseId` 找 kit 会落到 generic；记录上的 `kitRef`
+  （`char_377_gdglow` / `char_450_necras` / `char_250_phatom`）让浮游单元、召唤物、部署型被动原样照搬。
+- **特质**（`garrisons.json` + 包侧 `battle/main.mjs`，全部 `IN_BATTLE`）：
+  * **澄闪** `RECON_GDGLOW_DRONES`：`已激活的【维多利亚】每 200 层（精锐 100），技能开启时浮游单元 +1` —— 官方 kit
+    的 `onStart` 先建好 `unit.mem.gdDrones`（`skills.js` 先 `onStart`、再 `emit('skillStart')`），这里按实时层数往后
+    追加同形的单元（`{ i, lock, cd, rampId, ramp }`）。
+  * **死芒** `RECON_NECRAS_FIELD`：`自身与召唤物造成的伤害提升【维多利亚】层数×0.5%（精锐×1%）`（`hit` 里按实时
+    层数乘 `dmg.mul`，`source === 死芒` 或 `source.ownerUnit === 死芒`）；`普通攻击与技能攻击范围扩大为场上
+    【维多利亚】干员攻击范围的总和`（`setExtraRange` 合并**绝对格键**，技能的 `targeting.rangeGrid` 也叠加；每
+    0.5 秒与部署 / 阵亡时重算）。
+  * **傀影** `RECON_PHATOM_DEPLOY`：`<部署时>自身已激活的盟约 +4 层（精锐 +8，最多 5 次）`（`gainLayers` +
+    `requireActive`，层加给它自己 `unitBonds` 里已激活的盟约）；`本回合部署次数 ≥3` 时进入休整期获得 1 件（精锐
+    2 件）带随机效果的维式重锤 —— 战斗侧 `setBattleMark('reconPhantomDeploys', 本场非移动部署次数)`，休整期由
+    `meta/main.mjs` 的 `victoriaPrepRewards` 从 `pool_equip_vict`（战栗 / 坚固 / 加速 / 灼燃）当场抽。
+- **召唤物记录随包提供**（`workshop/mode-recon/tokens.json`，官方 `data/tokens.json` 里没有这两条）：
+  悲叹的仆役 `token_10043_necras_skeltn`、镜中虚影 `token_10007_phatom_twin`，从 `data/backups.json` 抄入并**补上
+  重构棋子 id 的形态变体键**（`chess_ws_recon_*` 的 `_a` / `_b`，对应普通 / 精英形态），官方 `char_*@<状态>` 键保留。
+- **风笛 → 3 阶**（只在重构对局覆盖官方记录），其余不变（价格 3、`garrison_50_a/b`、技能与模组逐字照抄）。
+- 回归：新增 `test/content/recon-victoria.test.js` 5 条（浮游单元 +1 与精锐 / 未激活 / 不到阈值；伤害与召唤物同享
+  层数倍率；范围并集含 / 不含非维多利亚；部署加层与 5 次上限及标记；休整期发维式重锤）；`test/match/recon-chess.test.js`
+  补 1 条真实数据与 `Match` 断言（含两条 summon 记录与形态变体）；`workshop-validate` 0 error。
+
+### 重构模拟：谢拉格·新增与重构干员（2026-10-30）
+
+- **新增两名干员**（`workshop/mode-recon/chess.json`）：极光 `recon_chess_ws_recon_aurora`（3 阶，谢拉格 / 不屈，
+  记录取自 `chess_char_3_02`）、讯使 `recon_chess_ws_recon_courier`（1 阶，谢拉格，取自 `chess_char_1_02`）。
+  两枚在本机官方数据里是别人，所以照左乐的先例用新 id；技能走引擎的 generic kit（`kits/ops` 里没有
+  `char_422_aurora` / `char_198_blackd`）。
+- **特质**（`garrisons.json` + 包侧 `battle/main.mjs`）：
+  * **极光** `RECON_AURORA_TRAIT`（`IN_BATTLE`）：`【谢拉格】盟约激活后，每秒获得 1 / 2 技力`（`battle.every(1)` 给
+    自身 `skill.gainSp`，未激活不涨）；`每对敌人造成 3 次寒冷，使已激活的【谢拉格】【不屈】层数 +2 / +4`（
+    `beforeStatus` 数这名玩家对敌人施加的寒冷，满 3 次 `gainLayers` + `requireActive`）。另补 generic kit 认不出的
+    一处：S2 的 `atk_scale`（250% / 300%）只应在**目标已冻结**时生效，未冻结时在 `hit` 里把这一笔倍率退回。
+  * **讯使** `RECON_COURIER_PREP`（`SERVER_PREP_START`）：`<进入休整期时>获得 1 / 2 件简易通讯机（需要激活
+    【谢拉格】盟约）` —— `meta/main.mjs` 的 `kjeragPrepRewards` 在 `onRoundStart` 读场上持有该特质的棋子、按
+    `bb.count` 发 `chess_item_2_06_e`。S2 的两处补数（开启 +3 部署费用、之后每 1.87 秒 +1 共 8 次、持续期防御 +40%）
+    generic kit 认不出 `blackd_s_2[period].*`，挂在包自己的 `install(battle)`（`installCourierSkills`，按去前缀后的
+    正式 id 认人 —— 这条特质不进 `IN_BATTLE` 表，所以不能走 `registerGarrisonInstaller`）。
+  * **雪猎 → 2 阶**（`recon_chess_char_3_11_a/b` 覆盖官方记录），特质沿用官方 `SERVER_ADD_BOND_CHESS_ALL`，
+    `bb.count` 改为 3 / 6（普通 / 精锐获得的所属盟约层数）。
+  * **圣聆初雪 → 7 阶**（`recon_chess_char_6_02_a/b` 覆盖官方记录），保留原本的 `garrison_05_a/b`，**另加**一条
+    `RECON_SBELL2_PIERCE`（`IN_BATTLE`）：`攻击处于寒冷、冻结的敌人时，使自身下次攻击造成的伤害无视敌人 1 / 2 点
+    法术抗性（可叠加 25 层）` —— 在 `damaged` 里叠 `resIgnoreFlat` 层（这一击不受益，下一击起生效；加法 mod 按层数
+    放大，正好等于「无视 N 点」）。
+- 回归：新增 `test/content/recon-kjerag.test.js` 6 条（极光 SP 与寒冷加层、极光 S2 冻结倍率、圣聆初雪法抗穿透、
+  讯使 S2 与休整期通讯机）；`test/match/recon-chess.test.js` 补谢拉格数据断言；`workshop-validate` 0 error。
+
+### 重构模拟：拉特兰·新增与重构干员（2026-10-30）
+
+- **新增两名干员**（`workshop/mode-recon/chess.json`，记录由本机缓存的官方角色表按 6 阶 / 2 阶练度推导，
+  不是从旧赛季记录抄的）：菲亚梅塔 `recon_chess_ws_recon_phenxi`（6 阶，拉特兰 / 独行，`kitRef` =
+  `char_300_phenxi` 借官方自选 kit）、空构 `recon_chess_ws_recon_spuria`（2 阶，拉特兰 / 远见，官方没有她的 kit，
+  技能走引擎 generic kit）。
+- **特质**（`garrisons.json` + 包侧 `battle/main.mjs` / `meta/main.mjs`）：
+  * **菲亚梅塔** `<获得时>获得 1 / 2 件铳骑之威` —— 纯数据（`SERVER_GAIN` + `SERVER_GAIN_EQUIP`，与「迅捷作战粮」
+    同一格）；`<战斗中>【拉特兰】干员消耗弹药 ≥200（精锐 100）发 ⇒ 进入休整期获得 1 件拉特兰桥夹` —— 战斗侧
+    `RECON_PHENXI_AMMO` 数本场 `ammoUsed`（多名【拉特兰】干员的弹药都算）并按玩家写标记 `reconLateranoAmmo`，
+    休整期由 `meta/main.mjs` 的 `lateranoPrepRewards` 对照 `bb.ammo` 发件。
+  * **空构** `<休整期结束时>使身后一名【拉特兰】干员已激活的盟约层数 +2 / +4` —— `SERVER_PREP_FIN` 记录
+    `RECON_KONGGOU_LAYERS`，`meta/main.mjs` 的 `konggouPrepEnd`（`onPrepEnd`）沿棋子朝向取身后一格，目标必须是
+    【拉特兰】成员，只加**它**的已激活盟约（不加空构自己）。
+  * **蕾缪安 → 7 阶**（`recon_chess_char_6_01_a/b` 覆盖官方记录，保留 `garrison_24_a/b`），**另加**
+    `RECON_LEMUEN_FIELD`：技能开启期间射程内敌人速度 -90%（每 0.2 秒补一层 0.3 秒的 `moveMul`，离开射程到期），
+    自身受到的伤害按【拉特兰】层数 ×2% / ×4% 降低（`hit` 里按实时层数改 `dmg.mul`）。
+  * **塑心 → 5 阶**（`recon_chess_char_6_09_a/b` 覆盖官方记录，其余字段照抄）。
+- 回归：新增 `test/content/recon-laterano.test.js` 3 条（弹药计数与休整期桥夹、空构身后加层、蕾缪安减速与减伤）；
+  `test/match/recon-chess.test.js` 补拉特兰数据断言与 `Match` 断言；`workshop-validate` 0 error。
+
+### 重构模拟：卡西米尔·新增与重构干员（2026-10-30）
+
+- **新增两名干员**（`workshop/mode-recon/chess.json`，记录由本机缓存的官方角色表按 5 阶 / 3 阶练度推导）：
+  薇薇安娜 `recon_chess_ws_recon_vvana`（5 阶，卡西米尔 / 灵巧，`kitRef` = `char_4098_vvana` 借官方自选 kit）、
+  白金 `recon_chess_ws_recon_platnm`（3 阶，卡西米尔 / 精准 / 独行，官方没有她的 kit，技能走 generic kit）。
+- **特质**（`garrisons.json` + 包侧 `battle/main.mjs` / `meta/main.mjs`）：
+  * **薇薇安娜** `<进入休整期时>获得 1 / 2 件骑士储蓄罐` —— 纯数据（`SERVER_PREP_START` + `SERVER_GAIN_EQUIP`）；
+    `骑士储蓄罐被装备销毁时，极小概率（3.25%，精锐 7.99%）不获得资金，而是获得 1 件天马之盔或天马之枪` ——
+    引擎的 `dispatchItem` 先跑装备自己的处理器，`global:` 钩子拦不到官方的资金结算，所以包在 `registerMeta`
+    里**覆盖**同一 key 的 `item:chess_item_3_12_e`：场上有（重构对局里的）薇薇安娜且 `rng.chance(bb.prob)` 命中 ⇒
+    改发天马之盔 / 之枪（`ctx.grantItem`，二者各半）；否则逐字复刻官方的 1~6 / 2~12 资金。
+  * **白金** `RECON_PLATNM_ASPD`（`IN_BATTLE`）：`未攻击时每 0.5 秒攻速 +5（最多 20 层），到顶后在场每 5 秒
+    自身已激活盟约 +1；攻击后的 10 秒内逐渐降回 0` —— 一个按干员 id 区分的 buff 每 0.5 秒 `refresh: 'replace'`
+    重写 `aspd` 加法值；最后一次攻击距今 ≤ 10 秒只降不涨（窗口结束后仍未攻击才重新累积），到顶后的盟约 +1 走
+    `gainLayers` + `requireActive`，只加这名干员自己的盟约。
+  * **玛恩纳 → 7 阶**（`recon_chess_char_5_19_a/b` 覆盖官方记录，保留 `garrison_115_a/b`），**另加**
+    `RECON_MLYNAR_FIELD`：`【卡西米尔】干员每攻击 3 次，使全场敌人在 2 秒受到 5 次 799（精锐 1124）点固定伤害` ——
+    `attack` 钩子按玩家计【卡西米尔】成员的攻击次数，满 3 次用 `battle.after` 排 5 发 `sourceless` 真伤
+    （不吃增伤、不吃减伤，走 `type: 'true'`）。
+  * **流星 → 2 阶**（`recon_chess_char_3_17_a/b`，去掉独行盟约，`garrison_137_a` / `garrison_01_a` 与其余字段照抄）。
+  * **远牙 → 3 阶**（`recon_chess_char_4_20_a/b`）：外层 `ADD_BOND` 授予改写数值的 `recon_garrison_fartth_gift_a/b`
+    （沿用官方 `act2autochess_gar_event_onstart` 的 `bond_add_count` / `max_add_count_per_battle` 口径），
+    `获得层数 3 / 6、每场上限 18 / 36`，不改共享的官方 `garrison_108`。
+  * **灰毫 → 1 阶、购买资金 2**（`recon_chess_char_2_18_a/b`）：特质沿用官方 `SERVER_ADD_BOND_ACTIVATED_MOST_LAYER`，
+    `bb.count` 改为 2 / 4。
+- 回归：新增 `test/content/recon-kazimierz.test.js` 3 条（白金的叠层 / 到顶加层 / 攻击后 10 秒归零并重新累积、
+  玛恩纳的 3 次触发与精锐 1124、薇薇安娜的储蓄罐概率改写与「没有她仍是官方资金」）；`test/match/recon-chess.test.js`
+  补卡西米尔数据断言与 `Match` / 官方模式断言；`workshop-validate` 0 error。
+
+### 重构模拟：叙拉古·新增与重构干员（2026-10-31）
+
+- **新增两名干员**（`workshop/mode-recon/chess.json`，记录由本机缓存的官方角色表按 7 阶 / 5 阶练度推导，
+  `kitRef` 借官方自选 kit）：贝洛内 `recon_chess_ws_recon_demetr`（7 阶，叙拉古 / 突袭）、斥罪
+  `recon_chess_ws_recon_judge`（5 阶，叙拉古 / 不屈）。贝洛内 S3 的召唤物「牵绊」（`token_10065_demetr_dmtpos`）
+  随包提供（`tokens.json`，补上重构棋子 id 的形态变体）。
+- **特质**（`garrisons.json` + 包侧 `battle/main.mjs` / `meta/main.mjs`）：
+  * **贝洛内** `<部署时>【叙拉古】【突袭】层数 +10（精锐 +20，最多 4 次）` —— 纯数据（`act2autochess_gar_event_onstart`，
+    每场上限 40 / 80 层）；`<进入休整期时>若伺夜在场且携带叙拉古正装，获得 1 / 2 件叙拉古正装` ——
+    `meta/main.mjs` 的 `siracusaPrepRewards`（两条互惠的条件都在**发放任何装备之前**判定，先发的那件触发的
+    装备合并不会吃掉另一条要看的「携带」）。
+  * **斥罪** `RECON_ZEIZ_GUARD`：`处于隐匿的【叙拉古】干员受到的攻击由自身承担，每次承担攻击使【叙拉古】【不屈】
+    层数 +4 / +8（最多 6 次）` —— 战斗侧在 `hit` 钩子（priority −20，等其它修正算完）取消这一击，再以同一份数值
+    打给斥罪（按她自己的防御 / 法抗结算）；每承担一次 `gainLayers`（`cap` = 4/8 × 6，`capKey` 按干员区分）。
+    另一名斥罪身上的伤害不再转走（`zeizTransfer` 标签 + 目标自带同一条特质即跳过）。
+  * **阿罗玛 → 3 阶**：刷新加层不变（+2 / +4），每回合上限 6 / 12 → **4 / 8**。
+  * **忍冬 → 2 阶**：`<获得时>` 自身盟约层数 6 / 12 → **4 / 8**。
+  * **安洁莉娜 → 4 阶**：每刷 4 / 8 → **3 / 6**，每回合上限 12 / 24 → **9 / 18**。
+  * **伺夜阶级不变**，保留原本三条特质，**另加** `<进入休整期时>若贝洛内在场且携带叙拉古正装，获得 1 / 2 件
+    家族徽章`（同一个 `siracusaPrepRewards`）。
+  * 三条数值改写都做成包内副本（`recon_garrison_aroma / vulpis / aglina`），官方 `garrison_122 / 71 / 147` 不动。
+- 回归：新增 `test/content/recon-siracusa.test.js` 2 条（斥罪的承担 / 6 次上限 / 精锐 +8、不隐匿与不承担）；
+  `test/match/recon-chess.test.js` 补叙拉古数据断言、`Match` / 官方模式断言与「贝洛内 / 伺夜互惠」（含装备合并、
+  只满足一侧、对方不在场不发）；`workshop-validate` 0 error。
+
 ### 名片干员（room.card）
 
 - 新 C2S `room.card { charId }`：`''` 清空，其余必须是 `isCharId`；白名单是**本房内容**的干员（`operatorCharIds`），未知 id 返回 `BAD_MSG`。
@@ -113,6 +409,27 @@
   —— 同一 seed + 同一座位恒得同一个（重放一致），不碰别人的流；`finishPreRecon` 再兜一次（幂等）。补选后的值随公开视图
   `pub.recon.choices` 下发，局内「策略效果」两行与装备拆卸开关看到的就是实际生效的那份。官方对局 `reconChoices` 恒 null，
   一个字节不动。
+- **熔芯负载改为「排除」**（业主 2026-10-30）：预重构屏的熔芯负载仍是三选一，但**选中的那一项被排除**、另外两项
+  **同时生效**（重构协助不变，仍是单选一项生效）。战斗侧 `workshop/mode-recon/battle/main.mjs` 的 `loadActive`
+  按「交的不是它」判定（没交 / 未知 id ⇒ 三条都不生效，与从前的「不指定」同一口径），元数据侧装备负载的 3 回合倒计时
+  （`meta/main.mjs` `syncLoadDoom`）同一条判据。屏上组头加「选中的一项排除」小注、缩小卡片的标记改 ✕，右侧摘要 /
+  队友速览 / 总览 / 局内「策略效果」都改成念**排除的是谁 + 哪两条生效**（`reconProtocolRows` 由一行变两行）。
+  回归：`test/match/recon-battle.test.js` / `recon-mechanics.test.js` / `recon-copy.test.js` 全部按新口径重写，30 pass。
+- **重构模拟调度中心开到 7 级**（业主 2026-10-30）：`shared/reconModes.js` 合成的 `mode_recon_abyss` 把
+  `maxShopLevel` 从 6 提到 **7**，升价补第 6 档 **14**（前五档仍是官方的 5 / 8 / 11 / 12 / 13），第 7 级的
+  `shopSlots` 是 **6 张干员卡 + 2 件装备**（6 级仍是 5 + 1）。升级开出的新格子仍是空的，下一次刷新 / 回合开始才补卡。
+  官方 `mode_multi_*` 一个字节不动（`maxShopLevel` 仍 6）。回归：`test/recon-curve.test.js` 新增一条
+  （7 级 / 升价 / 槽位 / 官方不动）。
+- **干员新增 7 阶（红字，只有 7 级调度中心抽得到）**（业主 2026-10-30）：阶级合法范围 1–6 → **1–7**，7 阶没有官方精灵，
+  阶级 chip 回落到 CSS 八边形 + **红色数字 `VII`**（`--tier-7: #ff3b30`；战场 canvas 贴图的 sprite sheet 同步从 7 列
+  扩到 8 列）。抽卡只在**商店 7 级**时生效：每一格先按 `gd.tier7Share`（缺省 **5%**）摇一次，命中就抽一枚 7 阶；
+  **池里没有 7 阶记录时不摇这枚骰子** ⇒ 官方 / 现有对局的 rng 消耗与结果逐字节不变（官方 `maxShopLevel` 仍 6，
+  `maxTier` 也夹到 6）。库存 `poolCopies[7] = 4`、阶级价 `chessPrice[7] = 5`；7 阶记录（含 normal/golden 成对）
+  由业主后续补，引擎规则已就位。**练度口径（Wiki）**：普通 = 满潜 / 精二 **70 级** / 满信赖 / **7 级技能** /
+  **1 级模组**，精锐 = 满潜 / 精二 **90 级** / 满信赖 / **专精 3（skillLevel 10）** / **3 级模组** —— 落在
+  `shared/chessAuthoring.js` 新导出的 `TIER7`（作者层默认 status、插件导入器的第 7 阶经济表都用这一份；满潜是运行时
+  输入，满信赖已在 Wiki 数值里）。作者层 / 插件记录 / Forge 导入器的 tier 门同步放宽到 **1–7**。回归：新增
+  `test/match/tier7.test.js` 4 条（含练度口径）。
 - **脱手类教官技能的 kit fx 不再退回引擎默认特效**（业主 2026-10-29）：`FX_BINDINGS` / `FX_COVER` 按**技能 id** 登记，
   异客 S3 的雷暴 / 落雷、蕾缪安 S3 的锁定 / 礼炮这些**脱手类**技能的 fx 全由 kit 发出 —— 学员自己的技能 id 查不到它们，
   于是画的是引擎过程化特效（教官本体是对的）。现在 `SkillFx.of` 记下教官技能的 index 侧 id（`U.mentorSkillId`）：
@@ -194,6 +511,39 @@
   1 号座的博士看到 / 用的是**另一位**的整备格（业主 2026-10-29「不是更改之后的部署区」）。镜头现在把 `seat` 一起带出去
   （`prepCamKey` 也带上它）。回归：`test/ui/gameLogic.test.js` +1。
 
+### 重构模拟：【重构】盟约的激活效果（2026-10-30）
+
+- 业主 2026-10-30（`重构盟约新增相关.txt`）：「根据在场的【重构】干员的数量触发效果 —— 2 人：【重构】盟约干员触发
+  特质时额外触发 1 次（每回合 1 次）；4 人：【重构】盟约干员的生命上限与基础攻击力 +50%」。阈值随之从 [1] 改成
+  **[2, 4]**（`activeCount: 2`）——只有 1 名学员时盟约条亮起但不生效。
+- 数据：`workshop/mode-recon/bonds.json` 的 `bond_recon` 记录写 `bb.recon_trait_extra: 1` / `bb.recon_stat_pct: 0.5`，
+  `desc` / `descRaw` / `effectDesc` / `effectDescRaw` 两档同步。
+- **休整期**：`EffectDispatcher.reconTraitExtra`（`server/match/effectsMeta.js`）并进 `_garrisons` /
+  `triggerGarrisons` 的 `repeat` —— 对**任何**特质钩子都多跑一遍（投资人只在获得时翻倍，这里不限）。预算挂在棋子
+  自己的回合计数器（`PlayerState.pieceRoundCount` 的 `recon.trait.extra`），换回合 / 新棋子自动从 0 起算。
+- **战斗内**：`server/sim/content/garrisons/battle.js` 的 `fireGain` 在本次层数真的加上之后，为这名【重构】干员再跑
+  一次 `fireGainRaw`（`battle._reconTraitExtra` 按单位记，「每回合」在战斗里就是每场）。
+- **4 人档**：包 `battle/main.mjs` 的 `installReconBondStats`（`install` 里、与预重构的两条选择无关）按 tier ≥ 2 给
+  `S.bondMembers` 挂 `bond:recon:stat`（`S.directMods({ atk, hp })`，与技能 / 装备的 +X% 相加），干员逐波部署所以认
+  `deploy` 事件；召唤物不吃（与 `bonds/dataDriven.js` 通用盟约同口径）。
+- 回归：`test/match/recon-bonds.test.js` +3（数据面 / 2 人档战斗内 / 2 人档休整期），
+  `test/match/recon-battle.test.js` +1（4 人档 ×1.5、2 人档不加、没装包不加）。
+
+### 重构模拟：会移动的 boss 在双人场地里每位玩家各一只（2026-10-30）
+
+- 业主 2026-10-30：「重构模拟 boss 区域里会移动的 boss 应该有两只（参考原版卢西恩），每位玩家的场地各一只，我每个 boss
+  区域画的地图路线也是两条；不移动的 boss（例如萨米的意志）还是 1 只，两位玩家同时对抗」。
+- 实现：`server/match/match/bossRounds.js` 建战场时，双人场地调 `waves.js mirrorMovingLeaders` —— 把 `tag: 'boss'`
+  的那条出怪复制一份到这块场地的另一条巡逻线上（两条线起点都是首领站位中心、终点回起点）；已有出怪（部位）占用的
+  路线优先，没有空线就不补。**站定首领不复制**：判定在 `waves.js bossStandsStill` —— 引擎自缚巨型首领
+  （`SELF_BOUND`：萨米的意志 / 阿利斯泰尔 / 昆图斯 / 胄 ×2 / 管 ×2）、记录里写 `stillBoss: true` 的
+  （源阶方 / 洛伦茨 / 岁四部位 / 伤心的大锁）、移速 0 的（终始）。
+- **血量仍是一条整队共享池**：两只同步显示同一根血条，全队伤害一起扣同一条池，池空两只同时退场。单人场地、
+  只有一条巡逻线、以及非重构图（没有自绘 boss 路线）都保持原来的一只。
+- 包侧 `installStillBosses` 改为读记录的 `stillBoss: true`（不再手写名单）；**伤心的大锁**加入站定名单（此前它按
+  0.1 移速慢慢爬巡逻线）。`test/match/recon-routes.test.js` +3（判定 / 复制 / sim 共用池）、
+  `test/match/recon-boss-fullmatch.test.js` 按新口径（会移动的 R20 首领每块场地两只，R21 大锁与岁 / 洛伦茨 / 终始仍一只）。
+
 ### 重构模拟：隐秘核心候选分档 / 装备上限 / 盟约层数上限（2026-10-29）
 
 - **隐秘核心（R21）候选按房间人数分档**（`shared/reconModes.js RECON_TRIAL_BOSSES[21]`）：**≤5 人**只有伤心的大锁·重构 /
@@ -211,6 +561,18 @@
   `placementContext` 没有接收 `reconMode`（`ctx.reconMode` 恒 undefined），`equipReplaces` 的 +1 分支永远走不到，第 3 件
   仍弹替换对话框。现在 `placementContext` 收纳 `reconMode` 并放进 ctx。回归：`test/ui/gameLogic.test.js` 新增一条
   （重构 3 格 / 维多利亚 4 格 / 官方 2 格），`test/match/equipCapacity.test.js` +2 条（重构基础 3 格、层数 2000）。
+
+### 重构模拟对公网开放（2026-10-29）
+
+- 「重构模拟」本来是**本地实验模式**：`room.create { mode:'recon' }` 只收回环 / 私网会话（`session.local`），大厅入口也只在
+  `welcome.devAllowed` 为真的会话上画。业主要在云服务器上开放这个模式、收玩家反馈，新增环境变量 **`SP_RECON_PUBLIC`**：
+  设成 `1` / `true` / `yes` / `on` 之后任何会话都能开重构房，`welcome` 多一格 `reconAllowed: true`，客户端
+  `screens/lobby.js` 据此画出「重构模拟」入口（`pickMode` 的兜底同一条）。
+- **不设 / 写错 ⇒ 关闭**（`LOBBY_DEFAULTS.reconPublic = reconPublicFrom(process.env)`，与 `SP_MAX_SEATS` 同一套纯函数解析）：
+  `welcome` 的字段集合一个字都不多，公网握手与从前逐字节相同。「全量模拟」（`room.create.dev`）**不受这一格影响**，
+  仍只认本地端。
+- 回归：新增 `test/lobby-recon-public.test.js`（4 条：解析器、公网会话没开时被点名拒绝且 `welcome` 无该键、开了之后能建房
+  而同会话的 `dev` 仍被拒、本地端照旧）。
 
 ### 召唤物的图标让位给官方特效
 

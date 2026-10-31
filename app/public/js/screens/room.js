@@ -31,7 +31,7 @@ import { enabled as federationEnabled, currentNode } from '../federation.js';
 // Texts go through t() (docs/I18N.md).
 
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MIN_SEATS, MAX_SPECTATORS, ERR_TEXT, RECON } from '../../../shared/constants.js';
+import { DIFFICULTIES, DIFFICULTY_COLORS, difficultyLabel, MIN_SEATS, MAX_SPECTATORS, ERR_TEXT, RECON } from '../../../shared/constants.js';
 // seat counts through the namespace: the live constants (before the 10-seat package) have MAX_SEATS 4 and no DEFAULT_SEATS
 import * as SEAT_CONST from '../../../shared/constants.js';
 import { RANDOM_MODE, RANDOM_MODE_NAME } from '../../../shared/randomMode.js';
@@ -889,7 +889,7 @@ export function RoomScreen() {
   });
   const copy = async (what) => {
     const modeLabel = firepower ? `${RANDOM_MODE_NAME} · ` : '';
-    const ok = await copyText(what === 'code' ? room.code : t('{0} {name}邀请你加入卫戍协议：盟约【{modeLabel}{3}】', { 0: inviteLink(room.code), name: me.name, modeLabel, 3: DIFFICULTY_NAMES[room.difficulty] }));
+    const ok = await copyText(what === 'code' ? room.code : t('{0} {name}邀请你加入卫戍协议：盟约【{modeLabel}{3}】', { 0: inviteLink(room.code), name: me.name, modeLabel, 3: difficultyLabel(room.mode, room.difficulty) }));
     if (ok) toast(what === 'code' ? t('同盟密钥复制成功，可前往邀请队友') : t('已复制邀请链接'), 'success');
     else toast(t('复制失败，请手动复制'), 'warn');
   };
@@ -976,7 +976,7 @@ export function RoomScreen() {
         onPickCard=${cardList.length ? () => setPicking(true) : null} onAddBot=${addBot} onRemoveBot=${removeBot} />`)}
       ${coop ? null : html`<aside class="solo-brief rs-brief brackets">
         <${MicroLabel} tone="mint">BRIEFING<//>
-        <h2>${DIFFICULTY_NAMES[room.difficulty] ? t(DIFFICULTY_NAMES[room.difficulty]) : ''}<span class="num t-dim"> ${info.code}</span></h2>
+        <h2>${difficultyLabel(room.mode, room.difficulty) ? t(difficultyLabel(room.mode, room.difficulty)) : ''}<span class="num t-dim"> ${info.code}</span></h2>
         <p>${info.desc}</p>
         <ul>
           ${info.effects.map((e) => html`<li key=${e}>${e}</li>`)}
@@ -1004,7 +1004,7 @@ export function RoomScreen() {
         <div class="rs-pill">
           ${coop && CAN_QUEUE ? html`<span class="rs-pill__mode" title=${t('精确搜寻：只与选择相同难度的博士组成同盟')}><${Icon} name="search" />${t('精确搜寻')}</span><i class="rs-pill__sep"></i>` : null}
           <button type="button" class="rs-pill__diff" disabled=${!facts.isHost || !!busy} onClick=${() => setPicker(true)}
-            title=${facts.isHost ? t('更改模拟难度') : t('由创建者选择')}><${DifficultyIcon} difficulty=${room.difficulty} />${t(DIFFICULTY_NAMES[room.difficulty])}</button>
+            title=${facts.isHost ? t('更改模拟难度') : t('由创建者选择')}><${DifficultyIcon} difficulty=${room.difficulty} />${t(difficultyLabel(room.mode, room.difficulty))}</button>
           ${room.content?.modeId ? html`<span class="room-mode" data-testid="room-mode">${(room.content.modes || []).find((m) => m.id === room.content.modeId)?.name || room.content.modeId}</span>` : null}
           <button type="button" class=${`rs-pill__gear${opts ? ' is-on' : ''}`} onClick=${() => setOpts((v) => !v)} title=${t('同盟设置')} aria-label=${t('同盟设置')} aria-expanded=${opts ? 'true' : 'false'}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" fill-rule="evenodd" /></svg>
@@ -1037,7 +1037,7 @@ export function RoomScreen() {
       onStop=${facts.isHost ? cancelMatch : null} stopping=${busy === 'cancel-match'}
       note=${facts.isHost ? t('搜寻期间可随时直接开始模拟') : t('创建者正在搜寻队友')}
       tags=${[{ key: 'mode', label: t('精确搜寻'), icon: html`<${Icon} name="search" />` },
-        { key: 'diff', label: t(DIFFICULTY_NAMES[room.difficulty]), color: DIFFICULTY_COLORS[room.difficulty], icon: html`<${DifficultyIcon} difficulty=${room.difficulty} />` }]} />` : null}
+        { key: 'diff', label: t(difficultyLabel(room.mode, room.difficulty)), color: DIFFICULTY_COLORS[room.difficulty], icon: html`<${DifficultyIcon} difficulty=${room.difficulty} />` }]} />` : null}
     ${foundShown ? html`<${FoundPanel} class=${foundLeaving ? 'is-leaving' : ''} seats=${facts.seats.length} text=${t('同盟集结完毕')} />` : null}
     ${picking ? html`<${CardPicker} current=${shownCard} list=${cardList} m=${m} onPick=${pickCard} onClose=${() => setPicking(false)} />` : null}
     ${protoShown ? html`<${RoomProtocol} room=${room} variant=${variant} busy=${busy} onClose=${() => setPicker(false)} onPick=${setDifficulty} leaving=${protoLeaving} />` : null}

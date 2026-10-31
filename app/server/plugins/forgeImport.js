@@ -133,6 +133,7 @@ import { BOUND_TABLES, rememberOfficialBounds, officialBbRange, officialBbMax } 
 import { isStepKey } from '../../shared/plugins/limits.js';
 import { FORGE_SHIM_TEXT, forgeDisplaySlot, forgePanelPage, planForgePanel } from './forgePanels.js';
 import { readForgeBehaviour } from '../../shared/plugins/rules.js';
+import { TIER7 } from '../../shared/chessAuthoring.js';
 
 const APP_RANGE = '>=0.3.0 <0.4.0';
 const DANGER_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -1531,7 +1532,9 @@ export function planForgeImport(files, { id: idOverride, contentId, dataDir, van
   const installedChar = id => typeof id === 'string' && (!!table('units')?.[id] || Object.values(table('chess') ?? {}).some(c => c.charId === id));
   const deriveChar = (id, tier) => {
     if (!deriveLocal) throw new Error('Local official character/skill/range tables unavailable (no dataDir).');
-    const econ = table('config')?.economy?.chessStatus?.[tier];
+    // 7 阶（业主 2026-10-30）：官方经济表没有第 7 档，用 `shared/chessAuthoring.js` 的 TIER7 练度口径
+    // （普通精二 70 / 7 级技能 / 1 级模组，精锐精二 90 / 专精 3 / 3 级模组）。
+    const econ = table('config')?.economy?.chessStatus?.[tier] ?? (tier === 7 ? TIER7.status : null);
     if (!econ) throw new Error(`Missing economy training defaults for tier ${tier}.`);
     officialNeeded.add(id);
     const got = deriveLocal(id, [econ.normal, econ.golden]);
@@ -2095,11 +2098,12 @@ export function planForgeImport(files, { id: idOverride, contentId, dataDir, van
     const profession = professionOf(normal.profession);
     const sub = typeof normal.subProfessionId === 'string' ? normal.subProfessionId.trim().slice(0, 40) : '';
     if (!name || !PROFESSIONS.has(profession) || !sub) { skip(label, '棋子缺名字、职业或分支，没有导入。', 'The chess record lacks a name, profession or branch, so it was not imported.', undefined, 'operators'); return; }
-    const tier = Number.isInteger(normal.tier) && normal.tier >= 1 && normal.tier <= 6 ? normal.tier : 0;
-    if (!tier) { skip(label, '阶级（tier）不在 1–6，没有导入。', 'The tier is not from 1 to 6, so it was not imported.', undefined, 'operators'); return; }
+    const tier = Number.isInteger(normal.tier) && normal.tier >= 1 && normal.tier <= 7 ? normal.tier : 0;
+    if (!tier) { skip(label, '阶级（tier）不在 1–7，没有导入。', 'The tier is not from 1 to 7, so it was not imported.', undefined, 'operators'); return; }
     let rarity = Number.isInteger(normal.rarity) && normal.rarity >= 1 && normal.rarity <= 6 ? normal.rarity : 0;
     if (!rarity) {
-      rarity = tier;
+      // 星级封顶 6★（7 阶没有第 7 颗星）：没有星级时按阶级推，7 阶写成 6★
+      rarity = Math.min(tier, 6);
       assume('chess-rarity', '棋子没有 1–6 的星级时，星级写成它的阶级。', 'A chess record without a rarity from 1 to 6 takes its tier as the rarity.');
     }
     const unit = chessUnit(normal);
@@ -2191,8 +2195,10 @@ export function planForgeImport(files, { id: idOverride, contentId, dataDir, van
     for (const k of ['identifier', 'shopSortId']) if (Number.isInteger(normal[k]) && normal[k] >= 0 && normal[k] <= 1e6) chess[k] = normal[k];
     // what our economy decides, and the pack says otherwise
     const econ = table('config')?.economy;
+    // 7 阶没有官方经济表：用 TIER7 的练度口径判「包里写的 status 与本安装是否一致」
+    const econStatus = econ?.chessStatus?.[tier] ?? (tier === 7 ? TIER7.status : null);
     const statusKeys = ['phase', 'level', 'skillLevel', 'equipLevel'];
-    const statusDiffers = (r, quality) => isObj(r.status) && isObj(econ?.chessStatus?.[tier]?.[quality]) && statusKeys.some((k) => r.status[k] !== econ.chessStatus[tier][quality][k]);
+    const statusDiffers = (r, quality) => isObj(r.status) && isObj(econStatus?.[quality]) && statusKeys.some((k) => r.status[k] !== econStatus[quality][k]);
     if (statusDiffers(normal, 'normal') || statusDiffers(elite, 'golden')) skip(`${label}#status`, `练度（status）由本安装第 ${tier} 阶的经济表决定，包里写的不一样，没有照抄。`, `The level (status) comes from this installation's tier-${tier} economy; the pack's differs and was not copied.`);
     if (Number.isInteger(normal.upgradeNum) && Number.isInteger(econ?.mergeCount) && normal.upgradeNum !== econ.mergeCount) skip(`${label}#upgradeNum`, `合成数由经济表决定（${econ.mergeCount}），包里写的是 ${normal.upgradeNum}，没有照抄。`, `The merge count comes from the economy (${econ.mergeCount}); the pack says ${normal.upgradeNum}, which was not copied.`);
     if (typeof normal.chessType === 'string' && normal.chessType !== 'PRESET') assume('chess-preset', `Forge 的 ${normal.chessType} 棋子写成 PRESET：新棋子自己就是自己的补位，紧凑记录没有别的类型。`, `A Forge ${normal.chessType} piece was written as PRESET: a new piece is its own stand-in, and the compact record has no other type.`);

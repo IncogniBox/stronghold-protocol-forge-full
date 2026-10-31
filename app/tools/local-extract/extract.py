@@ -56,6 +56,7 @@ Usage:
   .venv/bin/python tools/local-extract/extract.py --only scene [--scenes <dir of in-season bundles>]
   .venv/bin/python tools/local-extract/extract.py --only fx [--fx-set sample|used] [--fx-keys k1,k2] [--fx-jobs N]
   .venv/bin/python tools/local-extract/extract.py --only plugin-art [--plugin-root <installation>]
+  .venv/bin/python tools/local-extract/extract.py --skill-icons skchr_blackd_2,skchr_aurora_1
 
 Writes <out>/**.png|.webp|.skel|.atlas and data/local-assets.json (manifest of what was extracted). With --only, just
 the jobs whose output subdir starts with one of the prefixes run, and their groups replace those of the existing
@@ -939,7 +940,13 @@ def main():
                     help='with --only fx: the Phase 1a sample (default) or every effect the mode\'s units reference')
     ap.add_argument('--fx-keys', default='', metavar='K1,K2',
                     help='with --only fx: export only these effect prefabs (comma-separated keys)')
+    ap.add_argument('--fx-units', default='', metavar='C1,C2',
+                    help='with --only fx: crawl only these unit ids (charId / enemy key / token id) instead of the whole set')
     ap.add_argument('--fx-jobs', type=int, default=0, metavar='N', help='with --only fx: worker processes (default up to 8)')
+    ap.add_argument('--skill-icons', default='', metavar='S1,S2',
+                    help='export these skills\' icons from spritepack/skill_icons_*.ab into <out>/skill/ and list them '
+                         'in the manifest (skills / skillsById, the sections data/assets.json uses); the served '
+                         'manifest fills ids the official plan does not carry (workshop chess operators, 0.19.1)')
     ap.add_argument('--webp', action='store_true',
                     help='only write the WebP copies of the board textures and the guide pages from the PNGs already '
                          'under --out and list them in the manifest (needs Pillow, not the client)')
@@ -983,15 +990,19 @@ def main():
     # §36.28: a normal full run is not consent for optional plugin art. --only plugin-art is explicit too.
     art_on = wants_sub(args.only, operators.SUB) and (bool(args.only) or args.plugin_art)
     art_ids = spine_ids(args.only, operators.SUB, operators.references(Path(args.plugin_root))) if art_on else []
-    if not jobs and not enemy_ids and not token_ids and not stage_ids and not fx_on and not art_on:
+    skill_ids = [s.strip() for s in args.skill_icons.split(',') if s.strip()]
+    if not jobs and not enemy_ids and not token_ids and not stage_ids and not fx_on and not art_on and not skill_ids:
         print(f'--only {args.only}: no job matches', file=sys.stderr)
         return 2
     out_root = Path(args.out)
     out_root.mkdir(parents=True, exist_ok=True)
     manifest, total = {}, 0
-    chars = {}
+    chars, skills = {}, {'skills': {}, 'skillsById': {}}
     if art_ids:
         chars, n = operators.export(ab_root, out_root, manifest, print, art_ids)
+        total += n
+    if skill_ids:
+        skills, n = operators.export_skill_icons(ab_root, out_root, manifest, print, skill_ids)
         total += n
     print(f'AB root: {ab_root}')
     for job in jobs:
@@ -1002,30 +1013,35 @@ def main():
         total += export_token_spines(ab_root, out_root, manifest, print, token_ids)
     if fx_on:
         keys = [k.strip().lower() for k in args.fx_keys.split(',') if k.strip()]
+        units = [u.strip() for u in args.fx_units.split(',') if u.strip()]
         total += fx.export_fx(ab_root, out_root, manifest, print, selection=args.fx_set, keys=keys or None,
                               jobs=args.fx_jobs or None, root=ROOT,
-                              fx_manifest=Path(args.manifest).with_name(fx.FX_MANIFEST))
+                              fx_manifest=Path(args.manifest).with_name(fx.FX_MANIFEST), units=units or None)
     if stage_ids:
         total += export_scenes(ab_root, out_root, manifest, print, stage_ids, scene_roots(ab_root, args.scenes))
-    old, old_chars = {}, {}
+    old, old_chars, old_skills = {}, {}, {'skills': {}, 'skillsById': {}}
     if Path(args.manifest).exists():
         try:
             previous = json.loads(Path(args.manifest).read_text(encoding='utf-8'))
             old_chars = previous.get('chars') or {}
+            old_skills = {'skills': previous.get('skills') or {}, 'skillsById': previous.get('skillsById') or {}}
             old = previous.get('groups') or {}
             if not args.only:
                 old = {g: v for g, v in old.items() if g.startswith(('char/', 'spine/char/'))}
         except (OSError, ValueError) as e:
             print(f'warn: previous manifest unreadable ({e}); writing only the re-extracted groups', file=sys.stderr)
-    # Partial sprite packs keep previously extracted pictures, just as merge_chars keeps their URLs.
+    # A run without --skill-icons keeps the icons an earlier run extracted (like merge_chars keeps the pictures).
     for group in manifest:
-        if group.startswith('char/'):
+        if group.startswith(('char/', 'skill')):
             manifest[group] = {**old.get(group, {}), **manifest[group]}
     groups = merge_manifest(old, manifest, ran_groups(old, manifest, fx_on))  # a missing bundle keeps its previous group
     count = sum(len(v) for v in groups.values())
     doc = {'version': 1, 'source': 'local-client', 'count': count, 'groups': groups}
     if old_chars or chars:
         doc['chars'] = operators.merge_chars(old_chars, chars)
+    if old_skills['skills'] or skills['skills']:
+        doc['skills'] = {**old_skills['skills'], **skills['skills']}
+        doc['skillsById'] = {**old_skills['skillsById'], **skills['skillsById']}
     Path(args.manifest).write_text(json.dumps(doc, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print(f'done: {total} files extracted, manifest {args.manifest} ({count} entries)')
     return 0 if total else 1

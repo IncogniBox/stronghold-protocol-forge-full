@@ -1,0 +1,511 @@
+/* Official HUD skin, adapted from the UI package (2026-10-29 snapshot): shop bar (sections 8/10/16/19/20/24/28/29),
+   top bar (11) and the official fonts (25). Image URLs point at our /assets/local/ui/... tree; --p is the package's
+   1280-video pixel (1px there; our 1rem is 66.67px at 1280x720). Loaded last, after game.css / game-shop.css, so it only overrides. */
+/* ===== official-pages.css lines 393-490 (ported) ===== */
+/* ---- 8. 战斗商店栏 (ui/shopBar.js, css/screens/game-shop.css), the [uc]autochessbattle sprites — a different card system
+   from the out-of-match loadout. Measured off 8:00 / 8:05 (1280-wide px; one --p = one px of that frame): the bar flush
+   right 15 from the edge and 10 from the bottom; LEVEL on upgrade_disable 111 × 175 1:1 (its cost on cost_bg_2), the
+   cards on frame_lv1 158 × 175 1:1 every 163 (cost on cost_bg_1 at +57, −3), the funds panel 155 × 185 on bg_close with
+   bg_money 1:1 (its coin mark is in the sprite); 冻结 / 刷新 126 × 55 on frozen_bg_normal / refresh_bg_normal (their
+   shadows outside) with frozen_icon / refresh_icon. OUR choices, not seen in the footage: upgrade_max for a LEVEL card
+   that can be bought (the footage only shows it greyed), frozen_bg_unselect + frozen_icon2 while the shop is frozen, the
+   *_icon_lock pair when a tool is disabled, frame_outline for the selected (armed) card; frame_lv2 / lv3 stay unused (no
+   merge level in this shop). Kept: 卡池剩余 N 张 (small) and the skill icon, which the recorded cards do not carry. ---- */
+.shopbar { --p: min(calc(100vw / 1280), calc(100vh / 720)); scale: none; right: calc(15 * var(--p)); bottom: calc(10 * var(--p)); gap: calc(10 * var(--p)); }
+.shopbar__row { gap: calc(5 * var(--p)); padding: 0; border: 0; background: rgba(10, 12, 12, .55); box-shadow: none; }
+.shopbar__row::before { display: none; }
+.shopbar__cards { gap: calc(5 * var(--p)); }
+.shopbar__item { gap: calc(5 * var(--p)); padding-left: 0; border-left: 0; }
+.shopbar kbd { display: none; }
+
+.shopbar .lvcard { display: block; width: calc(111 * var(--p)); height: calc(175 * var(--p)); padding: 0; clip-path: none; color: #e9eded;
+  background: url(/assets/local/ui/battle/upgrade_max.png) calc(-2.5 * var(--p)) calc(-2.5 * var(--p)) / calc(116 * var(--p)) calc(180 * var(--p)) no-repeat; }
+.shopbar .lvcard.is-disabled { background: url(/assets/local/ui/battle/upgrade_disable.png) 0 0 / 100% 100% no-repeat; color: #b9bdbe; }
+.shopbar .lvcard.is-max { color: #e9eded; }
+.shopbar .lvcard__price { position: absolute; left: calc(31.5 * var(--p)); top: calc(-10 * var(--p)); }
+.shopbar .lvcard__frame { position: absolute; left: 0; right: 0; top: calc(52 * var(--p)); height: calc(52 * var(--p)); width: auto; display: grid; place-items: center; border: 0; background: none; }
+.shopbar .lvcard__frame::before, .shopbar .lvcard__frame::after, .shopbar .lvcard__micro { display: none; }
+.shopbar .lvcard__num { font-size: calc(52 * var(--p)); line-height: 1; color: #fff; text-shadow: 0 calc(2 * var(--p)) calc(4 * var(--p)) rgba(0, 0, 0, .5); }
+.shopbar .lvcard__label { position: absolute; left: 0; right: 0; top: calc(124 * var(--p)); text-align: center; font-size: calc(21 * var(--p)); font-weight: 700; }
+
+/* the cost hexagons: cost_bg_1 (gold, buyable) / cost_bg_2 (grey) with the number on top */
+.shopbar .hex { width: calc(44 * var(--p)); height: calc(35 * var(--p)); clip-path: none; background: url(/assets/local/ui/battle/cost_bg_1.png) 0 0 / 100% 100% no-repeat; filter: none; }
+.shopbar .hex--dark, .shopbar .lvcard.is-disabled .hex { width: calc(48 * var(--p)); height: calc(40 * var(--p)); background-image: url(/assets/local/ui/battle/cost_bg_2.png); }
+.shopbar .hex__fill { inset: 0; width: 100%; height: 100%; clip-path: none; background: none; display: grid; place-items: center; }
+.shopbar .hex__fill::before, .shopbar .hex::before { display: none; }
+.shopbar .hex__value { font-size: calc(22 * var(--p)); font-weight: 700; color: #ffc81e; }
+.shopbar .hex--dark .hex__value, .shopbar .lvcard.is-disabled .hex__value { color: #c9cccd; }
+
+/* the cards */
+.shopbar .scard { flex: none; width: calc(158 * var(--p)); height: calc(175 * var(--p)); overflow: visible; border: 0; border-radius: 0; box-shadow: none; background: none; }
+.shopbar .scard::before { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: url(/assets/local/ui/battle/frame_lv1.png) 0 0 / 100% 100% no-repeat; }
+.shopbar .scard.is-armed::before, .shopbar .scard[aria-pressed="true"]::before { inset: calc(-1 * var(--p)) calc(-1 * var(--p)) calc(-4 * var(--p)); background-image: url(/assets/local/ui/battle/frame_outline.png); }
+.shopbar .scard__bg { inset: calc(2 * var(--p)); background: rgba(46, 50, 51, .9); }
+.shopbar .scard__art { right: calc(2 * var(--p)); top: calc(2 * var(--p)); height: calc(100% - 4 * var(--p)); }
+.shopbar .scard__top { left: calc(7 * var(--p)); right: calc(7 * var(--p)); top: calc(8 * var(--p)); z-index: 4; }
+.shopbar .scard .tier { width: calc(28 * var(--p)); height: calc(28 * var(--p)); }
+.shopbar .scard__price { left: calc(50 * var(--p)); top: calc(-11 * var(--p)); transform: none; filter: none; }
+.shopbar .scard__body { z-index: 2; gap: calc(2 * var(--p)); padding: 0 calc(8 * var(--p)) calc(4 * var(--p)); background: linear-gradient(0deg, rgba(30, 33, 34, .9) 30%, transparent); }
+.shopbar .scard__name { order: 9; text-align: left; height: calc(24 * var(--p)); padding-left: calc(24 * var(--p)); font-size: calc(19 * var(--p)); line-height: calc(24 * var(--p)); color: #eef0f0; }
+.shopbar .scard__stock { order: 1; font-size: calc(11 * var(--p)); opacity: .8; }
+.shopbar .scard__bonds { order: 2; font-size: calc(16 * var(--p)); }
+.shopbar .scard__class { order: 3; height: 0; overflow: visible; }
+.shopbar .scard__class > span { display: none; }
+.shopbar .scard__prof { position: absolute; left: calc(8 * var(--p)); bottom: calc(7 * var(--p)); width: calc(19 * var(--p)); height: calc(19 * var(--p)); }
+.shopbar .scard--sold { border: 0; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .05) 0 calc(2 * var(--p)), transparent 0 calc(7 * var(--p))), rgba(26, 28, 29, .9); }
+.shopbar .scard--sold::before { display: none; }
+
+/* the funds panel */
+.shopbar .funds { position: relative; width: calc(155 * var(--p)); height: calc(185 * var(--p)); margin-top: calc(-10 * var(--p)); padding: 0; justify-content: flex-start; gap: 0; border: 0; }
+.shopbar .funds::before { content: ''; position: absolute; left: calc(-13 * var(--p)); top: calc(-6 * var(--p)); width: calc(181 * var(--p)); height: calc(197 * var(--p)); pointer-events: none;
+  background: url(/assets/local/ui/battle/bg_close.png) 0 0 / 100% 100% no-repeat; }
+.shopbar .funds > * { position: relative; }
+.shopbar .funds__hex { width: calc(110 * var(--p)); height: calc(37 * var(--p)); margin-top: calc(1 * var(--p)); padding: 0; display: flex; flex-direction: row; align-items: center; justify-content: center;
+  clip-path: none; background: url(/assets/local/ui/battle/bg_money.png) 0 0 / 100% 100% no-repeat; box-shadow: none; }
+.shopbar .funds__hex::before, .shopbar .funds__coin { display: none; }
+.shopbar .funds__num { position: absolute; left: calc(48 * var(--p)); right: calc(9 * var(--p)); top: 0; bottom: 0;
+  display: grid; place-items: center; margin: 0; translate: 0 calc(-2 * var(--p)); font-size: calc(28 * var(--p));
+  line-height: 1; letter-spacing: 0; font-variant-numeric: normal; color: #ffc81e; }
+.shopbar .funds__label { margin-top: calc(12 * var(--p)); font-size: calc(19 * var(--p)); color: #f2f4f4; letter-spacing: 0; }
+.shopbar .funds__collapse { margin-top: calc(40 * var(--p)); flex-direction: column; gap: calc(4 * var(--p)); padding: 0 0 calc(8 * var(--p)); border: 0; border-bottom: calc(2 * var(--p)) solid rgba(62, 230, 192, .35);
+  font-size: calc(24 * var(--p)); font-weight: 700; color: #3ee6c0; }
+.shopbar .funds__collapse .icon { width: calc(30 * var(--p)); height: calc(30 * var(--p)); }
+
+/* 冻结 / 刷新 */
+.shopbar__tools { gap: calc(6 * var(--p)) calc(9 * var(--p)); margin-right: calc(-6 * var(--p)); }
+.shopbar .toolbtn { position: relative; width: calc(126 * var(--p)); height: calc(55 * var(--p)); padding: 0 0 0 calc(18 * var(--p)); gap: calc(14 * var(--p)); justify-content: flex-start;
+  border: 0; border-radius: 0; box-shadow: none; background: none; color: #15191b; font-size: calc(22 * var(--p)); font-weight: 700; }
+/* (doubled classes: devices.css gives touch screens a ::before hit area on .toolbtn at (0,3,1); the button is 126 × 55 anyway) */
+.shopbar .shopbar__tools .toolbtn.toolbtn::before { content: ''; position: absolute; z-index: 0; transform: none; left: calc(-11 * var(--p)); top: calc(-8 * var(--p)); width: calc(149 * var(--p)); height: calc(77 * var(--p)); pointer-events: none;
+  background: url(/assets/local/ui/battle/frozen_bg_normal.png) 0 0 / 100% 100% no-repeat; }
+.shopbar .shopbar__tools .toolbtn.toolbtn--amber::before { left: calc(-13 * var(--p)); top: calc(-9 * var(--p)); width: calc(152 * var(--p)); height: calc(80 * var(--p)); background-image: url(/assets/local/ui/battle/refresh_bg_normal.png); }
+.shopbar .shopbar__tools .toolbtn.toolbtn--ice.is-on::before { left: calc(-13 * var(--p)); top: calc(-9 * var(--p)); width: calc(152 * var(--p)); height: calc(80 * var(--p)); background-image: url(/assets/local/ui/battle/frozen_bg_unselect.png); }
+.shopbar .toolbtn > * { position: relative; }
+.shopbar .toolbtn:hover:not(:disabled) { background: none; box-shadow: none; filter: brightness(1.06); }
+.shopbar .toolbtn:disabled { filter: grayscale(.9) brightness(.7); color: #15191b; }
+.shopbar .toolbtn__img { width: calc(32 * var(--p)); height: calc(32 * var(--p)); content: url(/assets/local/ui/battle/frozen_icon.png); }
+.shopbar .toolbtn--ice.is-on .toolbtn__img { content: url(/assets/local/ui/battle/frozen_icon2.png); }
+.shopbar .toolbtn--amber .toolbtn__img { content: url(/assets/local/ui/battle/refresh_icon.png); }
+.shopbar .toolbtn--ice:disabled .toolbtn__img { content: url(/assets/local/ui/battle/frozen_icon_lock.png); }
+.shopbar .toolbtn--amber:disabled .toolbtn__img { content: url(/assets/local/ui/battle/refresh_icon_lock.png); }
+.shopbar .toolbtn .hex { position: absolute; left: calc(46 * var(--p)); top: calc(-19 * var(--p)); }
+/* widths over hub-official.css's 8:00 rule (round 4: the bar must end right of the bottom-left tools, ~345 px): 1:1 sprites
+   while up to three operators fit (the recording's 8:00 — LEVEL at x 500); four operators 150 wide, five 104 (that
+   rule's old size), so the bar never covers 统计 / 设置 / 全屏 / 录制 — the recording at 8:05 reaches x 10 with six
+   cards, where this client keeps its tools: a kept difference */
+.gm__hud .shopbar .shopbar__row .scard { width: calc(158 * var(--p)); }
+.gm__hud .shopbar .shopbar__row .lvcard { width: calc(111 * var(--p)); }
+.gm__hud .shopbar .shopbar__row .funds { width: calc(155 * var(--p)); }
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(4)) .shopbar__row .scard { width: calc(150 * var(--p)); }
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(5)) .shopbar__row .scard { width: calc(104 * var(--p)); }
+.shopbar .scard__ice { left: auto; right: calc(8 * var(--p)); bottom: auto; top: calc(42 * var(--p)); transform: none; width: calc(24 * var(--p)); height: calc(24 * var(--p)); }
+
+
+/* ===== official-pages.css lines 847-898 (ported) ===== */
+.gm__hud .shopbar { bottom: calc(8 * var(--p)); }
+.shopbar .lvcard { order: -2; }
+.shopbar .shopbar__item { order: -1; }
+.gm__hud .shopbar .shopbar__row .scard,
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(4)) .shopbar__row .scard,
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(5)) .shopbar__row .scard { width: calc(158 * var(--p)); }
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(4)) .shopbar__row .lvcard,
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(5)) .shopbar__row .lvcard { width: calc(111 * var(--p)); }
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(4)) .shopbar__row .funds,
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(5)) .shopbar__row .funds { width: calc(155 * var(--p)); }
+/* six operators and the item (only past LEVEL 5, not in the reference): the cards shrink to keep the bar on screen — OUR */
+.gm__hud .shopbar:has(.shopbar__cards > :nth-child(6)) .shopbar__row .scard { width: calc(141 * var(--p)); }
+.shopbar__row, .shopbar__cards, .shopbar__item { background: none; gap: calc(6 * var(--p)); }
+
+/* the empty slot */
+.shopbar .scard--sold, .shopbar .scard--sold.scard--empty { border: 0; background: url(/assets/local/ui/battle/bg_empty.png) calc(.5 * var(--p)) calc(1 * var(--p)) / calc(157 * var(--p)) calc(173 * var(--p)) no-repeat; }
+.shopbar .scard--sold .scard__soldtxt { display: none; }
+
+/* a card that cannot be bought */
+.shopbar .scard.is-disabled .scard__art, .shopbar .scard.is-disabled .scard__itemart { filter: grayscale(.8) brightness(1.05) contrast(.7); opacity: .55; }
+.shopbar .scard.is-disabled .scard__bg { background: rgba(70, 76, 77, .85); }
+.shopbar .scard.is-disabled .scard__body { color: #9ea4a5; background: linear-gradient(0deg, rgba(70, 76, 77, .8) 30%, transparent); }
+.shopbar .scard.is-disabled .scard__name { color: #c4c9ca; }
+.shopbar .scard.is-disabled .scard__water { filter: grayscale(1); opacity: .25; }
+
+/* frozen (OUR placement) */
+.shopbar .scard.is-frozen::after { inset: calc(2 * var(--p)) calc(2 * var(--p)) auto; height: calc(68 * var(--p)); z-index: 3; box-shadow: none; opacity: .8;
+  background: url(/assets/local/ui/battle/ice_matte.png) 0 0 / 100% 100% no-repeat; }
+.shopbar .scard__ice { display: none; }
+
+/* the folded shop (OUR binding: bg_open 1 is the panel's other state) */
+.gm__hud > .shopbar-tab { --p: min(calc(100vw / 1280), calc(100vh / 720)); right: calc(15 * var(--p)); bottom: calc(8 * var(--p)); width: calc(155 * var(--p)); height: calc(175 * var(--p));
+  flex-direction: column; justify-content: flex-start; gap: 0; padding: 0; border: 0; background: none; }
+.gm__hud > .shopbar-tab::before { content: ''; position: absolute; left: calc(-14 * var(--p)); top: calc(-10 * var(--p)); width: calc(182 * var(--p)); height: calc(195 * var(--p)); pointer-events: none;
+  background: url(/assets/local/ui/battle/bg_open_1.png) 0 0 / 100% 100% no-repeat; }
+.gm__hud > .shopbar-tab::after { content: ''; position: absolute; z-index: -1; left: calc(-6 * var(--p)); top: calc(2 * var(--p)); width: calc(167 * var(--p)); height: calc(183 * var(--p)); pointer-events: none;
+  background: url(/assets/local/ui/battle/bg_open_shadow.png) 0 0 / 100% 100% no-repeat; }
+.shopbar-tab .shopbar-tab__funds { position: relative; width: calc(110 * var(--p)); height: calc(37 * var(--p)); margin-top: calc(-9 * var(--p)); padding: 0 calc(22 * var(--p)) 0 0; justify-content: flex-end;
+  background: url(/assets/local/ui/battle/bg_money.png) 0 0 / 100% 100% no-repeat; }
+.shopbar-tab .shopbar-tab__funds .coin-glyph { display: none; }
+.shopbar-tab .shopbar-tab__funds b { position: absolute; left: calc(48 * var(--p)); right: calc(9 * var(--p)); top: 0; bottom: 0;
+  display: grid; place-items: center; margin: 0; translate: 0 calc(-2 * var(--p)); font-family: 'ArkWide', var(--font-num); font-size: calc(27 * var(--p));
+  font-weight: 500; line-height: 1; letter-spacing: 0; font-variant-numeric: normal; color: #ffc81e; }
+.shopbar-tab .shopbar-tab__label { position: relative; margin-top: calc(9 * var(--p)); font-size: calc(19 * var(--p)); color: #f2f4f4; }
+.shopbar-tab .shopbar-tab__btn { position: absolute; left: calc(25.5 * var(--p)); top: calc(78 * var(--p)); width: calc(104 * var(--p)); height: calc(40 * var(--p)); padding: 0; justify-content: center; gap: calc(6 * var(--p));
+  background: url(/assets/local/ui/battle/btn_open.png) 0 0 / 100% 100% no-repeat; color: #3ee6c0; font-size: calc(20 * var(--p)); letter-spacing: .04em; }
+.shopbar-tab .shopbar-tab__btn::before { content: ''; width: calc(26 * var(--p)); height: calc(12 * var(--p)); background: url(/assets/local/ui/battle/btn_close.png) 0 0 / 100% 100% no-repeat; }
+.shopbar-tab .shopbar-tab__btn .icon { display: none; }
+
+/* the corner tools above the bar's left end while the shop is open */
+.gm:not(.is-collapsed) .gm__corner { bottom: calc(200 * var(--p, .667px)); --p: min(calc(100vw / 1280), calc(100vh / 720)); }
+
+
+/* ===== official-pages.css lines 899-983 (ported) ===== */
+/* ---- 11. 战斗顶栏 (五项·2, 2026-10-28; ui/hud.js TopBar / PhaseCapsule / ReadyToggle, ui/bondStrip.js), the user's original
+   battle screenshot scaled to 1280 wide (1rem = 66.67 px there, one sprite px = .015rem): the phase capsule on its phase's
+   own plate 160 × 48 1:1 — bg_rest (休整 / 机变, icon_rest), bg_battle (作战, icon_battle), bg_coop (联防, icon_coop),
+   bg_boss (领袖, icon_boss) — centred on the screen, the words in the plate's colour. 2026-10-29 correction:
+   frame_mid_normal is nine-sliced to 183 × 50 (wider for a boss), joined to 28 px side rails and native frame_left
+   end caps. The round number on bg_round; both 🔍 buttons in bg_check_btn's native 81 × 44 brackets; frame_deco_box
+   behind 回合 N and the LP. The bond row: discs 54 wide every 80 (was 35 / 49), its top at y 62;
+   an inactive bond's disc on bond_icon_bg (OUR binding — the screenshot's grey discs could be either), an active one
+   keeps the mint fill; the open bond in `frame`'s brackets. 准备就绪: ready_frame while not ready, icon_ready once ready (OUR binding). Not restored: the
+   countdown was subsequently restored with the extracted bitmap font in section 26.
+   frame_mid_boss (56 × 28) is not placed: its node in the boss bar is unknown. ---- */
+.gtop__band { top: -.135rem; }
+/* Our TopBar is one bar (.gtop__center) instead of the package's two halves: the same continuous thin frame is drawn on
+   it — the native frame_left end caps at both ends (the right one mirrored) with 2.5 px top / bottom lines between. */
+.gtop__center { translate: .02rem 0; height: .75rem; border: 0; border-radius: 0; box-shadow: none;
+  background:
+    linear-gradient(rgba(143, 150, 150, .48), rgba(143, 150, 150, .48)) .09rem top / calc(100% - .18rem) .025rem no-repeat,
+    linear-gradient(rgba(143, 150, 150, .48), rgba(143, 150, 150, .48)) .09rem bottom / calc(100% - .18rem) .025rem no-repeat,
+    linear-gradient(180deg, rgba(9, 12, 12, .62), rgba(9, 12, 12, .4)); }
+.gtop__center::before, .gtop__center::after { content: ''; position: absolute; top: 0; bottom: 0; width: .105rem; pointer-events: none;
+  background: url(/assets/local/ui/battle/frame_left.png) left center / .105rem 100% no-repeat; }
+.gtop__center::before { left: 0; }
+/* also replaces .brackets::after (the mint corner bracket) — same element, drawn as the mirrored end cap */
+.gtop__center::after { right: 0; left: auto; inset: 0 0 0 auto; transform: scaleX(-1); }
+/* the event's deco box behind 回合 N (its own sprite, stretched to 1.8rem) */
+.gtop__center .roundbox { position: relative; padding: 0 .12rem; }
+.gtop__center .roundbox::before { content: ''; position: absolute; inset: -.05rem -.12rem; z-index: -1; pointer-events: none;
+  background: url(/assets/local/ui/battle/frame_deco_box.png) center / 1.8rem .165rem no-repeat,
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, .16) 0 1px, transparent 1px 3px), rgba(9, 12, 12, .54); }
+.roundbox__num { min-width: .6rem; height: .3rem; padding: 0 .08rem; border-radius: 0; font-size: .27rem;
+  background: url(/assets/local/ui/battle/bg_round.png) 0 0 / 100% 100% no-repeat; color: #16191a; }
+
+/* the plate: frame_mid_normal around the capsule (the drawn bevelled plate goes) */
+.gtop__cap { padding: .06rem .12rem; }
+.gtop__cap::before { inset: auto; left: 50%; top: 50%; width: calc(100% + .105rem); height: .75rem; margin: -.375rem 0 0; translate: -50% 0; clip-path: none;
+  /* Preserve the corner slopes; stretching the 34 px image as one bitmap pulls its tails away
+     from the side rails. Only its middle grows to the plate's 50 px outside height. */
+  background: none; border-style: solid; border-color: transparent; border-width: .225rem .45rem .15rem;
+  border-image: url(/assets/local/ui/battle/frame_mid_normal.png) 15 30 10 30 fill / 1 / 0 stretch; }
+.gtop__cap::after { display: none; }
+.gtop__cap > .capfx { inset: calc(.06rem + 4px) calc(.12rem + 6px); }
+
+/* the capsule on its phase's plate */
+.gtop .capsule { --cap-plate: url(/assets/local/ui/battle/bg_rest.png); --cap-ink: #4fe0bd;
+  width: 2.4rem; min-width: 2.4rem; height: .72rem; padding: 0 .22rem 0 .3rem; gap: .12rem; justify-content: center; border: 0; border-radius: 0; box-shadow: none;
+  background: var(--cap-plate) 0 0 / 100% 100% no-repeat; }
+.gtop .capsule--combat { --cap-plate: url(/assets/local/ui/battle/bg_battle.png); --cap-ink: #ffb21e; }
+.gtop .capsule--unite { --cap-plate: url(/assets/local/ui/battle/bg_coop.png); --cap-ink: #ff7a1e; }
+.gtop .capsule--boss { --cap-plate: url(/assets/local/ui/battle/bg_boss.png); --cap-ink: #ff4f4f; width: auto; min-width: 4.2rem; }
+.gtop .capsule__label { font-size: .28rem; letter-spacing: .06em; color: var(--cap-ink); }
+.gtop .capsule__kills { color: color-mix(in srgb, var(--cap-ink) 70%, #fff); }
+.gtop .capsule__kills b { color: var(--cap-ink); }
+.gtop .capsule--prep { justify-content: flex-start; padding-left: .27rem; gap: .12rem; overflow: hidden; }
+/* Owner's 10-29 close-up: the figure occupies the left of the pill (36 × 54), its lower
+   stem hidden at the inner edge; do not shrink the whole figure to fit its transparent cell. */
+.gtop .capsule--prep .capsule__icon { align-self: flex-start; width: .54rem; height: .81rem; margin-top: .045rem; clip-path: inset(0 0 .21rem 0); }
+.gtop .capsule--prep .capsule__label { font-size: .267rem; }
+.gtop .capsule--combat .capsule__icon { width: .465rem; height: .555rem; }
+.gtop .capsule--boss .capsule__icon { width: .5rem; height: .55rem; }
+
+/* the 🔍 buttons: the package wraps its CheckBtn in .gtop__frame and paints bg_check_btn's 81 × 44 brackets BEHIND the
+   glyph. Ours paints the official glyph sprite (btn_check_player_normal / btn_check_enemy — plate and glyph in one
+   picture) AS the whole button (game.css .gtop__iconbtn.has-sprite), so painting the bracket would erase the glyph; the
+   buttons keep the base rule (61 × 29 art at .967rem × .46rem), which is the same official art. */
+
+
+/* the bond row */
+.gm .gm__bonds { top: .93rem; }
+/* the event ticker (博士将调度中心等级提升… — 1rem down, under the old row) moves under the raised row so it never covers it */
+.gm .ticker { top: 2.12rem; }
+.gm__bonds .bslot { width: 1.2rem; }
+.gm__bonds .bslot .bond { --disc: .81rem; }
+.gm__bonds .bond:not(.is-active) .bond__core { background: url(/assets/local/ui/battle/bond_icon_bg.png) center / 118% 118% no-repeat; box-shadow: none; }
+.gm__bonds .bond__name { font-size: .2rem; }
+.gm__bonds .bond__count { font-size: .25rem; bottom: calc(var(--disc) * -.04); }
+
+/* the open bond: `frame` (97 × 85, the mint brackets) around its disc, as the screenshot's 远见; its popup on the screenshot's
+   translucent grey (its place stays gameLogic bondPopupPlace's — the screenshot drops it centred under the row, 640 wide:
+   kept apart so it never covers an open detail card or the selected unit, user playtest #2) */
+.gm__bonds .bslot.is-open::before { content: ''; position: absolute; z-index: 1; left: 50%; top: -.08rem; width: 1.16rem; height: 1.02rem; margin-left: -.58rem; pointer-events: none;
+  background: url(/assets/local/ui/battle/frame.png) 0 0 / 100% 100% no-repeat; }
+.gm__bonds .bslot.is-open .bond__core { box-shadow: none; }
+.bpop { background: rgba(34, 38, 40, .93); }
+.bpop.is-over { background: rgb(34, 38, 40); }
+
+/* 准备就绪 */
+.gtop .readybtn__box { width: .42rem; height: .36rem; border: 0; background: url(/assets/local/ui/battle/ready_frame.png) 0 0 / 100% 100% no-repeat; }
+.gtop .readybtn.is-on .readybtn__box { width: .48rem; height: .48rem; margin: -.06rem -.03rem; background: url(/assets/local/ui/battle/icon_ready.png) 0 0 / 100% 100% no-repeat; }
+.gtop .readybtn.is-on .readybtn__box .icon { display: none; }
+.gtop .readybtn:disabled .readybtn__box { opacity: .5; }
+
+
+/* ===== official-pages.css lines 1123-1133 (ported) ===== */
+/* ---- 16. 商店卡面 (round 9) against the user's original card (梅, 06 screenshot at 1280): 卡池剩余 off the face (now on the
+   card's hover tip, ui/shopBar.js); the bonds one a line, icon 18 + name 16 in the original's light grey, stacked over the
+   name bar; the name bar's name regular weight, left after the class icon. ---- */
+.shopbar .scard__bonds { flex-direction: column; flex-wrap: nowrap; gap: calc(1 * var(--p)); }
+.shopbar .scard__bond { font-size: calc(16 * var(--p)); line-height: calc(20 * var(--p)); gap: calc(4 * var(--p)); color: #dfe3e3; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); white-space: nowrap; }
+.shopbar .scard__bond .bglyph { width: calc(18 * var(--p)); height: calc(18 * var(--p)); }
+.shopbar .scard__bond .bglyph img { filter: brightness(0) invert(.88); }
+.shopbar .scard__name { font-size: calc(17 * var(--p)); font-weight: 500; letter-spacing: .02em; }
+.shopbar .scard__prof { opacity: 1; filter: brightness(0) invert(.92); }
+.shopbar .scard.is-disabled .scard__bond { color: #b9bfc0; }
+
+
+/* ===== official-pages.css lines 1206-1245 (ported) ===== */
+/* ---- 19. 收起的商店 (round 11) against the recording's 08:27–08:29 frames (the 08:28 one at 1280 × 720): the panel on
+   bg_close (the shelves / robot drawing — bg_open 1 with the rook is the panel's other state, 08:32), bg_money and 当前资金
+   as before; level__v2 (80 × 76, LEVEL in the art) hanging over the panel's left edge at 1084.5 / 616 with the level number
+   in mint; the event's trap_1096_acshopup skeleton (ui/shopUpFigure.js) on a canvas over the panel's inside, cut by its
+   lower edge. No 展开 caption in the frame: the whole panel is the (invisible) expand button. The frame's yellow pointing-
+   hand bubble (1164 / 607, 35 × 39) is another layer the packs do not have: not drawn. ---- */
+.gm__hud > .shopbar-tab::before { left: calc(-14 * var(--p)); top: calc(-11 * var(--p)); width: calc(181 * var(--p)); height: calc(197 * var(--p));
+  background-image: url(/assets/local/ui/battle/bg_close.png); }
+.shopbar-tab .shopbar-tab__funds, .shopbar-tab .shopbar-tab__label { z-index: 2; }
+.shopbar-tab .shopbar-tab__figure { position: absolute; z-index: 1; left: 0; top: 0; width: calc(162 * var(--p)); height: calc(176 * var(--p)); pointer-events: none; }
+.shopbar-tab .shopbar-tab__lv { position: absolute; z-index: 2; left: calc(-25.5 * var(--p)); top: calc(79 * var(--p)); width: calc(80 * var(--p)); height: calc(76 * var(--p));
+  background: url(/assets/local/ui/battle/level__v2.png) 0 0 / 100% 100% no-repeat; pointer-events: none; }
+.shopbar-tab .shopbar-tab__lv b { position: absolute; left: 0; right: 0; top: calc(38 * var(--p)); transform: translateY(-50%); text-align: center;
+  font-size: calc(37 * var(--p)); line-height: 1; font-weight: 500; color: #3fe0bd; }
+.shopbar-tab .shopbar-tab__btn { left: calc(-4 * var(--p)); top: calc(-7 * var(--p)); width: calc(168 * var(--p)); height: calc(184 * var(--p)); z-index: 3;
+  background: none; font-size: 0; color: transparent; }
+.shopbar-tab .shopbar-tab__btn::before { display: none; }
+.shopbar-tab .shopbar-tab__label { margin-top: calc(4 * var(--p)); font-size: calc(16.5 * var(--p)); }
+
+/* ---- 20. 商店卡面 second pass (round 11) against the user's 梅 card and the recording's 08:30 frame (the same cards, the
+   整备区已满 state): the card face keeps only the original's layers — frame, tier mark, gold cost plate, portrait, bonds a
+   line each, branch icon + name. Off the face: the equipped-skill badge (ours; the loadout stays in the card's detail,
+   right click / long press) and our watermark (the first bond's glyph, large). The faint mark behind the portrait is drawn again
+   in section 24 as the card's ability type — this pass's "one shared mark, no sprite matches" was wrong. A bond the
+   mode never activates keeps its strike, in grey (ours: the original never shows that state). ---- */
+/* our card watermark is the first bond's glyph; the official face has none (the ability-type underlay of the
+   package's section 24 needs its own abilityMark DOM, which we do not ship) — the skill badge stays (our loadout) */
+.shopbar .scard__water { display: none; }
+.shopbar .scard__bond.is-off { text-decoration-color: rgba(200, 205, 205, .55); }
+/* the unbuyable card against the 08:30 frame's (整备区已满) samples at 1280: frame (76, 98, 95) — ours was full mint (52, 149,
+   135) —, face (69, 68, 72) neutral grey, portrait washed but keeping a little colour; the bonds and name a step dimmer */
+.shopbar .scard.is-disabled::before { filter: grayscale(.65) brightness(.72); }
+.shopbar .scard.is-disabled .scard__bg { background: rgba(66, 66, 70, .9); }
+.shopbar .scard.is-disabled .scard__body { background: linear-gradient(0deg, rgba(68, 72, 74, .85) 30%, transparent); }
+.shopbar .scard.is-disabled .scard__art, .shopbar .scard.is-disabled .scard__itemart { filter: grayscale(.55) brightness(1.1) contrast(.7); opacity: .5; }
+.shopbar .scard.is-disabled .scard__bond { color: #a9aeaf; }
+.shopbar .scard.is-disabled .scard__name { color: #b3b8b9; }
+/* text sizes measured off the 08:30 frame at 1280: a bond name ~13.5 px a character (ours was 17.5), the name ~14 (ours 16.7) */
+.shopbar .scard__bond { font-size: calc(13.5 * var(--p)); line-height: calc(19 * var(--p)); }
+.shopbar .scard__bond .bglyph { width: calc(16 * var(--p)); height: calc(16 * var(--p)); }
+.shopbar .scard__name { font-size: calc(14 * var(--p)); }
+
+
+/* ===== official-pages.css lines 1312-1333 (ported) ===== */
+/* ---- 24. 商店能力类型底纹 + 冻结 (round 15, the user's seven reference shots; 1 ref px = 1.31 here at 1280 — card pitch
+   125 there, 164 here).
+   - The faint mark behind a card's portrait is its 特质's ability type (ui/shopBar.js abilityMark — the record's own
+     eventTypeIcon): icon_bond 单次叠加 / 持续叠加, icon_battle 作战能力, icon_gold 整备能力, icon_support 特异化, the 95 × 95
+     originals in img/official/hub/ac/icons/. Fitted on the reference's 维多利亚 (frozen strip) and 锡人 / 森蚺 cards
+     (shape correlation, then a regression of the drawn grey on the card ground): 66 px square, its corner at (8, 32),
+     opacity .25 — the same on a card that cannot be bought (the frozen strip's cards are all 整备区已满). Over the shade
+     (section 22) and the portrait's feathered edge, under the frame, the tier chip, the price and the frost.
+   - 冻结: ice_matte 160 × 68 1:1 across the card's inner width, anchored to its bottom edge — the reference's frost rises
+     ~52 ref px (68) from the bottom and is full at the foot; the sprite's alpha is the fade. Over the bonds and name, under
+     the tier / price; no tint over the rest of the card. Its snowflake: icon_ice 36 × 36 (glyph ~25) drawn 32, centred,
+     its centre 18 above the bottom edge. Replaces section 10's top frost and the hidden / top-right .scard__ice; the 冻结
+     button keeps its own sprites. Empty and bought slots never carry .is-frozen. ---- */
+.shopbar .scard.is-frozen::after { inset: auto calc(2 * var(--p)) calc(2 * var(--p)); height: calc(68 * var(--p)); z-index: 3; opacity: 1; box-shadow: none;
+  background: url(/assets/local/ui/battle/ice_matte.png) 0 0 / 100% 100% no-repeat; }
+.shopbar .scard__ice { display: block; z-index: 4; left: 50%; right: auto; top: auto; bottom: calc(2 * var(--p)); transform: translateX(-50%);
+  width: calc(32 * var(--p)); height: calc(32 * var(--p)); border: 0; background: url(/assets/local/ui/battle/icon_ice.png) 0 0 / 100% 100% no-repeat; }
+.shopbar .scard__ice .icon { display: none; }
+
+/* ===== official-pages.css lines 1334-1414 (ported) ===== */
+
+/* 25. Fonts (round 16). The official client's own faces (fonts-ark/ark-fonts.css) inside a match and its settlement.
+   Picked per component against the 09:04 shop frame at 1280 (scripts-r16/fontcmp.py, rec-20261028/r16/fonts/):
+   CJK body = NotoSansHans-Medium. 2026-10-29 correction: 准备就绪 / 升级 / 收起 also use Medium;
+   the owner's rest-pill close-up retains Heavy for 休息一下, as do the separate transition titles.
+   Numbers = Novecento Wide Medium (prices, funds, level),
+   Wide Normal (bond counts, round and LP); LEVEL = Novecento Wide Bold,
+   ping = Open Sans Semibold. ArkCN maps weight < 750 to Medium and ≥ 750 to Heavy; synthesis is off so nothing is faux-bolded. */
+.screen.gm, .screen.settle {
+  --font-cjk: 'ArkCN', var(--cjk-faces), sans-serif;
+  --font-num: 'ArkWide', 'Bender', var(--cjk-faces), sans-serif;
+  --font-display: 'ArkWide', 'Novecento Wide', var(--cjk-faces), sans-serif;
+  font-family: var(--font-cjk);
+  font-synthesis: none;
+}
+.screen.gm .readybtn__label, .shopbar .lvcard__label, .gtop .capsule__label, .shopbar .funds__collapse { font-family: var(--font-cjk); font-weight: 500; }
+.gtop .capsule--prep .capsule__label { font-weight: 900; }
+.shopbar .toolbtn, .shopbar .funds__label, .shopbar .scard__name, .shopbar .scard__bond, .shopbar__remain, .gtop__center .roundbox__label { font-family: var(--font-cjk); font-weight: 500; }
+.shopbar .lvcard__num, .shopbar .funds__num, .gtop__center .roundbox__num, .gtop .capsule__kills, .bslot__count { font-family: var(--font-num); font-weight: 500; }
+/* Bond buttons otherwise inherit the display font's CJK fallback. Keep the extracted Medium face;
+   their counters and LP use the normal-width stroke, not ArkWide Bold inherited from <b>. */
+.gm__bonds .bond__name { font-family: var(--font-cjk); font-weight: 500; }
+.gm__bonds .bond__count, .gtop__center .lp__val, .gtop__center .roundbox__num { font-family: var(--font-num); font-weight: 400; }
+.gm__hud > .team .team__line .lp__val { font-family: 'ArkWide', var(--font-num); font-weight: 400; font-variant-numeric: normal; }
+.shopbar .hex__value { font-weight: 500; }
+.shopbar .lvcard__micro { font-family: var(--font-display); font-weight: 700; }
+.gtop__net .ping { font-family: 'ArkOpenSans', var(--font-num); font-weight: 600; }
+/* sizes against the same frame (glyph ink heights: 准备就绪 17, 升级 18, 冻结/刷新 17–18, 当前资金 15, 收起 20, 休息一下 17, 回合 13,
+   card name 15, bond 13, 剩余可放置角色 18, level digit 40, funds digit 20) — the original sets CJK without tracking */
+.gtop .readybtn .readybtn__label { font-size: .249rem; letter-spacing: .1em; } /* (.gtop has no --p: 1rem = 1280 / 19.2 px) */
+.shopbar .lvcard .lvcard__label { font-size: calc(18 * var(--p)); letter-spacing: .08em; padding-left: .08em; }
+.shopbar .shopbar__tools .toolbtn { font-size: calc(18.5 * var(--p)); letter-spacing: 0; }
+.shopbar .funds .funds__label { font-size: calc(16 * var(--p)); letter-spacing: 0; }
+.shopbar .funds .funds__collapse { font-size: calc(19.5 * var(--p)); letter-spacing: 0; }
+.gtop .capsule .capsule__label, .gtop .capsule--prep .capsule__label { font-size: .2625rem; letter-spacing: .02em; }
+.gtop__half .roundbox__label { font-size: .21rem; }
+.shopbar .lvcard .lvcard__num { font-size: calc(56 * var(--p)); }
+.shopbar .funds .funds__num { font-size: calc(27 * var(--p)); }
+.shopbar .scard .scard__name { font-size: calc(16 * var(--p)); }
+.shopbar .scard .scard__bond { font-size: calc(13.8 * var(--p)); }
+/* 剩余可放置角色：N — white text on a dark band (below), about 40 px above the 冻结 / 刷新 row */
+.shopbar .shopbar__remain { margin-bottom: calc(30 * var(--p)); padding: 0 calc(10 * var(--p)) 0 0; border: 0; background: none;
+  font-size: calc(19 * var(--p)); color: #f4f6f6; text-shadow: 0 0 calc(3 * var(--p)) rgba(0, 0, 0, .85), 0 calc(1 * var(--p)) calc(2 * var(--p)) #000; }
+.shopbar .shopbar__remain b { margin-left: 0; font-size: inherit; color: inherit; font-weight: inherit; }
+/* its dark band (v01 f0001–f0150: x 1091 to the screen edge, y 401–434 — 11 px before the text, 34 high round its
+   middle; (47, 52, 55) over the (61, 96, 102) water → about rgba(44, 47, 50, .86)) */
+.shopbar .shopbar__remain { position: relative; z-index: 0; }
+.shopbar .shopbar__remain::before { content: ''; position: absolute; z-index: -1; left: calc(-11 * var(--p)); right: calc(-10 * var(--p)); top: calc(-2 * var(--p));
+  bottom: calc(-3 * var(--p)); background: rgba(44, 47, 50, .86); pointer-events: none; }
+/* 装备卡 text against the user's image 09 (its card 200 px wide, ours 158: ×0.79). There the description is 10.2 px a character
+   (8.1 at ours) on 15 px lines (11.9) and the name's ink 18 px (14.2) — ours already measured the same, but at 8 px the browser
+   greys the strokes into a line where the original stays crisp: the description one step up (9 px) on the original's line
+   pitch, its lighter grey and a dark edge; the values keep the data's colours (rt-vup / rt-vdown), in the medium face */
+.shopbar .scard--item .scard__idesc { font-size: calc(9 * var(--p)); line-height: calc(12 * var(--p)); font-weight: 500; color: #b4bcba;
+  text-shadow: 0 0 calc(1.5 * var(--p)) rgba(0, 0, 0, .9), 0 0 calc(1.5 * var(--p)) rgba(0, 0, 0, .6); }
+.shopbar .scard--item .scard__idesc .rt-vup, .shopbar .scard--item .scard__idesc .rt-vdown { font-size: inherit; font-weight: 500; }
+.shopbar .scard--item .scard__idesc .rt-vup { color: #3fb1f4; }
+/* a bond the mode never activates (offBonds — data, not whether the card can be bought): the text kept but a step dimmer,
+   one bright 2 px bar with a dark edge straight across the glyph and the name — three separate tones (bar #eef1f1 / text
+   #8f9697 / ground), on a normal card and on a greyed (.is-disabled) one alike */
+.shopbar .scard .scard__bond.is-off { position: relative; align-self: flex-start; width: max-content; max-width: 100%; color: #8f9697; text-decoration: none; }
+.shopbar .scard .scard__bond.is-off .bglyph { opacity: .6; }
+.shopbar .scard .scard__bond.is-off::after { content: ''; position: absolute; left: calc(-2 * var(--p)); right: calc(-3 * var(--p)); top: 50%;
+  height: calc(2 * var(--p)); margin-top: calc(-1 * var(--p)); background: #eef1f1; box-shadow: 0 0 0 calc(.75 * var(--p)) rgba(10, 12, 13, .8);
+  pointer-events: none; }
+/* the greyed card itself against the user's image 10: the bonds stay light (#b0b6b7 — sampled 163, 169, 170 at the stroke
+   peaks) on the (66, 68, 70) ground; only an is-off bond drops below that */
+.shopbar .scard.is-disabled .scard__bond:not(.is-off) { color: #b6bcbd; }
+.shopbar .scard.is-disabled .scard__bond.is-off { color: #7f8687; }
+/* FREE: the client's own cost_free (101 × 35, the word drawn in, room on its right for the count). 刷新 with free refreshes
+   (v01 f0030 / f0150 at 1280: the pill x 1164–1254 / y 448–475 — 19 right of the button's gold and 18 above it, 1:1 high,
+   ×.92 wide) carries the count after it in Open Sans Semibold ("x2", the 2's ink 12 px, #eef6f3); the FREE word is the
+   sprite's, the <i> stays for the text only. A free card's price is the same sprite alone, centred where the hex sits
+   ([ASSUMED]: no frame shows a free card). */
+.shopbar .toolbtn .toolbtn__free { position: absolute; z-index: 2; left: calc(18 * var(--p)); top: calc(-18 * var(--p)); display: flex; align-items: center;
+  box-sizing: border-box; width: calc(92 * var(--p)); height: calc(35 * var(--p)); margin: 0; padding: 0 0 calc(8 * var(--p)) calc(61 * var(--p));
+  background: url(/assets/local/ui/battle/cost_free.png) 0 0 / 100% 100% no-repeat; font-family: 'ArkOpenSans', var(--font-num); font-weight: 600;
+  font-size: calc(17 * var(--p)); line-height: 1; letter-spacing: 0; color: #eef6f3; }
+.shopbar .toolbtn__free i { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.shopbar .scard .scard__free { left: calc(26 * var(--p)); top: calc(-11 * var(--p)); transform: none; width: calc(92 * var(--p)); height: calc(35 * var(--p)); padding: 0;
+  clip-path: none; background: url(/assets/local/ui/battle/cost_free.png) 0 0 / 100% 100% no-repeat; font-size: 0; color: transparent; }
+
+/* ===== official-pages.css lines 1562-1661 (ported) ===== */
+/* ---- 28. 商店卡面 上部暗幕 + 底色 (round 16, the user's image 01: "the top of the portrait darker too") against the video's
+   09:04 shop (v01 f0021: funds 6, nothing frozen, every card buyable — the same state as ours) at 1280, by 15 × 8 px blocks
+   over the same operator (角峰, cards at x 783 / 619): the original's card ground is (27, 27, 29) — ours read (35, 42, 43),
+   a step lighter and greener — and its lower half under the art 18–22 (ours 37–39); the 资金 panel's dark inside reads the same
+   in both (18–19), so the footage is not darker overall. The portrait's top fades into that ground: 宴's blonde hair (even in
+   tone) keeps ≈ .58 of its brightness at the card's top edge, .7 at 20 px, .86 at 28, .93 at 36, all of it by ≈ 44 px; the
+   face below stays as bright as ours (p95 170–199 both). So: the ground and the shade a step darker and neutral, and the
+   art's mask gets that top fade (the art's own box: its visible top is at 13 %, 1 % ≈ 1.85 px on the card). [OUR] fit —
+   head_mask_v / both_mask_v ([uc]autochessbattle, 1 × 476 vertical fades) have a similar top ramp but no node binding
+   to the card is known, so they are not used. The disabled (资金不足 / 整备区已满) grey ground and shade and the 冻结 layer
+   are untouched. ---- */
+.shopbar .scard { --shade: 21, 22, 24; }
+.shopbar .scard__bg { background: rgba(25, 26, 28, .95); }
+.shopbar .scard__art {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 34%),
+    linear-gradient(180deg, rgba(0, 0, 0, .56) 13%, rgba(0, 0, 0, .6) 19.5%, rgba(0, 0, 0, .7) 23.8%, rgba(0, 0, 0, .86) 28%, rgba(0, 0, 0, .94) 32.5%, #000 36.8%, #000 52%, transparent 84%);
+  mask-image: linear-gradient(90deg, transparent, #000 34%),
+    linear-gradient(180deg, rgba(0, 0, 0, .56) 13%, rgba(0, 0, 0, .6) 19.5%, rgba(0, 0, 0, .7) 23.8%, rgba(0, 0, 0, .86) 28%, rgba(0, 0, 0, .94) 32.5%, #000 36.8%, #000 52%, transparent 84%); }
+
+/* ---- 29. 升级卡的光 (round 16, video 09:04–09:09 = v01, measured frame by frame at 1280 × 720; the card is 1:1 with
+   upgrade_max__tex / upgrade_disable, 111 × 175). Driven by the card's state (js/ui/shopBar.js LevelCard):
+   · can buy — upgrade_max__tex lit teal: the sprite is ~85 % opaque, so it is first laid on a dark ground (24, 26, 27); the
+     video's card is then that × (1.17, 2.33, 1.76) + (16, 11, 21) per channel (fitted on ground / box, f21; the outline
+     checks). Done here as × tint + a little light, raised by brightness(2.4) — the method is [REBUILT], the colours are
+     measured.
+   · armed (first tap, f45–f75) — a glow from below and a bright edge, added on top (plus-lighter): + (17, 74, 50) low,
+     + (24, 76, 58) at the foot, + (34, 102, 80) on the edge; it lands in ≤ 33 ms with a white flare that decays in ~430 ms
+     (f45–f57). The digit turns to the level it would buy (the old one leaves upward, the next comes up from below),
+     升级 crossfades to 确认升级, and check_arrow shows under the box (20 × 11, matched by shape and colour).
+   · back (second tap or tap away, f76–f78) — the same in reverse in ~100–150 ms.
+   · level up (the server's answer, f80–f86) — a mint-white wash and two fx_arrow chevrons rising out of the top, ~230 ms;
+     the box keeps its light a little longer than the ground. fx_arrow is bound by shape (112 × 76, white) and motion, the
+     wash is [REBUILT]. Then grey: upgrade_disable, 1:1 (f79+). The digit and 升级 colours are measured (f21 / f60 / f92).
+   Not reproduced: a slow rise and fall of the lit ground before the tap (f1–f43) — its cause is outside the clip. ---- */
+.shopbar .lvcard, .shopbar .lvcard.is-armed { isolation: isolate; background: none; box-shadow: none; animation: none; color: #8afedd; }
+.shopbar .lvcard::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(rgb(7, 6, 10), rgb(7, 6, 10)), linear-gradient(rgb(124, 248, 186), rgb(124, 248, 186)),
+    url(/assets/local/ui/battle/upgrade_max__tex.png) 0 0 / 100% 100% no-repeat rgb(24, 26, 27);
+  background-blend-mode: screen, multiply, normal; filter: brightness(2.4); }
+.shopbar .lvcard.is-disabled { background: none; color: #babbbd; }
+.shopbar .lvcard.is-disabled::before { background: url(/assets/local/ui/battle/upgrade_disable.png) 0 0 / 100% 100% no-repeat; filter: none; }
+/* centred on the card: game-shop.css's translateX(-50%) was still applied to 2. 's left: 31.5 — the badge sat 22 px left of the video's */
+.shopbar .lvcard__price { z-index: 1; left: 50%; transform: translateX(-50%); }
+
+/* the digits slide in a window under the sprite's LEVEL (y 57–110: the video's digits vanish there, f45 / f76); the digit
+   sits at y 61–100 as in f21 */
+.shopbar .lvcard__frame { left: calc(13 * var(--p)); right: auto; width: calc(85 * var(--p)); top: calc(57 * var(--p)); height: calc(53 * var(--p));
+  display: block; padding: 0; overflow: hidden; }
+/* Anchor both digits to the same measured ink position. The old grid's 56 px automatic row plus
+   14 px padding overflowed its 53 px window. Proportional figures also restore the original narrow
+   '1': .num's tabular-nums selected a different glyph with a wide foot. */
+.shopbar .lvcard__frame > .lvcard__num { position: absolute; left: 0; top: calc(-8 * var(--p)); width: 100%; height: calc(56 * var(--p));
+  text-align: center; letter-spacing: 0; font-variant-numeric: normal; font-feature-settings: "tnum" 0;
+  color: #8afedd; text-shadow: none; transition: transform 90ms ease-out; }
+.shopbar .lvcard.is-disabled .lvcard__num { color: #babbbd; }
+.shopbar .lvcard__frame > .lvcard__num--next { transform: translateY(calc(50 * var(--p))); opacity: 0; transition: transform 90ms linear, opacity 90ms linear; }
+.shopbar .lvcard.is-armed .lvcard__num { transform: translateY(calc(-56 * var(--p))); transition: transform 50ms linear; }
+.shopbar .lvcard.is-armed .lvcard__num--next { transform: none; opacity: .8; transition: transform 90ms cubic-bezier(.2, .6, .4, 1) 30ms, opacity 1ms linear 30ms; }
+
+.shopbar .lvcard__label { color: #98fee6; transition: opacity 100ms linear; }
+.shopbar .lvcard__label--ok { opacity: 0; color: #dcfffc; }
+.shopbar .lvcard.is-armed .lvcard__label { opacity: 0; transition-duration: 33ms; }
+.shopbar .lvcard.is-armed .lvcard__label--ok { opacity: 1; transition: opacity 100ms linear 33ms; }
+.shopbar .lvcard.is-armed .lvcard__label, .shopbar .lvcard.is-armed .lvcard__label--ok { letter-spacing: .08em; padding-left: .08em; }
+.shopbar .lvcard.is-disabled .lvcard__label { color: #5c5d5f; }
+.shopbar .lvcard__chev { position: absolute; left: calc(46 * var(--p)); top: calc(110 * var(--p)); width: calc(20 * var(--p)); height: calc(11 * var(--p));
+  background: url(/assets/local/ui/battle/check_arrow.png) 0 0 / 100% 100% no-repeat; opacity: 0; transition: opacity 100ms linear; pointer-events: none; }
+.shopbar .lvcard.is-armed .lvcard__chev { opacity: 1; transition-duration: 33ms; }
+
+.shopbar .lvcard__glow { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: plus-lighter; opacity: 0; transition: opacity 150ms ease-out;
+  background: linear-gradient(180deg, rgb(0, 0, 0) 0%, rgb(7, 17, 15) 46%, rgb(17, 74, 50) 88%, rgb(24, 76, 58) 100%);
+  box-shadow: inset 0 0 0 calc(2 * var(--p)) rgb(34, 102, 80); }
+.shopbar .lvcard__glow::after { content: ''; position: absolute; inset: 0; mix-blend-mode: plus-lighter; opacity: 0;
+  background: linear-gradient(180deg, rgb(0, 0, 0) 0%, rgb(15, 20, 19) 46%, rgb(44, 41, 43) 88%, rgb(47, 46, 43) 100%);
+  box-shadow: inset 0 0 0 calc(2 * var(--p)) rgb(40, 36, 48); }
+.shopbar .lvcard.is-armed .lvcard__glow { opacity: 1; transition-duration: 33ms; }
+.shopbar .lvcard.is-armed .lvcard__glow::after { animation: lv-armflare 433ms linear both; }
+@keyframes lv-armflare { 0%, 7.7% { opacity: 1; } 23% { opacity: .88; } 38.5% { opacity: .74; } 53.8% { opacity: .45; } 69% { opacity: .3; }
+  77% { opacity: .12; } 92% { opacity: .05; } 100% { opacity: 0; } }
+
+.shopbar .lvcard__fx { position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  background: url(/assets/local/ui/battle/fx_arrow.png) 0 calc(-80 * var(--p)) / 100% calc(76 * var(--p)) no-repeat,
+    url(/assets/local/ui/battle/fx_arrow.png) 0 calc(-80 * var(--p)) / 100% calc(76 * var(--p)) no-repeat;
+  animation: lv-uparrows 167ms linear both; }
+@keyframes lv-uparrows {
+  0% { background-position: 0 calc(86 * var(--p)), 0 calc(131 * var(--p)); }
+  20% { background-position: 0 calc(-23 * var(--p)), 0 calc(20 * var(--p)); }
+  40% { background-position: 0 calc(-60 * var(--p)), 0 calc(-16 * var(--p)); }
+  60% { background-position: 0 calc(-80 * var(--p)), 0 calc(-36 * var(--p)); }
+  80% { background-position: 0 calc(-80 * var(--p)), 0 calc(-45 * var(--p)); }
+  100% { background-position: 0 calc(-80 * var(--p)), 0 calc(-80 * var(--p)); } }
+.shopbar .lvcard__fx::before, .shopbar .lvcard__fx::after { content: ''; position: absolute; background: rgb(151, 255, 248); mix-blend-mode: screen; opacity: 0; }
+.shopbar .lvcard__fx::before { inset: 0; animation: lv-upwash 200ms linear both;
+  clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, calc(13 * var(--p)) calc(42 * var(--p)), calc(98 * var(--p)) calc(42 * var(--p)),
+    calc(98 * var(--p)) calc(110 * var(--p)), calc(13 * var(--p)) calc(110 * var(--p)), calc(13 * var(--p)) calc(42 * var(--p))); }
+.shopbar .lvcard__fx::after { left: calc(13 * var(--p)); top: calc(42 * var(--p)); width: calc(85 * var(--p)); height: calc(68 * var(--p)); animation: lv-upbox 233ms linear both; }
+@keyframes lv-upwash { 0% { opacity: 1; } 16.7% { opacity: .35; } 33.3% { opacity: .18; } 50%, 100% { opacity: 0; } }
+@keyframes lv-upbox { 0% { opacity: .6; } 14.3% { opacity: .63; } 28.6% { opacity: .53; } 42.9% { opacity: .35; } 57.1% { opacity: .27; }
+  71.4% { opacity: .12; } 85.7% { opacity: .04; } 100% { opacity: 0; } }
+

@@ -1,7 +1,7 @@
 {
  "id": "mod-manager",
  "name": "模组管理",
- "version": "1.3.0",
+ "version": "1.3.1",
  "author": "the mod-manager mod",
  "gameVersion": "0.3.1",
  "description": "在「选择模拟协议」顶栏、干员调配左边加一个「模组管理」浮层：把本房间要声明的模组列成一行行开关，逐个启用 / 停用。本包只提供界面（改写 lobby.modManager / lobby.modPicker 两个引擎组件），不携带素材；「本房间声明哪些模组」这份状态仍由引擎保管（roomMods.js → room.create.modIds）。",

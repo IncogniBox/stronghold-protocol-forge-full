@@ -30,6 +30,8 @@
   <script src="/js/webFonts.js" defer></script>
   <!-- Self-hosted Bender / Novecento (provided by the assets pipeline). -->
   <link rel="stylesheet" href="/fonts/fonts.css" />
+  <!-- Official font pack (ArkCN / ArkWide / ArkBender / ArkOpenSans / ArkWunder), from the UI package 2026-10-29. -->
+  <link rel="stylesheet" href="/fonts-ark/ark-fonts.css" />
 
   <link rel="stylesheet" href="/css/theme.css" />
   <link rel="stylesheet" href="/css/components.css" />
@@ -38,6 +40,7 @@
   <link rel="stylesheet" href="/css/screens/room.css" />
   <link rel="stylesheet" href="/css/screens/game.css" />
   <link rel="stylesheet" href="/css/screens/match-popups.css" />
+  <link rel="stylesheet" href="/css/screens/goal-banner.css" />
   <link rel="stylesheet" href="/css/screens/protocol-boot.css" />
   <link rel="stylesheet" href="/css/screens/boss-plates.css" />
   <link rel="stylesheet" href="/css/screens/game-shop.css" />
@@ -56,6 +59,11 @@
   <link rel="stylesheet" href="/css/screens/sweep.css" />
   <link rel="stylesheet" href="/css/emotes.css" />
   <link rel="stylesheet" href="/css/devices.css" />
+  <!-- Official HUD skin (top bar / shop bar / cards / funds), from the UI package 2026-10-29. MUST load last: it only overrides. -->
+  <link rel="stylesheet" href="/css/screens/official-hud.css" />
+  <!-- The package's remaining page skins (room / lobby / briefing / draft / loadout / achievements / bond discs / plates /
+       countdown / bounty). Loaded after official-hud.css: it only overrides. -->
+  <link rel="stylesheet" href="/css/screens/official-pages.css" />
 
   <!-- `@kit/`, `@sim/`, `@battle/` and the per-file `@ops/` table are the ONLY module specifiers a workshop pack may
        import — `@kit/` for a per-operator kit, `@battle/` for a battle-level installer (`server.battle`, DESIGN §28.17)

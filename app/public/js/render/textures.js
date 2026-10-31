@@ -1060,12 +1060,12 @@ export function statusTexture(key) {
 // =============================================================================================================
 // Tier chips (roman numerals), backdrop
 
-const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 let _chips = null;
 
 function drawChips(c, w, h) {
-  c.clearRect(0, 0, w * 7, h * 2);
-  for (let g = 0; g < 2; g++) for (let t = 1; t <= 6; t++) {
+  c.clearRect(0, 0, w * 8, h * 2);
+  for (let g = 0; g < 2; g++) for (let t = 1; t <= 7; t++) {
     const x = t * w, y = g * h;
     c.save();
     roundRect(c, x + 3, y + 3, w - 6, h - 6, 7);
@@ -1074,7 +1074,7 @@ function drawChips(c, w, h) {
     else { grad.addColorStop(0, '#2c3335'); grad.addColorStop(1, '#111516'); }
     c.fillStyle = grad; c.fill();
     c.lineWidth = 2.5; c.strokeStyle = g ? '#fff3b8' : 'rgba(210,225,220,0.55)'; c.stroke();
-    c.fillStyle = g ? '#2a1a00' : '#f2f2f2';
+    c.fillStyle = t === 7 && !g ? '#ff3b30' : g ? '#2a1a00' : '#f2f2f2'; // 7 阶：阶级数字红色（业主 2026-10-30）
     c.font = `700 ${t >= 4 ? 24 : 27}px Bender, Oxanium, "Segoe UI", sans-serif`;
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(ROMAN[t], x + w / 2, y + h / 2 + 1.5);
@@ -1082,18 +1082,18 @@ function drawChips(c, w, h) {
   }
 }
 
-/** Tier chip texture: tier 1–6, golden → gold plate. */
+/** Tier chip texture: tier 1–7 (7 阶 = 红字), golden → gold plate. */
 export function tierChip(tier, golden) {
   if (!_chips) {
     const P = PIXI();
     const w = 64, h = 44;
-    const canvas = makeCanvas(w * 7, h * 2);
+    const canvas = makeCanvas(w * 8, h * 2);
     const base = P.BaseTexture.from(canvas);
     _chips = { canvas, base, tex: new Map(), w, h };
     drawChips(canvas.getContext('2d'), w, h);
     base.update();
   }
-  const t = Math.max(1, Math.min(6, tier | 0 || 1));
+  const t = Math.max(1, Math.min(7, tier | 0 || 1));
   const key = `${t}:${golden ? 1 : 0}`;
   let tex = _chips.tex.get(key);
   if (!tex) {

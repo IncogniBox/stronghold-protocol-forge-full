@@ -3061,6 +3061,26 @@ def game_data(root):
         for s in [v.get('skill')] + list(v.get('skills') or []):
             if isinstance(s, dict) and (s.get('prefabId') or s.get('skillId')):
                 skills.setdefault(cid, set()).add(s.get('prefabId') or s.get('skillId'))
+    # Workshop operators (docs/WORKSHOP.md): the installed packs' chess overlays join the set too, so a mode's borrowed
+    # operators (their charId / skill prefab ids) feed the same char/skill maps as the official chess records.
+    for pd in pack_dirs:
+        try:
+            recs = json.loads((pd / 'chess.json').read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(recs, dict):
+            continue
+        for rec in recs.values():
+            if not isinstance(rec, dict):
+                continue
+            cid = rec.get('charId')
+            if not cid:
+                continue
+            if cid not in chars:
+                chars.append(cid)
+            for s in [rec.get('skill')] + list(rec.get('skills') or []):
+                if isinstance(s, dict) and (s.get('prefabId') or s.get('skillId')):
+                    skills.setdefault(cid, set()).add(s.get('prefabId') or s.get('skillId'))
     for cid, u in (backups.get('units') or {}).items():
         if cid not in chars:
             chars.append(cid)
@@ -3169,11 +3189,13 @@ def _read_json(path):
         return None
 
 
-def export_fx(ab_root, out_root, manifest, log, selection='sample', keys=None, jobs=None, root=None, fx_manifest=None):
+def export_fx(ab_root, out_root, manifest, log, selection='sample', keys=None, jobs=None, root=None, fx_manifest=None,
+              units=None):
     """The fx run (extract.py --only fx): writes <out_root>/fx/** and `fx_manifest` (default <root>/data/local-fx.json:
     the groups FX_GROUPS, every file); returns the number of files written. `manifest` (the groups of
     data/local-assets.json) gets nothing: extract.py drops the fx groups an earlier run left there (ran_groups). A
-    --fx-keys run (`keys`) updates those prefabs in the earlier set's index and file list."""
+    --fx-keys run (`keys`) updates those prefabs in the earlier set's index and file list; `units` (--fx-units) crawls
+    only those charIds instead of every unit of the mode's set."""
     t_start = time.time()
     ab_root = Path(ab_root)
     root = Path(root) if root else Path(__file__).resolve().parents[2]
@@ -3191,7 +3213,9 @@ def export_fx(ab_root, out_root, manifest, log, selection='sample', keys=None, j
 
     t0 = time.time()
     gd = game_data(root)
-    if keys:
+    if units:
+        unit_ids = [u for u in units if u in set(gd['chars'] + gd['enemies'] + gd['tokens'])] or list(units)
+    elif keys:
         unit_ids = []
     elif selection == 'sample':
         unit_ids = list(FX_SAMPLE_UNITS)

@@ -81,11 +81,12 @@ import { PHASE, GEO } from '../../../shared/constants.js';
 import { ruleOption } from '../../../shared/plugins/rules.js';
 import { RECON_TRAINING_ROUNDS } from '../../../shared/reconModes.js';
 import { ReconTrainModal } from '../ui/reconTrain.js';
-import { html, Spinner, PhaseBanner, ResultDialog, Icon, Button, confirmDialog, closeAllDialogs, useTicker } from '../ui/components.js';
+import { html, Spinner, PhaseBanner, Icon, Button, confirmDialog, closeAllDialogs, useTicker } from '../ui/components.js';
 import { useGameData, GIcon } from '../ui/gameComponents.js';
 import { useFieldView } from '../ui/fieldHost.js';
 import { TopBar, liveLp, ownLeaks, uniteRemaining, tempInfo, tempReadyReason } from '../ui/hud.js';
 import { BondStrip, BondPopup } from '../ui/bondStrip.js';
+import { GoalBanner, goalOf } from '../ui/goalBanner.js';
 import { TeamPanel } from '../ui/teamPanel.js';
 import { ShopBar } from '../ui/shopBar.js';
 import { DetailPanel, resolveDetail } from '../ui/detailPanel.js';
@@ -105,7 +106,7 @@ import { BattleMusicButton } from '../ui/battleMusic.js';
 // 局内开发者面板（「全量模拟」专属，见 ui/devPanel.js 与 m.public.dev）
 import { DevPanel } from '../ui/devPanel.js';
 import { ExitModal, AwayOverlay, awayStore } from '../ui/matchChrome.js';
-import { RoundPopup, PhasePopup, phasePopupOf, roundsToBoss, preloadPopupArt } from '../ui/matchPopups.js';
+import { RoundPopup, PhasePopup, BattleOverPopup, phasePopupOf, roundsToBoss, preloadPopupArt } from '../ui/matchPopups.js';
 import { openGuide } from '../ui/guide.js';
 import { actions, onRefreshBusy, setUnequipSelfAllowed } from '../ui/gameActions.js';
 import { FacingWheel, holdPiece, setPieceDir, syncPieceDirs, showRange, useTileScreen } from '../ui/facingWheel.js';
@@ -125,7 +126,7 @@ import {
   terrainInfo, deviceInfo, deviceTipAt, noteDeviceUnits, deviceUnitsForEntry,
   countdownState, shopBlockReason, stageOverrides, effectiveStage, watchTarget, dropFailureReason,
   previewEnemyKey, prepCamera, prepCameraFor, foldCamera, deployFoldsShop, deployZoomStep, deployZoomRemember, prepDeployCamera, deployFieldOf, deployLayoutOf, fieldTile, panelSide, panelSlots, bondPopupPlace, unitLoadout, deployedRecord,
-  mergeTarget, modeOffBonds, removedBondSet, readyFundsPrompt, readyShopFold, ownerBandId, ownDiyRecord, ownStandIn, roundStartReplay,
+  mergeTarget, modeOffBonds, removedBondSet, readyFundsPrompt, readyShopFold, ownerBandId, ownDiyRecord, ownStandIn, roundStartReplay, sortBonds,
 } from '../ui/gameLogic.js';
 import { toast } from '../ui/toasts.js';
 import { LoadoutButton } from './loadout.js';
@@ -261,8 +262,9 @@ function MatchScreen() {
   const [hud, setHud] = useState(null);
   const [banner, setBanner] = useState(null);            // a phase's banner (PhaseBanner) or plate (ui/matchPopups.js PhasePopup: `plate`)
   const [roundPop, setRoundPop] = useState(null);        // the round-start plate (RoundPopup)
+  const [goal, setGoal] = useState(null);                // 全局作战目标 banner (ui/goalBanner.js): { text, key } at round 1
   const [boot, setBoot] = useState(null);                // 协议启动！ (ui/protocolBoot.js): { key } while it shows
-  const [resultBox, setResultBox] = useState(null);      // the round's result box (ResultDialog), shown at SETTLE
+  const [resultBox, setResultBox] = useState(null);      // the round's result plate (BattleOverPopup), shown at SETTLE
   const [bossPlate, setBossPlate] = useState(null);      // ui/bossPlates.js: { kind: 'final'|'core'|'end', … , key }
   const [readyBusy, setReadyBusy] = useState(false);
   const [spBusy, setSpBusy] = useState(null);
@@ -336,6 +338,19 @@ function MatchScreen() {
     }
     if (Object.keys(map).length) data.setBondAlias(map);
     return () => data.setBondAlias(null);
+  }, [isReconRoom, gd.ready]);
+  // 重构棋子（`chess.json` 的 `recon_<id>` 记录，业主 2026-10-30）：与盟约同一条纪律 —— 只在重构对局里覆盖 / 新增，
+  // 离开对局清掉。`recon_*` 的正式 id 就是去掉前缀的那一个（官方没有的 id ⇒ 新增干员）。
+  useEffect(() => {
+    if (!isReconRoom || !gd.ready) return;
+    const raw = data.getRaw('chess');
+    if (!raw) return;
+    const map = {};
+    for (const id of Object.keys(raw)) {
+      if (id.startsWith('recon_') && id.length > 'recon_'.length) map[id.slice('recon_'.length)] = id;
+    }
+    if (Object.keys(map).length) data.setChessAlias(map);
+    return () => data.setChessAlias(null);
   }, [isReconRoom, gd.ready]);
   const prepLoadoutOpen = ruleOption(roomRules, 'prepLoadout') === 'prep';
   const hasOffers = !!pub?.offers?.length;
@@ -857,11 +872,20 @@ function MatchScreen() {
   // 休整期自己那张棋盘必须始终是 `prepCamera(pub)` 算出来的那一张（boss 回合 = bossPrep）。
   // 业主 2026-10-26：boss 回合休整期**精锐化干员**后场地会掉回普通场地、开战才回来。相机只在那几个
   // effect 的 key 变化时重发，任何一次「误发的普通 prep 相机」都不会被纠正，于是整段休整期停在普通场地。
-  // 这里只做一件事：当前相机 kind 与 prepCamera 的结论不一致时，按结论重发一次（战斗 / 观战队友 / 看敌人时不碰）。
+  // 业主 2026-10-29：同样的掉回普通区域在**整备区满、临时整备区出现干员/装备**时也会发生（每次 m.private 都会走到
+  // 这里）。所以这里读的必须是**渲染器里真正在用的相机**（render/app.js `debug.camKind`），不是上一次 setCam 的记录：
+  // 后者只说明「我们请求过 bossPrep」，说明不了画面上现在是哪一张。
   useEffect(() => {
     if (!view || viewModeRef.current !== 'prep' || !showPrep || pen || watchingOther) return;
     const want = prepCameraFor(pub, myId, shopFolded, stageLayout);
-    if (camRef.current?.kind !== want.kind) setCam(want.kind, { ...want.opts, ms: FOLD_CAMERA_MS });
+    const cur = view.raw?.debug?.camKind ?? camRef.current?.kind;
+    // 取景矩形也一起核对：`prepCamKey` 里没有布局（地图数据晚到、换数据面时 `stageLayout` 会变），只比 kind 的话
+    // 会一直停在旧矩形上
+    const a = camRef.current?.opts?.rect, b = want.opts.rect;
+    const rectWrong = (a && Number.isFinite(a.r0)) !== (b && Number.isFinite(b.r0))
+      || (!!a && !!b && Number.isFinite(a.r0) && (a.r0 !== b.r0 || a.r1 !== b.r1 || a.c0 !== b.c0 || a.c1 !== b.c1));
+    // 已经是结论就不动（守卫重复发：每一次 priv 变更都会走到这里）
+    if (cur !== want.kind || rectWrong) setCam(want.kind, { ...want.opts, ms: FOLD_CAMERA_MS });
   }, [view, pub, priv, showPrep, pen, watchingOther, shopFolded, stageLayout, myId]);
 
   // 联防 / 最终攻势 / 左右两半的普通带: the ‹ › pill moves the camera between the field's halves and 全景
@@ -911,7 +935,7 @@ function MatchScreen() {
   // phase changes: banners, sounds, resets
   const phaseKey = `${phase}:${pub?.round}`;
   const prevPhase = useRef(null);
-  const resultSeq = useRef(0);                           // re-keys the result box (ResultDialog) at every SETTLE
+  const resultSeq = useRef(0);                           // re-keys the result plate (BattleOverPopup) at every SETTLE
   useEffect(() => {
     const prev = prevPhase.current;
     prevPhase.current = phase;
@@ -929,6 +953,9 @@ function MatchScreen() {
     else if (phase === PHASE.ROUND_START && b && pub?.round > 0) {
       setBanner(null);
       setRoundPop({ round: pub.round, left: roundsToBoss(pub), sub: b.sub, watching: spectator || !alive, key: phaseKey });
+      // the official 全局作战目标 band opens the match once, before round 1's plate (ui/goalBanner.js)
+      const g = pub.round === 1 ? goalOf(pub) : null;
+      setGoal(g ? { text: g, key: phaseKey } : null);
     } else if (plate) setBanner({ ...plate, plate: true, key: phaseKey });
     else if (b) setBanner({ ...b, key: phaseKey });
     if (phase === PHASE.ROUND_START) audio.sfx('roundStart');
@@ -1712,6 +1739,13 @@ function MatchScreen() {
   const popOps = cc && battleRunner && field?.local && bondOpen && bondOpen.ownerId !== myId ? battleRunner.ownerOps(bondOpen.ownerId, field.fieldId) : null;
   const bondPop = popupView({ open: bondOpen, pub, priv, myId, field, units: popOps, live: liveLayers });
   const openBond = (id, ownerId, from) => { setBondOpen((b) => toggleBond(b, id, ownerId, from)); audio.sfx('click', { volume: 0.4 }); };
+  // the centred plate's ‹ ›: the strip's previous / next bond (only for a popup opened from the strip it steps along)
+  const stepBond = bondOpen && bondOpen.from === 'strip' && bondOpen.ownerId === strip.ownerId ? (d) => {
+    const ring = sortBonds(stripBonds, (id) => data.lookup('bonds', id)).map((x) => x.bondId);
+    const i = ring.indexOf(bondOpen.id);
+    if (ring.length < 2 || i < 0) return;
+    setBondOpen({ id: ring[(i + d + ring.length) % ring.length], ownerId: strip.ownerId, from: 'strip' });
+  } : null;
   const watchingNow = combat ? (watching || field?.fieldId || home) : watching;
   const shopOpen = showShop && !barCollapsed;
   const ufShown = !!(selEntry && editable && !facing && !drag && showPrep && ufGeo);
@@ -1789,7 +1823,7 @@ function MatchScreen() {
   // 本局被**摘除**的盟约（包策略产物，m.public.removedBonds）：对任何棋子都不算数 —— 卡片 / 详情芯片里直接不出现
   const removedBonds = removedBondSet(pub);
 
-  return html`<div class=${cx('screen', 'gm', `gm--${mode}`, drag && 'is-dragging', barCollapsed && 'is-collapsed', (sp || hasPersonalChoice || offerBlocksPrep(pub?.offers)) && 'has-sp', sp && 'has-spdraft', pen && 'is-pen', readyWhy && 'has-readywhy')}
+  return html`<div class=${cx('screen', 'gm', `gm--${mode}`, drag && 'is-dragging', barCollapsed && 'is-collapsed', (sp || hasPersonalChoice || offerBlocksPrep(pub?.offers)) && 'has-sp', sp && 'has-spdraft', pen && 'is-pen', goal && 'is-goal', readyWhy && 'has-readywhy')}
       data-camera=${pen ? 'pen' : camKind}>
     <div class="mod-host" data-mod-slot="screen.game.overlay"></div>
     <div class="gm__field" ref=${hostRef} onContextMenu=${(e) => e.preventDefault()}></div>
@@ -1890,7 +1924,7 @@ function MatchScreen() {
 
       ${bondPop ? html`<${BondPopup} bondId=${bondPop.bondId} entry=${bondPop.entry} priv=${bondPop.priv} banned=${pub?.bannedChess || []} owner=${bondPop.name}
         off=${offBonds.has(bondPop.bondId)} morphMode=${morphMode}
-        place=${bpPlace} over=${!!resolved && bpPlace === dSide}
+        place=${bpPlace} over=${!!resolved && bpPlace === dSide} onStep=${stepBond}
         onClose=${() => setBondOpen(null)} onMember=${(id, items, standInFor, diy) => setDetail({ kind: 'chess', id, owner: bondPop.ownerId, items: items || null, standInFor: standInFor || null, diy: diy || null })} />` : null}
 
       ${resolved ? html`<${DetailPanel} detail=${resolved} snapHp=${snapHp} onClose=${() => { setDetail(null); setSel(null); }}
@@ -1924,15 +1958,17 @@ function MatchScreen() {
       onClose=${() => setTrainOpen(false)} />` : null}
 
     ${boot && !hasOffers ? html`<${ProtocolBoot} key=${boot.key} players=${players} myId=${myId} leaving=${phase !== PHASE.BATTLE_CHECK} />` : null}
-    ${roundPop && !hasOffers ? html`<${RoundPopup} key=${roundPop.key} round=${roundPop.round} gain=${roundGain} left=${roundPop.left} sub=${roundPop.sub}
+    ${goal && !hasOffers && (!boot || bootDone) ? html`<${GoalBanner} key=${goal.key} text=${goal.text} onDone=${() => setGoal(null)} />` : null}
+    ${roundPop && !hasOffers && !goal ? html`<${RoundPopup} key=${roundPop.key} round=${roundPop.round} gain=${roundGain} left=${roundPop.left} sub=${roundPop.sub}
       watching=${roundPop.watching} onDone=${() => setRoundPop(null)} />` : null}
     ${!hasOffers && banner?.plate && !roundPop ? html`<${PhasePopup} key=${banner.key} tone=${banner.tone} faces=${banner.faces} title=${banner.title} sub=${banner.sub}
       chev=${banner.chev} duration=${banner.duration} onDone=${() => setBanner(null)} />` : null}
     ${!hasOffers && banner && !banner.plate && !roundPop ? html`<${PhaseBanner} key=${banner.key} mode="overlay" title=${banner.title} sub=${banner.sub} micro=${banner.micro}
       tone=${banner.tone} duration=${banner.duration || 1500} onDone=${() => setBanner(null)} />` : null}
 
-    ${resultBox ? html`<${ResultDialog} key=${resultBox.key} title=${resultBox.title} sub=${resultBox.sub} micro=${resultBox.micro}
-      tone=${resultBox.tone} duration=${resultBox.duration} onDone=${() => setResultBox(null)} />` : null}
+    ${resultBox ? html`<div class="gm__edim" aria-hidden="true"></div>` : null}
+    ${resultBox ? html`<${BattleOverPopup} key=${resultBox.key} kind=${resultBox.kind} loss=${resultBox.loss} title=${resultBox.title}
+      sub=${resultBox.sub} onDone=${() => setResultBox(null)} />` : null}
 
     ${bossPlate?.kind === 'final' ? html`<${FinalAssaultPlate} key=${bossPlate.key} rows=${bossPlate.rows} total=${bossPlate.total} bossId=${pub?.bossId}
       myId=${myId} onDone=${() => setBossPlate(null)} />`

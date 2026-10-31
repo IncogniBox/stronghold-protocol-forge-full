@@ -335,7 +335,7 @@
    "phase": 2,
    "level": 60,
    "skillLevel": 7,
-   "equipLevel": 0
+   "equipLevel": 1
   },
   "stats": {
    "maxHp": 1463,
@@ -426,13 +426,12 @@
    "desc": "不攻击，持续恢复范围内所有友军生命（每秒相当于自身攻击力10%的生命），自身不受鼓舞影响",
    "descRaw": "不攻击，持续恢复范围内所有友军<@ba.kw>生命</>（每秒相当于自身攻击力<@ba.kw>10%</>的生命），自身不受<$ba.inspire>鼓舞</>影响",
    "bb": {
-    "attack@atk_to_hp_recovery_ratio": 0.1,
-    "atk": 0.08
+    "atk_to_hp_recovery_ratio": 0.1
    },
    "bbStr": {},
    "rangeGrid": null,
    "moduleDesc": "攻击范围内存在2名及以上其他干员时，攻击力+8%（不受技能影响）",
-   "moduleDescRaw": "攻击范围内存在2名及以上其他干员时，攻击力<@ba.kw>+8%</>（不受技能影响）"
+   "moduleDescRaw": "攻击范围内存在2名及以上其他干员时，攻击力+8%（不受技能影响）"
   },
   "skill": {
    "skillId": "skchr_dolris_2",
@@ -498,6 +497,21 @@
     "tokenKey": null,
     "hidden": false,
     "fromModule": false
+   },
+   {
+    "index": -1,
+    "name": null,
+    "desc": null,
+    "descRaw": null,
+    "bb": {
+     "atk": 0.08,
+     "cnt": 2
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": true,
+    "fromModule": true
    }
   ],
   "tokens": [],
@@ -604,15 +618,29 @@
      "desc": "不攻击，持续恢复范围内所有友军生命（每秒相当于自身攻击力10%的生命），自身不受鼓舞影响",
      "descRaw": "不攻击，持续恢复范围内所有友军<@ba.kw>生命</>（每秒相当于自身攻击力<@ba.kw>10%</>的生命），自身不受<$ba.inspire>鼓舞</>影响",
      "bb": {
-      "attack@atk_to_hp_recovery_ratio": 0.1,
-      "atk": 0.08
+      "atk_to_hp_recovery_ratio": 0.1
      },
      "bbStr": {},
      "rangeGrid": null,
      "moduleDesc": "攻击范围内存在2名及以上其他干员时，攻击力+8%（不受技能影响）",
-     "moduleDescRaw": "攻击范围内存在2名及以上其他干员时，攻击力<@ba.kw>+8%</>（不受技能影响）"
+     "moduleDescRaw": "攻击范围内存在2名及以上其他干员时，攻击力+8%（不受技能影响）"
     },
-    "talentChanges": []
+    "talentChanges": [
+     {
+      "talentIndex": -1,
+      "name": null,
+      "desc": null,
+      "descRaw": null,
+      "bb": {
+       "atk": 0.08,
+       "cnt": 2
+      },
+      "bbStr": {},
+      "rangeGrid": null,
+      "tokenKey": null,
+      "hidden": true
+     }
+    ]
    }
   ],
   "traitBase": {
@@ -969,7 +997,7 @@
    "phase": 2,
    "level": 60,
    "skillLevel": 7,
-   "equipLevel": 0
+   "equipLevel": 1
   },
   "stats": {
    "maxHp": 2464,
@@ -1018,7 +1046,8 @@
    "bb": {
     "attack@ability_range_radius": 1,
     "attack@atk_scale_2": 0.5,
-    "atk_scale": 1.15
+    "atk_scale_e": 1.15,
+    "cnt": 3
    },
    "bbStr": {},
    "rangeGrid": null,
@@ -1090,6 +1119,21 @@
     "tokenKey": null,
     "hidden": false,
     "fromModule": false
+   },
+   {
+    "index": -1,
+    "name": null,
+    "desc": null,
+    "descRaw": null,
+    "bb": {
+     "attack@cnt": 3,
+     "attack@e_002_atk_scale": 1.15
+    },
+    "bbStr": {},
+    "rangeGrid": null,
+    "tokenKey": null,
+    "hidden": true,
+    "fromModule": true
    }
   ],
   "tokens": [],
@@ -1199,14 +1243,30 @@
      "bb": {
       "attack@ability_range_radius": 1,
       "attack@atk_scale_2": 0.5,
-      "atk_scale": 1.15
+      "atk_scale_e": 1.15,
+      "cnt": 3
      },
      "bbStr": {},
      "rangeGrid": null,
      "moduleDesc": "溅射范围内有大于或等于3个敌人时，使当次攻击力提升至115%",
      "moduleDescRaw": "溅射范围内有大于或等于3个敌人时，使当次攻击力提升至<@ba.kw>115%</>"
     },
-    "talentChanges": []
+    "talentChanges": [
+     {
+      "talentIndex": -1,
+      "name": null,
+      "desc": null,
+      "descRaw": null,
+      "bb": {
+       "attack@cnt": 3,
+       "attack@e_002_atk_scale": 1.15
+      },
+      "bbStr": {},
+      "rangeGrid": null,
+      "tokenKey": null,
+      "hidden": true
+     }
+    ]
    }
   ],
   "traitBase": {
@@ -1591,7 +1651,7 @@
    "phase": 2,
    "level": 60,
    "skillLevel": 7,
-   "equipLevel": 0
+   "equipLevel": 1
   },
   "stats": {
    "maxHp": 1768,
@@ -1673,9 +1733,7 @@
     "prob": 0.65
    },
    "bbStr": {},
-   "rangeGrid": null,
-   "moduleDesc": null,
-   "moduleDescRaw": null
+   "rangeGrid": null
   },
   "skill": {
    "skillId": "skchr_tmoris_2",
@@ -1845,9 +1903,7 @@
       "prob": 0.65
      },
      "bbStr": {},
-     "rangeGrid": null,
-     "moduleDesc": null,
-     "moduleDescRaw": null
+     "rangeGrid": null
     },
     "talentChanges": []
    }
@@ -2276,17 +2332,17 @@
    "phase": 2,
    "level": 60,
    "skillLevel": 7,
-   "equipLevel": 0
+   "equipLevel": 3
   },
   "stats": {
-   "maxHp": 2090,
-   "atk": 742,
+   "maxHp": 2210,
+   "atk": 767,
    "def": 400,
    "res": 10,
    "cost": 18,
    "blockCnt": 2,
    "bat": 1.3,
-   "aspd": 105,
+   "aspd": 107,
    "respawnTime": 66,
    "spRecovery": 1,
    "hpRecoveryPerSec": 0,
@@ -2353,7 +2409,7 @@
    "bbStr": {},
    "rangeGrid": null,
    "moduleDesc": "攻击范围内存在2名及以上敌人时攻击速度+12",
-   "moduleDescRaw": "攻击范围内存在2名及以上敌人时攻击速度<@ba.kw>+12</>"
+   "moduleDescRaw": "攻击范围内存在2名及以上敌人时攻击速度<@ba.vup>+12</>"
   },
   "skill": {
    "skillId": "skchr_oblvns_2",
@@ -2393,18 +2449,56 @@
    {
     "index": 0,
     "name": "颂乐音符",
-    "desc": "丰川祥子可以持续攻击且攻击会演奏追踪敌人的音符，音符飘出攻击范围一段时间后消失。每存在一个音符，Ave Mujica成员无视敌人3%的防御力和2%法术抗性（最多叠加至10层）",
-    "descRaw": "丰川祥子可以持续攻击且攻击会演奏追踪敌人的音符，音符飘出攻击范围一段时间后消失。每存在一个音符，<$ba.mujica>Ave Mujica</>成员无视敌人3%的防御力和2%法术抗性（最多叠加至10层）",
+    "desc": "丰川祥子可以持续攻击且攻击会演奏追踪敌人的音符，音符飘出攻击范围一段时间后消失。每存在一个音符，Ave Mujica成员无视敌人5%的防御力和2.5%法术抗性（最多可叠加12层）；技能期间远程攻击不再降低攻击力",
+    "descRaw": "丰川祥子可以<$ba.permanentatk>持续攻击</>且攻击会演奏追踪敌人的音符，音符飘出攻击范围一段时间后消失。每存在一个音符，<$ba.mujica>Ave Mujica</>成员无视敌人5%的防御力和2.5%法术抗性（最多可叠加12层）；技能期间远程攻击不再降低攻击力",
     "bb": {
      "def_pen": 0.03,
      "res_pen": 0.02,
-     "max_stack": 10
+     "max_stack": 10,
+     "def_penetrate_ratio": 0.05,
+     "magic_resist_penetrate_ratio": 0.025,
+     "attack@angle": 20,
+     "delay": 1,
+     "max_cnt": 12
     },
     "bbStr": {},
-    "rangeGrid": null,
+    "rangeGrid": [
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      0,
+      3
+     ],
+     [
+      -1,
+      0
+     ],
+     [
+      -1,
+      1
+     ]
+    ],
     "tokenKey": null,
     "hidden": false,
-    "fromModule": false
+    "fromModule": true
    },
    {
     "index": 1,
@@ -2426,7 +2520,7 @@
    "id": "uniequip_002_oblivionis",
    "name": "无言的约定",
    "type": "LOR-Y",
-   "level": 1,
+   "level": 3,
    "active": true
   },
   "assets": {
@@ -2557,11 +2651,11 @@
     "typeIcon": "lor-y",
     "icon": "uniequip_002_oblivionis",
     "isDefault": true,
-    "level": 1,
+    "level": 3,
     "attr": {
-     "maxHp": 180,
-     "atk": 38,
-     "aspd": 5
+     "maxHp": 300,
+     "atk": 63,
+     "aspd": 7
     },
     "traitOverride": {
      "desc": "可以进行远程攻击，但此时攻击力降低至80%",
@@ -2573,9 +2667,71 @@
      "bbStr": {},
      "rangeGrid": null,
      "moduleDesc": "攻击范围内存在2名及以上敌人时攻击速度+12",
-     "moduleDescRaw": "攻击范围内存在2名及以上敌人时攻击速度<@ba.kw>+12</>"
+     "moduleDescRaw": "攻击范围内存在2名及以上敌人时攻击速度<@ba.vup>+12</>"
     },
-    "talentChanges": []
+    "talentChanges": [
+     {
+      "talentIndex": 0,
+      "name": "颂乐音符",
+      "desc": "丰川祥子可以持续攻击且攻击会演奏追踪敌人的音符，音符飘出攻击范围一段时间后消失。每存在一个音符，Ave Mujica成员无视敌人5%的防御力和2.5%法术抗性（最多可叠加12层）；技能期间远程攻击不再降低攻击力",
+      "descRaw": "丰川祥子可以<$ba.permanentatk>持续攻击</>且攻击会演奏追踪敌人的音符，音符飘出攻击范围一段时间后消失。每存在一个音符，<$ba.mujica>Ave Mujica</>成员无视敌人5%的防御力和2.5%法术抗性（最多可叠加12层）；技能期间远程攻击不再降低攻击力",
+      "bb": {
+       "def_penetrate_ratio": 0.05,
+       "magic_resist_penetrate_ratio": 0.025,
+       "attack@angle": 20,
+       "delay": 1,
+       "max_cnt": 12
+      },
+      "bbStr": {},
+      "rangeGrid": [
+       [
+        1,
+        0
+       ],
+       [
+        1,
+        1
+       ],
+       [
+        0,
+        0
+       ],
+       [
+        0,
+        1
+       ],
+       [
+        0,
+        2
+       ],
+       [
+        0,
+        3
+       ],
+       [
+        -1,
+        0
+       ],
+       [
+        -1,
+        1
+       ]
+      ],
+      "tokenKey": null,
+      "hidden": false
+     },
+     {
+      "talentIndex": -1,
+      "name": null,
+      "desc": null,
+      "descRaw": null,
+      "bb": {},
+      "bbStr": {},
+      "rangeGrid": null,
+      "tokenKey": null,
+      "hidden": false
+     }
+    ]
    }
   ],
   "traitBase": {

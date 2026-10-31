@@ -509,6 +509,7 @@ npm start          # 启动服务器：http://localhost:3000
 | `SP_NO_BROWSER` | 空 | 设为 `1` 时启动脚本不自动打开浏览器 |
 | `SP_BOT_EMOTES` | 空 | AI 队友的对局表情回应（战斗、整备、合成、联防、收礼时即刻的 `m.emote` 广播）；设为 `0` 时整体关闭 |
 | `SP_MAX_SEATS` | `20` | **一间同盟房最多几张座位卡**（房主滑杆的上限）。缺省 20；空值 / 写错 / 小于 1 回落 20，小数向下取整。设成 `4` 回到官方那一档（帧与从前逐字节相同）。抬更多座时通常要同时抬 `startServer({ maxConnectionsPerAddr })`——它**不是**环境变量（注释里的 `SP_MAX_CONNS_PER_ADDR` 并不存在）；细节见 [docs/NET-TUNING.md](docs/NET-TUNING.md) §2.3 |
+| `SP_RECON_PUBLIC` | 不设 | 把**重构模拟**（`mode:'recon'`）对公网开放：不设时只有回环 / 私网会话能开重构房（大厅入口也只在这些会话上画）；设成 `1` / `true` / `yes` / `on` 后任何会话都能开，`welcome` 多一格 `reconAllowed: true` 让客户端画出入口。「全量模拟」仍只归本地端（`devAllowed` 不受它影响）。业主 2026-10-29 在云服务器上开放、收集玩家反馈用的就是这一格 |
 
 设置方式：macOS / Linux `PORT=8080 npm start`；PowerShell `$env:PORT=8080; npm start`；cmd `set "PORT=8080" && npm start`。健康检查：`GET /healthz`。
 座位上限同理：`SP_MAX_SEATS=40 npm start`（PowerShell：`$env:SP_MAX_SEATS = 40; npm start`）。

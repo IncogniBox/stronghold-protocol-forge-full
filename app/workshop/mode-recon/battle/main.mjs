@@ -20,8 +20,654 @@
 
 import * as S from '@battle/mod.js';
 
+/** 赤刃明霄陈·重构（业主 2026-10-30）：攻击附带「已激活【炎】层数 × 当前生命百分比」的固定真实伤害。 */
+const CHEN3_TRUE_DMG = 'RECON_CHEN3_TRUE_DMG';
+const YAN_BOND = 'yanShip';
+
+/**
+ * 赤刃明霄陈·重构的特质（`garrisons.json` 的 `recon_garrison_chen3_a/b`，`eventType: IN_BATTLE`）：
+ * 每次命中（`hit`，来源是这名干员）追加一笔**真实伤害** = 已激活【炎】层数 × `hp_pct` × 目标**当前**生命值。
+ * 精英 `hp_pct` = 0.00002（0.002%），普通 0.00001（0.001%）；层数读 `S.bondLayers`（盟约没激活就是 0）。
+ * 追加的那一笔带 `garrison` 标签 —— 它自己也会走 `hit`，靠这个标签挡掉递归。
+ */
+S.registerGarrisonInstaller(CHEN3_TRUE_DMG, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u) continue;
+    const pct = S.num(it.bb.hp_pct, 0);
+    if (!(pct > 0)) continue;
+    battle.on('hit', ({ source, target, dmg }) => {
+      if (source !== u || !target || target.side !== 'enemy' || !dmg) return;
+      if (!dmg.isAttack) return; // 「攻击附带」：技能 DoT / 元素损伤那类不算
+      if (Array.isArray(dmg.tags) && dmg.tags.includes('garrison')) return; // 追加的那一笔不递归
+      const layers = S.bondLayers(battle, u.ownerId, YAN_BOND);
+      const hp = target.bossPool ? target.bossPool.hp : target.hp;
+      const amount = layers * pct * Math.max(0, S.num(hp, 0));
+      if (amount > 0) battle.dealDamage(u, target, { amount, type: 'true', canDodge: false, tags: ['garrison', 'addition'] });
+    }, { owner: u });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// 萨尔贡（业主 2026-10-30）：娜仁图亚 / 森蚺 / 狮蝎 三名新干员的战斗内特质（`garrisons.json` 的
+// `recon_garrison_narant_a/b`、`recon_garrison_zumama_a/b`、`recon_garrison_mantic_a/b`，全部 `IN_BATTLE`）。
+// 两条与休整期有关的数走**战斗 → 休整期的通用标记**（`S.setBattleMark`，`meta/main.mjs` 的 sargonPrepRewards 读）。
+// ---------------------------------------------------------------------------------------------------------------
+
+/** 萨尔贡盟约 id（三名特质都按「这名干员是不是萨尔贡干员」判定）。 */
+const SARGON_BOND = 'sargonShip';
+const NARANT_SHARE = 'RECON_NARANT_SHARE';
+const ZUMAMA_LAYERS = 'RECON_ZUMAMA_LAYERS';
+const MANTIC_STEALTH = 'RECON_MANTIC_STEALTH';
+/** 狮蝎给的隐匿 buff 键（同一个键在同一名干员身上只保留一份）。 */
+const MANTIC_STEALTH_KEY = 'recon:mantic:stealth';
+/** 战斗 → 休整期标记的键（与 `meta/main.mjs` 同一份字符串）。 */
+const MARK_SARGON_CASTS = 'reconSargonCasts';
+const MARK_STEALTH_HOLDERS = 'reconStealthHolders';
+
+/**
+ * 娜仁图亚：`【萨尔贡】干员技能开启后，携带装备的效果共享至相邻四格 / 周围八格【萨尔贡】干员（持续60秒）`。
+ * 触发者是**开启技能的那名萨尔贡干员本人**（共享的是它携带的装备，引擎的 `lendItemEffects` 就是为此而备）；
+ * 特质主人娜仁图亚只要在同一名玩家的场上即可，多个副本取「格数最大」的那一份。
+ */
+S.registerGarrisonInstaller(NARANT_SHARE, (battle, list) => {
+  battle.on('skillStart', ({ unit }) => {
+    if (!unit || unit.kind !== 'op' || !S.isMember(battle, unit, SARGON_BOND)) return;
+    const carriers = list.filter((it) => it.unit && it.unit.ownerId === unit.ownerId && S.onField(it.unit));
+    if (!carriers.length) return;
+    let best = carriers[0];
+    for (const it of carriers) if (S.num(it.bb.tiles, 4) > S.num(best.bb.tiles, 4)) best = it;
+    const tiles = S.num(best.bb.tiles, 4) >= 8 ? S.N8 : S.N4;
+    const duration = S.num(best.bb.duration, 60);
+    const maxTier = S.num(best.bb.max_tier, 6);
+    if (!(duration > 0)) return;
+    let n = 0;
+    for (const a of S.alliesAround(battle, unit, tiles)) {
+      if (!S.isOp(a) || !S.onField(a) || !S.isMember(battle, a, SARGON_BOND)) continue;
+      if (S.lendItemEffects(battle, unit, a, { maxTier, duration })) n++;
+    }
+    if (n) S.fxOn(battle, 'bondShare', unit, 'recon:narant', 'share', { n, duration });
+  });
+});
+
+/**
+ * 森蚺：`【萨尔贡】干员每开启1次技能，使已激活的【萨尔贡】【坚守】层数+6`；本场开启次数 ≥20 时，
+ * 进入休整期获得黄沙罗盘（精锐 2 件，休整期那一半在 `meta/main.mjs`）。计数按玩家分开记。
+ */
+S.registerGarrisonInstaller(ZUMAMA_LAYERS, (battle, list) => {
+  const casts = new Map();
+  const bonds = ['sargonShip', 'steadShip'];
+  battle.on('skillStart', ({ unit }) => {
+    if (!unit || unit.kind !== 'op' || unit.ownerId == null || !S.isMember(battle, unit, SARGON_BOND)) return;
+    const carrier = list.find((it) => it.unit && it.unit.ownerId === unit.ownerId && S.onField(it.unit));
+    if (!carrier) return;
+    casts.set(unit.ownerId, (casts.get(unit.ownerId) ?? 0) + 1);
+    const n = S.num(carrier.bb.layers, 6);
+    if (n > 0) S.gainLayers(battle, { playerId: unit.ownerId, bonds, n, requireActive: true, source: carrier.unit, reason: 'garrison' });
+  });
+  battle.on('battleEnd', () => {
+    for (const it of list) {
+      const ownerId = it.unit && it.unit.ownerId;
+      if (ownerId == null) continue;
+      S.setBattleMark(battle, ownerId, MARK_SARGON_CASTS, casts.get(ownerId) ?? 0);
+    }
+  });
+});
+
+/**
+ * 狮蝎：`<战斗开始时>使自身与相邻四格 / 周围8格的干员获得隐匿（持续999秒，受到敌人攻击后解除）`；
+ * `<进入休整期时>`按上回合战斗结束时持有隐匿的干员数给盟约之币（最多 2 / 4 件，休整期那一半在 meta）。
+ * 解除只在**敌人的攻击**命中时发生（技能 DoT / 流失不算）。
+ */
+S.registerGarrisonInstaller(MANTIC_STEALTH, (battle, list) => {
+  const watched = new Set();
+  battle.on('battleStart', () => {
+    for (const it of list) {
+      const u = it.unit;
+      if (!u || !S.onField(u)) continue;
+      const tiles = S.num(it.bb.tiles, 4) >= 8 ? S.N8 : S.N4;
+      const duration = S.num(it.bb.duration, 999);
+      if (!(duration > 0)) continue;
+      const targets = [u, ...S.alliesAround(battle, u, tiles).filter((a) => S.isOp(a) && S.onField(a))];
+      for (const t of targets) {
+        battle.addBuff(t, { key: MANTIC_STEALTH_KEY, duration, flags: { stealth: true }, status: 'stealth' });
+        watched.add(t);
+      }
+    }
+  });
+  battle.on('hit', ({ target, source, dmg }) => {
+    if (!target || !watched.has(target) || !dmg || !dmg.isAttack || dmg.cancel) return;
+    if (!source || source.side !== 'enemy') return;
+    watched.delete(target);
+    battle.removeBuff(target, MANTIC_STEALTH_KEY);
+  });
+  battle.on('battleEnd', () => {
+    for (const it of list) {
+      const ownerId = it.unit && it.unit.ownerId;
+      if (ownerId == null) continue;
+      let n = 0;
+      for (const a of S.playerOps(battle, ownerId)) if (S.onField(a) && a.s && a.s.flags && a.s.flags.stealth) n++;
+      S.setBattleMark(battle, ownerId, MARK_STEALTH_HOLDERS, n);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// 维多利亚（业主 2026-10-30）：澄闪 / 死芒 / 傀影 三名新干员的战斗内特质（`garrisons.json` 的
+// `recon_garrison_gdglow_a/b`、`recon_garrison_necras_a/b`、`recon_garrison_phatom_a/b`，全部 `IN_BATTLE`）。
+// 三名干员的技能本体是官方自选 kit（棋子记录的 `kitRef` = 官方 charId，`content/index.js kitOf` 照搬），
+// 所以这里只叠加特质。傀影的「本回合部署次数 ≥3 → 维式重锤」走**战斗 → 休整期的通用标记**
+// （`meta/main.mjs` 的 victoriaPrepRewards 读）。
+// ---------------------------------------------------------------------------------------------------------------
+
+const VICTORIA_BOND = 'victoriaShip';
+const GDGLOW_DRONES = 'RECON_GDGLOW_DRONES';
+const NECRAS_FIELD = 'RECON_NECRAS_FIELD';
+const PHATOM_DEPLOY = 'RECON_PHATOM_DEPLOY';
+/** 战斗 → 休整期标记的键（与 `meta/main.mjs` 同一份字符串）。 */
+const MARK_PHATOM_DEPLOYS = 'reconPhantomDeploys';
+
+/**
+ * 澄闪：`已激活的【维多利亚】盟约每有200层（精锐100），技能开启时召唤的浮游单元+1`。
+ * 浮游单元由官方 kit 在技能 `onStart` 里建好（`unit.mem.gdDrones`）—— `skills.js` 先跑 `onStart`、
+ * 再 `emit('skillStart')`，所以这里读到的数组已经存在，往后追加的单元与 kit 建的同形（`{ i, lock, cd, rampId, ramp }`）。
+ */
+S.registerGarrisonInstaller(GDGLOW_DRONES, (battle, list) => {
+  battle.on('skillStart', ({ unit }) => {
+    if (!unit || unit.kind !== 'op') return;
+    const it = list.find((x) => x.unit === unit);
+    if (!it) return;
+    const per = S.num(it.bb.layers, 200);
+    if (!(per > 0) || !S.bondActive(battle, unit.ownerId, VICTORIA_BOND)) return;
+    const extra = Math.floor(S.bondLayers(battle, unit.ownerId, VICTORIA_BOND) / per);
+    const D = unit.mem && unit.mem.gdDrones;
+    if (!(extra > 0) || !Array.isArray(D)) return;
+    const n0 = D.length;
+    for (let i = n0; i < n0 + extra; i++) D.push({ i, lock: null, cd: 0, rampId: null, ramp: 0 });
+    S.fxOn(battle, 'drones', unit, 'recon:gdglow', 'extra', { n: extra });
+  });
+});
+
+/**
+ * 死芒：`自身与召唤物造成的伤害提升【维多利亚】盟约层数×0.5%（精锐×1%）`，
+ * `普通攻击与技能攻击范围扩大为场上【维多利亚】干员攻击范围的总和`。
+ *   * 伤害：`hit` 里按**实时**层数乘 `dmg.mul`（自身与自己的召唤物都算，`source.ownerUnit`）；
+ *   * 范围：`setExtraRange`（绝对格键，技能的 `targeting.rangeGrid` 也叠加），每 0.5 秒与每次部署 / 阵亡重算。
+ */
+S.registerGarrisonInstaller(NECRAS_FIELD, (battle, list) => {
+  const itOf = (source) => {
+    if (!source) return null;
+    return list.find((x) => x.unit && (source === x.unit || (source.kind === 'token' && source.ownerUnit === x.unit))) ?? null;
+  };
+  battle.on('hit', ({ source, target, dmg }) => {
+    if (!target || target.side !== 'enemy' || !dmg || dmg.cancel) return;
+    const it = itOf(source);
+    if (!it || it.unit.ownerId == null) return;
+    const bond = (it.bbStr && it.bbStr.bond) || 'victoriaShip';
+    const pct = S.num(it.bb.pct, 0);
+    if (!(pct > 0) || !S.bondActive(battle, it.unit.ownerId, bond)) return;
+    const layers = S.bondLayers(battle, it.unit.ownerId, bond);
+    if (layers <= 0) return;
+    const mul = typeof dmg.mul === 'number' && Number.isFinite(dmg.mul) ? dmg.mul : 1;
+    dmg.mul = mul * (1 + layers * pct);
+  });
+  /** 场上每一名【维多利亚】干员当前攻击范围的并集（绝对格键）→ 这名死芒的额外攻击范围。 */
+  const refreshRange = () => {
+    for (const it of list) {
+      const u = it.unit;
+      if (!u || !u.alive || !u.deployed || u.ownerId == null) continue;
+      const keys = new Set();
+      for (const a of S.playerOps(battle, u.ownerId, { fieldOnly: true })) {
+        if (!S.isMember(battle, a, VICTORIA_BOND)) continue;
+        for (const k of a.rangeKeys || []) keys.add(k);
+      }
+      battle.setExtraRange(u, [...keys]);
+    }
+  };
+  battle.every(0.5, refreshRange);
+  battle.on('deploy', refreshRange);
+  battle.on('death', refreshRange);
+  battle.on('battleStart', refreshRange);
+});
+
+/**
+ * 傀影：`<部署时>使自身已激活的盟约层数+4（精锐+8，最多5次）`；
+ * `本回合部署次数≥3时，获得1件（精锐2件）带有随机效果的维式重锤`（休整期那一半在 `meta/main.mjs`）。
+ * 部署计数按**棋子**（同一名傀影的第 n 次非移动部署），上限 `bb.max_times`；标记按玩家取所有副本的最大值。
+ */
+S.registerGarrisonInstaller(PHATOM_DEPLOY, (battle, list) => {
+  const counts = new Map();
+  battle.on('deploy', ({ unit, move }) => {
+    if (!unit || unit.kind !== 'op' || move) return;
+    const it = list.find((x) => x.unit === unit);
+    if (!it) return;
+    const cap = Math.max(0, S.num(it.bb.max_times, 5));
+    const n = counts.get(unit) ?? 0;
+    if (n >= cap) return;
+    counts.set(unit, n + 1);
+    const layers = S.num(it.bb.layers, 4);
+    if (!(layers > 0) || unit.ownerId == null) return;
+    S.gainLayers(battle, { playerId: unit.ownerId, bonds: S.unitBonds(unit), n: layers, requireActive: true, source: unit, reason: 'garrison' });
+  });
+  battle.on('battleEnd', () => {
+    for (const it of list) {
+      const pid = it.unit && it.unit.ownerId;
+      if (pid == null) continue;
+      let max = 0;
+      for (const [unit, n] of counts) if (unit.ownerId === pid) max = Math.max(max, n);
+      S.setBattleMark(battle, pid, MARK_PHATOM_DEPLOYS, max);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// 谢拉格（业主 2026-10-30）：极光 / 讯使 两名新干员与 雪猎 / 圣聆初雪 两名重构。
+// 雪猎的重构只是数据（新的 SERVER_ADD_BOND_CHESS_ALL 特质记录，层数 3 / 6），不需要代码；讯使的休整期那一半在
+// `meta/main.mjs`（`kjeragPrepRewards`）。这里的三段：
+//   * 极光：盟约激活后每秒回技力 + 每 3 次寒冷给【谢拉格】【不屈】加层；
+//   * 圣聆初雪：攻击寒冷 / 冻结的敌人时，下一次攻击多无视 1 / 2 点法抗（最多 25 层）；
+//   * 两名新干员在本机没有官方 kit（`char_422_aurora` / `char_198_blackd` 不在 `kits/ops` 里），技能走引擎的
+//     generic kit —— 这里只补它推导不出的两处：讯使 S2 的部署费用 / 防御力，与极光 S2 的「目标冻结时才提高攻击力」。
+// ---------------------------------------------------------------------------------------------------------------
+
+/** 谢拉格 / 不屈 盟约 id。 */
+const KJERAG_BOND = 'kjeragShip';
+const INDOM_BOND = 'indomShip';
+const AURORA_TRAIT = 'RECON_AURORA_TRAIT';
+const SBELL2_PIERCE = 'RECON_SBELL2_PIERCE';
+/** 圣聆初雪的法抗穿透层数 buff 键（同一名干员身上只保留一份，层数上限 `bb.max`）。 */
+const SBELL2_PIERCE_KEY = 'recon:sbell2:pierce';
+/** 讯使 S2 的防御力 buff 键（技能结束时摘掉）。 */
+const COURIER_DEF_KEY = 'recon:courier:s2def';
+/** 两名新干员的 S2 skillId（`data/chess.json` 另一版记录里的 id，逐字保留在包里）。 */
+const AURORA_S2 = 'skchr_aurora_2';
+const COURIER_S2 = 'skchr_blackd_2';
+
+/**
+ * 极光：`【谢拉格】盟约激活后，每秒获得1技力（精锐2）`；
+ * `每对敌人造成3次寒冷，使已激活的【谢拉格】【不屈】层数+2（精锐+4）`。
+ *   * 技力给**极光自己**（`unit.skill.gainSp`），盟约没激活就跳过；
+ *   * 寒冷在 `beforeStatus` 里数**这名玩家**对敌人施加的次数：`source` 是自家干员，或 `source` 为空时敌人属于这名
+ *     玩家的半场（谢拉格 6 人的寒风就是无来源、按 `ownerId` 只吹自己这半边）；满 3 次给两条盟约各加 `bb.layers` 层。
+ */
+S.registerGarrisonInstaller(AURORA_TRAIT, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u) continue;
+    const sp = S.num(it.bb.sp, 0);
+    if (sp > 0) {
+      battle.every(1, () => {
+        if (!u.alive || !u.deployed || u.ownerId == null || !u.skill) return;
+        if (!S.bondActive(battle, u.ownerId, KJERAG_BOND)) return;
+        u.skill.gainSp(sp, 'trait');
+      });
+    }
+    const need = Math.max(1, S.num(it.bb.cold, 3));
+    const layers = S.num(it.bb.layers, 2);
+    if (!(layers > 0)) continue;
+    let n = 0;
+    battle.on('beforeStatus', (c) => {
+      if (!c || c.cancel || c.status !== 'cold') return;
+      const target = c.target;
+      if (!target || !target.alive || target.side !== 'enemy' || u.ownerId == null) return;
+      const src = c.source;
+      if (src ? !(src.side === 'ally' && src.ownerId === u.ownerId) : target.ownerId !== u.ownerId) return;
+      if (++n < need) return;
+      n = 0;
+      S.gainLayers(battle, { playerId: u.ownerId, bonds: [KJERAG_BOND, INDOM_BOND], n: layers, requireActive: true, source: u, reason: 'garrison' });
+    }, { owner: u });
+    // generic kit 把 S2 的 `atk_scale`（2.5 / 3）当成**每次攻击**的倍率；官方口径是「目标已冻结才提高到 250% / 300%」，
+    // 所以目标没有冻结时把这一笔倍率退回去（`hit` 在减伤之前，`dmg.amount` 可改）。
+    battle.on('hit', ({ source, target, dmg }) => {
+      if (source !== u || !dmg || !dmg.isAttack || !target || target.side !== 'enemy') return;
+      const sk = u.skill;
+      if (!sk || !sk.active || sk.id !== AURORA_S2) return;
+      if (target.s.flags.freeze) return;
+      const sc = S.num(sk.bb && sk.bb.atk_scale, 1);
+      if (sc > 1 && S.num(dmg.amount, 0) > 0) dmg.amount /= sc;
+    }, { owner: u });
+  }
+});
+
+/**
+ * 圣聆初雪：`<战斗中>攻击处于寒冷、冻结的敌人时，使自身下次攻击造成的伤害无视敌人1点法术抗性（精锐2，可叠加25层）`。
+ * 每满足一次就叠一层（`refresh: 'stack'` + `maxStacks`），层数即 `resIgnoreFlat` 数值（引擎的加法 mod 按层数放大）；
+ * 在 `damaged` 里叠层，所以**这一击不受益**，下一击起自动带上（单位三围在 `markDirty` 后重算）。
+ */
+S.registerGarrisonInstaller(SBELL2_PIERCE, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u) continue;
+    const per = S.num(it.bb.res, 0);
+    const max = Math.max(1, S.num(it.bb.max, 25));
+    if (!(per > 0)) continue;
+    battle.on('damaged', ({ source, target, dmg }) => {
+      if (source !== u || !dmg || !dmg.isAttack) return;
+      if (!target || target.side !== 'enemy') return;
+      const f = target.s.flags;
+      if (!f.cold && !f.freeze) return;
+      battle.addBuff(u, {
+        key: SBELL2_PIERCE_KEY, mods: { resIgnoreFlat: per }, maxStacks: max, refresh: 'stack',
+        duration: Infinity, persist: true, allowDead: true, tags: ['garrison'],
+      });
+    }, { owner: u });
+  }
+});
+
+/**
+ * 讯使 S2 `冲锋号令·防御`（本机没有 `char_198_blackd` 的官方 kit，generic kit 认不出 `blackd_s_2[period].*`）：
+ * 开启时立即获得 `once.cost` 点部署费用，随后每 `period.interval` 秒获得 `period.cost` 点（`trig_cnt` 次），
+ * 持续期间防御力 +`period.def`（与技能同时结束）。S1 `skcom_charge_cost[2]` 的 9 点费用 generic kit 已经能读（平键 `cost`）。
+ * 讯使的特质记录是 `SERVER_PREP_START`（只进休整期，不进 `IN_BATTLE` 的特质表），所以这一段挂在包自己的
+ * `install(battle)` 上，按棋子的正式 id 认人。
+ */
+function installCourierSkills(battle) {
+  for (const u of battle.allyUnits || []) {
+    if (!u || u.kind !== 'op') continue;
+    const base = String(u.def?.baseId ?? u.defId ?? '');
+    if (!base.includes('chess_ws_recon_courier_')) continue;
+    battle.on('skillStart', ({ unit }) => {
+      if (unit !== u || !u.skill || u.skill.id !== COURIER_S2 || u.ownerId == null) return;
+      const bb = u.skill.bb || {};
+      const once = S.num(bb['blackd_s_2[once].cost'], 3);
+      if (once > 0) {
+        battle.addDp(u.ownerId, once);
+        S.fxOn(battle, 'dp', u, 'recon:courier', 's2', { n: once });
+      }
+      const period = Math.max(0.01, S.num(bb['blackd_s_2[period].interval'], 1.87));
+      let left = Math.max(0, Math.floor(S.num(bb['blackd_s_2[period].trig_cnt'], 8)));
+      if (left > 0) {
+        const timer = battle.every(period, () => {
+          if (left <= 0 || !u.alive || !u.skill || !u.skill.active) { timer.cancel(); return; }
+          left--;
+          battle.addDp(u.ownerId, S.num(bb['blackd_s_2[period].cost'], 1));
+        });
+      }
+      const def = S.num(bb['blackd_s_2[period].def'], 0);
+      if (def > 0) battle.addBuff(u, { key: COURIER_DEF_KEY, mods: { defPct: def }, duration: S.num(u.skill.duration, 15), refresh: 'replace', tags: ['garrison'] });
+    }, { owner: u });
+    battle.on('skillEnd', ({ unit }) => { if (unit === u) battle.removeBuff(u, COURIER_DEF_KEY); }, { owner: u });
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 拉特兰（业主 2026-10-30）：菲亚梅塔的弹药计数（战斗 → 休整期）与蕾缪安的两条战斗内特质。
+//   * 菲亚梅塔的 `<获得时>` 一半是纯数据（官方 `SERVER_GAIN_EQUIP`），这里只数「【拉特兰】干员消耗了多少弹药」；
+//   * 蕾缪安的新特质：技能开启期间射程内敌人速度 -90%、自身受到伤害按【拉特兰】层数 ×2% / ×4% 降低。
+// ---------------------------------------------------------------------------------------------------------------
+
+const LATERANO_BOND = 'lateranoShip';
+const PHENXI_AMMO = 'RECON_PHENXI_AMMO';
+const LEMUEN_FIELD = 'RECON_LEMUEN_FIELD';
+/** 战斗 → 休整期标记的键（与 `meta/main.mjs` 同一份字符串）。 */
+const MARK_LATERANO_AMMO = 'reconLateranoAmmo';
+
+/**
+ * 菲亚梅塔：`<战斗中>【拉特兰】干员消耗弹药 ≥ bb.ammo` ⇒ 进入休整期时获得 1 件拉特兰桥夹。
+ * `ammoUsed` 一条 = 一发（多名【拉特兰】干员的弹药都算）；战斗结束时按玩家把总数写进标记，由
+ * `meta/main.mjs` 的 `lateranoPrepRewards` 对照特质记录的 `bb.ammo` 发件（阈值在数据里，普通 200 / 精锐 100）。
+ */
+S.registerGarrisonInstaller(PHENXI_AMMO, (battle) => {
+  const spent = new Map();
+  battle.on('ammoUsed', ({ unit }) => {
+    if (!unit || unit.kind !== 'op' || unit.ownerId == null) return;
+    if (!S.isMember(battle, unit, LATERANO_BOND)) return;
+    spent.set(unit.ownerId, (spent.get(unit.ownerId) ?? 0) + 1);
+  });
+  battle.on('battleEnd', () => {
+    for (const [playerId, n] of spent) S.setBattleMark(battle, playerId, MARK_LATERANO_AMMO, n);
+  });
+});
+
+/**
+ * 蕾缪安：`<战斗中>技能开启期间，攻击范围内的敌人速度-90%，自身受到的伤害降低【拉特兰】层数×2%（精锐×4%）`。
+ *   * 减速：每 0.2 秒给射程内的敌人补一层 0.3 秒的 `moveMul`（离开射程就到期；技能一开立刻补一次）；
+ *   * 减伤：`hit` 里按**实时**层数乘 `dmg.mul`（自身受到的任何伤害都算，层数读到多少就减多少）。
+ */
+S.registerGarrisonInstaller(LEMUEN_FIELD, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u) continue;
+    const slow = S.num(it.bb.slow, 0.9);
+    const pct = S.num(it.bb.pct, 0);
+    const slowKey = `recon:lemuen:slow:${u.id}`;
+    const pulse = () => {
+      if (!u.alive || !u.deployed || !u.skill || !u.skill.active) return;
+      const mul = Math.max(0, 1 - slow);
+      if (!(mul < 1)) return;
+      for (const e of battle.enemies || []) {
+        if (!e || !e.alive || !S.inRange(u, e)) continue;
+        battle.addBuff(e, { key: slowKey, duration: 0.3, refresh: 'replace', mods: { moveMul: mul }, source: u, tags: ['garrison'] });
+      }
+    };
+    battle.on('skillStart', ({ unit }) => { if (unit === u) pulse(); }, { owner: u });
+    battle.every(0.2, pulse);
+    if (pct > 0) {
+      battle.on('hit', ({ target, dmg }) => {
+        if (target !== u || !dmg || dmg.cancel) return;
+        if (!u.skill || !u.skill.active || u.ownerId == null) return;
+        const cut = S.bondLayers(battle, u.ownerId, LATERANO_BOND) * pct;
+        if (cut <= 0) return;
+        dmg.mul = cut >= 1 ? 0 : S.num(dmg.mul, 1) * (1 - cut);
+      }, { owner: u });
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// 卡西米尔（业主 2026-10-30）：白金的攻速叠层与玛恩纳的固定伤害齐射。
+//   * 薇薇安娜的两个「休整期 / 装备销毁」一半都在数据与 `meta/main.mjs`（骑士储蓄罐的销毁概率改写在那边的 item 处理器）。
+// ---------------------------------------------------------------------------------------------------------------
+
+const KAZIMIERZ_BOND = 'kazimierzShip';
+const PLATNM_ASPD = 'RECON_PLATNM_ASPD';
+const MLYNAR_FIELD = 'RECON_MLYNAR_FIELD';
+
+/**
+ * 白金：`<战斗中>未攻击时每 0.5 秒攻速 +5（最多 20 层），到顶后在场每 5 秒自身已激活盟约 +1；攻击后 10 秒内逐渐降到 0`。
+ * 一个 buff（key 按干员 id 区分）每跳用 `refresh: 'replace'` 重写 `aspd` 加法值；最后一次攻击距今 < `bb.decay` 秒就减一层，
+ * 否则加一层。到顶后的盟约 +1 走 `gainLayers`（只加这名干员自己的已激活盟约）。
+ */
+S.registerGarrisonInstaller(PLATNM_ASPD, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u) continue;
+    const step = S.num(it.bb.aspd, 5);
+    const max = Math.max(1, Math.floor(S.num(it.bb.max, 20)));
+    const interval = Math.max(0.01, S.num(it.bb.interval, 0.5));
+    const decay = Math.max(0, S.num(it.bb.decay, 10));
+    const bondEvery = Math.max(0, S.num(it.bb.layers_interval, 5));
+    const bondLayers = S.num(it.bb.layers, 1);
+    const key = `recon:platnm:aspd:${u.id}`;
+    let stacks = 0;
+    let lastAttack = -Infinity;
+    let clock = 0;
+    const apply = () => {
+      if (!u.alive) return;
+      if (stacks <= 0) { battle.removeBuff(u, key); return; }
+      battle.addBuff(u, { key, mods: { aspd: stacks * step }, duration: Infinity, refresh: 'replace', persist: true, allowDead: true, tags: ['garrison'] });
+    };
+    battle.on('attack', ({ attacker }) => { if (attacker === u) lastAttack = battle.time; }, { owner: u });
+    battle.every(interval, () => {
+      if (!u.alive || !u.deployed) return;
+      const since = battle.time - lastAttack;
+      // 攻击后的 `decay` 秒内只降不涨（「10 秒内逐渐降至 0」）；窗口结束后若仍在场上且没再攻击，才回到
+      // 「未攻击时每 `interval` 秒 +1 层」的累积。边界含等号：正好到 10 秒的那一跳仍算窗口内，随后才开始回升。
+      const next = since <= decay ? Math.max(0, stacks - 1) : Math.min(max, stacks + 1);
+      if (next !== stacks) { stacks = next; apply(); }
+      if (stacks >= max && bondEvery > 0) {
+        clock += interval;
+        if (clock >= bondEvery) {
+          clock -= bondEvery;
+          if (u.ownerId != null) S.gainLayers(battle, { playerId: u.ownerId, bonds: S.unitBonds(u), n: bondLayers, requireActive: true, source: u, reason: 'garrison' });
+        }
+      } else {
+        clock = 0;
+      }
+    });
+  }
+});
+
+/**
+ * 玛恩纳：`【卡西米尔】干员每攻击 3 次，都会使全场敌人在 2 秒受到 5 次 N 点的固定伤害`。
+ * 每名玛恩纳各记一份自己的攻击计数（同一玩家的【卡西米尔】干员的攻击都算）；每 3 次排 5 发无来源固定伤害
+ * （`sourceless`，`type: 'true'`，间隔 `bb.interval` 秒、共 2 秒）。
+ */
+S.registerGarrisonInstaller(MLYNAR_FIELD, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u || u.ownerId == null) continue;
+    const need = Math.max(1, Math.floor(S.num(it.bb.attacks, 3)));
+    const ticks = Math.max(1, Math.floor(S.num(it.bb.ticks, 5)));
+    const interval = Math.max(0.01, S.num(it.bb.interval, 0.4));
+    const damage = S.num(it.bb.damage, 0);
+    if (!(damage > 0)) continue;
+    let n = 0;
+    battle.on('attack', ({ attacker }) => {
+      if (!attacker || attacker.kind !== 'op' || attacker.ownerId !== u.ownerId) return;
+      if (!S.isMember(battle, attacker, KAZIMIERZ_BOND)) return;
+      if (++n % need !== 0) return;
+      for (let i = 1; i <= ticks; i++) {
+        battle.after(interval * i, () => {
+          for (const e of battle.enemies || []) {
+            if (!e || !e.alive) continue;
+            battle.dealDamage(null, e, { amount: damage, type: 'true', canDodge: false, sourceless: true, tags: ['garrison', 'addition'] });
+          }
+        }, { owner: u });
+      }
+    }, { owner: u });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// 叙拉古（业主 2026-10-31）：斥罪的「替隐匿的叙拉古干员承担攻击」。
+//   * 贝洛内的两条特质（部署加层 / 休整期互惠）一半在数据（`act2autochess_gar_event_onstart`）一半在
+//     `meta/main.mjs`（`siracusaPrepRewards`）。
+// ---------------------------------------------------------------------------------------------------------------
+
+const SIRACUSA_BOND = 'siracusaShip';
+const ZEIZ_GUARD = 'RECON_ZEIZ_GUARD';
+
+/**
+ * 斥罪：`处于隐匿的【叙拉古】干员受到的攻击由自身承担，每次承担攻击都会使【叙拉古】【不屈】层数 +4 / +8
+ * （最多 6 次）`。
+ * 在 `hit` 钩子上（priority −20，等其它修正都算完）把这一击取消，再以同一份数值打给斥罪自己 —— 她按自己的
+ * 防御 / 法抗结算（「由自身承担」）。每承担一次就 `gainLayers` 一次，`cap` = 4/8 × 6 且 `capKey` 按干员区分，
+ * 所以每名斥罪每场各自至多 6 次。另一名斥罪身上的伤害不再转走（`zeizTransfer` 标签 + 目标自带同一条特质即跳过）。
+ */
+S.registerGarrisonInstaller(ZEIZ_GUARD, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u || u.ownerId == null) continue;
+    const step = Math.max(1, Math.floor(S.num(it.bb.layers, 4)));
+    const maxTimes = Math.max(0, Math.floor(S.num(it.bb.max_times, 6)));
+    if (!(step > 0)) continue;
+    battle.on('hit', ({ source: src, target: t, dmg: d }) => {
+      if (!src || !d || !t) return;
+      if (!d.isAttack || src.side !== 'enemy') return;
+      if (d.cancel || (Array.isArray(d.tags) && d.tags.includes('zeizTransfer'))) return;
+      if (t === u || t.side !== 'ally' || t.kind !== 'op' || !t.alive || t.removed) return;
+      if (!t.s || !t.s.flags || !t.s.flags.stealth) return;
+      if (!S.isMember(battle, t, SIRACUSA_BOND)) return;
+      if (!u.alive || !u.deployed) return;
+      // 目标自己就是另一名斥罪 ⇒ 不替她承担（避免两名斥罪互相转移）
+      if (S.garrisonIdsOf(t).some((gid) => /^recon_garrison_judge_/.test(gid))) return;
+      d.cancel = true;
+      battle.dealDamage(src, u, {
+        amount: d.amount, type: d.type, mul: d.mul, canDodge: d.canDodge,
+        isAttack: true, isSkill: d.isSkill, tags: ['garrison', 'addition', 'zeizTransfer'],
+      });
+      S.gainLayers(battle, {
+        playerId: u.ownerId, bonds: [SIRACUSA_BOND, INDOM_BOND], n: step,
+        requireActive: true, source: u, reason: 'garrison',
+        cap: step * maxTimes, capKey: `recon:zeiz:${u.id}`,
+      });
+    }, { owner: u, priority: -20 });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// 阿戈尔（业主 2026-10-31）：克莱门莎的元素伤害 / 侵蚀爆发冷却，海沫的「身后继承身前的特质」。
+//   * 深海色（售出给 2 阶装备）与安哲拉（休整期装备替换）全在 `meta/main.mjs`。
+// ---------------------------------------------------------------------------------------------------------------
+
+const AEGIR_BOND = 'egirShip';
+const CLEMNT_AEGIR = 'RECON_CLEMNT_AEGIR';
+const HIGHMO_COPY = 'RECON_HIGHMO_COPY';
+
+/**
+ * 克莱门莎：`每次攻击额外附带自身 1% / 2% 生命上限 ×【阿戈尔】层数的元素伤害`；
+ * `<战斗中>攻击使敌人的侵蚀损伤冷却减少 25% / 50%`。
+ * 两个都挂在 `hit`：元素伤害走 `type: 'elemental'`（元素抗性结算、无视 DEF/RES），带 `recon:clemnt` 标签防递归；
+ * 侵蚀爆发冷却就是引擎的 `erosionBurst` buff（`burstLock`），这里把剩余时间按比例砍掉（`duration` 留着做展示）。
+ */
+S.registerGarrisonInstaller(CLEMNT_AEGIR, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u || u.ownerId == null) continue;
+    const pct = S.num(it.bb.hp_pct, 0);
+    const cut = Math.min(1, Math.max(0, S.num(it.bb.cooldown_cut, 0)));
+    battle.on('hit', ({ source, target, dmg }) => {
+      if (source !== u || !dmg || !target || target.side !== 'enemy') return;
+      if (!dmg.isAttack) return; // 「每次攻击」：技能 DoT / 元素损伤那类不算
+      if (Array.isArray(dmg.tags) && dmg.tags.includes('recon:clemnt')) return;
+      // 侵蚀损伤的爆发冷却（erosionBurst）按比例缩短剩余时间
+      const lock = typeof target.findBuff === 'function' ? target.findBuff('erosionBurst') : null;
+      if (lock && cut > 0 && lock.timeLeft > 0) lock.timeLeft = Math.max(0, lock.timeLeft * (1 - cut));
+      if (!(pct > 0)) return;
+      const layers = S.bondLayers(battle, u.ownerId, AEGIR_BOND);
+      const amount = u.s.maxHp * pct * layers;
+      if (!(amount > 0)) return;
+      battle.dealDamage(u, target, {
+        amount, type: 'elemental', element: 'erosion', canDodge: false,
+        tags: ['garrison', 'addition', 'recon:clemnt'],
+      });
+    }, { owner: u });
+  }
+});
+
+/** 朝向 → 前进向量（与引擎 `dir.js` 同一张表；缺省 RIGHT）。 */
+const HOME_DIR_VEC = Object.freeze({ UP: [1, 0], RIGHT: [0, 1], DOWN: [-1, 0], LEFT: [0, -1] });
+
+/** 同一玩家、同一「家格」（战前部署位置）上的干员。 */
+function opAtHome(battle, pid, r, c) {
+  for (const a of battle.allyUnits || []) {
+    if (!a || a.kind !== 'op' || a.ownerId !== pid || a.removed) continue;
+    if (a.homeR === r && a.homeC === c) return a;
+  }
+  return null;
+}
+
+/**
+ * 海沫：`<战斗开始时>使身后一格（精锐两格）干员获得身前一格干员的特质`。
+ * 引擎的动态授予通道 `battle.rbAddGarrison(unit, g)`（莱伊「复制身前干员的战斗中类效果」用的同一格）——
+ * 复制的是身前一格那名干员的 **IN_BATTLE** 特质；授予发生在特质安装阶段，早于第一次部署。
+ */
+S.registerGarrisonInstaller(HIGHMO_COPY, (battle, list) => {
+  for (const it of list) {
+    const u = it.unit;
+    if (!u || u.ownerId == null || typeof battle.rbAddGarrison !== 'function') continue;
+    if (!Number.isInteger(u.homeR) || !Number.isInteger(u.homeC)) continue;
+    const tiles = Math.max(1, Math.floor(S.num(it.bb.tiles, 1)));
+    const [dr, dc] = HOME_DIR_VEC[u.dir] || HOME_DIR_VEC.RIGHT;
+    const front = opAtHome(battle, u.ownerId, u.homeR + dr, u.homeC + dc);
+    if (!front || front === u) continue;
+    const traits = S.garrisonIdsOf(front).map((gid) => S.garrisonRecord(gid)).filter((g) => g && g.eventType === 'IN_BATTLE');
+    if (!traits.length) continue;
+    for (let k = 1; k <= tiles; k++) {
+      const t = opAtHome(battle, u.ownerId, u.homeR - dr * k, u.homeC - dc * k);
+      if (!t || t === u) continue;
+      for (const g of traits) battle.rbAddGarrison(t, g);
+    }
+  }
+});
+
 /** 与 `meta/main.mjs` 的 `EFFECT_KEY` 必须是同一个字符串（meta 写、这里读）。 */
+
 const EFFECT_KEY = 'effect:recon_protocol';
+
+/** 【重构】盟约的 id（`bonds.json` 的记录、特训学员的 `bondGrants`、引擎的 RECON_BOND_ID 三处同一个）。 */
+const RECON_BOND = 'bond_recon';
 
 const ASSIST_DATA = 'recon_assist_data';
 const LOAD_DATA = 'recon_load_data';
@@ -35,6 +681,22 @@ const BOND_LOAD_PER_LAYER = 0.001;
 const BARE_DAMAGE_MUL = 0.75;
 const KINDS = Object.freeze(['core', 'addon', 'story']);
 const SIDE_STORY = 'SIDE_STORY';
+
+/**
+ * 熔芯负载三条的 id。**业主 2026-10-30 改规则**：预重构屏上交的是「要**排除**的那一条」，
+ * 另外两条同时生效（从前是单选一条生效）。所以这里判的不是 `plan.load === X`，而是 `plan.load !== X`。
+ */
+const LOAD_IDS = Object.freeze([LOAD_BOND, LOAD_EQUIP, LOAD_DATA]);
+
+/**
+ * 某一条负载在这一局是否生效：`plan.load` 是三条之一（没交 / 不认识的 id ⇒ 一条都不生效，与从前的「不指定」同一口径），
+ * 且不是被排除的那一条。
+ * @param {{ load?: string }|null} plan
+ * @param {string} id
+ */
+function loadActive(plan, id) {
+  return !!plan && LOAD_IDS.includes(plan.load) && plan.load !== id;
+}
 
 /**
  * 战斗音乐（业主 2026-10-28）：场上出现带专属曲目的·重构首领时，`key` = 那只首领的 `defId`（没有 ⇒ null）。
@@ -103,14 +765,14 @@ function kindOf(rec) {
   return rec.bondType === SIDE_STORY ? 'story' : 'addon';
 }
 
-/** 敌方那一条 buff（数据负载 + 盟约负载合并成一条 hpPct，省一次挂 buff）。 */
+/** 敌方那一条 buff（数据负载 + 盟约负载合并成一条 hpPct，省一次挂 buff）。被排除的那一条不算，其余照常。 */
 function enemyModsOf(battle, plans) {
   let pct = 0;
   let res = 0;
   let hp = 0;
   for (const [playerId, plan] of plans) {
-    if (plan.load === LOAD_DATA) { pct = Math.max(pct, DATA_PCT); res = Math.max(res, DATA_RES); }
-    if (plan.load === LOAD_BOND) {
+    if (loadActive(plan, LOAD_DATA)) { pct = Math.max(pct, DATA_PCT); res = Math.max(res, DATA_RES); }
+    if (loadActive(plan, LOAD_BOND)) {
       const top = topLayersByKind(battle, playerId);
       hp = Math.max(hp, (top.core + top.addon + top.story) * BOND_LOAD_PER_LAYER);
     }
@@ -130,7 +792,7 @@ function applyAlly(battle, unit, plan, dec = null) {
   if (plan && plan.assist === ASSIST_DATA) {
     S.passiveBuff(battle, unit, 'recon:assist_data', S.directMods({ atk: DATA_PCT, def: DATA_PCT, hp: DATA_PCT }, { resFlat: DATA_RES }));
   }
-  if (plan && plan.load === LOAD_EQUIP) {
+  if (loadActive(plan, LOAD_EQUIP)) {
     if (!S.itemsOf(unit).length) S.passiveBuff(battle, unit, 'recon:load_bare', { dmgDealtMul: BARE_DAMAGE_MUL });
     const tier = S.tierOf(unit);
     for (const itemId of S.itemsOf(unit)) {
@@ -413,6 +1075,10 @@ function scaleEnemySkills(enemy, dec) {
 export function install(battle) {
   if (!battle || !Array.isArray(battle.players)) return;
   installReconBosses(battle);
+  // 讯使 S2 的两处补数（特质记录是休整期的，不进战斗特质表）
+  installCourierSkills(battle);
+  // 【重构】盟约的 4 人档属性加成：与预重构的两条选择无关，任何重构对局都要挂
+  installReconBondStats(battle);
   // 战斗音乐：每 tick 认一次场上有没有带专属曲目的·重构首领（面板读 RECON_MUSIC）
   battle.on('tick', () => {
     const key = musicKeyOf(battle);
@@ -454,6 +1120,33 @@ export function install(battle) {
   });
   // 建场时已经站在场上的（今天的部署是逐波来的，install 时通常一个都没有 —— 这一趟是防御性的）
   for (const u of battle.allyUnits || []) if (u && u.deployed) applyAlly(battle, u, plans.get(u.ownerId), decisions.get(u.ownerId), bondLayerSum(battle, u.ownerId));
+}
+
+/**
+ * 重构盟约（`bond_recon`）4 人档（业主 2026-10-30，数值在 `bonds.json` 的 `bb.recon_stat_pct`）：在场 ≥4 名【重构】
+ * 干员（阈值 [2,4] ⇒ tier 2）时，**他们自己的**生命上限与基础攻击力 +50%。与官方盟约同一个「直接乘算」桶
+ * （`S.directMods`），所以和技能/装备的 +X% 是相加关系。干员是逐波部署的，所以认 `deploy` 事件；
+ * 召唤物不吃（与 `bonds/dataDriven.js` 的通用盟约加成同口径，只有干员本人）。
+ */
+function installReconBondStats(battle) {
+  const rec = S.bondRecord(RECON_BOND);
+  const pct = rec && rec.bb ? Number(rec.bb.recon_stat_pct) : 0;
+  if (!(pct > 0)) return;
+  const pids = new Set();
+  for (const p of battle.players || []) {
+    const playerId = p && p.playerId;
+    if (playerId && S.bondTier(battle, playerId, RECON_BOND) >= 2) pids.add(playerId);
+  }
+  if (!pids.size) return;
+  const mods = S.directMods({ atk: pct, hp: pct });
+  const apply = (unit) => {
+    if (!unit || unit.side !== 'ally' || unit.kind !== 'op') return;
+    if (!pids.has(unit.ownerId)) return;
+    if (!S.isMember(battle, unit, RECON_BOND)) return;
+    S.passiveBuff(battle, unit, 'bond:recon:stat', mods);
+  };
+  battle.on('deploy', (ctx) => apply(ctx && ctx.unit));
+  for (const u of battle.allyUnits || []) if (u && u.deployed) apply(u);
 }
 
 /** 供测试与诊断：本模块认的四条规则与它们的数值（一条真相）。 */
@@ -1452,6 +2145,8 @@ function installFaust(battle) {
     const u = c && c.unit;
     if (!u || u.defId !== BOSS_MEPHI) return;
     for (const e of liveEnemies(battle, BOSS_FAUST)) {
+      // 梅菲斯特阵亡 = 浮士德的隐匿结束（重构文本「梅菲斯特阵亡后…」）；已在 tick 里自然到期的 buff 再删也无害。
+      battle.removeBuff(e, FAUST_STEALTH_KEY);
       battle.addBuff(e, { key: FAUST_HASTE_KEY, persist: true, visible: true, mods: { batPct: -FAUST_BAT_CUT / (e.base.bat || 5) } });
     }
   });
@@ -4108,13 +4803,14 @@ function installMusnakeRecon(battle) {
 // 官方的「镇岁柱 / 未熄 / 柱折维绝召唤追加敌人」不实现（没有那些记录 / 装置通道）。
 
 const SUI_ALL = new Set([BOSS_SUISHO, BOSS_SUIZZH, BOSS_SUIYZH, BOSS_SUIWEI]);
-/** 站定不动的首领（业主 2026-10-29）：源阶方 / 岁四部位 / 洛伦茨 —— 地图 boss 路线的起点就是它们的站位中心。 */
-const STILL_BOSSES = new Set([BOSS_SUISHO, BOSS_SUIZZH, BOSS_SUIYZH, BOSS_SUIWEI, BOSS_SHOPHM, BOSS_SHORBB]);
-
+/** 站定不动的首领（业主 2026-10-29 / 2026-10-30）：源阶方 / 洛伦茨 / 岁四部位 / 伤心的大锁 —— **记录里写了
+ *  `stillBoss: true`**，地图 boss 路线的起点就是它们的站位中心。引擎侧 `server/match/waves.js bossStandsStill`
+ *  读同一个字段，决定双人场地里这一只出 1 只（两位玩家同时打）还是 2 只（每位玩家一只）。 */
 function installStillBosses(battle) {
   battle.on('enemySpawn', (c) => {
     const e = c && c.enemy;
-    if (!e || !STILL_BOSSES.has(e.defId)) return;
+    const raw = e && e.def && e.def.raw;
+    if (!raw || raw.stillBoss !== true) return;
     if (e.findBuff('recon:boss_still')) return;
     battle.addBuff(e, { key: 'recon:boss_still', persist: true, visible: false, flags: { noMove: true } });
   });

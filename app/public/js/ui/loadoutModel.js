@@ -396,6 +396,36 @@ export function rosterOf(list) {
     .sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0) || (a.shopSortId ?? 0) - (b.shopSortId ?? 0) || String(a.chessId).localeCompare(String(b.chessId)));
 }
 
+/** 重构模拟专用记录的前缀（`recon_<正式 id>`，见 shared/reconModes.js 的 RECON_PREFIX）。 */
+export const RECON_CHESS_PREFIX = 'recon_';
+/** 这条记录是不是重构模拟的专用记录（只在干员调配右下角的「重构模拟干员」开关打开时列出）。 */
+export const isReconChess = (c) => String(c && c.chessId || '').startsWith(RECON_CHESS_PREFIX);
+
+/**
+ * 干员调配的名单（业主 2026-10-30）：
+ *   * 开关关闭 ⇒ 只列普通干员（`recon_*` 记录全部隐藏）；
+ *   * 开关打开 ⇒ 有重构版的干员**换成**它的重构记录（阶级 / 特质 / 数值按重构版），
+ *     并把官方没有对应记录的「新增干员」追加进来。
+ * 记录的 `chessId` 保持重构记录自己的 id（`recon_<正式 id>`）：服务端 `checkLoadout` 认得它（记录在合并数据里），
+ * 而重构对局里棋子用的是去掉前缀的正式 id —— `PlayerState.setLoadout` 按 `Match.reconLoadoutAlias` 把条目落过去。
+ * @param {any[]} list data.list('chess')
+ * @param {boolean} recon
+ */
+export function rosterWithRecon(list, recon) {
+  const all = Array.isArray(list) ? list : [];
+  const plain = rosterOf(all.filter((c) => !isReconChess(c)));
+  if (!recon) return plain;
+  const byId = {};
+  for (const c of all) if (c && typeof c.chessId === 'string') byId[c.chessId] = c;
+  const out = plain.map((c) => byId[`${RECON_CHESS_PREFIX}${c.chessId}`] || c);
+  for (const c of all) {
+    if (!isReconChess(c)) continue;
+    const base = c.chessId.slice(RECON_CHESS_PREFIX.length);
+    if (!byId[base]) out.push(c); // 官方没有这个 id ⇒ 就是重构模拟的新增干员
+  }
+  return rosterOf(out);
+}
+
 /** A stored potential that the screen does not edit is not a visible change. Omitted `potentialCounts` keeps the old rule. */
 function opsVisibleChange(ops, charId, potentialCounts) {
   const cur = opsOf(ops, charId);

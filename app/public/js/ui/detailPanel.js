@@ -534,7 +534,7 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
           ${golden ? html`<span class="dtag-elite">${t('精锐')}</span>` : null}
           ${piece?.kind === 'token' ? html`<span class="dtag-token">${t('召唤物')}</span>` : null}
           ${si ? html`<span class="dtag-standin" data-standin=${si.charId} title=${standInTip(si, c.name)}>${standInLabel(si)}</span>` : null}
-          ${trainee ? html`<span class="dtag-train" title=${t('重构协议·特训：叠加教官的技能效果、特质与天赋；攻击 / 防御 / 生命 = 学员基础值 + 教官的 50%')}>${t('特训学员')}</span>` : null}
+          ${trainee ? html`<span class="dtag-train" title=${t('重构协议·特训：叠加教官的技能效果、特质与天赋；攻击 / 防御 / 生命 = 学员基础值 + 教官的 50%')}><span class="rt-ico rt-ico--trainee" aria-hidden="true"></span>${t('特训学员')}</span>` : null}
           ${diy ? html`<span class="dtag-diy" data-diy=${c.charId || ''} title=${t('自选编队：所选技能与模组，没有特质，盟约按所属阵营分配')}>${t('自选')}</span>` : null}
         </div>
         <h3 class="dhead__name">${si ? si.name : c.name}</h3>
@@ -582,7 +582,7 @@ export function ChessDetail({ chess, piece, unit, snapHp, editable, onSell, bond
     };
     return html`<div key="stats" class="dstats-unit">
       ${base}
-      <p class="dhint dhint--mentor" data-mentor-stats><${Icon} name="info" />${t('三围')}：${[
+      <p class="dhint dhint--mentor" data-mentor-stats><span class="rt-ico rt-ico--mentor" aria-hidden="true"></span>${t('三围')}：${[
         line('atk', t('攻击')), line('def', t('防御')), line('maxHp', t('生命')),
       ].join(' · ')}</p>
     </div>`;

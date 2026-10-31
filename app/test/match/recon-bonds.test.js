@@ -8,7 +8,10 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeBattle, chessRec, enemyRec } from '../helpers/battleHarness.js';
 import { setGameData, bondRecord } from '../../server/sim/content/support/index.js';
-import { DATA } from './harness.js';
+import { fireGain } from '../../server/sim/content/garrisons/battle.js';
+import { RECON_BOND_ID } from '../../shared/reconModes.js';
+import { DATA, makeMatch } from './harness.js';
+import { PHASE } from '../../shared/constants.js';
 import { TOKEN_IDS } from '../../server/sim/content/tokens.js';
 import { createBattleFromSpec } from '../../server/sim/spec.js';
 import { DataSource } from '../../server/sim/simdata.js';
@@ -187,4 +190,142 @@ test('拉特兰·重构：数值（弹药 +10% / 每层 +2%；3 名每发 +5%）
   assert.equal(bb.max_atk_for_consume, 5);
   assert.equal(bb.recon.hpPct, 0.02);
   assert.equal(bb.recon.refillChance, 0.25);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// 【重构】盟约（`bond_recon`）自己的两档激活效果（业主 2026-10-30）
+//   2 人档：`bond_recon` 干员触发特质时额外触发 1 次（每名干员每回合 1 次）
+//   4 人档：`bond_recon` 干员的生命上限与基础攻击力 +50%
+
+test('【重构】盟约的数据面：阈值 [2,4]、2 人档额外触发 1 次、4 人档 +50%、两档文案', () => {
+  const rec = DATA.bonds[RECON_BOND_ID];
+  assert.ok(rec, 'bonds.json 里有 bond_recon');
+  assert.deepEqual(rec.thresholds, [2, 4], '阈值 [2,4]（1 名学员时盟约不激活）');
+  assert.equal(rec.activeCount, 2);
+  assert.equal(rec.bb.recon_trait_extra, 1, '2 人档：额外触发 1 次');
+  assert.equal(rec.bb.recon_stat_pct, 0.5, '4 人档：+50%');
+  for (const s of [rec.desc, rec.effectDesc]) {
+    assert.match(s, /额外触发1次/);
+    assert.match(s, /生命上限与基础攻击力\+50%/);
+  }
+});
+
+test('【重构】盟约 2 人档（战斗内）：每名【重构】干员每场战斗第一次触发特质额外触发 1 次，未激活则不额外', () => {
+  const ids = ['r1_a', 'r2_a'];
+  const chess = {};
+  for (const id of ids) chess[id] = op(id, [RECON_BOND_ID]);
+  const run = (state) => {
+    const h = makeBattle({
+      defs: { chess, enemies: { e_dummy: dummy } }, units: lineup(ids),
+      // 层数收到 yanShip 上（bond_self 只看已激活的盟约，测「未激活」档时目标得换成一条激活的盟约）
+      bonds: { [RECON_BOND_ID]: state, yanShip: { count: 3, active: true, tier: 1, layers: 0 } },
+      autoFinish: false, timeLimit: 20,
+    });
+    h.runUntil(() => h.allies().length >= 2, 10);
+    const it = (u) => ({ unit: u, gid: 'test_recon_extra', key: 'recon', bb: { bond_add_count: 1 }, bbStr: { bond_id: 'yanShip' }, cap: Infinity, capKey: null });
+    const layers = () => h.b.getPlayer('p1').bonds.yanShip.layers;
+    fireGain(h.b, it(h.unit('r1_a')));
+    assert.equal(layers(), state.active ? 2 : 1, state.active ? '本体 1 层 + 额外 1 层' : '盟约未激活：只有本体那 1 层');
+    fireGain(h.b, it(h.unit('r1_a')));
+    assert.equal(layers(), state.active ? 3 : 2, '同一名干员同一场战斗第二次不再额外');
+    fireGain(h.b, it(h.unit('r2_a')));
+    assert.equal(layers(), state.active ? 5 : 3, '另一名【重构】干员有自己的那一份（本体 + 额外）');
+    fireGain(h.b, it(h.unit('r2_a')));
+    assert.equal(layers(), state.active ? 6 : 4, '他自己的第二次也不额外');
+    assert.equal(h.invariants(), true);
+    return h;
+  };
+  run({ count: 2, active: true, tier: 1, layers: 0 });
+  run({ count: 1, active: false, tier: 0, layers: 0 });
+});
+
+const JAYE = 'chess_char_3_20_a';
+const JAYE_HIGH = 'chess_char_4_03_a';
+const ICE = 'chess_item_5_02_e_a';
+
+/** 谢拉格不融冰的等价张数（金卡算 2 张）—— 耶拉 `garrison_92_a` 的获得时特质每触发一次给 1 张。 */
+function iceHeld(gd, ps) {
+  const golden = gd.item(ICE)?.goldenId;
+  let n = 0;
+  const see = (p) => {
+    if (!p || p.kind !== 'item') return;
+    if (p.id === ICE) n += 1;
+    else if (golden && p.id === golden) n += 2;
+  };
+  for (const p of [...ps.hand, ...ps.temp, ...ps.board.values()]) {
+    if (!p) continue;
+    see(p);
+    for (const it of p.items || []) see(it);
+  }
+  return n;
+}
+
+test('【重构】盟约 2 人档（休整期）：每名【重构】干员每回合第一次触发特质额外触发一次，换回合从 0 起算', () => {
+  const m = makeMatch({ mode: 'recon', modeId: 'mode_recon_abyss', seed: 7, fake: true, data: DATA, humans: 1 }).m;
+  m.phase = PHASE.PREP;
+  m.round = 1;
+  const ps = m.players.get('p_0');
+  const a = { uid: 501, kind: 'chess', id: JAYE, items: [], meta: { data: { bondGrants: [RECON_BOND_ID] } } };
+  const b = { uid: 502, kind: 'chess', id: JAYE_HIGH, items: [], meta: { data: { bondGrants: [RECON_BOND_ID] } } };
+  ps.board.set('3,3', a);
+  ps.board.set('4,4', b);
+  ps.recompute();
+  assert.equal(ps.bonds[RECON_BOND_ID].count, 2, '两名【重构】干员在场（两种棋子）');
+  assert.equal(ps.bonds[RECON_BOND_ID].active, true);
+
+  m.dispatcher.dispatch(ps, 'onGain', { piece: a, kind: 'chess' });
+  assert.equal(iceHeld(m.gd, ps), 2, '第一次触发：额外触发一次 ⇒ 两张不融冰');
+  m.dispatcher.dispatch(ps, 'onGain', { piece: a, kind: 'chess' });
+  assert.equal(iceHeld(m.gd, ps), 3, '同一名干员同一回合第二次不再额外');
+  m.round += 1;
+  m.dispatcher.dispatch(ps, 'onGain', { piece: a, kind: 'chess' });
+  assert.equal(iceHeld(m.gd, ps), 5, '换回合从 0 起算：又额外一次');
+
+  // 另一名【重构】干员有一份自己的预算：他的第一次 = 本体 ×2，第二次 = 本体 ×1（与这张牌每次给几张无关）
+  m.round += 1;
+  const before = iceHeld(m.gd, ps);
+  m.dispatcher.dispatch(ps, 'onGain', { piece: b, kind: 'chess' });
+  const first = iceHeld(m.gd, ps) - before;
+  const mid = iceHeld(m.gd, ps);
+  m.dispatcher.dispatch(ps, 'onGain', { piece: b, kind: 'chess' });
+  const second = iceHeld(m.gd, ps) - mid;
+  assert.ok(second > 0, `b 的特质真的有给东西（${second}）`);
+  assert.equal(first, 2 * second, 'b 的第一次 = 本体 ×2（额外触发一次）');
+  m.dispose();
+});
+
+// 业主 2026-10-31「【炎】盟约效果的炎佑和【叙拉古】盟约效果的狼之主，都没有出现在场上」：45×60 重构战场上两人同场
+// （左右两半）时，召唤物的落位从前写死官方那条相接列（左 ≤ 10 / 右 ≥ 11）—— 普通带在 cols 20–40 时左手玩家拿到
+// 一个空区间（炎佑完全不生成），狼之主的满场回退还会扫到队友那半。现在两者都读布局自己的相接列（`mirrorCol` 的一半）。
+test('大图左右两半同场：炎佑 / 狼之主两侧都落在自己那半场', () => {
+  const yan = ['y1_a', 'y2_a', 'y3_a'];
+  const sira = Array.from({ length: 9 }, (_, i) => `r${i}_a`);
+  const chess = {};
+  for (const id of yan) chess[id] = op(id, ['yanShip']);
+  for (const id of sira) chess[id] = op(id, ['siracusaShip']);
+  const data = new DataSource({ chess, stages: { my_map: DATA.stages.my_map } }, new DataSource(DATA, null));
+  const unitsFor = (ids, base) => ids.map((chessId, i) => ({ uid: base + i, kind: 'chess', chessId, row: 9 + Math.floor(i / 6), col: 2 + (i % 6) }));
+  const onOwnHalf = (u) => (u.ownerId === 'p1' ? u.tileC <= 30 : u.tileC >= 31);
+  const pairBattle = (ids, bond) => makeBattle({
+    stageId: 'my_map', kind: 'normal', data, autoFinish: false, timeLimit: 5,
+    players: [
+      { playerId: 'p1', seat: 0, side: 'L', colOffset: 0, units: unitsFor(ids, 1), bonds: { [bond]: bondOn(ids.length) } },
+      { playerId: 'p2', seat: 1, side: 'R', colOffset: 0, units: unitsFor(ids, 101), bonds: { [bond]: bondOn(ids.length) } },
+    ],
+  });
+  const hy = pairBattle(yan, 'yanShip');
+  hy.runUntil(() => hy.allies().length >= 6, 5);
+  hy.run(0.5);
+  const yanyou = hy.b.allyUnits.filter((u) => u.defId === TOKEN_IDS.yanyou && u.ownerId);
+  assert.equal(yanyou.length, 2, '两位玩家各有 1 只炎佑');
+  assert.ok(yanyou.every(onOwnHalf), yanyou.map((u) => `${u.ownerId}@${u.tileR},${u.tileC}`).join(' '));
+  const hs = pairBattle(sira, 'siracusaShip');
+  hs.runUntil(() => hs.allies().length >= 18, 5);
+  hs.run(0.5);
+  const wolves = hs.b.allyUnits.filter((u) => u.defId === TOKEN_IDS.wolfPack && u.ownerId);
+  assert.ok(wolves.length >= 2, `狼之主两侧都出现（${wolves.length}）`);
+  assert.ok(new Set(wolves.map((u) => u.ownerId)).size === 2, '两侧各至少一只');
+  assert.ok(wolves.every(onOwnHalf), wolves.map((u) => `${u.ownerId}@${u.tileR},${u.tileC}`).join(' '));
+  assert.equal(hy.invariants(), true);
+  assert.equal(hs.invariants(), true);
 });

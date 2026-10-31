@@ -238,8 +238,12 @@ H.SERVER_CHESS_PRICE = {
 H.SERVER_GAIN_EQUIP = {
   run(ctx) {
     const { bb, bbStr } = ctx.source;
-    if (!ctx.gd.item(bbStr.chess)) return;
-    for (let i = 0; i < Math.min(10, num(bb.count, 1)); i++) ctx.grantItem(bbStr.chess, { requirePool: false });
+    // `bbStr.chess` 可以是逗号分隔的一列（左乐·重构的精锐：天师古鼎 + 炎国短刀一次给两件）
+    const ids = String(bbStr.chess ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (!ids.length || ids.some((id) => !ctx.gd.item(id))) return;
+    for (let i = 0; i < Math.min(10, num(bb.count, 1)); i++) {
+      for (const id of ids) ctx.grantItem(id, { requirePool: false });
+    }
   },
 };
 

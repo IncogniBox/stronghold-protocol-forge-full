@@ -1,0 +1,46 @@
+/* ==========================================================================================
+   goal-banner.css — 「全局作战目标」 (js/ui/goalBanner.js), the event footage at 1280×720 (video 7:52.4–7:55.1):
+   one --p is one px of the recording. Ported from the UI复刻 package; sprite URLs point at /assets/local/ui/battle/.
+   The band: a dark fade (CSS) with banner_back stretched behind 150–1130 × 225–465, the contour map goal_bg
+   at 420, 240 (620 × 200), the ring goal_round 1:1 at 214, 231 with the hatching (goal_round_tile turned 45°) and the
+   cross-hair goal_cross 1:1 at 276, 306, brackets at 250 and 988 (300–402), the marks goal_text_04 / 00 / 01 / 03 1:1;
+   the words from 353, 313: 全局作战目标 25 px green, 消灭敌方领袖！ 34 px white. In 300 ms (the words wiping in from the
+   left), out in 280 ms. pointer-events: none.
+   ========================================================================================== */
+.gbn { --p: min(calc(100vw / 1280), calc(100vh / 720)); position: fixed; inset: 0; z-index: var(--z-banner, 60); display: grid; place-items: center;
+  pointer-events: none; }
+@supports (height: 100dvh) { .gbn { --p: min(calc(100vw / 1280), calc(100dvh / 720)); } }
+.gbn img { position: absolute; max-width: none; user-select: none; }
+.gbn__band { position: relative; width: calc(var(--p) * 1280); height: calc(var(--p) * 720); animation: gbn-in 300ms var(--ease-out, ease-out) both; }
+.gbn.is-leaving .gbn__band { animation: gbn-out 280ms ease-in both; }
+@keyframes gbn-in { from { opacity: 0; } }
+@keyframes gbn-out { to { opacity: 0; } }
+/* under it all, the band's own dark (the footage is near black from 200 to 1090): a plain fade, then banner_back's soft edge */
+.gbn__band::before { content: ''; position: absolute; left: calc(var(--p) * 150); top: calc(var(--p) * 262); width: calc(var(--p) * 980); height: calc(var(--p) * 166);
+  background: linear-gradient(90deg, transparent, rgba(6, 9, 9, .93) 9%, rgba(6, 9, 9, .93) 91%, transparent);
+  -webkit-mask: linear-gradient(transparent, #000 14%, #000 86%, transparent); mask: linear-gradient(transparent, #000 14%, #000 86%, transparent); }
+.gbn__back { left: calc(var(--p) * 150); top: calc(var(--p) * 225); width: calc(var(--p) * 980); height: calc(var(--p) * 240); }
+.gbn__map { left: calc(var(--p) * 420); top: calc(var(--p) * 240); width: calc(var(--p) * 620); height: calc(var(--p) * 200); }
+.gbn__round { left: calc(var(--p) * 214); top: calc(var(--p) * 231); width: calc(var(--p) * 208); height: calc(var(--p) * 208); }
+.gbn__hatch { position: absolute; left: calc(var(--p) * 250); top: calc(var(--p) * 300); width: calc(var(--p) * 110); height: calc(var(--p) * 102); overflow: hidden; opacity: .55; }
+.gbn__hatch::before { content: ''; position: absolute; inset: -50%; transform: rotate(45deg);
+  background: url("/assets/local/ui/battle/goal_round_tile.png") 0 0 / calc(var(--p) * 144) repeat; }
+.gbn__cross { left: calc(var(--p) * 276); top: calc(var(--p) * 306); width: calc(var(--p) * 83); height: calc(var(--p) * 83); }
+.gbn__br { position: absolute; top: calc(var(--p) * 300); width: calc(var(--p) * 10); height: calc(var(--p) * 102); border: calc(var(--p) * 2) solid rgba(49, 207, 170, .55); }
+.gbn__br--l { left: calc(var(--p) * 250); border-right: 0; }
+.gbn__br--r { left: calc(var(--p) * 990); border-left: 0; }
+.gbn__t04 { left: calc(var(--p) * 190); top: calc(var(--p) * 281); width: calc(var(--p) * 71); height: calc(var(--p) * 12); }
+.gbn__t00 { left: calc(var(--p) * 846); top: calc(var(--p) * 286); width: calc(var(--p) * 16); height: calc(var(--p) * 12); }
+.gbn__t01 { left: calc(var(--p) * 710); top: calc(var(--p) * 394); width: calc(var(--p) * 16); height: calc(var(--p) * 12); }
+.gbn__t03 { left: calc(var(--p) * 888); top: calc(var(--p) * 394); width: calc(var(--p) * 90); height: calc(var(--p) * 9); }
+.gbn__sq { position: absolute; left: calc(var(--p) * 1029.5); top: calc(var(--p) * 329); width: calc(var(--p) * 38); height: calc(var(--p) * 26); background: rgb(32, 138, 115);
+  -webkit-mask: url("/assets/local/ui/battle/dec_text_lower_corner_squares.png") 0 0 / 100% 100% no-repeat;
+  mask: url("/assets/local/ui/battle/dec_text_lower_corner_squares.png") 0 0 / 100% 100% no-repeat; }
+.gbn__words { position: absolute; left: calc(var(--p) * 353); top: calc(var(--p) * 313); display: flex; flex-direction: column; gap: calc(var(--p) * 6);
+  white-space: nowrap; animation: gbn-wipe 350ms 60ms var(--ease-out, ease-out) both; }
+.gbn__words b { font-size: calc(var(--p) * 25); font-weight: 700; line-height: 1; letter-spacing: .05em; color: #2bd8aa; }
+.gbn__words strong { font-size: calc(var(--p) * 34); font-weight: 500; line-height: 1.15; letter-spacing: .03em; color: #f4f6f5; }
+@keyframes gbn-wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) { .gbn__band, .gbn__words { animation: none !important; } }
+/* HUD hidden behind the band (game.css .gm.is-goal keeps only exit + latency) */
+.gm.is-goal .gm__hud { visibility: hidden; }

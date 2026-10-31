@@ -127,7 +127,7 @@ export function registerMeta(registry) {
       ctx.setCounter(KEY, ctx.round);
       const tier = Math.max(1, ctx.shopLevel());
       for (let k = 0; k < count; k++) {
-        const id = ctx.rollChess({ maxTier: tier });
+        const id = ctx.rollChess({ tier });
         if (id) ctx.grantChess(id, { source: 'band' });
       }
     },

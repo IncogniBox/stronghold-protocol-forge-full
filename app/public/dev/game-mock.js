@@ -322,6 +322,10 @@ function setPhase(phase, variant) {
     case PHASE.BATTLE_CHECK:
       pub.round = 0; pub.deadline = Date.now() + 3000;
       break;
+    case PHASE.ROUND_START:
+      // 全局作战目标 (ui/goalBanner.js) opens the match once, at round 1 (?variant=goal)
+      pub.round = VARIANTS.has('goal') ? 1 : 6; pub.deadline = Date.now() + 3000;
+      break;
     case PHASE.SP_DRAFT: {
       pub.round = 9; pub.deadline = Date.now() + 14000;
       const fam = VARIANTS.has('supply') ? 'supply' : VARIANTS.has('shop') ? 'shop' : VARIANTS.has('tactic') ? 'tactic' : 'bounty';
@@ -803,7 +807,7 @@ function applyUiVariants() {
 // ---- switcher --------------------------------------------------------------------------------------------------------------
 const SWITCH = [
   ['INFO_CHECK', PHASE.INFO_CHECK, ''], ['BAND_DRAFT', PHASE.BAND_DRAFT, ''], ['BAND_DRAFT solo', PHASE.BAND_DRAFT, 'solo'],
-  ['BATTLE_CHECK', PHASE.BATTLE_CHECK, ''], ['PREP', PHASE.PREP, ''], ['PREP + reward', PHASE.PREP, 'reward'],
+  ['BATTLE_CHECK', PHASE.BATTLE_CHECK, ''], ['ROUND_START (全局作战目标)', PHASE.ROUND_START, 'goal'], ['PREP', PHASE.PREP, ''], ['PREP + reward', PHASE.PREP, 'reward'],
   ['PREP + temp', PHASE.PREP, 'temp'], ['PREP frozen', PHASE.PREP, 'frozen'], ['PREP dead', PHASE.PREP, 'dead'],
   ['PREP boss (L)', PHASE.PREP, 'boss'], ['PREP boss (R)', PHASE.PREP, 'bossR'], ['PREP 标准 同构体 + 调和', PHASE.PREP, 'funny,morph,harmony'],
   ['SP bounty', PHASE.SP_DRAFT, 'bounty'], ['SP supply', PHASE.SP_DRAFT, 'supply'], ['SP shop', PHASE.SP_DRAFT, 'shop'], ['SP tactic', PHASE.SP_DRAFT, 'tactic'], ['SP solo', PHASE.SP_DRAFT, 'solo'],

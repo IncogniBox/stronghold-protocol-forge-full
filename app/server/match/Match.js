@@ -217,7 +217,7 @@ import { morphPairingOf } from '../../shared/morph.js';
 import { formView, isEliteForm } from '../../shared/formProjection.js';
 import { layoutOf, benchOf, isDualLayout } from '../../shared/layout.js';
 // 重构模拟的盟约别名（`recon_<id>` → 官方 id）：与 `Battle.dataObjectOf` 共用同一份口径（见 `shared/reconModes.js`）。
-import { isReconModeId, reconBondAlias } from '../../shared/reconModes.js';
+import { isReconModeId, reconBondAlias, reconChessAlias } from '../../shared/reconModes.js';
 import { Battle } from '../sim/Battle.js';
 import { DataSource } from '../sim/simdata.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
@@ -397,6 +397,20 @@ export class Match {
      * 往下传。没声明这个轴时视图的 `chess(id)` 逐字返回 `data.chess[id]` 那个对象本身。
      */
     this.eliteForm = isEliteForm(variantValue(this.variants, 'form'));
+    // 重构棋子（业主 2026-10-30）：`recon_<id>` 的棋子记录只在**重构对局**里覆盖 / 新增 —— 必须放在 `formView`
+    // 建之前，口径轴 `form: "elite"` 才会看到重构后的那一份记录。其它模式 `this.data` 一个字节不动。
+    this.reconChessAlias = null;
+    /** 干员调配的条目别名（`recon_<正式 id>` → 正式 id）：调配页存的是重构记录自己的 id（服务端认它），
+     * 而重构对局里的棋子用的是去掉前缀的正式 id —— `PlayerState.setLoadout` 在检查前按这一份换键。 */
+    this.reconLoadoutAlias = null;
+    if (isReconModeId(this.modeId)) {
+      const aliasedChess = reconChessAlias(this.data && this.data.chess);
+      if (aliasedChess) {
+        this.reconChessAlias = aliasedChess.alias;
+        this.reconLoadoutAlias = Object.freeze(Object.fromEntries(Object.entries(aliasedChess.alias).map(([base, id]) => [id, base])));
+        this.data = { ...this.data, chess: aliasedChess.chess };
+      }
+    }
     this.formView = formView(this.data && this.data.chess, this.eliteForm, { tokens: this.data && this.data.tokens });
     // 重构模拟的盟约覆盖（`workshop/mode-recon/bonds.json` 的 `recon_<id>` 记录）：**只在这一局**把官方 id 换成
     // 重构那一份 —— 数据、战斗、客户端读的是同一份 id（因此不需要第二套读取点），其它模式 / 官方对局一个字节不动。

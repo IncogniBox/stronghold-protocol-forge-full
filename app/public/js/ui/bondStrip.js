@@ -41,6 +41,22 @@ import { t, tc, tParts, tName, N_ } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
+// The top bar's discs on the event's own ring art (official-pages §21): bond_board/<N>_<k>.png (77 × 77: grey 1_0, full
+// 1_1, and the 2 / 3 / 4-segment rings with k lit). OUR binding of the states: N = the members the first tier needs
+// (capped at 4), k = the members on the field toward it (scaled into 4 when it needs more), an active bond the full N_N
+// disc; no member toward it 1_0. The original's own rule is not in the packs. The centre glyph stays the data-pack
+// art (`bondIconUrl`) — the official icon_<id> set covers only the base bonds, a workshop bond (dossolesShip) has none.
+const BOARD = new URL('../../assets/local/ui/battle/bond_board/', import.meta.url).href;
+export function bondBoardKey(count, thresholds, active) {
+  const need = Math.max(1, Number(Array.isArray(thresholds) && thresholds.length ? thresholds[0] : 1) || 1);
+  const n = Math.min(4, need);
+  if (active) return `${n}_${n}`;
+  const have = Math.max(0, Number(count) || 0);
+  const k = Math.min(n - 1, need <= 4 ? have : Math.floor((have * 4) / need));
+  return n === 1 || k <= 0 ? '1_0' : `${n}_${k}`;
+}
+const boardUrl = (key) => `${BOARD}${key}.png`;
+
 /** The "👁 name" tag of a teammate's strip (DESIGN §20.15). */
 function OwnerTag({ owner }) {
   return html`<span class="bstrip__owner" title=${t('正在查看 {owner} 的盟约', { owner })} data-owner=${owner}>
@@ -72,7 +88,7 @@ export const BondStrip = modComponent('game.bondStrip', function BondStrip({ bon
         const name = rec?.name || b.bondId;
         return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-off="1"
             class=${cx('bslot', 'is-off', openId === b.bondId && 'is-open')}>
-          <${BondDisc} name=${name} icon=${bondIconUrl(m, b.bondId)} tier=${0} maxTier=${Math.max(1, th.length)} active=${false}
+          <${BondDisc} name=${name} icon=${bondIconUrl(m, b.bondId)} board=${boardUrl('1_0')} tier=${0} maxTier=${Math.max(1, th.length)} active=${false}
             disabled=${true} size="sm" showName=${true} layersDisabled=${layersDisabled} onClick=${() => onOpen(b.bondId)}
             title=${t('{tip} · {n} 名成员', { tip: briefingBondTip(name, 'off'), n: b.count ?? 0 })} />
           <span class="bslot__count bslot__off">${t('本局禁用')}</span>
@@ -81,7 +97,8 @@ export const BondStrip = modComponent('game.bondStrip', function BondStrip({ bon
       const next = nextThreshold(b.count ?? 0, th);
       return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-harmony=${b.harmony > 0 ? b.harmony : null}
           class=${cx('bslot', b.active && 'is-active', openId === b.bondId && 'is-open')}>
-        <${BondDisc} name=${rec?.name || b.bondId} icon=${bondIconUrl(m, b.bondId)} layers=${rec?.noStack ? undefined : b.layers ?? 0}
+        <${BondDisc} name=${rec?.name || b.bondId} icon=${bondIconUrl(m, b.bondId)} board=${boardUrl(bondBoardKey(b.count, th, !!b.active))}
+          layers=${rec?.noStack ? undefined : b.layers ?? 0}
           tier=${b.tier ?? 0} maxTier=${Math.max(1, th.length)} active=${!!b.active} size="sm" showName=${true}
           layersDisabled=${layersDisabled} onClick=${() => onOpen(b.bondId)}
           title=${`${rec?.name || b.bondId} ${b.count ?? 0}/${next ?? th[th.length - 1] ?? '-'}${b.harmony > 0 ? t('（含调和 +{harmony}）', { harmony: b.harmony }) : ''}`} />
@@ -121,7 +138,7 @@ const BOND_KIND_LABELS = Object.freeze({ SIDE_STORY: N_('SIDE STORY BOND // 故�
 /** 取这条盟约该显示哪一个标签（**msgid**；显示处再交给 `t()`，所以这里用 `N_` 标记，见 `shared/i18n.js`）。 */
 const bondKindLabel = (b) => (b.isCore ? BOND_KIND_CORE : (BOND_KIND_LABELS[b.bondType] || BOND_KIND_ADDON));
 
-export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember, place = null, over = false, beside = null, owner = null, off = false }) {
+export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember, place = null, over = false, beside = null, owner = null, off = false, onStep = null }) {
   const b = data.lookup('bonds', bondId);
   if (!b) return null;
   const count = entry?.count ?? 0;
@@ -142,6 +159,9 @@ export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember,
   const next = nextThreshold(count, th);
   const hasNow = !off && !!(b.effectDescRaw || b.effectDesc);
   const at = place || (beside === 'left' ? 'beside' : 'left');
+  // the centred plate's ‹ ›: the strip's previous / next bond (official-pages.css §15 .bpop-nav)
+  const nav = onStep && at === 'center' ? html`<button type="button" class="bpop-nav bpop-nav--prev" aria-label=${t('上一个盟约')} onClick=${() => onStep(-1)}></button>
+    <button type="button" class="bpop-nav bpop-nav--next" aria-label=${t('下一个盟约')} onClick=${() => onStep(1)}></button>` : null;
   // 调和's +1 in this count (the server's word), and the 调和 operators on that board who give it
   const harmony = !off && Number.isInteger(entry?.harmony) && entry.harmony > 0 ? entry.harmony : 0;
   const harmonyBy = harmony ? harmonyMembers(priv, getChess).map((x) => {
@@ -151,7 +171,7 @@ export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember,
   const harmonyName = data.lookup('bonds', HARMONY_BOND)?.name || tName('调和');
   const harmonyText = harmonyBy.length ? t('{names} 在场：核心盟约激活人数 +{harmony}', { names: harmonyBy.map((x) => x.name), harmony })
     : t('{harmonyName}已激活：核心盟约激活人数 +{harmony}', { harmonyName, harmony });
-  return html`<div class=${cx('bpop', 'brackets', `bpop--${at}`, over && 'is-over', owner && 'is-other')} data-place=${at} data-owner=${owner || null}
+  return html`${nav}<div class=${cx('bpop', 'brackets', `bpop--${at}`, over && 'is-over', owner && 'is-other')} data-place=${at} data-owner=${owner || null}
       role="dialog" aria-label=${owner ? t('{owner} 的盟约：{name}', { owner, name: b.name }) : t('盟约：{name}', { name: b.name })}>
     <button type="button" class="bpop__close" aria-label=${t('关闭')} onClick=${onClose}><${Icon} name="close" /></button>
     <header class="bpop__head">

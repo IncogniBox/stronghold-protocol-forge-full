@@ -181,7 +181,7 @@
 //     the match are the grace timers already running for its disconnected seats.
 
 import { randomBytes, randomInt } from 'node:crypto';
-import { DIFFICULTIES, ERR, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor, maxSeatsFrom, clampSeats, RECON } from '../shared/constants.js';
+import { DIFFICULTIES, ERR, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor, maxSeatsFrom, reconPublicFrom, clampSeats, RECON } from '../shared/constants.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkConflictPicks, checkDiyPicks, charPotentialChanges, PACK_MSG_LIMITS, CHAT_LIMITS } from '../shared/protocol.js';
 import { modSetOf, isModId, modSetDrift } from '../shared/modIdentity.js';
 import { normalizeSupportConfig, checkSupport, supportPicker, supportCapacity, supportTiers } from '../shared/support.js';
@@ -230,6 +230,9 @@ export const LOBBY_DEFAULTS = Object.freeze({
   // §2 列全了。注意 `MAX_SEATS`（4）不在这里：它是「官方房间 1–4 人」的声明与超容变体的闸门口径，不是缺省上限。
   // 房间的座位数在建房时定死，改上限不会 resize 一个活房间（也不会在对局中动座位数组）。
   maxSeats: maxSeatsFrom(process.env),
+  // 重构模拟对公网开放 (业主 2026-10-29): 缺省 false（本地实验模式）；`SP_RECON_PUBLIC=1` 时任何会话都能开重构房，
+  // 且 `welcome.reconAllowed` 让客户端画出大厅入口（判据见 `create` 与 `welcomeInfo`）。
+  reconPublic: reconPublicFrom(process.env),
   resyncMinGapMs: 1000,   // heavy resyncs (match state / result replay) per session at most this often on repeated hellos
   soloReconnectWindowMs: null, // a dropped solo run stays resumable this long (null = data singleReconnectTime, 24 h)
   queue: null,            // 野排匹配 (server/matchmaking.js MATCHMAKE_DEFAULTS): size / max / waitMs / sweepMs / difficulty
@@ -1487,7 +1490,9 @@ export class Lobby {  /**
     }
     // 重构模拟（模式扩展-重构模拟，mode 'recon'）同一条本地闸：本地实验模式，客户端入口按 `welcome.devAllowed`
     // 隐藏，但「看不见」不是拒绝 —— 公网服务器上构造出来的 `room.create` 在这里被点名挡下。
-    if (mode === 'recon' && session.local !== true) {
+    // 例外：部署方用 `SP_RECON_PUBLIC=1` 把本模式对公网开放（业主 2026-10-29「在云服务器开放，可以实际游玩」），
+    // 那时任何会话都能开重构房，`welcome.reconAllowed` 同步下发（见 welcomeInfo）。「全量模拟」不受这一格影响。
+    if (mode === 'recon' && session.local !== true && this.opts?.reconPublic !== true) {
       return fail(ERR.BAD_MSG, 'recon simulation is only available from a local (loopback / private network) client');
     }
     const devOn = dev === true && mode === 'solo';
@@ -2586,6 +2591,10 @@ export class Lobby {  /**
       // 也就是任何连到公网服务器的浏览器——**这个键一个字都不出现**，于是客户端把那两处 UI 整块藏掉；反过来，
       // 一份从前那种（不带这个键的）`welcome` 与今天的一次公网握手逐字节相同。
       ...(session && session.local === true ? { devAllowed: true } : {}),
+      // 重构模拟对公网开放 (业主 2026-10-29, `SP_RECON_PUBLIC=1`): 与 `devAllowed` 同一条「只有读者才加」——
+      // 部署方没开这一格时 `welcome` 的字段集合一个字都不多（公网握手与从前逐字节相同）；开了就只有这一个键，
+      // 客户端 `screens/lobby.js` 的 `reconAllowed` 据它画出口大厅入口（「全量模拟」仍按 `devAllowed`）。
+      ...(this.opts && this.opts.reconPublic === true ? { reconAllowed: true } : {}),
       ...(this.modSet ? { mods: this.modSet } : {}),
       ...(panels.length ? { modPanels: panels } : {}),
       ...(assets.length ? { modAssets: assets } : {}),

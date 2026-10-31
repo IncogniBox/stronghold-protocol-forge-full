@@ -1374,6 +1374,23 @@ function mapCharKeys(battle) {
 }
 
 /**
+ * 多人同场时，这位棋手**自己那半场**的列范围（地图列）—— 场上召唤物只落在自己一侧。
+ *
+ * 从前这里写死官方那条相接列（左 ≤ 10 / 右 ≥ 11）：一张普通带在 cols 20–40 的大战场上，左手玩家得到
+ * `c1 = min(40, 10) = 10 < c0 = 20`，空循环 ⇒ 炎佑根本不出现（业主 2026-10-31「炎佑和狼之主都没有出现在场上」）。
+ * 一半的列由布局自己的相接列定（`mirrorCol` 的一半：官方 20 → col 10，与写死的值逐列相同）；第 2… 块 boss 场地
+ * 这类每人一条自己矩形（`bossRect`）的场地上，直接读他**自己**那条矩形。
+ */
+function halfColSpan(battle, ps) {
+  const R = battle.rect;
+  const own = ps && ps.input && Array.isArray(ps.input.bossRect) ? ps.input.bossRect : null;
+  if (own) return [Math.max(R.c0, own[2]), Math.min(R.c1, own[3])];
+  const L = (ps && ps.layout) || battle.layout;
+  const seam = Math.floor((Number(L && L.mirrorCol) || 20) / 2);
+  return ps && ps.half === 'R' ? [Math.max(R.c0, seam + 1), R.c1] : [R.c0, Math.min(R.c1, seam)];
+}
+
+/**
  * Free field tile for a flyer: the player's half, void/non-deployable tiles first, nearest to the half's centre — never a
  * map character's position: the 炎佑 spawns at the same battle start as 外勤医疗's medic and took its tile on the maps
  * whose free void tiles nearest the centre include it (战场#08 涨潮控制 always, 战场#07 排气格栅 with 9 炎), so the medic
@@ -1382,8 +1399,7 @@ function mapCharKeys(battle) {
 function airTile(battle, playerId, taken) {
   const R = battle.rect;
   const ps = battle.getPlayer(playerId);
-  let c0 = R.c0, c1 = R.c1;
-  if (battle.players.length > 1 && ps) { if (ps.half === 'R') c0 = Math.max(c0, 11); else c1 = Math.min(c1, 10); }
+  const [c0, c1] = battle.players.length > 1 && ps ? halfColSpan(battle, ps) : [R.c0, R.c1];
   const cr = (R.r0 + R.r1) / 2, cc = (c0 + c1) / 2;
   const held = mapCharKeys(battle);
   let best = null, bs = null;
@@ -1411,11 +1427,13 @@ export function spawnWolfLord(battle, owner, { atk = 0, hp = 0 } = {}) {
   if (Number.isFinite(hp) && hp > 0) stats.maxHp = num(base.maxHp, 1) + hp;
   let tile = findSummonTile(battle, owner, 'melee');
   if (!tile) {
-    // 满场时（重构里 9 名成员常把一排占满）：退到「战场矩形内任意可站、无人的格子」
+    // 满场时（重构里 9 名成员常把一排占满）：退到「战场矩形内任意可站、无人的格子」，且只在**召唤者自己那半场**
     const R = battle.rect;
+    const ps = owner.player || (typeof battle.getPlayer === 'function' ? battle.getPlayer(owner.ownerId) : null);
+    const [c0, c1] = battle.players.length > 1 && ps ? halfColSpan(battle, ps) : [R.c0, R.c1];
     const occ = new Set(battle.allies().filter((a) => a.alive).map((a) => (Math.round(a.tileR) * COLS) + Math.round(a.tileC)));
     for (let r = R.r1; r >= R.r0 && !tile; r--) {
-      for (let c = R.c0; c <= R.c1; c++) {
+      for (let c = c0; c <= c1; c++) {
         if (occ.has(r * COLS + c) || !battle.grid.canStand(r, c, { ranged: false })) continue;
         tile = [r, c];
         break;

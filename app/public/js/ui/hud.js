@@ -88,6 +88,16 @@ export function SpectatorPill({ spectators, myId, isHost, onRemove }) {
 }
 
 /**
+ * 作战开始's clock (the footage, video 8:31.1–8:33.6): the countdown gives way to four countdown_arrow chevrons lit
+ * left to right, then the clock is empty until the scene is over (css/screens/official-pages.css section 31).
+ */
+function ClockChevrons() {
+  return html`<span class="gclock-chev" aria-hidden="true">
+    ${[0, 1, 2, 3].map((i) => html`<i key=${i} class="gclock-chev__a" style=${`--i:${i}`}><${Sprite} k="prepReady/countdown_arrow" /></i>`)}
+  </span>`;
+}
+
+/**
  * Phase capsule: prep label, kills n/m (combat/unite), kills + boss HP bar (boss rounds).
  * @param {{ pub:any, hud:any }} props
  */
@@ -145,7 +155,9 @@ export function capsuleFxKind(phase, prev) {
   return 'enter';
 }
 
-const CAP_ART = ['cup', 'batte1', 'batte2', 'coop1', 'coop2', 'coop3', 'coop4', 'worm1', 'worm2'].map((n) => `hudPanel/trans_${n}`);
+// + 作战开始's ✕ (icon_sword_yellow) and the clock's chevrons (prepReady/countdown_arrow, ClockChevrons; round 16)
+const CAP_ART = ['cup', 'batte1', 'batte2', 'coop1', 'coop2', 'coop3', 'coop4', 'worm1', 'worm2'].map((n) => `hudPanel/trans_${n}`)
+  .concat('hudPanel/icon_sword_yellow', 'prepReady/countdown_arrow');
 
 /** Whether every scene sprite has loaded (preloadCapsuleArt): null = not fetched yet, false = missing or still loading. */
 let capsuleArt = null;
@@ -209,7 +221,8 @@ function CapsuleScene({ kind }) {
       <span class="capfx__foe">${trans(unite ? 'worm2' : 'worm1')}</span>
     </span>
     <span class="capfx__clash">
-      <span class="capfx__swords">${trans(`${c}2`, 'capfx__x')}${trans(`${c}2`, 'capfx__x capfx__x--flip')}</span>
+      <span class="capfx__swords">${unite ? html`${trans('coop2', 'capfx__x')}${trans('coop2', 'capfx__x capfx__x--flip')}`
+        : html`<${Sprite} k="hudPanel/icon_sword_yellow" class="capfx__x" />`}</span>
       <b class="capfx__word">${unite ? t('联防开始') : t('开始作战')}</b>
     </span>
   </span>`;
@@ -518,36 +531,40 @@ export const TopBar = modComponent('game.hud.topBar', function TopBar({ pub, pri
           <${SpectatorPill} spectators=${spectators} myId=${myId} isHost=${isHost} onRemove=${onRemoveSpectator} />
         </div>
         ${pub?.dev ? html`<span class="gtop__mode-dev" title=${t('全量模拟')}>${t('全量模拟')}</span>`
-          : pub?.difficulty ? html`<${DifficultyTag} difficulty=${pub.difficulty} size="sm" />` : null}
+          : pub?.difficulty ? html`<${DifficultyTag} difficulty=${pub.difficulty} size="sm" mode=${room?.mode} />` : null}
         ${pub?.test ? html`<${TestMark} class="gtop__test" />` : null}
         <${UnofficialMark} room=${room} compact=${true} class="gtop__mod" />
         ${ruleLine(room?.content?.rules) ? html`<span class="gtop__rules" data-testid="plugin-rules">${ruleLine(room?.content?.rules)}</span>` : null}
       </div>
     </div>
 
-    <div class="gtop__center brackets">
-      <${Tooltip} text=${btn.left.tip} placement="bottom">
+    <div class=${cx('gtop__center', 'brackets', (isCombatPhase(phase) || phase === PHASE.SETTLE) && 'is-nochk')}>
+      <${Tooltip} text=${btn.left.tip} placement="bottom" class="gtop__chk">
         <${CheckBtn} sprite=${btn.left.sprite} cls=${cx('gtop__iconbtn', btn.left.back && 'is-back')} label=${btn.left.label}
           chev=${btn.left.back ? '◀◀' : null} on=${!!drawer && !pen} onClick=${onLeft} testid="check-player" />
       <//>
-      <div class="roundbox">
-        <span class="roundbox__label">${t('回合')}</span>
-        <b class="roundbox__num num">${roundText}</b>
+      <div class="gtop__bar">
+        <i class="gtop__plus" aria-hidden="true">+</i>
+        <div class="roundbox">
+          <span class="roundbox__label">${t('回合')}</span>
+          <b class="roundbox__num num">${roundText}</b>
+        </div>
+        <div class=${cx('gtop__cap', fx.kind && `is-fx-${fx.kind}`)} key=${`cap${fx.seq}`}>
+          <${PhaseCapsule} pub=${pub} hud=${hud} miss=${!boss && Number.isFinite(live?.left) ? live.left : null} />
+          ${fx.kind && fx.kind !== 'enter' ? html`<${CapsuleScene} kind=${fx.kind} />` : null}
+        </div>
+        <${LpTower} value=${lp} size="lg" tone=${lowLp ? 'danger' : boss ? 'team' : null} pending=${pending}
+          note=${pending > 0 && live?.unite ? t('联防中') : null} tip=${pendingTip(lp, pending, { unite: !!live?.unite, cap, left: live?.left ?? null })} />
       </div>
-      <div class=${cx('gtop__cap', fx.kind && `is-fx-${fx.kind}`)} key=${`cap${fx.seq}`}>
-        <${PhaseCapsule} pub=${pub} hud=${hud} miss=${!boss && Number.isFinite(live?.left) ? live.left : null} />
-        ${fx.kind && fx.kind !== 'enter' ? html`<${CapsuleScene} kind=${fx.kind} />` : null}
-      </div>
-      <${LpTower} value=${lp} size="lg" tone=${lowLp ? 'danger' : boss ? 'team' : null} pending=${pending}
-        note=${pending > 0 && live?.unite ? t('联防中') : null} tip=${pendingTip(lp, pending, { unite: !!live?.unite, cap, left: live?.left ?? null })} />
-      <${Tooltip} text=${btn.right.tip} placement="bottom">
+      <${Tooltip} text=${btn.right.tip} placement="bottom" class="gtop__chk gtop__chk--right">
         <${CheckBtn} sprite=${btn.right.sprite} cls=${cx('enemybtn', btn.right.grey && 'is-grey')} label=${btn.right.label}
           chev=${btn.right.grey ? null : '▶▶'} disabled=${btn.right.grey && !pen} onClick=${onRight} testid="check-enemy" />
       <//>
     </div>
 
     <div class="gtop__right">
-      <div class="gtop__clock">
+      <div class=${cx('gtop__clock', fx.kind === 'clash' && 'is-fx-clash')}>
+        ${fx.kind === 'clash' ? html`<${ClockChevrons} key=${`chev${fx.seq}`} />` : null}
         ${frozenSecs != null
           ? html`<${Countdown} seconds=${frozenSecs} total=${total ?? undefined} size="md" label="PAUSED" />`
           : html`<${Countdown} deadline=${pub?.deadline} total=${total ?? undefined} size="md" />`}

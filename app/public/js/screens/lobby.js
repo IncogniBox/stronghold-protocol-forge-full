@@ -23,7 +23,7 @@ import { useHubBackdrop, HubBackdrop, HubRadar, BackdropSettings, BackdropGlyph,
 
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, modeIdFor, clampSeats, ERR, ERR_TEXT, RECON } from '../../../shared/constants.js';
+import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, difficultyLabel, ROOM_CODE_LEN, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, modeIdFor, clampSeats, ERR, ERR_TEXT, RECON } from '../../../shared/constants.js';
 import { RANDOM_MODE } from '../../../shared/randomMode.js';
 import { html, Button, Icon, MicroLabel, Panel, TextField, PingPill, AvatarFrame, Tooltip, Spinner, DifficultyIcon, doctorNo, confirmDialog } from '../ui/components.js';
 import { toast, toastError } from '../ui/toasts.js';
@@ -360,7 +360,20 @@ let devAllowed = false;
 /** @returns {boolean} 这一台服务器允不允许「全量模拟」（本地端才是 true） */
 export function devAllowedOf() { return devAllowed; }
 
-net.on('welcome', (msg) => { devAllowed = !!(msg && msg.devAllowed === true); });
+/**
+ * 「重构模拟」入口的可见性 = 本地端（`devAllowed`，本地实验模式）**或**这台服务器用 `SP_RECON_PUBLIC=1`
+ * 把本模式对公网开放（`welcome.reconAllowed`，业主 2026-10-29 在云服务器上收集玩家反馈）。
+ *
+ * 与 `devAllowed` 同一条纪律：在**模块作用域**读握手、字段缺席即 `false`（旧服务器 / 没开的部署），
+ * 所以「全量模拟」仍只在本地端出现，这一格只影响重构模拟那一个入口。服务端那道真正的闸在
+ * `server/lobby.js` 的 `create`（`reconPublic`），界面藏起来从来不是唯一一道。
+ */
+let reconAllowed = false;
+
+net.on('welcome', (msg) => {
+  devAllowed = !!(msg && msg.devAllowed === true);
+  reconAllowed = !!(msg && msg.reconAllowed === true);
+});
 
 /** The slider's range for a ceiling: `max` is the server's, `min` the floor (narrowed if the server is below it). */
 export function seatCapRange(serverMax) {
@@ -450,7 +463,7 @@ function RecruitCard({ rooms, online, onJoin, onAll, onCreate }) {
             <span class=${`hub-recruit__name${isOwnerName(r.hostName || r.name) ? ' sp-owner-name' : ''}`}>${name}</span>
             <span class="hub-recruit__meta">
               <${DifficultyIcon} difficulty=${r.difficulty} class="diff-glyph" />
-              <span>${DIFFICULTY_NAMES[r.difficulty] ? t(DIFFICULTY_NAMES[r.difficulty]) : r.difficulty}</span>
+              <span>${difficultyLabel(r.mode, r.difficulty) ? t(difficultyLabel(r.mode, r.difficulty)) : r.difficulty}</span>
               ${r.random ? html`<span class="hub-recruit__fp">${t('无限火力')}</span>` : null}
               ${r.nodeName ? html`<span class="t-dim">${r.nodeName}</span>` : null}
             </span>
@@ -731,7 +744,7 @@ export function ProtoCard({ roomMode, difficulty, selected, onSelect, matchmakin
     <span class="pcard__glow" aria-hidden="true"></span>
     <span class="pcard__head">
       <${DifficultyIcon} difficulty=${difficulty} class="pcard__glyph" />
-      <span class="pcard__name">${t(DIFFICULTY_NAMES[difficulty])}</span>
+      <span class="pcard__name">${t(difficultyLabel(roomMode, difficulty))}</span>
       ${roomMode === 'coop' && !random ? html`<${MatchmakingCount} count=${matchmaking?.byDifficulty?.[difficulty]} />` : null}
     </span>
     <span class="pcard__desc">${info.desc}</span>
@@ -796,7 +809,7 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
           <${SearchPanel} elapsed=${mm?.elapsed || 0} onStop=${onCancel} stopping=${busy === 'cancel'}
             note=${t('已找到 {matched}/{target} 名博士', { matched: mm?.matched || 1, target: mm?.target || 4 })}
             tags=${[{ key: 'mode', label: t('精确搜寻'), icon: html`<${Icon} name="search" />` },
-              { key: 'diff', label: t(DIFFICULTY_NAMES[d]), color: DIFFICULTY_COLORS[d], icon: html`<${DifficultyIcon} difficulty=${d} />` }]} />
+              { key: 'diff', label: t(difficultyLabel(roomMode, d)), color: DIFFICULTY_COLORS[d], icon: html`<${DifficultyIcon} difficulty=${d} />` }]} />
         </section>
       </div>
     </div>`;
@@ -817,7 +830,7 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
         <${ProtocolScene} key=${difficulty} difficulty=${difficulty} />
         <div class="proto-brief">
           <span class="proto-brief__code num">${info.code}</span>
-          <b class="proto-brief__name">${t(DIFFICULTY_NAMES[difficulty])}</b>
+          <b class="proto-brief__name">${t(difficultyLabel(roomMode, difficulty))}</b>
           <p>${t(card.desc, params)}</p>
           ${card.points ? html`<ul class="proto-brief__points">${card.points.map((p) => html`<li key=${p}>${t(p, pointParams)}</li>`)}</ul>` : null}
         </div>
@@ -901,7 +914,7 @@ function AllianceSelect({ onClose, code, onCode, codeOk, recent, online, maint, 
         <button type="button" class="ally-card ally-card--create" disabled=${!online || maint?.active || busy === 'create'} onClick=${onCreate}>
           <span class="ally-card__art"><${CreateArt} /></span>
           <span class="ally-card__bar"><span class="ally-card__icon"><${Icon} name="plus" /></span>${maint?.active ? t('维护中 · 暂停开局') : t('创建同盟')}
-            ${busy === 'create' ? html`<${Spinner} size="sm" />` : html`<small>${t('难度：{name}（可在同盟内更改）', { name: t(DIFFICULTY_NAMES[difficulty]) })}</small>`}</span>
+            ${busy === 'create' ? html`<${Spinner} size="sm" />` : html`<small>${t('难度：{name}（可在同盟内更改）', { name: t(difficultyLabel(roomMode, difficulty)) })}</small>`}</span>
         </button>
         <div class="ally-links">
           ${CAN_QUEUE ? html`<button type="button" class="ally-pill" onClick=${onSearch}><${Icon} name="search" />${t('搜寻队友')}</button>` : null}
@@ -1017,7 +1030,7 @@ function MatchmakingModal({ open, onClose, onJoin, onSpectate }) {
                   <div class="mm-room-meta">
                     <span class="mm-room-diff" style=${`--d-color:${DIFFICULTY_COLORS[r.difficulty] || 'var(--mint)'}`}>
                       <${DifficultyIcon} difficulty=${r.difficulty} class="diff-glyph" />
-                      <span>${DIFFICULTY_NAMES[r.difficulty] || r.difficulty}</span>
+                      <span>${difficultyLabel(r.mode, r.difficulty) || r.difficulty}</span>
                     </span>
                     ${r.random ? html`<span class="mm-room-rm">${t('无限火力 · 1.1 ·')} ${r.variant === 'endurance' ? t('持久鏖战') : r.variant === 'marathon' ? t('最长时赛') : t('快速突袭')}</span>` : null}
                     <span class="mm-room-players">
@@ -1214,8 +1227,8 @@ export function LobbyScreen() {
     // 非本地端（公网服务器）不认「全量模拟」：入口根本不画，这条是给 localStorage 里留下的陈旧偏好兜底 ——
     // 在同一台机器上先连过本地端、又换到公网服务器时，`lobby.simulation` 可能还指着 'full'。
     if (m === 'full' && !devAllowed) return;
-    // 「重构模拟」与「全量模拟」同一条 devAllowed 门控（本地实验模式；公网服务器上一个字都不画）。
-    if (m === 'recon' && !devAllowed) return;
+    // 「重构模拟」= 本地端或这台服务器对公网开放（`welcome.reconAllowed`）；两者都没有时一个字都不画。
+    if (m === 'recon' && !(devAllowed || reconAllowed)) return;
     // 重构模拟只有终极难度：不继承「标准/险境/绝境」留下的偏好（那些难度已经不存在了）
     if (m === 'recon') setDifficulty(RECON_DIFFICULTY_UI);
     // Normal modes share their difficulty; firepower remembers its own explicitly chosen difficulty.
@@ -1417,7 +1430,7 @@ export function LobbyScreen() {
         ${maint?.active ? html`<div class="hub-maint">${t('服务器即将维护，暂停开启新的模拟')}</div>` : null}
         <div class="hub-entries__row">
           ${devAllowed ? html`<${HubEntry} name=${t('全量模拟')} en="FULL SIMULATION" icon="rook" tone="green" onClick=${() => openMode('full')} />` : null}
-          ${devAllowed ? html`<${HubEntry} name=${t('重构模拟')} en="RECON SIMULATION" iconSrc=${RECON_ICON} tone="ice" onClick=${() => openMode('recon')} />` : null}
+          ${devAllowed || reconAllowed ? html`<${HubEntry} name=${t('重构模拟')} en="RECON SIMULATION" iconSrc=${RECON_ICON} tone="ice" onClick=${() => openMode('recon')} />` : null}
           <${HubEntry} group=${{ icon: 'user', label: t('独立模拟') }} name=${t('独立模拟')} en="SOLO" icon="user" onClick=${() => openMode('solo')} />
           <${HubEntry} group=${{ icon: 'users', label: t('同盟模拟') }} name=${t('同盟模拟')} en="ALLIANCE" icon="users" count=${matchmakingCounts?.total} onClick=${() => openMode('coop')} />
           ${CAN_FIREPOWER ? html`<${HubEntry} name=${t('无限火力')} en="FIREPOWER" icon="dice" badge="1.1" tone="gold" onClick=${() => openMode('firepower')} />` : null}

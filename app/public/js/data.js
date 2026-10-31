@@ -174,6 +174,10 @@ export function createDataStore(opts = {}) {
   const views = new Map();
   /** 重构模拟的盟约别名（官方 id → `recon_<id>`）：只在重构对局里由 game.js 设置，见 `setBondAlias`。 */
   let bondAlias = null;
+  /** 重构模拟的棋子别名（官方 id → `recon_<id>`；新增干员是「新 id → `recon_<新 id>`」）：`setChessAlias`。 */
+  let chessAlias = null;
+  /** `chessAlias` 的展开表缓存（原始表对象 + 别名对象不变时复用）。 */
+  let chessAliasView = null;
   /**
    * The content set the files come from (setContent: `values` name → JSON, `overlay(lang)` → a language's game texts or
    * null), or null: the files at `base`.
@@ -325,6 +329,26 @@ export function createDataStore(opts = {}) {
     }
     return out;
   }
+  /**
+   * `get('chess')` 的那一份（对象表）：丢掉 `recon_*`；官方记录有别名就用重构版（`chessId` 保持官方 id）；
+   * 别名指向一个**官方没有的 id** 时就是重构对局的新增干员，直接加进来（`chessId` 用正式 id）。
+   */
+  function aliasChess(file) {
+    if (!chessAlias || !file || typeof file !== 'object') return file;
+    if (chessAliasView && chessAliasView.raw === file && chessAliasView.map === chessAlias) return chessAliasView.table;
+    const out = {};
+    for (const [id, rec] of Object.entries(file)) {
+      if (isReconId(id)) continue;
+      const to = chessAlias[id];
+      out[id] = to && file[to] ? { ...file[to], chessId: id } : rec;
+    }
+    for (const [base, to] of Object.entries(chessAlias)) {
+      if (!file[base] && to && file[to]) out[base] = { ...file[to], chessId: base };
+    }
+    const table = Object.freeze(out);
+    chessAliasView = { raw: file, map: chessAlias, table };
+    return table;
+  }
 
   /**
    * The localized copy of a ready file (null in Chinese or without an overlay for the file): the overlays of the chain
@@ -462,7 +486,9 @@ export function createDataStore(opts = {}) {
     /** JSON of a loaded file in the current locale, through its view (setView); null when missing / not loaded yet. */
     get: (name) => {
       const v = localizedEntry(name)?.value ?? entries.get(name)?.value ?? null;
-      const withAlias = name === 'bonds' && bondAlias && v && typeof v === 'object' ? aliasBonds(v) : v;
+      const withAlias = name === 'bonds' && bondAlias && v && typeof v === 'object' ? aliasBonds(v)
+        : name === 'chess' && chessAlias && v && typeof v === 'object' ? aliasChess(v)
+          : v;
       const view = views.get(name);
       return view && withAlias != null ? view(withAlias) : withAlias;
     },
@@ -473,6 +499,11 @@ export function createDataStore(opts = {}) {
     /** Record by id from a loaded file (null when unknown / not loaded). */
     lookup(name, id) {
       if (id == null) return null;
+      // 重构对局：棋子读别名后的那一份（覆盖记录 / 新增干员都在里面）
+      if (name === 'chess' && chessAlias) {
+        const t = aliasChess(entries.get('chess')?.value ?? null);
+        return (t && t[String(id)]) || null;
+      }
       const real = aliasId(name, id);
       const rec = index(name)?.get(String(real)) ?? null;
       return rec && name === 'bonds' && String(real) !== String(id) ? { ...rec, bondId: String(id) } : rec;
@@ -483,6 +514,10 @@ export function createDataStore(opts = {}) {
      */
     lookupRaw(name, id) {
       if (id == null) return null;
+      if (name === 'chess' && chessAlias) {
+        const t = aliasChess(entries.get('chess')?.value ?? null);
+        return (t && t[String(id)]) || null;
+      }
       const e = entries.get(name);
       if (!e || e.status !== 'ready') return null;
       if (!e.index) e.index = buildIndex(name, e.value);
@@ -491,6 +526,8 @@ export function createDataStore(opts = {}) {
     },
     /** All records of a loaded file as an array (empty when not loaded). */
     list: (name) => {
+      // 重构对局：棋子列表读别名后的那一份（`recon_*` 不会单独出现，新增干员按正式 id 列出）
+      if (name === 'chess' && chessAlias) return Object.values(aliasChess(entries.get('chess')?.value ?? null) || {});
       const all = [...(index(name)?.values() ?? [])];
       if (name !== 'bonds') return all;
       // `recon_*` 是重构对局的备选记录，永远不会被单独列出来
@@ -508,6 +545,15 @@ export function createDataStore(opts = {}) {
     setBondAlias(map) {
       bondAlias = map && typeof map === 'object' ? { ...map } : null;
       notify('bonds');
+    },
+    /**
+     * 重构对局：棋子别名 `{ 正式 id: recon_<id> }`（`null` 撤销）。官方记录被覆盖、官方没有的 id 是新增干员；
+     * 与 `setBondAlias` 同一条纪律 —— 只有重构对局设置，离开对局 game.js 清掉。
+     */
+    setChessAlias(map) {
+      chessAlias = map && typeof map === 'object' ? { ...map } : null;
+      chessAliasView = null;
+      notify('chess');
     },
     /** Drop a cached file and refetch it now (subscribers are notified when it settles). */
     invalidate(name) {

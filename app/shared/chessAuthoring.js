@@ -179,6 +179,27 @@ export const DEFAULT_RANGED_RANGE = Object.freeze([
 const TIER_DEFAULTS = Object.freeze({
   1: { price: 2, rarity: 1 }, 2: { price: 3, rarity: 2 }, 3: { price: 3, rarity: 3 },
   4: { price: 3, rarity: 4 }, 5: { price: 4, rarity: 5 }, 6: { price: 4, rarity: 6 },
+  // 7 阶（业主 2026-10-30，见 TIER7 注释）：价格照 `DEFAULTS.chessPrice[7]`，星级封顶 6★
+  7: { price: 5, rarity: 6 },
+});
+
+/**
+ * **7 阶的练度口径**（业主 2026-10-30 从 Wiki 查得；官方数据只有 1–6 阶，这一档只活在重构模拟的 7 级商店里）：
+ *
+ *   * 普通 = 满潜 / 精二 **70 级** / 满信赖 / **7 级技能** / **1 级模组**；
+ *   * 精锐 = 满潜 / 精二 **90 级** / 满信赖 / **专精 3（M3 = skillLevel 10）** / **3 级模组**。
+ *
+ * 两点不在 `status` 里：**满潜**是运行时输入（`shared/potential.js`，缺省潜能 6，数据的数值里已经含潜能加成），
+ * **满信赖**的加成就是 Wiki 数值本身（数据没有独立的 trust 字段，官方记录也是 favorPoint 0）。
+ * 这里的四个键与 `economy.chessStatus[tier][quality]` 同一形状，所以插件导入器可以直接拿它当第 7 阶的经济表。
+ */
+export const TIER7 = Object.freeze({
+  price: 5,
+  sellPrice: 1,
+  status: Object.freeze({
+    normal: Object.freeze({ phase: 2, level: 70, skillLevel: 7, equipLevel: 1 }),
+    golden: Object.freeze({ phase: 2, level: 90, skillLevel: 10, equipLevel: 3 }),
+  }),
 });
 
 const isPlainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -331,7 +352,7 @@ export function deriveChessRecord(spec, overrideIds) {
     : chessIds(spec.id);
   req(ids, 'id', 'BAD_ID', 'id must contain at least one letter or digit', 'e.g. "abyss_hunter"');
   req(typeof spec.name === 'string' && spec.name.trim(), 'name', 'MISSING', 'name is required');
-  req(isIntIn(spec.tier, 1, 6), 'tier', 'BAD_TIER', 'tier must be an integer 1..6');
+  req(isIntIn(spec.tier, 1, 7), 'tier', 'BAD_TIER', 'tier must be an integer 1..7');
   req(PROFESSIONS.includes(String(spec.profession || '').toUpperCase()), 'profession', 'BAD_PROFESSION', `profession must be one of ${PROFESSIONS.join(', ')}`);
   req(['MELEE', 'RANGED'].includes(String(spec.position || '').toUpperCase()), 'position', 'BAD_POSITION', 'position must be MELEE or RANGED');
   for (const state of ['normal', 'golden']) {
@@ -401,9 +422,13 @@ export function deriveChessRecord(spec, overrideIds) {
   const spine = spec.assetsSpine || spec.assetsAvatar || null;
   if (!spine) warnings.push('no assetsSpine: the operator renders with the fallback look. Reusing an existing spine id is the only way to get real art without shipping assets.');
 
-  const statusOf = (golden) => (golden
-    ? { phase: 2, level: 60, skillLevel: 7, equipLevel: 0 }
-    : { phase: 2, level: 1, skillLevel: 4, equipLevel: 0 });
+  // 7 阶的练度口径走 `TIER7.status`（业主 2026-10-30）：普通精二 70 级 / 7 级技能 / 1 级模组，精锐精二 90 级 /
+  // 专精 3（skillLevel 10）/ 3 级模组；其余各阶照旧。
+  const statusOf = (golden) => (tier === 7
+    ? { ...TIER7.status[golden ? 'golden' : 'normal'] }
+    : golden
+      ? { phase: 2, level: 60, skillLevel: 7, equipLevel: 0 }
+      : { phase: 2, level: 1, skillLevel: 4, equipLevel: 0 });
   const normStats = (st) => ({
     maxHp: Math.round(st.maxHp), atk: Math.round(st.atk), def: Math.round(st.def), res: st.res,
     cost: Math.round(st.cost), blockCnt: st.blockCnt, bat: st.bat,
@@ -421,7 +446,7 @@ export function deriveChessRecord(spec, overrideIds) {
     const idx = 0;
     const rec = {
       skillId: `skchr_ws_${ids.slug}`, iconId: null,
-      name: sk.name || spec.name, level: golden ? 7 : 4,
+      name: sk.name || spec.name, level: golden ? (tier === 7 ? TIER7.status.golden.skillLevel : 7) : (tier === 7 ? TIER7.status.normal.skillLevel : 4),
       desc: sk.desc || '', descRaw: sk.desc || '',
       skillType: String(sk.skillType || 'MANUAL').toUpperCase(),
       durationType: String(sk.durationType || 'NONE').toUpperCase(),
@@ -520,7 +545,7 @@ export function deriveChessRecord(spec, overrideIds) {
       typeIcon: m && typeof m.typeIcon === 'string' && m.typeIcon ? m.typeIcon : typeNameRaw.toLowerCase(),
       icon: mid,
       isDefault: !!(m && m.isDefault === true),
-      level: isIntIn(m && m.level, 1, 3) ? m.level : 1,
+      level: isIntIn(m && m.level, 1, 3) ? m.level : (tier === 7 ? TIER7.status.golden.equipLevel : 1),
       attr, traitOverride, talentChanges,
     };
   });
@@ -820,7 +845,9 @@ export function validateChessRecord(rec, opts = {}) {
   const isGolden = rec.isGolden === true || /_b$/.test(String(id));
   if (isGolden && rec.isGolden !== true) warn('isGolden', 'IMPLIED', 'isGolden is implied by the _b suffix but not set');
   if (!isGolden && rec.isGolden === true) err('isGolden', 'CONFLICT', 'isGolden is true but the id does not end in _b');
-  if (!isIntIn(rec.tier, 1, 6)) err('tier', 'BAD_TIER', 'tier must be an integer 1..6');
+  if (!isIntIn(rec.tier, 1, 7)) err('tier', 'BAD_TIER', 'tier must be an integer 1..7');
+  // 7 阶只会在重构模拟的 7 级调度中心被摇到（官方模式 `maxTier` 夹在 6）：写它不是错，但要说出来
+  if (rec.tier === 7) warn('tier', 'TIER7_RECON_ONLY', 'tier 7 chess is only drawable in recon mode (its shop tops out at 7; official modes stop at tier 6)');
   if (!Number.isInteger(rec.rarity) || rec.rarity < 1 || rec.rarity > 6) warn('rarity', 'BAD_RARITY', 'rarity should be an integer 1..6');
   if (!PROFESSIONS.includes(String(rec.profession || '').toUpperCase())) err('profession', 'BAD_PROFESSION', `profession must be one of ${PROFESSIONS.join(', ')}`);
   if (!['MELEE', 'RANGED'].includes(String(rec.position || '').toUpperCase())) err('position', 'BAD_POSITION', 'position must be MELEE or RANGED');

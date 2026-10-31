@@ -81,10 +81,10 @@ describe('协议已失效 (headless Chrome)', { skip: !ENABLED && 'set SP_E2E=1 
     const s = await page.evaluate(() => ({
       title: document.querySelector('.downm__title').textContent,
       focus: document.activeElement?.textContent?.trim(),
-      out: !!document.querySelector('.downm__face.is-out'),
+      dead: !!document.querySelector('.downm__dead'),
       map: document.querySelector('.downm__map')?.naturalWidth > 0,
     }));
-    assert.deepEqual(s, { title: '协议已失效', focus: '继续观战', out: true, map: true });
+    assert.deepEqual(s, { title: '协议已失效', focus: '继续观战', dead: true, map: true });
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('[data-testid="downed-plate"]'), { timeout: 2000 });
     assert.deepEqual(problems, []);

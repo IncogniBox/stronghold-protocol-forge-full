@@ -25,7 +25,7 @@ import { CultivationSelects } from './cultivation.js';
 import { t } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
-const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
 /** The data the 自选 rules read (shared/diy.js): chess.json + backups.json (localized copies). */
 export const diyData = () => ({ chess: data.get('chess'), backups: data.get('backups') });

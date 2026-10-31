@@ -1,0 +1,1590 @@
+{
+  "recon_garrison_zuole_a": {
+    "garrisonId": "recon_garrison_zuole_a",
+    "desc": "<进入休整期时>获得1件天师古鼎",
+    "descRaw": "<进入休整期时>获得<@ba.vup>1</>件天师古鼎",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "SERVER_GAIN_EQUIP",
+    "effectKey": "SERVER_GAIN_EQUIP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 1
+    },
+    "bbStr": {
+      "chess": "chess_item_6_03_e_a",
+      "conditionkey": "character_target_inboard"
+    },
+    "owners": [
+      "recon_chess_ws_recon_zuole_a"
+    ]
+  },
+  "recon_garrison_zuole_b": {
+    "garrisonId": "recon_garrison_zuole_b",
+    "desc": "<进入休整期时>获得1件天师古鼎与1件炎国短刀",
+    "descRaw": "<进入休整期时>获得<@ba.vup>1</>件天师古鼎与<@ba.vup>1</>件炎国短刀",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "SERVER_GAIN_EQUIP",
+    "effectKey": "SERVER_GAIN_EQUIP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 1
+    },
+    "bbStr": {
+      "chess": "chess_item_6_03_e_a,chess_item_3_04_e_a",
+      "conditionkey": "character_target_inboard"
+    },
+    "owners": [
+      "recon_chess_ws_recon_zuole_b"
+    ]
+  },
+  "recon_garrison_chen3_a": {
+    "garrisonId": "recon_garrison_chen3_a",
+    "desc": "<战斗中>攻击附带已激活【炎】盟约层数×0.001%敌方当前生命值的固定真实伤害",
+    "descRaw": "<战斗中>攻击附带已激活【炎】盟约层数×<@ba.vup>0.001%</>敌方当前生命值的固定真实伤害",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_CHEN3_TRUE_DMG",
+    "effectKey": "RECON_CHEN3_TRUE_DMG",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "hp_pct": 0.00001
+    },
+    "bbStr": {
+      "bond_id": "yanShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_chen3_a"
+    ]
+  },
+  "recon_garrison_chen3_b": {
+    "garrisonId": "recon_garrison_chen3_b",
+    "desc": "<战斗中>攻击附带已激活【炎】盟约层数×0.002%敌方当前生命值的固定真实伤害",
+    "descRaw": "<战斗中>攻击附带已激活【炎】盟约层数×<@ba.vup>0.002%</>敌方当前生命值的固定真实伤害",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_CHEN3_TRUE_DMG",
+    "effectKey": "RECON_CHEN3_TRUE_DMG",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "hp_pct": 0.00002
+    },
+    "bbStr": {
+      "bond_id": "yanShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_chen3_b"
+    ]
+  },
+  "recon_garrison_156_a": {
+    "garrisonId": "recon_garrison_156_a",
+    "desc": "<获得时>【炎】层数+4、【奇迹】层数+2（无需激活盟约）",
+    "descRaw": "<获得时>【炎】层数<@ba.vup>+4</>、【奇迹】层数<@ba.vup>+2</>（无需激活盟约）",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_MULTIPLE_BOND",
+    "effectKey": "SERVER_ADD_MULTIPLE_BOND",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {},
+    "bbStr": {
+      "bond": "yanShip,miraShip",
+      "count": "4,2"
+    },
+    "owners": [
+      "recon_chess_char_5_23_a"
+    ]
+  },
+  "recon_garrison_156_b": {
+    "garrisonId": "recon_garrison_156_b",
+    "desc": "<获得时>【炎】层数+8、【奇迹】层数+4（无需激活盟约）",
+    "descRaw": "<获得时>【炎】层数<@ba.vup>+8</>、【奇迹】层数<@ba.vup>+4</>（无需激活盟约）",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_MULTIPLE_BOND",
+    "effectKey": "SERVER_ADD_MULTIPLE_BOND",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {},
+    "bbStr": {
+      "bond": "yanShip,miraShip",
+      "count": "8,4"
+    },
+    "owners": [
+      "recon_chess_char_5_23_b"
+    ]
+  },
+  "recon_garrison_65_a": {
+    "garrisonId": "recon_garrison_65_a",
+    "desc": "<获得时>自身所属盟约层数+6（无需激活盟约）",
+    "descRaw": "<获得时>自身所属盟约层数<@ba.vup>+6</>（无需激活盟约）",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_BOND_CHESS_ALL",
+    "effectKey": "SERVER_ADD_BOND_CHESS_ALL",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 6
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_char_4_17_a"
+    ]
+  },
+  "recon_garrison_65_b": {
+    "garrisonId": "recon_garrison_65_b",
+    "desc": "<获得时>自身所属盟约层数+12（无需激活盟约）",
+    "descRaw": "<获得时>自身所属盟约层数<@ba.vup>+12</>（无需激活盟约）",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_BOND_CHESS_ALL",
+    "effectKey": "SERVER_ADD_BOND_CHESS_ALL",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 12
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_char_4_17_b"
+    ]
+  },
+  "recon_garrison_35_a": {
+    "garrisonId": "recon_garrison_35_a",
+    "desc": "<获得时>【炎】【维多利亚】层数+4（无需激活盟约）",
+    "descRaw": "<获得时>【炎】【维多利亚】层数<@ba.vup>+4</>（无需激活盟约）",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_BOND",
+    "effectKey": "SERVER_ADD_BOND",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 4
+    },
+    "bbStr": {
+      "bond": "yanShip,victoriaShip"
+    },
+    "owners": [
+      "recon_chess_char_5_03_a"
+    ]
+  },
+  "recon_garrison_35_b": {
+    "garrisonId": "recon_garrison_35_b",
+    "desc": "<获得时>【炎】【维多利亚】层数+8（无需激活盟约）",
+    "descRaw": "<获得时>【炎】【维多利亚】层数<@ba.vup>+8</>（无需激活盟约）",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_BOND",
+    "effectKey": "SERVER_ADD_BOND",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 8
+    },
+    "bbStr": {
+      "bond": "yanShip,victoriaShip"
+    },
+    "owners": [
+      "recon_chess_char_5_03_b"
+    ]
+  },
+  "recon_garrison_101_a": {
+    "garrisonId": "recon_garrison_101_a",
+    "desc": "【炎】【突袭】每叠加3层，本干员攻击束缚和停顿状态的敌人造成的伤害提升0.5%",
+    "descRaw": "【炎】【突袭】每叠加3层，本干员攻击束缚和停顿状态的敌人造成的伤害提升<@ba.vup>0.5%</>",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "GAIN_BUFF",
+    "effectKey": "act2autochess_gar_eff_ab_damageScaleByBond",
+    "battleRuneKey": "env_gbuff_new_with_verify",
+    "charLevel": 0,
+    "bb": {
+      "divide_num": 3,
+      "check_ab_flag": 13,
+      "check_sluggish": 1,
+      "damage_scale_per_stack": 0.005
+    },
+    "bbStr": {
+      "key": "act2autochess_gar_eff_ab_damageScaleByBond",
+      "bond_id": "yanShip,raidShip"
+    },
+    "owners": [
+      "recon_chess_char_6_15_a"
+    ]
+  },
+  "recon_garrison_101_b": {
+    "garrisonId": "recon_garrison_101_b",
+    "desc": "【炎】【突袭】每叠加3层，本干员攻击束缚和停顿状态的敌人造成的伤害提升1%",
+    "descRaw": "【炎】【突袭】每叠加3层，本干员攻击束缚和停顿状态的敌人造成的伤害提升<@ba.vup>1%</>",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "GAIN_BUFF",
+    "effectKey": "act2autochess_gar_eff_ab_damageScaleByBond",
+    "battleRuneKey": "env_gbuff_new_with_verify",
+    "charLevel": 0,
+    "bb": {
+      "divide_num": 3,
+      "check_ab_flag": 13,
+      "check_sluggish": 1,
+      "damage_scale_per_stack": 0.01
+    },
+    "bbStr": {
+      "key": "act2autochess_gar_eff_ab_damageScaleByBond",
+      "bond_id": "yanShip,raidShip"
+    },
+    "owners": [
+      "recon_chess_char_6_15_b"
+    ]
+  },
+  "recon_garrison_narant_a": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {
+      "bond": "sargonShip"
+    },
+    "garrisonId": "recon_garrison_narant_a",
+    "desc": "【萨尔贡】干员技能开启后，携带装备的效果共享至相邻四格【萨尔贡】干员（持续60秒）",
+    "descRaw": "【萨尔贡】干员技能开启后，携带装备的效果共享至相邻四格【萨尔贡】干员（持续<@ba.vup>60</>秒）",
+    "effectType": "RECON_NARANT_SHARE",
+    "effectKey": "RECON_NARANT_SHARE",
+    "bb": {
+      "tiles": 4,
+      "duration": 60,
+      "max_tier": 6
+    },
+    "owners": [
+      "recon_chess_ws_recon_narant_a"
+    ]
+  },
+  "recon_garrison_narant_b": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {
+      "bond": "sargonShip"
+    },
+    "garrisonId": "recon_garrison_narant_b",
+    "desc": "【萨尔贡】干员技能开启后，携带装备的效果共享至周围八格【萨尔贡】干员（持续60秒）",
+    "descRaw": "【萨尔贡】干员技能开启后，携带装备的效果共享至周围八格【萨尔贡】干员（持续<@ba.vup>60</>秒）",
+    "effectType": "RECON_NARANT_SHARE",
+    "effectKey": "RECON_NARANT_SHARE",
+    "bb": {
+      "tiles": 8,
+      "duration": 60,
+      "max_tier": 6
+    },
+    "owners": [
+      "recon_chess_ws_recon_narant_b"
+    ]
+  },
+  "recon_garrison_zumama_a": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {
+      "bond": "sargonShip,steadShip"
+    },
+    "garrisonId": "recon_garrison_zumama_a",
+    "desc": "<战斗中>【萨尔贡】干员每开启1次技能，使已激活的【萨尔贡】【坚守】层数+6\n<战斗中>【萨尔贡】干员开启技能次数≥20次，进入休整期时获得1件黄沙罗盘",
+    "descRaw": "<战斗中>【萨尔贡】干员每开启<@ba.vup>1</>次技能，使已激活的【萨尔贡】【坚守】层数<@ba.vup>+6</>\n<战斗中>【萨尔贡】干员开启技能次数<@ba.vup>≥20</>次，进入休整期时获得<@ba.vup>1</>件黄沙罗盘",
+    "effectType": "RECON_ZUMAMA_LAYERS",
+    "effectKey": "RECON_ZUMAMA_LAYERS",
+    "bb": {
+      "layers": 6,
+      "casts": 20,
+      "count": 1
+    },
+    "owners": [
+      "recon_chess_ws_recon_zumama_a"
+    ]
+  },
+  "recon_garrison_zumama_b": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {
+      "bond": "sargonShip,steadShip"
+    },
+    "garrisonId": "recon_garrison_zumama_b",
+    "desc": "<战斗中>【萨尔贡】干员每开启1次技能，使已激活的【萨尔贡】【坚守】层数+6\n<战斗中>【萨尔贡】干员开启技能次数≥20次，进入休整期时获得2件黄沙罗盘",
+    "descRaw": "<战斗中>【萨尔贡】干员每开启<@ba.vup>1</>次技能，使已激活的【萨尔贡】【坚守】层数<@ba.vup>+6</>\n<战斗中>【萨尔贡】干员开启技能次数<@ba.vup>≥20</>次，进入休整期时获得<@ba.vup>2</>件黄沙罗盘",
+    "effectType": "RECON_ZUMAMA_LAYERS",
+    "effectKey": "RECON_ZUMAMA_LAYERS",
+    "bb": {
+      "layers": 6,
+      "casts": 20,
+      "count": 2
+    },
+    "owners": [
+      "recon_chess_ws_recon_zumama_b"
+    ]
+  },
+  "recon_garrison_mantic_a": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_mantic_a",
+    "desc": "<战斗开始时>使自身与相邻四格的干员获得隐匿（持续999秒，受到敌人攻击后解除）\n<进入休整期时>根据上回合战斗结束时持有隐匿干员的数量获得最多2件盟约之币",
+    "descRaw": "<战斗开始时>使自身与相邻四格的干员获得<$ba.invisible>隐匿</>（持续<@ba.vup>999</>秒，受到敌人攻击后解除）\n<进入休整期时>根据上回合战斗结束时持有<$ba.invisible>隐匿</>干员的数量获得最多<@ba.vup>2</>件盟约之币",
+    "effectType": "RECON_MANTIC_STEALTH",
+    "effectKey": "RECON_MANTIC_STEALTH",
+    "bb": {
+      "tiles": 4,
+      "duration": 999,
+      "max": 2
+    },
+    "owners": [
+      "recon_chess_ws_recon_mantic_a"
+    ]
+  },
+  "recon_garrison_mantic_b": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_mantic_b",
+    "desc": "<战斗开始时>使自身与周围8格的干员获得隐匿（持续999秒，受到敌人攻击后解除）\n<进入休整期时>根据上回合战斗结束时持有隐匿干员的数量获得最多4件盟约之币",
+    "descRaw": "<战斗开始时>使自身与周围<@ba.vup>8</>格的干员获得<$ba.invisible>隐匿</>（持续<@ba.vup>999</>秒，受到敌人攻击后解除）\n<进入休整期时>根据上回合战斗结束时持有<$ba.invisible>隐匿</>干员的数量获得最多<@ba.vup>4</>件盟约之币",
+    "effectType": "RECON_MANTIC_STEALTH",
+    "effectKey": "RECON_MANTIC_STEALTH",
+    "bb": {
+      "tiles": 8,
+      "duration": 999,
+      "max": 4
+    },
+    "owners": [
+      "recon_chess_ws_recon_mantic_b"
+    ]
+  },
+  "recon_garrison_gdglow_a": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_gdglow_a",
+    "desc": "已激活的【维多利亚】盟约每有200层，技能开启时召唤的浮游单元+1",
+    "descRaw": "已激活的【维多利亚】盟约每有<@ba.vup>200</>层，技能开启时召唤的<@ba.kw>浮游单元</><@ba.vup>+1</>",
+    "effectType": "RECON_GDGLOW_DRONES",
+    "effectKey": "RECON_GDGLOW_DRONES",
+    "bb": {
+      "layers": 200
+    },
+    "owners": [
+      "recon_chess_ws_recon_gdglow_a"
+    ]
+  },
+  "recon_garrison_gdglow_b": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_gdglow_b",
+    "desc": "已激活的【维多利亚】盟约每有100层，技能开启时召唤的浮游单元+1",
+    "descRaw": "已激活的【维多利亚】盟约每有<@ba.vup>100</>层，技能开启时召唤的<@ba.kw>浮游单元</><@ba.vup>+1</>",
+    "effectType": "RECON_GDGLOW_DRONES",
+    "effectKey": "RECON_GDGLOW_DRONES",
+    "bb": {
+      "layers": 100
+    },
+    "owners": [
+      "recon_chess_ws_recon_gdglow_b"
+    ]
+  },
+  "recon_garrison_necras_a": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {
+      "bond": "victoriaShip"
+    },
+    "garrisonId": "recon_garrison_necras_a",
+    "desc": "自身与召唤物造成的伤害提升【维多利亚】盟约层数×0.5%，普通攻击与技能攻击范围扩大为场上【维多利亚】干员攻击范围的总和",
+    "descRaw": "自身与召唤物造成的伤害提升【维多利亚】盟约层数<@ba.vup>×0.5%</>，普通攻击与技能攻击范围扩大为场上【维多利亚】干员攻击范围的<@ba.kw>总和</>",
+    "effectType": "RECON_NECRAS_FIELD",
+    "effectKey": "RECON_NECRAS_FIELD",
+    "bb": {
+      "pct": 0.005
+    },
+    "owners": [
+      "recon_chess_ws_recon_necras_a"
+    ]
+  },
+  "recon_garrison_necras_b": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {
+      "bond": "victoriaShip"
+    },
+    "garrisonId": "recon_garrison_necras_b",
+    "desc": "自身与召唤物造成的伤害提升【维多利亚】盟约层数×1%，普通攻击与技能攻击范围扩大为场上【维多利亚】干员攻击范围的总和",
+    "descRaw": "自身与召唤物造成的伤害提升【维多利亚】盟约层数<@ba.vup>×1%</>，普通攻击与技能攻击范围扩大为场上【维多利亚】干员攻击范围的<@ba.kw>总和</>",
+    "effectType": "RECON_NECRAS_FIELD",
+    "effectKey": "RECON_NECRAS_FIELD",
+    "bb": {
+      "pct": 0.01
+    },
+    "owners": [
+      "recon_chess_ws_recon_necras_b"
+    ]
+  },
+  "recon_garrison_phatom_a": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_phatom_a",
+    "desc": "<部署时>使自身已激活的盟约层数+4（最多5次）\n本回合部署次数≥3时，获得1件带有随机效果的维式重锤",
+    "descRaw": "<部署时>使自身已激活的盟约层数<@ba.vup>+4</>（最多<@ba.vup>5</>次）\n本回合部署次数<@ba.vup>≥3</>次时，获得<@ba.vup>1</>件带有随机效果的维式重锤",
+    "effectType": "RECON_PHATOM_DEPLOY",
+    "effectKey": "RECON_PHATOM_DEPLOY",
+    "bb": {
+      "layers": 4,
+      "max_times": 5,
+      "deploys": 3,
+      "count": 1
+    },
+    "owners": [
+      "recon_chess_ws_recon_phatom_a"
+    ]
+  },
+  "recon_garrison_phatom_b": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_phatom_b",
+    "desc": "<部署时>使自身已激活的盟约层数+8（最多5次）\n本回合部署次数≥3时，获得2件带有随机效果的维式重锤",
+    "descRaw": "<部署时>使自身已激活的盟约层数<@ba.vup>+8</>（最多<@ba.vup>5</>次）\n本回合部署次数<@ba.vup>≥3</>次时，获得<@ba.vup>2</>件带有随机效果的维式重锤",
+    "effectType": "RECON_PHATOM_DEPLOY",
+    "effectKey": "RECON_PHATOM_DEPLOY",
+    "bb": {
+      "layers": 8,
+      "max_times": 5,
+      "deploys": 3,
+      "count": 2
+    },
+    "owners": [
+      "recon_chess_ws_recon_phatom_b"
+    ]
+  },
+  "recon_garrison_aurora_a": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {
+      "bond": "kjeragShip"
+    },
+    "garrisonId": "recon_garrison_aurora_a",
+    "desc": "<战斗中>【谢拉格】盟约激活后，每秒获得1技力\n<战斗中>每对敌人造成3次寒冷，使已激活的【谢拉格】【不屈】层数+2",
+    "descRaw": "<战斗中>【谢拉格】盟约激活后，每秒获得<@ba.vup>1</>技力\n<战斗中>每对敌人造成<@ba.vup>3</>次<$ba.cold>寒冷</>，使已激活的【谢拉格】【不屈】层数<@ba.vup>+2</>",
+    "effectType": "RECON_AURORA_TRAIT",
+    "effectKey": "RECON_AURORA_TRAIT",
+    "bb": {
+      "sp": 1,
+      "cold": 3,
+      "layers": 2
+    },
+    "owners": [
+      "recon_chess_ws_recon_aurora_a"
+    ]
+  },
+  "recon_garrison_aurora_b": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {
+      "bond": "kjeragShip"
+    },
+    "garrisonId": "recon_garrison_aurora_b",
+    "desc": "<战斗中>【谢拉格】盟约激活后，每秒获得2技力\n<战斗中>每对敌人造成3次寒冷，使已激活的【谢拉格】【不屈】层数+4",
+    "descRaw": "<战斗中>【谢拉格】盟约激活后，每秒获得<@ba.vup>2</>技力\n<战斗中>每对敌人造成<@ba.vup>3</>次<$ba.cold>寒冷</>，使已激活的【谢拉格】【不屈】层数<@ba.vup>+4</>",
+    "effectType": "RECON_AURORA_TRAIT",
+    "effectKey": "RECON_AURORA_TRAIT",
+    "bb": {
+      "sp": 2,
+      "cold": 3,
+      "layers": 4
+    },
+    "owners": [
+      "recon_chess_ws_recon_aurora_b"
+    ]
+  },
+  "recon_garrison_courier_a": {
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_courier_a",
+    "desc": "<进入休整期时>获得1件简易通讯机（需要激活【谢拉格】盟约）",
+    "descRaw": "<进入休整期时>获得<@ba.vup>1</>件简易通讯机（需要激活【谢拉格】盟约）",
+    "effectType": "RECON_COURIER_PREP",
+    "effectKey": "RECON_COURIER_PREP",
+    "bb": {
+      "count": 1
+    },
+    "owners": [
+      "recon_chess_ws_recon_courier_a"
+    ]
+  },
+  "recon_garrison_courier_b": {
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_courier_b",
+    "desc": "<进入休整期时>获得2件简易通讯机（需要激活【谢拉格】盟约）",
+    "descRaw": "<进入休整期时>获得<@ba.vup>2</>件简易通讯机（需要激活【谢拉格】盟约）",
+    "effectType": "RECON_COURIER_PREP",
+    "effectKey": "RECON_COURIER_PREP",
+    "bb": {
+      "count": 2
+    },
+    "owners": [
+      "recon_chess_ws_recon_courier_b"
+    ]
+  },
+  "recon_garrison_snhunt_a": {
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_snhunt_a",
+    "desc": "<获得时>自身所属盟约层数+3（无需激活盟约）",
+    "descRaw": "<获得时>自身所属盟约层数<@ba.vup>+3</>（无需激活盟约）",
+    "effectType": "SERVER_ADD_BOND_CHESS_ALL",
+    "effectKey": "SERVER_ADD_BOND_CHESS_ALL",
+    "bb": {
+      "count": 3
+    },
+    "owners": [
+      "recon_chess_char_3_11_a"
+    ]
+  },
+  "recon_garrison_snhunt_b": {
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_snhunt_b",
+    "desc": "<获得时>自身所属盟约层数+6（无需激活盟约）",
+    "descRaw": "<获得时>自身所属盟约层数<@ba.vup>+6</>（无需激活盟约）",
+    "effectType": "SERVER_ADD_BOND_CHESS_ALL",
+    "effectKey": "SERVER_ADD_BOND_CHESS_ALL",
+    "bb": {
+      "count": 6
+    },
+    "owners": [
+      "recon_chess_char_3_11_b"
+    ]
+  },
+  "recon_garrison_sbell_a": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_sbell_a",
+    "desc": "<战斗中>攻击处于寒冷、冻结的敌人时，使自身下次攻击造成的伤害无视敌人1点法术抗性（可叠加25层）",
+    "descRaw": "<战斗中>攻击处于<$ba.cold>寒冷</>、<$ba.frozen>冻结</>的敌人时，使自身下次攻击造成的伤害<@ba.vup>无视敌人1点法术抗性</>（可叠加<@ba.vup>25</>层）",
+    "effectType": "RECON_SBELL2_PIERCE",
+    "effectKey": "RECON_SBELL2_PIERCE",
+    "bb": {
+      "res": 1,
+      "max": 25
+    },
+    "owners": [
+      "recon_chess_char_6_02_a"
+    ]
+  },
+  "recon_garrison_sbell_b": {
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bbStr": {},
+    "garrisonId": "recon_garrison_sbell_b",
+    "desc": "<战斗中>攻击处于寒冷、冻结的敌人时，使自身下次攻击造成的伤害无视敌人2点法术抗性（可叠加25层）",
+    "descRaw": "<战斗中>攻击处于<$ba.cold>寒冷</>、<$ba.frozen>冻结</>的敌人时，使自身下次攻击造成的伤害<@ba.vup>无视敌人2点法术抗性</>（可叠加<@ba.vup>25</>层）",
+    "effectType": "RECON_SBELL2_PIERCE",
+    "effectKey": "RECON_SBELL2_PIERCE",
+    "bb": {
+      "res": 2,
+      "max": 25
+    },
+    "owners": [
+      "recon_chess_char_6_02_b"
+    ]
+  },
+  "recon_garrison_phenxi_gain_a": {
+    "garrisonId": "recon_garrison_phenxi_gain_a",
+    "desc": "<获得时>获得1件铳骑之威",
+    "descRaw": "<获得时>获得<@ba.vup>1</>件铳骑之威",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "SERVER_GAIN_EQUIP",
+    "effectKey": "SERVER_GAIN_EQUIP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 1
+    },
+    "bbStr": {
+      "chess": "chess_item_6_02_e_a"
+    },
+    "owners": [
+      "recon_chess_ws_recon_phenxi_a"
+    ]
+  },
+  "recon_garrison_phenxi_ammo_a": {
+    "garrisonId": "recon_garrison_phenxi_ammo_a",
+    "desc": "<战斗中>【拉特兰】干员消耗弹药≥200发，进入休整期时获得1件拉特兰桥夹",
+    "descRaw": "<战斗中>【拉特兰】干员消耗弹药<@ba.vup>≥200</>发，进入休整期时获得<@ba.vup>1</>件拉特兰桥夹",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_PHENXI_AMMO",
+    "effectKey": "RECON_PHENXI_AMMO",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "ammo": 200,
+      "count": 1
+    },
+    "bbStr": {
+      "bond": "lateranoShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_phenxi_a"
+    ]
+  },
+  "recon_garrison_konggou_a": {
+    "garrisonId": "recon_garrison_konggou_a",
+    "desc": "<休整期结束时>使身后一名【拉特兰】干员已激活的盟约层数+2",
+    "descRaw": "<休整期结束时>使身后一名【拉特兰】干员已激活的盟约层数<@ba.vup>+2</>",
+    "eventType": "SERVER_PREP_FIN",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "RECON_KONGGOU_LAYERS",
+    "effectKey": "RECON_KONGGOU_LAYERS",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "layers": 2
+    },
+    "bbStr": {
+      "bond": "lateranoShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_spuria_a"
+    ]
+  },
+  "recon_garrison_lemuen_a": {
+    "garrisonId": "recon_garrison_lemuen_a",
+    "desc": "<战斗中>技能开启期间，攻击范围内的敌人速度-90%，自身受到的伤害降低【拉特兰】盟约层数×2%",
+    "descRaw": "<战斗中>技能开启期间，攻击范围内的敌人速度<@ba.vup>-90%</>，自身受到的伤害降低【拉特兰】盟约层数×<@ba.vup>2%</>",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_LEMUEN_FIELD",
+    "effectKey": "RECON_LEMUEN_FIELD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "slow": 0.9,
+      "pct": 0.02
+    },
+    "bbStr": {
+      "bond": "lateranoShip"
+    },
+    "owners": [
+      "recon_chess_char_6_01_a"
+    ]
+  },
+  "recon_garrison_phenxi_gain_b": {
+    "garrisonId": "recon_garrison_phenxi_gain_b",
+    "desc": "<获得时>获得2件铳骑之威",
+    "descRaw": "<获得时>获得<@ba.vup>2</>件铳骑之威",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "SERVER_GAIN_EQUIP",
+    "effectKey": "SERVER_GAIN_EQUIP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 2
+    },
+    "bbStr": {
+      "chess": "chess_item_6_02_e_a"
+    },
+    "owners": [
+      "recon_chess_ws_recon_phenxi_b"
+    ]
+  },
+  "recon_garrison_phenxi_ammo_b": {
+    "garrisonId": "recon_garrison_phenxi_ammo_b",
+    "desc": "<战斗中>【拉特兰】干员消耗弹药≥100发，进入休整期时获得1件拉特兰桥夹",
+    "descRaw": "<战斗中>【拉特兰】干员消耗弹药<@ba.vup>≥100</>发，进入休整期时获得<@ba.vup>1</>件拉特兰桥夹",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_PHENXI_AMMO",
+    "effectKey": "RECON_PHENXI_AMMO",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "ammo": 100,
+      "count": 1
+    },
+    "bbStr": {
+      "bond": "lateranoShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_phenxi_b"
+    ]
+  },
+  "recon_garrison_konggou_b": {
+    "garrisonId": "recon_garrison_konggou_b",
+    "desc": "<休整期结束时>使身后一名【拉特兰】干员已激活的盟约层数+4",
+    "descRaw": "<休整期结束时>使身后一名【拉特兰】干员已激活的盟约层数<@ba.vup>+4</>",
+    "eventType": "SERVER_PREP_FIN",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "RECON_KONGGOU_LAYERS",
+    "effectKey": "RECON_KONGGOU_LAYERS",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "layers": 4
+    },
+    "bbStr": {
+      "bond": "lateranoShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_spuria_b"
+    ]
+  },
+  "recon_garrison_lemuen_b": {
+    "garrisonId": "recon_garrison_lemuen_b",
+    "desc": "<战斗中>技能开启期间，攻击范围内的敌人速度-90%，自身受到的伤害降低【拉特兰】盟约层数×4%",
+    "descRaw": "<战斗中>技能开启期间，攻击范围内的敌人速度<@ba.vup>-90%</>，自身受到的伤害降低【拉特兰】盟约层数×<@ba.vup>4%</>",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_LEMUEN_FIELD",
+    "effectKey": "RECON_LEMUEN_FIELD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "slow": 0.9,
+      "pct": 0.04
+    },
+    "bbStr": {
+      "bond": "lateranoShip"
+    },
+    "owners": [
+      "recon_chess_char_6_01_b"
+    ]
+  },
+  "recon_garrison_vvana_a": {
+    "garrisonId": "recon_garrison_vvana_a",
+    "desc": "<进入休整期时>获得1件骑士储蓄罐\n骑士储蓄罐被装备销毁时，极小概率（3.25%）不获得资金，而是获得1件天马之盔或1件天马之枪",
+    "descRaw": "<进入休整期时>获得<@ba.vup>1</>件骑士储蓄罐\n骑士储蓄罐被装备销毁时，极小概率（<@ba.vup>3.25%</>）不获得资金，而是获得<@ba.vup>1</>件天马之盔或<@ba.vup>1</>件天马之枪",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "SERVER_GAIN_EQUIP",
+    "effectKey": "SERVER_GAIN_EQUIP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 1,
+      "prob": 0.0325
+    },
+    "bbStr": {
+      "chess": "chess_item_3_12_e_a"
+    },
+    "owners": [
+      "recon_chess_ws_recon_vvana_a"
+    ]
+  },
+  "recon_garrison_platnm_a": {
+    "garrisonId": "recon_garrison_platnm_a",
+    "desc": "<战斗中>未攻击时每0.5秒使攻击速度+5（最多叠加20层），达到上限后在场每5秒都会使自身已激活盟约层数+1（提升的攻速会在攻击后的10秒内逐渐降至0）",
+    "descRaw": "<战斗中>未攻击时每<@ba.vup>0.5</>秒使攻击速度<@ba.vup>+5</>（最多叠加<@ba.vup>20</>层），达到上限后在场每<@ba.vup>5</>秒都会使自身已激活盟约层数<@ba.vup>+1</>（提升的攻速会在攻击后的<@ba.vup>10</>秒内逐渐降至0）",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_PLATNM_ASPD",
+    "effectKey": "RECON_PLATNM_ASPD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "aspd": 5,
+      "interval": 0.5,
+      "max": 20,
+      "decay": 10,
+      "layers_interval": 5,
+      "layers": 1
+    },
+    "bbStr": {
+      "bond": "kazimierzShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_platnm_a"
+    ]
+  },
+  "recon_garrison_mlynar_a": {
+    "garrisonId": "recon_garrison_mlynar_a",
+    "desc": "【卡西米尔】干员每攻击3次，都会使全场敌人在2秒受到5次799点的固定伤害",
+    "descRaw": "【卡西米尔】干员每攻击<@ba.vup>3</>次，都会使全场敌人在<@ba.vup>2</>秒受到<@ba.vup>5</>次<@ba.vup>799</>点的固定伤害",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_MLYNAR_FIELD",
+    "effectKey": "RECON_MLYNAR_FIELD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "attacks": 3,
+      "ticks": 5,
+      "interval": 0.4,
+      "damage": 799
+    },
+    "bbStr": {
+      "bond": "kazimierzShip"
+    },
+    "owners": [
+      "recon_chess_char_5_19_a"
+    ]
+  },
+  "recon_garrison_fartth_a": {
+    "garrisonId": "recon_garrison_fartth_a",
+    "desc": "<战斗开始时>使同一行最右边一名干员获得特质“<部署时>使已激活的【卡西米尔】【精准】层数+3（每场作战至多18层）”",
+    "descRaw": "<战斗开始时>使同一行最右边一名干员获得特质“<部署时>使已激活的【卡西米尔】【精准】层数<@ba.vup>+3</>（每场作战至多18层）”",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "ADD_BOND",
+    "effectKey": "ADD_BOND",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {},
+    "bbStr": {
+      "give_garrison_id": "recon_garrison_fartth_gift_a"
+    },
+    "owners": [
+      "recon_chess_char_4_20_a"
+    ]
+  },
+  "recon_garrison_fartth_gift_a": {
+    "garrisonId": "recon_garrison_fartth_gift_a",
+    "desc": "<部署时>使已激活的【卡西米尔】【精准】层数+3（每场作战至多18层）",
+    "descRaw": "<部署时>使已激活的【卡西米尔】【精准】层数<@ba.vup>+3</>（每场作战至多18层）",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "ADD_BOND",
+    "effectKey": "act2autochess_gar_event_onstart",
+    "battleRuneKey": "env_gbuff_new_with_verify",
+    "charLevel": 0,
+    "bb": {
+      "bond_add_count": 3,
+      "max_add_count_per_battle": 18
+    },
+    "bbStr": {
+      "key": "act2autochess_gar_event_onstart",
+      "bond_type": "bond_by_id",
+      "bond_id": "kazimierzShip,preciShip",
+      "bond_add_type": "by_count",
+      "garrison_key": "recon_garrison_fartth_gift_a"
+    },
+    "owners": []
+  },
+  "recon_garrison_ashlok_a": {
+    "garrisonId": "recon_garrison_ashlok_a",
+    "desc": "<获得时>当前激活且层数最多的盟约层数+2",
+    "descRaw": "<获得时>当前激活且层数最多的盟约层数<@ba.vup>+2</>",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_BOND_ACTIVATED_MOST_LAYER",
+    "effectKey": "SERVER_ADD_BOND_ACTIVATED_MOST_LAYER",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 2
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_char_2_18_a"
+    ]
+  },
+  "recon_garrison_vvana_b": {
+    "garrisonId": "recon_garrison_vvana_b",
+    "desc": "<进入休整期时>获得2件骑士储蓄罐\n骑士储蓄罐被装备销毁时，小概率（7.99%）不获得资金，而是获得1件天马之盔或1件天马之枪",
+    "descRaw": "<进入休整期时>获得<@ba.vup>2</>件骑士储蓄罐\n骑士储蓄罐被装备销毁时，小概率（<@ba.vup>7.99%</>）不获得资金，而是获得<@ba.vup>1</>件天马之盔或<@ba.vup>1</>件天马之枪",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "SERVER_GAIN_EQUIP",
+    "effectKey": "SERVER_GAIN_EQUIP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 2,
+      "prob": 0.0799
+    },
+    "bbStr": {
+      "chess": "chess_item_3_12_e_a"
+    },
+    "owners": [
+      "recon_chess_ws_recon_vvana_b"
+    ]
+  },
+  "recon_garrison_platnm_b": {
+    "garrisonId": "recon_garrison_platnm_b",
+    "desc": "<战斗中>未攻击时每0.5秒使攻击速度+5（最多叠加20层），达到上限后在场每5秒都会使自身已激活盟约层数+1（提升的攻速会在攻击后的10秒内逐渐降至0）",
+    "descRaw": "<战斗中>未攻击时每<@ba.vup>0.5</>秒使攻击速度<@ba.vup>+5</>（最多叠加<@ba.vup>20</>层），达到上限后在场每<@ba.vup>5</>秒都会使自身已激活盟约层数<@ba.vup>+1</>（提升的攻速会在攻击后的<@ba.vup>10</>秒内逐渐降至0）",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_PLATNM_ASPD",
+    "effectKey": "RECON_PLATNM_ASPD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "aspd": 5,
+      "interval": 0.5,
+      "max": 20,
+      "decay": 10,
+      "layers_interval": 5,
+      "layers": 1
+    },
+    "bbStr": {
+      "bond": "kazimierzShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_platnm_b"
+    ]
+  },
+  "recon_garrison_mlynar_b": {
+    "garrisonId": "recon_garrison_mlynar_b",
+    "desc": "【卡西米尔】干员每攻击3次，都会使全场敌人在2秒受到5次1124点的固定伤害",
+    "descRaw": "【卡西米尔】干员每攻击<@ba.vup>3</>次，都会使全场敌人在<@ba.vup>2</>秒受到<@ba.vup>5</>次<@ba.vup>1124</>点的固定伤害",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_MLYNAR_FIELD",
+    "effectKey": "RECON_MLYNAR_FIELD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "attacks": 3,
+      "ticks": 5,
+      "interval": 0.4,
+      "damage": 1124
+    },
+    "bbStr": {
+      "bond": "kazimierzShip"
+    },
+    "owners": [
+      "recon_chess_char_5_19_b"
+    ]
+  },
+  "recon_garrison_fartth_b": {
+    "garrisonId": "recon_garrison_fartth_b",
+    "desc": "<战斗开始时>使同一行最右边一名干员获得特质“<部署时>使已激活的【卡西米尔】【精准】层数+6（每场作战至多36层）”",
+    "descRaw": "<战斗开始时>使同一行最右边一名干员获得特质“<部署时>使已激活的【卡西米尔】【精准】层数<@ba.vup>+6</>（每场作战至多36层）”",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "ADD_BOND",
+    "effectKey": "ADD_BOND",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {},
+    "bbStr": {
+      "give_garrison_id": "recon_garrison_fartth_gift_b"
+    },
+    "owners": [
+      "recon_chess_char_4_20_b"
+    ]
+  },
+  "recon_garrison_fartth_gift_b": {
+    "garrisonId": "recon_garrison_fartth_gift_b",
+    "desc": "<部署时>使已激活的【卡西米尔】【精准】层数+6（每场作战至多36层）",
+    "descRaw": "<部署时>使已激活的【卡西米尔】【精准】层数<@ba.vup>+6</>（每场作战至多36层）",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "ADD_BOND",
+    "effectKey": "act2autochess_gar_event_onstart",
+    "battleRuneKey": "env_gbuff_new_with_verify",
+    "charLevel": 0,
+    "bb": {
+      "bond_add_count": 6,
+      "max_add_count_per_battle": 36
+    },
+    "bbStr": {
+      "key": "act2autochess_gar_event_onstart",
+      "bond_type": "bond_by_id",
+      "bond_id": "kazimierzShip,preciShip",
+      "bond_add_type": "by_count",
+      "garrison_key": "recon_garrison_fartth_gift_b"
+    },
+    "owners": []
+  },
+  "recon_garrison_ashlok_b": {
+    "garrisonId": "recon_garrison_ashlok_b",
+    "desc": "<获得时>当前激活且层数最多的盟约层数+4",
+    "descRaw": "<获得时>当前激活且层数最多的盟约层数<@ba.vup>+4</>",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_BOND_ACTIVATED_MOST_LAYER",
+    "effectKey": "SERVER_ADD_BOND_ACTIVATED_MOST_LAYER",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 4
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_char_2_18_b"
+    ]
+  },
+  "recon_garrison_bellone_deploy_a": {
+    "garrisonId": "recon_garrison_bellone_deploy_a",
+    "desc": "<部署时>【叙拉古】【突袭】层数+10（最多4次）",
+    "descRaw": "<部署时>【叙拉古】【突袭】层数<@ba.vup>+10</>（最多4次）",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "ADD_BOND",
+    "effectKey": "act2autochess_gar_event_onstart",
+    "battleRuneKey": "env_gbuff_new_with_verify",
+    "charLevel": 0,
+    "bb": {
+      "bond_add_count": 10,
+      "max_add_count_per_battle": 40
+    },
+    "bbStr": {
+      "key": "act2autochess_gar_event_onstart",
+      "bond_type": "bond_by_id",
+      "bond_id": "siracusaShip,raidShip",
+      "bond_add_type": "by_count",
+      "garrison_key": "recon_garrison_bellone_deploy_a"
+    },
+    "owners": [
+      "recon_chess_ws_recon_demetr_a"
+    ]
+  },
+  "recon_garrison_bellone_prep_a": {
+    "garrisonId": "recon_garrison_bellone_prep_a",
+    "desc": "<进入休整期时>若伺夜在场且携带叙拉古正装，则获得1件叙拉古正装",
+    "descRaw": "<进入休整期时>若伺夜在场且携带叙拉古正装，则获得<@ba.vup>1</>件叙拉古正装",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "RECON_BELLONE_PREP",
+    "effectKey": "RECON_BELLONE_PREP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 1
+    },
+    "bbStr": {
+      "chess": "chess_item_3_01_e_a"
+    },
+    "owners": [
+      "recon_chess_ws_recon_demetr_a"
+    ]
+  },
+  "recon_garrison_judge_a": {
+    "garrisonId": "recon_garrison_judge_a",
+    "desc": "处于隐匿的【叙拉古】干员受到的攻击由自身承担，每次承担攻击都会使【叙拉古】【不屈】层数+4（最多6次）",
+    "descRaw": "处于隐匿的【叙拉古】干员受到的攻击由自身承担，每次承担攻击都会使【叙拉古】【不屈】层数<@ba.vup>+4</>（最多6次）",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_ZEIZ_GUARD",
+    "effectKey": "RECON_ZEIZ_GUARD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "layers": 4,
+      "max_times": 6
+    },
+    "bbStr": {
+      "bond": "siracusaShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_judge_a"
+    ]
+  },
+  "recon_garrison_aroma_a": {
+    "garrisonId": "recon_garrison_aroma_a",
+    "desc": "<休整期结束时>本回合每刷新过1次，使已激活的【叙拉古】【奥术】层数+2（至多4层）",
+    "descRaw": "<休整期结束时>本回合每刷新过1次，使已激活的【叙拉古】【奥术】层数<@ba.vup>+2</>（至多<@ba.vup>4</>层）",
+    "eventType": "SERVER_PREP_FIN",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER",
+    "effectKey": "SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "multiplier": 2,
+      "max_layer": 4
+    },
+    "bbStr": {
+      "bond": "siracusaShip,arcaneShip",
+      "conditionkey": "character_target_inboard"
+    },
+    "owners": [
+      "recon_chess_char_4_10_a"
+    ]
+  },
+  "recon_garrison_vulpis_a": {
+    "garrisonId": "recon_garrison_vulpis_a",
+    "desc": "<获得时>自身所属盟约层数+4（无需激活盟约）",
+    "descRaw": "<获得时>自身所属盟约层数<@ba.vup>+4</>（无需激活盟约）",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_BOND_CHESS_ALL",
+    "effectKey": "SERVER_ADD_BOND_CHESS_ALL",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 4
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_char_3_18_a"
+    ]
+  },
+  "recon_garrison_aglina_a": {
+    "garrisonId": "recon_garrison_aglina_a",
+    "desc": "<休整期结束时>本回合每刷新过1次，使已激活的【叙拉古】层数+3（每回合至多9层）",
+    "descRaw": "<休整期结束时>本回合每刷新过1次，使已激活的【叙拉古】层数<@ba.vup>+3</>（每回合至多<@ba.vup>9</>层）",
+    "eventType": "SERVER_PREP_FIN",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER",
+    "effectKey": "SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "multiplier": 3,
+      "max_layer": 9
+    },
+    "bbStr": {
+      "bond": "siracusaShip",
+      "conditionkey": "character_target_inboard"
+    },
+    "owners": [
+      "recon_chess_char_5_20_a"
+    ]
+  },
+  "recon_garrison_vigil_prep_a": {
+    "garrisonId": "recon_garrison_vigil_prep_a",
+    "desc": "<进入休整期时>若贝洛内在场且携带叙拉古正装，获得1件家族徽章",
+    "descRaw": "<进入休整期时>若贝洛内在场且携带叙拉古正装，获得<@ba.vup>1</>件家族徽章",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "RECON_VIGIL_PREP",
+    "effectKey": "RECON_VIGIL_PREP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 1
+    },
+    "bbStr": {
+      "chess": "chess_item_6_11_e_a"
+    },
+    "owners": [
+      "recon_chess_char_3_19_a"
+    ]
+  },
+  "recon_garrison_bellone_deploy_b": {
+    "garrisonId": "recon_garrison_bellone_deploy_b",
+    "desc": "<部署时>【叙拉古】【突袭】层数+20（最多4次）",
+    "descRaw": "<部署时>【叙拉古】【突袭】层数<@ba.vup>+20</>（最多4次）",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "ADD_BOND",
+    "effectKey": "act2autochess_gar_event_onstart",
+    "battleRuneKey": "env_gbuff_new_with_verify",
+    "charLevel": 0,
+    "bb": {
+      "bond_add_count": 20,
+      "max_add_count_per_battle": 80
+    },
+    "bbStr": {
+      "key": "act2autochess_gar_event_onstart",
+      "bond_type": "bond_by_id",
+      "bond_id": "siracusaShip,raidShip",
+      "bond_add_type": "by_count",
+      "garrison_key": "recon_garrison_bellone_deploy_b"
+    },
+    "owners": [
+      "recon_chess_ws_recon_demetr_b"
+    ]
+  },
+  "recon_garrison_bellone_prep_b": {
+    "garrisonId": "recon_garrison_bellone_prep_b",
+    "desc": "<进入休整期时>若伺夜在场且携带叙拉古正装，则获得2件叙拉古正装",
+    "descRaw": "<进入休整期时>若伺夜在场且携带叙拉古正装，则获得<@ba.vup>2</>件叙拉古正装",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "RECON_BELLONE_PREP",
+    "effectKey": "RECON_BELLONE_PREP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 2
+    },
+    "bbStr": {
+      "chess": "chess_item_3_01_e_a"
+    },
+    "owners": [
+      "recon_chess_ws_recon_demetr_b"
+    ]
+  },
+  "recon_garrison_judge_b": {
+    "garrisonId": "recon_garrison_judge_b",
+    "desc": "处于隐匿的【叙拉古】干员受到的攻击由自身承担，每次承担攻击都会使【叙拉古】【不屈】层数+8（最多6次）",
+    "descRaw": "处于隐匿的【叙拉古】干员受到的攻击由自身承担，每次承担攻击都会使【叙拉古】【不屈】层数<@ba.vup>+8</>（最多6次）",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_ZEIZ_GUARD",
+    "effectKey": "RECON_ZEIZ_GUARD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "layers": 8,
+      "max_times": 6
+    },
+    "bbStr": {
+      "bond": "siracusaShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_judge_b"
+    ]
+  },
+  "recon_garrison_aroma_b": {
+    "garrisonId": "recon_garrison_aroma_b",
+    "desc": "<休整期结束时>本回合每刷新过1次，使已激活的【叙拉古】【奥术】层数+4（每回合至多8层）",
+    "descRaw": "<休整期结束时>本回合每刷新过1次，使已激活的【叙拉古】【奥术】层数<@ba.vup>+4</>（每回合至多<@ba.vup>8</>层）",
+    "eventType": "SERVER_PREP_FIN",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER",
+    "effectKey": "SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "multiplier": 4,
+      "max_layer": 8
+    },
+    "bbStr": {
+      "bond": "siracusaShip,arcaneShip",
+      "conditionkey": "character_target_inboard"
+    },
+    "owners": [
+      "recon_chess_char_4_10_b"
+    ]
+  },
+  "recon_garrison_vulpis_b": {
+    "garrisonId": "recon_garrison_vulpis_b",
+    "desc": "<获得时>自身所属盟约层数+8（无需激活盟约）",
+    "descRaw": "<获得时>自身所属盟约层数<@ba.vup>+8</>（无需激活盟约）",
+    "eventType": "SERVER_GAIN",
+    "eventTypeDesc": "单次叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_BOND_CHESS_ALL",
+    "effectKey": "SERVER_ADD_BOND_CHESS_ALL",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 8
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_char_3_18_b"
+    ]
+  },
+  "recon_garrison_aglina_b": {
+    "garrisonId": "recon_garrison_aglina_b",
+    "desc": "<休整期结束时>本回合每刷新过1次，使已激活的【叙拉古】层数+6（每回合至多18层）",
+    "descRaw": "<休整期结束时>本回合每刷新过1次，使已激活的【叙拉古】层数<@ba.vup>+6</>（每回合至多<@ba.vup>18</>层）",
+    "eventType": "SERVER_PREP_FIN",
+    "eventTypeDesc": "持续叠加",
+    "eventTypeIcon": "icon_bond",
+    "effectType": "SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER",
+    "effectKey": "SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "multiplier": 6,
+      "max_layer": 18
+    },
+    "bbStr": {
+      "bond": "siracusaShip",
+      "conditionkey": "character_target_inboard"
+    },
+    "owners": [
+      "recon_chess_char_5_20_b"
+    ]
+  },
+  "recon_garrison_vigil_prep_b": {
+    "garrisonId": "recon_garrison_vigil_prep_b",
+    "desc": "<进入休整期时>若贝洛内在场且携带叙拉古正装，获得2件家族徽章",
+    "descRaw": "<进入休整期时>若贝洛内在场且携带叙拉古正装，获得<@ba.vup>2</>件家族徽章",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "RECON_VIGIL_PREP",
+    "effectKey": "RECON_VIGIL_PREP",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 2
+    },
+    "bbStr": {
+      "chess": "chess_item_6_11_e_a"
+    },
+    "owners": [
+      "recon_chess_char_3_19_b"
+    ]
+  },
+  "recon_garrison_clemnt_a": {
+    "garrisonId": "recon_garrison_clemnt_a",
+    "desc": "每次攻击额外附带自身1%生命上限×【阿戈尔】层数的元素伤害\n<战斗中>攻击使敌人的侵蚀损伤冷却减少25%",
+    "descRaw": "每次攻击额外附带自身<@ba.vup>1%</>生命上限×【阿戈尔】层数的元素伤害\n<战斗中>攻击使敌人的侵蚀损伤冷却减少<@ba.vup>25%</>",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_CLEMNT_AEGIR",
+    "effectKey": "RECON_CLEMNT_AEGIR",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "hp_pct": 0.01,
+      "cooldown_cut": 0.25
+    },
+    "bbStr": {
+      "bond": "egirShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_clemnt_a"
+    ]
+  },
+  "recon_garrison_highmo_a": {
+    "garrisonId": "recon_garrison_highmo_a",
+    "desc": "<战斗开始时>使身后一格干员获得身前一格干员的特质",
+    "descRaw": "<战斗开始时>使身后<@ba.vup>一</>格干员获得身前一格干员的特质",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_HIGHMO_COPY",
+    "effectKey": "RECON_HIGHMO_COPY",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "tiles": 1
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_ws_recon_highmo_a"
+    ]
+  },
+  "recon_garrison_deepcl_a": {
+    "garrisonId": "recon_garrison_deepcl_a",
+    "desc": "<售出时>获得1件随机2阶装备",
+    "descRaw": "<售出时>获得<@ba.vup>1</>件随机2阶装备",
+    "eventType": "SERVER_CHESS_SOLD",
+    "eventTypeDesc": "经济能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "RECON_DEEPCL_SOLD",
+    "effectKey": "RECON_DEEPCL_SOLD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 1,
+      "tier": 2
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_ws_recon_deepcl_a"
+    ]
+  },
+  "recon_garrison_cuttle_a": {
+    "garrisonId": "recon_garrison_cuttle_a",
+    "desc": "<进入休整期时>携带的装备≥2时，随机选择2件阶级最低的装备，较大概率（70%）替换为阿戈尔重刃，较小概率（20%）替换为突变细胞，小概率（10%）替换为海沟实验体",
+    "descRaw": "<进入休整期时>携带的装备≥2时，随机选择<@ba.vup>2</>件阶级最低的装备，较大概率（<@ba.vup>70%</>）替换为阿戈尔重刃，较小概率（<@ba.vup>20%</>）替换为突变细胞，小概率（<@ba.vup>10%</>）替换为海沟实验体",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "RECON_CUTTLE_REPLACE",
+    "effectKey": "RECON_CUTTLE_REPLACE",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "min_items": 2,
+      "pick": 2
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_ws_recon_cuttle_a"
+    ]
+  },
+  "recon_garrison_clemnt_b": {
+    "garrisonId": "recon_garrison_clemnt_b",
+    "desc": "每次攻击额外附带自身2%生命上限×【阿戈尔】层数的元素伤害\n<战斗中>攻击使敌人的侵蚀损伤冷却减少50%",
+    "descRaw": "每次攻击额外附带自身<@ba.vup>2%</>生命上限×【阿戈尔】层数的元素伤害\n<战斗中>攻击使敌人的侵蚀损伤冷却减少<@ba.vup>50%</>",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_CLEMNT_AEGIR",
+    "effectKey": "RECON_CLEMNT_AEGIR",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "hp_pct": 0.02,
+      "cooldown_cut": 0.5
+    },
+    "bbStr": {
+      "bond": "egirShip"
+    },
+    "owners": [
+      "recon_chess_ws_recon_clemnt_b"
+    ]
+  },
+  "recon_garrison_highmo_b": {
+    "garrisonId": "recon_garrison_highmo_b",
+    "desc": "<战斗开始时>使身后两格干员获得身前一格干员的特质",
+    "descRaw": "<战斗开始时>使身后<@ba.vup>两</>格干员获得身前一格干员的特质",
+    "eventType": "IN_BATTLE",
+    "eventTypeDesc": "作战能力",
+    "eventTypeIcon": "icon_battle",
+    "effectType": "RECON_HIGHMO_COPY",
+    "effectKey": "RECON_HIGHMO_COPY",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "tiles": 2
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_ws_recon_highmo_b"
+    ]
+  },
+  "recon_garrison_deepcl_b": {
+    "garrisonId": "recon_garrison_deepcl_b",
+    "desc": "<售出时>获得2件随机2阶装备",
+    "descRaw": "<售出时>获得<@ba.vup>2</>件随机2阶装备",
+    "eventType": "SERVER_CHESS_SOLD",
+    "eventTypeDesc": "经济能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "RECON_DEEPCL_SOLD",
+    "effectKey": "RECON_DEEPCL_SOLD",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "count": 2,
+      "tier": 2
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_ws_recon_deepcl_b"
+    ]
+  },
+  "recon_garrison_cuttle_b": {
+    "garrisonId": "recon_garrison_cuttle_b",
+    "desc": "<进入休整期时>携带的装备≥1时，随机选择1件阶级最低的装备，较大概率（70%）替换为阿戈尔重刃，较小概率（20%）替换为突变细胞，小概率（10%）替换为海沟实验体",
+    "descRaw": "<进入休整期时>携带的装备≥1时，随机选择<@ba.vup>1</>件阶级最低的装备，较大概率（<@ba.vup>70%</>）替换为阿戈尔重刃，较小概率（<@ba.vup>20%</>）替换为突变细胞，小概率（<@ba.vup>10%</>）替换为海沟实验体",
+    "eventType": "SERVER_PREP_START",
+    "eventTypeDesc": "整备能力",
+    "eventTypeIcon": "icon_gold",
+    "effectType": "RECON_CUTTLE_REPLACE",
+    "effectKey": "RECON_CUTTLE_REPLACE",
+    "battleRuneKey": null,
+    "charLevel": 0,
+    "bb": {
+      "min_items": 1,
+      "pick": 1
+    },
+    "bbStr": {},
+    "owners": [
+      "recon_chess_ws_recon_cuttle_b"
+    ]
+  }
+}

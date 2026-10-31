@@ -136,7 +136,7 @@ function EnemyThumb({ e, m, on = false, onClick = null, size = 'sm' }) {
   const Tag = onClick ? 'button' : 'span';
   return html`<${Tag} type=${onClick ? 'button' : undefined} class=${cx('sw-eth', `sw-eth--${size}`, on && 'is-on', e.rank === 'BOSS' && 'is-boss', e.rank === 'ELITE' && 'is-elite')}
       onClick=${onClick} title=${e.name}>
-    <${Img} src=${enemyIconUrl(m, e.key)} fallback=${html`<${GIcon} name="skull" />`} />
+    <${Img} src=${enemyIconUrl(m, e.iconId || e.key)} fallback=${html`<${GIcon} name="skull" />`} />
     ${e.handbookIndex ? html`<span class="sw-eth__no">${e.handbookIndex}</span>` : null}
   <//>`;
 }
@@ -162,7 +162,14 @@ function sweepBondIcon(m, bondId) {
 
 function BondPanel({ bond, m, notOwned, recon = false, onToggleRecon = null }) {
   const off = new Set(Array.isArray(notOwned) ? notOwned : []);
-  const ids = Array.isArray(bond.visibleMembers) && bond.visibleMembers.length ? bond.visibleMembers : (bond.members || []);
+  const rawIds = Array.isArray(bond.visibleMembers) && bond.visibleMembers.length ? bond.visibleMembers : (bond.members || []);
+  // 重构档的对应干员只留重构版本（业主 2026-10-30）：重构盟约的名册按棋子自己的 `bonds` 重算
+  // （shared/workshop.js reconBondMembers），同名干员的官方记录与 `recon_<id>` 记录会同时列在里面 ——
+  // 有重构记录的干员丢掉官方那一条，官方没有的（新增干员）原样保留。
+  const reconLayer = recon || isReconBondId(bond.bondId);
+  const ids = reconLayer
+    ? rawIds.filter((id) => isReconBondId(id) || !data.lookup('chess', `recon_${id}`))
+    : rawIds;
   const members = ids.map((id) => data.lookup('chess', id)).filter(Boolean)
     .sort((a, b) => (b.tier - a.tier) || ((a.shopSortId ?? 0) - (b.shopSortId ?? 0)));
   const anyOff = members.some((c) => off.has(c.chessId));
@@ -282,7 +289,7 @@ function EnemyPanel({ sel, m, onCodex }) {
     const e = data.lookup('enemies', boss.enemyKey);
     const escorts = bossEnemyKeys(boss).slice(1).map((k) => data.lookup('enemies', k)).filter(Boolean);
     return html`<div class="sw-detail">
-      <${Hero} src=${enemyIconUrl(m, boss.enemyKey)} art=${true} name=${boss.name} fallback=${html`<${GIcon} name="skull" />`} />
+      <${Hero} src=${enemyIconUrl(m, e?.iconId || boss.enemyKey)} art=${true} name=${boss.name} fallback=${html`<${GIcon} name="skull" />`} />
       <div class="sw-text"><${RichText} as="p" text=${e?.descRaw || e?.desc || ''} /></div>
       <div class="sw-box">
         <div class="sw-box__head">
@@ -323,10 +330,13 @@ function EnemiesTab({ m, sel, onSel, onCodex }) {
   const total = codexEnemies(data.list('enemies') || []).length;
   return html`
     <${Section} name=${t('领袖')} glyph=${html`<${GIcon} name="skull" />`} count=${bosses.length}>
-      ${bosses.map((b) => html`<${Tile} key=${b.bossId} kind="boss" on=${sel.kind === 'boss' && sel.id === b.bossId} onClick=${() => onSel({ kind: 'boss', id: b.bossId })} title=${b.name}>
-        <span class="sw-art"><${Img} src=${enemyIconUrl(m, b.enemyKey)} fallback=${html`<${GIcon} name="skull" />`} /></span>
-        <span class="sw-tile__cap">${b.name}</span>
-      <//>`)}
+      ${bosses.map((b) => {
+        const e = data.lookup('enemies', b.enemyKey);
+        return html`<${Tile} key=${b.bossId} kind="boss" on=${sel.kind === 'boss' && sel.id === b.bossId} onClick=${() => onSel({ kind: 'boss', id: b.bossId })} title=${b.name}>
+          <span class="sw-art"><${Img} src=${enemyIconUrl(m, e?.iconId || b.enemyKey)} fallback=${html`<${GIcon} name="skull" />`} /></span>
+          <span class="sw-tile__cap">${b.name}</span>
+        <//>`;
+      })}
     <//>
     <${Section} name=${t('战术特训敌人')} glyph=${html`<${GIcon} name="target" />`} count=${types.length}>
       ${types.map((f) => html`<${Tile} key=${f.type} kind="type" on=${sel.kind === 'type' && sel.id === f.type} onClick=${() => onSel({ kind: 'type', id: f.type })} title=${f.name}>
@@ -381,7 +391,7 @@ function CodexDetail({ e, m }) {
     </div>
     <div class="sw-cd__main">
       <div class="sw-cd__art">
-        <span class="sw-cd__img"><${Img} src=${enemyIconUrl(m, e.key)} fallback=${html`<${GIcon} name="skull" />`} /></span>
+        <span class="sw-cd__img"><${Img} src=${enemyIconUrl(m, e.iconId || e.key)} fallback=${html`<${GIcon} name="skull" />`} /></span>
         <span class="sw-cd__mass" title=${t('重量等级：越重越难被推动或拉动')}><${Icon} name="box" />${t('重量')}<b class="num">${s.massLevel ?? 0}</b></span>
       </div>
       <div class="sw-cd__stats">${STAT_ROWS.map(([k, label, icon]) => {

@@ -150,7 +150,7 @@ export function ResultView({ res, pub = null, myId = null, backLabel, onBack, qu
       <section class="result__hero">
         <div class="result__summary">
         <div class="result__logo"><${Sprite} k="entry/season_logo_settle" class="result__logoimg" fallback=${html`<${MicroLabel} tone="mint">STRONGHOLD PROTOCOL</${MicroLabel}>`} /></div>
-        ${r.difficulty ? html`<${DifficultyTag} difficulty=${r.difficulty} size="lg" />` : null}
+        ${r.difficulty ? html`<${DifficultyTag} difficulty=${r.difficulty} size="lg" mode=${r.modeId} />` : null}
         <h1 class="result__headline">${r.victory ? t('模拟完成') : t('模拟失败')}</h1>
         <${UnofficialMark} room=${content ? { content } : null} class="result__modmark" />
         ${res?.test === true ? html`<p class="result__test" data-testid="result-test"><${TestMark} /> ${t('测试对局')}${Number.isInteger(res.testActions) ? html` · ${t('测试指令 {n} 次', { n: res.testActions })}` : null}</p>

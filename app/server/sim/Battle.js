@@ -55,7 +55,7 @@ import { toDataSource, normalizeRoute, normalizeStage } from './simdata.js';
 import { installContent } from './content/index.js';
 import { withGameData, withMorphPairing } from './content/support/index.js';
 // 重构模拟的盟约别名（`recon_<官方 id>` → 官方 id；服务端复算、浏览器战斗、试玩与重放共用这一份口径）
-import { reconBondData } from '../../shared/reconModes.js';
+import { reconData } from '../../shared/reconModes.js';
 import { BattlePlayers } from './battle/players.js';
 import { BattleLifecycle } from './battle/lifecycle.js';
 import { BattleHooks } from './battle/hooks.js';
@@ -89,7 +89,7 @@ const DEFAULT_RECTS = { normal: GEO.NORMAL_RECT, unite: GEO.UNITE_RECT, boss: GE
 function dataObjectOf(data, modeId = null) {
   if (!data || typeof data !== 'object') return null;
   const src = data.source && typeof data.source === 'object' ? data.source : (typeof data.getChess === 'function' ? null : data);
-  return (src && reconBondData(src, modeId)) || src;
+  return (src && reconData(src, modeId)) || src;
 }
 
 export class Battle {

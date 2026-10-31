@@ -41,8 +41,9 @@ test('shared 的 RECON_ASSIST_IDS / RECON_LOAD_IDS 与屏上六条逐字一致',
 });
 
 // 局内「策略效果」下面那一列（screens/game.js 的 gm__effects → ui/effectsList.js 的 ReconProtocolList）读的行：
-// 只认本局交上去的两个 id，未知 id 与没交的座位都画不出来。
-test('reconProtocolRows 按已交的选择给出协助 / 负载两行', async () => {
+// 只认本局交上去的 id，未知 id 与没交的座位都画不出来。熔芯负载交上去的是**被排除的那一条**（业主 2026-10-30），
+// 所以那一列给出的是另外两条。
+test('reconProtocolRows 给出协助一行 + 生效中的两条负载', async () => {
   const { reconProtocolRows } = await import('../../public/js/screens/preRecon.js');
   const rows = reconProtocolRows({
     p1: { assist: 'recon_assist_equip', load: 'recon_load_data' },
@@ -51,14 +52,21 @@ test('reconProtocolRows 按已交的选择给出协助 / 负载两行', async ()
   }, 'p1');
   assert.deepEqual(rows.map((r) => [r.id, r.key]), [
     ['recon_assist_equip', 'assist'],
-    ['recon_load_data', 'load'],
-  ]);
+    ['recon_load_bond', 'load'],
+    ['recon_load_equip', 'load'],
+  ], '排除的是数据负载：列出来的是盟约负载 + 装备负载');
   assert.equal(rows[0].kind, '重构协助');
   assert.equal(rows[1].kind, '熔芯负载');
   assert.ok(rows.every((r) => r.name && r.desc), '名称与说明直接取自屏上的那两张表');
 
+  assert.deepEqual(reconProtocolRows({ p2: { assist: 'recon_assist_bond' } }, 'p2').map((r) => r.id), ['recon_assist_bond'],
+    '没交负载 ⇒ 只有协助一行（三条负载一条都不生效）');
+  assert.deepEqual(reconProtocolRows({ p4: { load: 'recon_load_equip' } }, 'p4').map((r) => r.id),
+    ['recon_load_bond', 'recon_load_data'], '只交负载也行：另外两条生效');
+  assert.deepEqual(reconProtocolRows({ p3: { assist: 'nope', load: 'nope' } }, 'p3'), [], '未知 id 一行都不画');
+  assert.deepEqual(reconProtocolRows({ p5: { load: 'recon_load_bond' } }, 'p5').map((r) => r.id),
+    ['recon_load_equip', 'recon_load_data'], '排除盟约负载 ⇒ 装备 + 数据生效');
   assert.deepEqual(reconProtocolRows({ p2: { assist: 'recon_assist_bond' } }, 'p1'), [], '没交的座位没有行');
-  assert.deepEqual(reconProtocolRows({ p3: { assist: 'nope' } }, 'p3'), [], '未知 id 一行都不画');
   assert.deepEqual(reconProtocolRows(null, 'p1'), [], '非重构对局（没有 pub.recon）不画');
   assert.deepEqual(reconProtocolRows({ p1: {} }, null), [], '观战席（没有自己）不画');
 });

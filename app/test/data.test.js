@@ -92,7 +92,8 @@ test('chess: ids, golden pairs and references resolve', () => {
     assert.equal(chess[c.baseId].isGolden, false, `${id}: baseId must be normal`);
     assert.ok(c.goldenId && chess[c.goldenId]?.isGolden, `${id}: goldenId`);
     assert.equal(c.tier, chess[c.baseId].tier, `${id}: tier differs from base`);
-    assert.ok(c.tier >= 1 && c.tier <= 6);
+    // 7 阶是业主 2026-10-30 新增的一档（数据里还没有记录，后续内容会补；规则允许 1–7）
+    assert.ok(c.tier >= 1 && c.tier <= 7);
     for (const b of c.bonds) assert.ok(bonds[b], `${id}: bond ${b}`);
     for (const g of c.garrisonIds) assert.ok(garrisons[g], `${id}: garrison ${g}`);
     for (const t of c.tokens) assert.ok(tokens[t], `${id}: token ${t}`);

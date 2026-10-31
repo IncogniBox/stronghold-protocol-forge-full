@@ -3,6 +3,7 @@ import { RECORD_SCHEMA, OPERATOR_ART_SCHEMA, OPERATOR_ORIGIN_SCHEMA } from './re
 import { composeUnitRecord, statusKey } from '../standIn.js';
 import { clone, object, own, problem, jsonProblems, mergeData, recordId, namespace, RECORD_MAPS } from './dataUtils.js';
 import { validateSkillSpec, matchesSchema, MODS_SCHEMA } from './skillSpec.js';
+import { TIER7 } from '../chessAuthoring.js';
 
 // [ASSUMED] Simple playable defaults for new operators only; explicit form values win (DESIGN §34.5).
 const stats = { maxHp: 1000, atk: 100, def: 0, res: 0, cost: 10, blockCnt: 1, bat: 1, aspd: 100,
@@ -125,7 +126,11 @@ function operator(data, r, pluginId, validateDsl) {
   };
   if (r.as !== 'diy') {
     const c = r.chess, tier = c?.tier, econ = data.config?.economy;
-    if (!Number.isInteger(tier) || tier < 1 || tier > 6 || !Array.isArray(c.bonds) || !c.bonds.length || !econ?.chessStatus?.[tier]) fail('PLUGIN_RECORD_TYPE', r.charId, 'chess needs tier 1–6 and bonds');
+    // 7 阶（业主 2026-10-30）：官方经济表只有 1–6 阶，第 7 阶用 `shared/chessAuthoring.js` 的 TIER7 口径顶替
+    const eco = econ?.chessStatus?.[tier]
+      ? { status: econ.chessStatus[tier], price: econ.chessPrice?.[tier], sellPrice: econ.chessSell?.[tier] }
+      : tier === 7 ? { status: TIER7.status, price: { normal: TIER7.price, golden: TIER7.price }, sellPrice: { normal: TIER7.sellPrice, golden: TIER7.sellPrice } } : null;
+    if (!Number.isInteger(tier) || tier < 1 || tier > 7 || !Array.isArray(c.bonds) || !c.bonds.length || !eco) fail('PLUGIN_RECORD_TYPE', r.charId, 'chess needs tier 1–7 and bonds');
     const stem = c.id ?? r.charId.replace(/^char_x_/, 'chess_x_');
     const baseId = c.ids?.normal ?? stem.replace(/_[ab]$/, '') + '_a', goldenId = c.ids?.elite ?? baseId.replace(/_a$/, '_b');
     if (baseId === goldenId) fail('PLUGIN_RECORD_ID', 'chess.ids', 'normal and elite ids must differ');
@@ -133,15 +138,15 @@ function operator(data, r, pluginId, validateDsl) {
     for (const golden of [false, true]) {
       const id = golden ? goldenId : baseId, which = golden ? 'elite' : 'normal';
       if (own(data.chess, id)) fail('PLUGIN_RECORD_EXISTS', id, 'use patches to change existing records');
-      const quality = golden ? 'golden' : 'normal', status = clone(econ.chessStatus[tier][quality]);
+      const quality = golden ? 'golden' : 'normal', status = clone(eco.status[quality]);
       const f = form(which, status), skillIndex = f.skills.find(s => s.isDefault).index;
       const identity = { chessId: id, baseId, goldenId, isGolden: golden, tier, identifier: c.identifier ?? 10000,
         shopSortId: c.shopSortId ?? 10000, isHidden: c.hidden === true, isDiy: false, visible: c.hidden !== true, chessType: 'PRESET',
         backup: { charId: r.charId, tmplId: null, skillIndex, uniEquipId: null, potRank: 0 },
         // garrisonIds, like price, is one value for both pieces or { normal, golden } (official pairs: garrison_N_a / _b)
         bonds: c.bonds, garrisonIds: object(c.garrisonIds) ? c.garrisonIds[quality] ?? [] : c.garrisonIds ?? [],
-        price: object(c.price) ? c.price[quality] : c.price ?? econ.chessPrice?.[tier]?.[quality],
-        sellPrice: c.sellPrice ?? econ.chessSell?.[tier]?.[quality] ?? 1, upgradeNum: golden ? 0 : econ.mergeCount ?? 3,
+        price: object(c.price) ? c.price[quality] : c.price ?? eco.price?.[quality],
+        sellPrice: c.sellPrice ?? eco.sellPrice?.[quality] ?? 1, upgradeNum: golden ? 0 : econ.mergeCount ?? 3,
         upgradeChessId: golden ? null : goldenId, status };
       data.chess[id] = composeUnitRecord(identity, unit, f, { skillIndex });
       delete data.chess[id].skill.isDefault;

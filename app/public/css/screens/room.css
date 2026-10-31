@@ -480,6 +480,11 @@
 }
 .rs--recon .rseat { --w: auto; width: auto; min-width: 0; }
 
+/* 空位的虚线名片板与 NOINFO 水印是 4 人房留下的占位（空位本身已经有 +/邀请 与说明），20 席两行铺开时它们还会把
+   邀请内容挤到卡片下半截。只在大席位的重构模拟房间去掉它们（4 人房的官方卡样式保持原样），整张卡的高度让给 +/邀请。 */
+.rs--recon.rs--big .rseat--empty .rseat__plate { display: none; }
+.rs--recon.rs--big .rseat--empty .rseat__noinfo { display: none; }
+
 /* 房内聊天：缩小并固定在左下角（业主 2026-10-21）。.screen 本身已是 absolute inset:0，
    所以 .chatp 的 absolute 直接锚在房间屏上；不要再给 .rs 写 position（会盖掉 .screen 的 absolute）。 */
 .rs .chatp {
@@ -508,3 +513,7 @@
 @media (max-width: 900px) {
   .rs .chatp { width: min(5.4rem, 56vw); }
 }
+/* 聊天面板不能压住第二行座位：4 人房左侧本来就是空地，20 席铺满整行后它正好盖在左下角 P11/P12 的底角上。
+   大席位的重构模拟里把它降到页脚那一带（页脚左栏是空的），座位区整块露出来；写在 `.rs .chatp` 之后才盖得住
+   它的 bottom: max(.92rem, 60px)。 */
+.rs--recon.rs--big .chatp { bottom: max(.1rem, 8px); }

@@ -29,7 +29,7 @@ export * from './index.js';
 // registration surface (a mod's bond / trait / item / token)
 export { registerBondInstaller, reached, onLayers, onUnitDamaged, isEnemyTarget, ownTag, bondBb } from '../bonds/core.js';
 export { registerGarrisonInstaller, registerGarrisonReader, byUnit, fireGain, garrisonIdsOf } from '../garrisons/battle.js';
-export { registerItemBehaviour, bp, isProc, procTags, memberOf, addShieldLayer, itemStatMods, setItemEffectScale } from '../items/battle.js';
+export { registerItemBehaviour, bp, isProc, procTags, memberOf, addShieldLayer, itemStatMods, setItemEffectScale, lendItemEffects } from '../items/battle.js';
 
 // prep-side / data helpers a mod reads (bondOrder / chessOnBoard / ids / metaBonds / frontPiece)
 export { ids, bondOrder, chessOnBoard } from '../garrisons/meta.js';

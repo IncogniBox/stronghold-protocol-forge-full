@@ -31,6 +31,11 @@ export const RECON_TRAINEE_STAT_RATIO = 0.5;
  * 它不是玩家能「倾向」的东西 —— 预重构的候选池按 id 把它排除（screens/preRecon.js），所以这个 id 在这里只许写一处。
  */
 export const RECON_BOND_ID = 'bond_recon';
+/**
+ * 重构对局专属记录的 id 前缀（盟约 / 棋子共用，业主 2026-10-30）：`recon_<官方 id>` 只在重构对局里生效 ——
+ * 盟约覆盖（`reconBondAlias`）与棋子覆盖 / 新增（`reconChessAlias`）都只认这一个前缀。
+ */
+export const RECON_PREFIX = 'recon_';
 
 /**
  * 预重构里「重构协助 / 熔芯负载」的候选 id（各单选 1 项，共六个；拼写与客户端屏上的 ASSIST_OPTS / LOAD_OPTS、
@@ -179,7 +184,9 @@ export const reconTemplateId = (r) => `recon_r${String(r).padStart(2, '0')}`;
  * 重构模拟的**阵营排程**（模式级键 `factionSetup`；官方模式没有这个键，所以官方抽取一个字节都不变）。
  *
  * * `rounds` —— 类型排程覆盖到隐秘回合（21），官方是 `generation.maxLevelCnt`（15）；
- * * `forceTypes` —— 涤墨每局必选（业主：一局内要把涤墨的种类都刷出来）；
+ * * `forceTypes` —— 涤墨每局必选（业主：一局内要把涤墨的种类都刷出来）。DIMO 在 `data/factions.json` 里是
+ *   `involveRandom: false` + `reconOnly: true`（业主 2026-10-31：从原版模式移除，只出现在重构模拟）；
+ *   `server/match/waves.js` 的必选过滤认得 `reconOnly`，官方模式没有 `factionSetup` ⇒ 一个字节都不动。
  * * `typeCounts.DIMO` —— 6 个涤墨回合（官方 3）；`fixedRounds.DIMO` 把它们钉在 R2/5/7（基础档）+ R10/13/17
  *   （R11 起走强化档），避开试炼首领回合 4/8/12/16/20；
  * * 涤墨 6 个固定回合的出怪**写死在模板里**（`workshop/mode-recon/waves.json` 的 `recon_rNN`，业主 2026-10-29 的固定表：
@@ -191,6 +198,15 @@ export const RECON_FACTION_SETUP = Object.freeze({
   typeCounts: Object.freeze({ DIMO: 6 }),
   fixedRounds: Object.freeze({ DIMO: Object.freeze([2, 5, 7, 10, 13, 17]) }),
 });
+
+/**
+ * 调度中心等级上限（业主 2026-10-30）：重构模拟开到 **7 级**（官方是 6 级，`mode_multi_*` 一个字节不动）。
+ * 棋子阶级只有 1–6，第 7 级不带来更高的抽卡阶级，收益全在**槽位**：商店多 1 张干员卡、多 1 件装备
+ * （6 张干员 + 2 件装备）。6→7 的升价 14，前五档（5 / 8 / 11 / 12 / 13）照抄官方。
+ */
+export const RECON_MAX_SHOP_LEVEL = 7;
+const RECON_TOP_UPGRADE_PRICE = 14;
+const RECON_TOP_SHOP_SLOTS = Object.freeze({ chess: 6, item: 2 });
 
 
 /**
@@ -245,8 +261,13 @@ export function reconModeFor(difficulty, modes) {
     enemyScale[r] = { hp: cur.hp, atk: cur.atk, speed: 1 };
     combatTimeLimit[r] = entry ? (entry.combatTimeLimit ?? null) : null;
   }
+  const basePrices = Array.isArray(base.upgradePrices) ? base.upgradePrices : [5, 8, 11, 12, 13];
   return {
     ...base,
+    // 调度中心 7 级（只服务重构模拟）：6→7 升价 14，商店第 7 级多 1 张干员卡 + 1 件装备（见 RECON_MAX_SHOP_LEVEL）。
+    maxShopLevel: RECON_MAX_SHOP_LEVEL,
+    upgradePrices: [...basePrices.slice(0, RECON_MAX_SHOP_LEVEL - 1), RECON_TOP_UPGRADE_PRICE],
+    shopSlots: { ...(base.shopSlots || {}), [RECON_MAX_SHOP_LEVEL]: { ...RECON_TOP_SHOP_SLOTS } },
     modeId: `mode_recon_${difficulty}`,
     name: `recon_${difficulty}`, code: 'RECON',
     desc: '重构模拟（本地实验模式）：20 回合制 · 终极难度 · 预重构 · 重构协议。', // i18n-ignore — 数据形状照官方 mode 条目（每个官方 mode 都带 desc）；界面从不读 config.modes[].desc（客户端的模式文案在 screens/lobby.js 的 MODE_CARDS）
@@ -261,7 +282,7 @@ export function reconModeFor(difficulty, modes) {
     stages: [...(base.stages || [])],
     bossWeights: { ...(base.bossWeights || {}) },
     hiddenBossWeights: { ...(base.hiddenBossWeights || {}) },
-    // 类型排程 / 涤墨必选 / 21 回合长度（官方模式没有这个键 ⇒ 官方抽取逐字节不变）。
+    // 类型排程 / 涤墨必选（reconOnly）/ 21 回合长度（官方模式没有这个键 ⇒ 官方抽取逐字节不变）。
     factionSetup: RECON_FACTION_SETUP,
   };
 }
@@ -323,6 +344,63 @@ export function reconBondData(data, modeId) {
   const aliased = reconBondAlias(data.bonds);
   const out = aliased ? Object.freeze({ ...data, bonds: aliased.bonds }) : null;
   ALIASED_DATA.set(data, out);
+  return out;
+}
+
+/**
+ * 重构棋子的**对局别名**（业主 2026-10-30）：`recon_<id>` 的棋子记录**只在重构对局**里生效 ——
+ *   * `<id>` 已经有官方记录 ⇒ 覆盖它（阶级 / 特质 / 数值换成重构版）；
+ *   * `<id>` 没有官方记录 ⇒ 就是一名**新增**干员（例如 `recon_chess_char_6_16_a` ⇒ `chess_char_6_16_a`）。
+ * 返回的 `chess` 里只有正式 id（`recon_*` 全部去掉），`chessId` / `baseId` / `goldenId` / `upgradeChessId` 同步改成
+ * 正式 id；原表一个字节不动。官方对局读不到这些记录（`GameData.visibleChess` 也排除 `recon_*`）。
+ * @param {Record<string, any>|null|undefined} chess chess.json 的合并结果
+ * @returns {{ chess: Record<string, any>, alias: Readonly<Record<string, string>> }|null} 没有这类记录 ⇒ null
+ */
+export function reconChessAlias(chess) {
+  if (!chess || typeof chess !== 'object') return null;
+  const overlay = {};
+  const alias = {};
+  for (const [id, rec] of Object.entries(chess)) {
+    if (!id.startsWith(RECON_PREFIX) || !rec || typeof rec !== 'object') continue;
+    const base = id.slice(RECON_PREFIX.length);
+    if (!base) continue;
+    const next = { ...rec, chessId: base };
+    for (const k of ['baseId', 'goldenId', 'upgradeChessId']) {
+      if (typeof next[k] === 'string') next[k] = next[k].startsWith(RECON_PREFIX) ? next[k].slice(RECON_PREFIX.length) : next[k];
+    }
+    overlay[base] = Object.freeze(next);
+    alias[base] = id;
+  }
+  if (!Object.keys(overlay).length) return null;
+  const table = {};
+  for (const [id, rec] of Object.entries(chess)) if (!id.startsWith(RECON_PREFIX)) table[id] = rec;
+  Object.assign(table, overlay);
+  return { chess: Object.freeze(table), alias: Object.freeze(alias) };
+}
+
+/** 别名后的整份数据（与 `ALIASED_DATA` 同一条缓存纪律：一局只建一次）。 */
+const ALIASED_CHESS_DATA = new WeakMap();
+
+/**
+ * 一局重构模拟要读的**整份数据**：盟约别名 + 棋子别名各叠一层，其余键原样。
+ * 战斗侧（浏览器 / 服务端复算 / 重放）与准备期读的是同一份（`Battle.dataObjectOf` / `Match`）。
+ * @param {object|null|undefined} data 整份数据
+ * @param {string|null|undefined} modeId 这一场战斗的 modeId
+ * @returns {object|null} 别名后的数据，或 null（非重构模式 / 没有别名记录）
+ */
+export function reconData(data, modeId) {
+  if (!isReconModeId(modeId) || !data || typeof data !== 'object') return null;
+  if (ALIASED_CHESS_DATA.has(data)) return ALIASED_CHESS_DATA.get(data) ?? null;
+  const bonds = reconBondAlias(data.bonds);
+  const chess = reconChessAlias(data.chess);
+  const out = bonds || chess
+    ? Object.freeze({
+      ...data,
+      ...(bonds ? { bonds: bonds.bonds } : {}),
+      ...(chess ? { chess: chess.chess } : {}),
+    })
+    : null;
+  ALIASED_CHESS_DATA.set(data, out);
   return out;
 }
 

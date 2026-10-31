@@ -67,17 +67,19 @@
 .brief-stage__name { display: flex; align-items: center; gap: .08rem; font-size: calc(.19 * var(--t)); font-weight: 700; }
 .brief-stage__name .icon { width: .2rem; height: .2rem; color: var(--mint-500); }
 
-.brief-factions { display: flex; flex-direction: column; gap: .1rem; min-height: 0; }
-.brief-faction { display: flex; gap: .14rem; align-items: center; padding: .12rem .16rem; background: rgba(12, 15, 14, .8); border: 1px solid var(--line); border-left: 3px solid var(--amber); }
-.brief-faction__icon { width: .72rem; height: .72rem; flex: none; display: grid; place-items: center; background: radial-gradient(circle, rgba(246, 163, 41, .16), transparent 70%); }
+.brief-factions { display: flex; flex-direction: column; gap: .08rem; min-height: 0; }
+.brief-faction { display: flex; gap: .14rem; align-items: center; padding: .09rem .16rem; background: rgba(12, 15, 14, .8); border: 1px solid var(--line); border-left: 3px solid var(--amber); }
+.brief-faction__icon { width: .66rem; height: .66rem; flex: none; display: grid; place-items: center; background: radial-gradient(circle, rgba(246, 163, 41, .16), transparent 70%); }
 .brief-faction__icon img { width: 100%; height: 100%; object-fit: contain; }
 .brief-faction__text { display: flex; flex-direction: column; gap: .03rem; }
 .brief-faction__text b { font-size: calc(.2 * var(--t)); color: var(--amber); }
 .brief-faction__text span { font-size: calc(.15 * var(--t)); color: var(--text-lo); }
 
-.brief-bonds { padding: .16rem .2rem .2rem; background: rgba(12, 15, 14, .8); border: 1px solid var(--line); }
-.brief-bonds__row { display: flex; flex-wrap: wrap; gap: .16rem .1rem; }
-.brief-bond { position: relative; min-width: 1rem; width: max-content; max-width: 100%; display: flex; justify-content: center; }
+.brief-bonds { padding: .14rem .2rem .14rem; background: rgba(12, 15, 14, .8); border: 1px solid var(--line); }
+.brief-bonds__row { display: flex; flex-wrap: wrap; gap: .14rem .08rem; }
+/* .9rem per cell is what keeps a match's 11 核心盟约 on ONE row at 1280 (11 × .9rem + 10 gaps ≈ 727 px inside a
+   745 px row): at 1rem the eleventh wrapped, which pushed the 本局禁用干员 grid below the briefing's fold. */
+.brief-bond { position: relative; min-width: .9rem; width: max-content; max-width: 100%; display: flex; justify-content: center; }
 .brief-bond .bond { --disc: .66rem; max-width: 100%; }
 .brief-bond .bond__name { font-size: calc(.16 * var(--t)); max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; }
 .brief-bond__ban { position: absolute; top: -.04rem; right: .08rem; display: inline-flex; align-items: center; gap: .01rem; font-size: calc(.12 * var(--t)); font-weight: 700; padding: 0 .05rem; background: var(--red); color: #fff; line-height: 1.5; box-shadow: 0 0 0 1px #000; }

@@ -47,6 +47,8 @@ import { itemKey } from './gamedata.js';
 // 部署位天花板（`DEPLOY_CAP_MAX`，shared/constants.js）：从前这里是硬编码的 `12`，与 `shared/variants.js` 的
 // `deploy: "max"` 口径各写一遍 —— 一个数两个真相，本刀收到常量里。
 import { DEPLOY_CAP_MAX } from '../../shared/constants.js';
+// 重构盟约（`bond_recon`，工坊包 mode-recon）：2 人档「特质额外触发 1 次」的 id 只在这里写一次
+import { RECON_BOND_ID } from '../../shared/reconModes.js';
 import { boardOrder, parseKey, tileKey } from './board.js';
 import { pieceBonds as bondsOfPiece } from './bondsMeta.js';
 import { charge } from '../sim/content/dsl/budget.js';
@@ -246,6 +248,30 @@ export class EffectDispatcher {
   }
 
   /**
+   * 重构盟约 2 人档（业主 2026-10-30，记录 `bb.recon_trait_extra`）：场上 ≥2 名【重构】干员时，**每名【重构】干员每回合
+   * 第一次触发特质**额外触发一次 —— 返回值 = 这次调用该多跑几遍（0 = 没有额外）。
+   *
+   * 预算挂在棋子自己的回合计数器上（`pieceRoundCount` / `bumpPieceRoundCount`），所以换回合自动从 0 起算、新棋子
+   * （买到的 / 合出来的精锐）也是新的一份。`onPrice` 那颗商店棋子是临时对象（uid 0），不算「触发特质」的干员，跳过。
+   * 非重构对局 / 包缺席（记录里没有这个键）⇒ 恒 0，官方对局逐字节不变。
+   */
+  reconTraitExtra(ps, piece) {
+    const bond = this.m.gd.bond(RECON_BOND_ID);
+    const n = bond && bond.bb ? Number(bond.bb.recon_trait_extra) : 0;
+    if (!(n > 0) || !piece || piece.kind !== 'chess') return 0;
+    if (!Number.isInteger(piece.uid) || piece.uid <= 0) return 0;
+    const st = ps.bonds && ps.bonds[RECON_BOND_ID];
+    if (!st || !st.active || !(Number(st.tier) >= 1)) return 0;
+    // 触发者自己得是【重构】干员（授予的盟约也算：pieceBonds 读 meta.data.bondGrants）
+    if (!bondsOfPiece(this.m.gd, piece, ps.m?.rules).includes(RECON_BOND_ID)) return 0;
+    const k = 'recon.trait.extra';
+    if (typeof ps.pieceRoundCount !== 'function' || typeof ps.bumpPieceRoundCount !== 'function') return 0;
+    if (ps.pieceRoundCount(piece, k) > 0) return 0;
+    ps.bumpPieceRoundCount(piece, k, 1);
+    return Math.max(1, Math.floor(n));
+  }
+
+  /**
    * Dispatch a hook for one player. `ev` is passed to every handler (mutable: onPrice writes ev.price, onSold
    * ev.gain, onBattleStart ev.input, …) and returned.
    */
@@ -374,7 +400,8 @@ export class EffectDispatcher {
         const h = this.registry.get(key);
         if (!h || !this._garrisonHooks(h, g).includes(hook)) continue;
         if (where === 'hand' && g.bbStr && g.bbStr.conditionkey === 'character_target_inboard') continue;
-        const repeat = hook === 'onGain' ? this.investRepeat(ps) : 1;
+        // 投资人只在获得时翻倍；重构盟约 2 人档对**任何**特质钩子都多触发 1 次（每名【重构】干员每回合 1 次）
+        const repeat = (hook === 'onGain' ? this.investRepeat(ps) : 1) + this.reconTraitExtra(ps, piece);
         this._call(ps, key, h, hook, { kind: 'garrison', key, piece, garrisonId: gid, garrison: g, bb: g.bb || {}, bbStr: g.bbStr || {}, where }, ev, repeat);
       }
     };
@@ -425,7 +452,8 @@ export class EffectDispatcher {
           : hook === 'onSold' ? { piece: self, gain: 0 }
           : hook === 'onRefresh' ? { slots: ps.shop.slots, free: true, price: 0, trigger: true }
           : { round: this.m.round, trigger: true };
-        const repeat = hook === 'onGain' ? this.investRepeat(ps) : 1;
+        // 显式重跑（铃兰 / 复制的特质）走同一份预算：触发者自己是【重构】干员时，这一回合的第一次也多触发 1 次
+        const repeat = (hook === 'onGain' ? this.investRepeat(ps) : 1) + this.reconTraitExtra(ps, self);
         const loc = ps.find(self.uid);
         const where = loc ? (loc.area === 'board' ? 'board' : loc.area) : 'trigger';
         this._call(ps, key, h, hook, { kind: 'garrison', key, piece: self, copiedFrom: asPiece ? piece : null,

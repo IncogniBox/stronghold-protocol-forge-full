@@ -29,13 +29,13 @@ import { recordId, selfRowOf, loadStats, isModdedRecord } from '../ui/stats.js';
 import { UnofficialMark, isModdedRoom } from '../ui/pluginTag.js';
 import { TestMark } from '../ui/testConsole.js';
 import { ResultView, resultBonds } from './result.js';
-import { DIFFICULTY_NAMES, DIFFICULTY_COLORS } from '../../../shared/constants.js';
+import { DIFFICULTY_COLORS, difficultyLabel } from '../../../shared/constants.js';
 import { t } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 const pad2 = (n) => String(Math.max(0, Math.trunc(n) || 0)).padStart(2, '0');
 const int = (v) => Math.max(0, Math.round(Number(v) || 0));
-const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 /** A stage position (1920×1080 design pixels) as rem (1rem = 100px). */
 const at = (x, y) => `left:${x / 100}rem;top:${y / 100}rem`;
 
@@ -219,7 +219,7 @@ function ModePill({ r }) {
   const key = String(d).toLowerCase();
   return html`<span class=${cx('smode', `smode--${key}`)} style=${`--d-color:${DIFFICULTY_COLORS[d] || 'var(--text-lo)'}`}>
     <${Sprite} k=${`settle/mode_${key}`} class="smode__bg" fallback=${html`<span class="smode__bg smode__bg--css"><${DifficultyIcon} difficulty=${d} /></span>`} />
-    <b class="smode__name">${DIFFICULTY_NAMES[d] ? t(DIFFICULTY_NAMES[d]) : d}</b>
+    <b class="smode__name">${difficultyLabel(r.modeId, r.difficulty) ? t(difficultyLabel(r.modeId, r.difficulty)) : d}</b>
   </span>`;
 }
 

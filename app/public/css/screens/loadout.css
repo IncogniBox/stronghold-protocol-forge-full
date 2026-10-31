@@ -105,6 +105,7 @@
 .lo-chip--tier .num { font-family: var(--font-num); font-size: max(.17rem, 12px); letter-spacing: .04em; }
 .lo-chip--t1 { --tc: var(--tier-1); } .lo-chip--t2 { --tc: var(--tier-2); } .lo-chip--t3 { --tc: var(--tier-3); }
 .lo-chip--t4 { --tc: var(--tier-4); } .lo-chip--t5 { --tc: var(--tier-5); } .lo-chip--t6 { --tc: var(--tier-6); }
+.lo-chip--t7 { --tc: var(--tier-7); }
 .lo-chip--tier { color: var(--tc); box-shadow: inset 0 -2px 0 var(--tc); }
 .lo-chip--tier.is-on { color: #0b0d0c; background: var(--tc); border-color: var(--tc); }
 .lo-chip__icon { width: max(.22rem, 14px); height: max(.22rem, 14px); object-fit: contain; }
@@ -169,6 +170,7 @@
 }
 .lo-card--t1 { --tc: var(--tier-1); } .lo-card--t2 { --tc: var(--tier-2); } .lo-card--t3 { --tc: var(--tier-3); }
 .lo-card--t4 { --tc: var(--tier-4); } .lo-card--t5 { --tc: var(--tier-5); } .lo-card--t6 { --tc: var(--tier-6); }
+.lo-card--t7 { --tc: var(--tier-7); }
 .lo .lo-card:hover { background: rgba(255, 255, 255, .045); border-color: var(--line-3); border-left-color: var(--tc); }
 .lo .lo-card.is-sel { background: linear-gradient(90deg, rgba(78, 216, 175, .1), rgba(78, 216, 175, .02) 60%); border-color: var(--mint-700); border-left-color: var(--tc); box-shadow: 0 0 0 1px var(--mint-500) inset; }
 .lo-card button:focus-visible, .lo-card select:focus-visible { outline: 2px solid var(--mint-400); outline-offset: 1px; }
@@ -262,6 +264,7 @@
 .lo-dhead__art { position: relative; overflow: hidden; aspect-ratio: 1 / 1.25; background: #1b201e; border: 1px solid var(--line-2); box-shadow: inset 0 -3px 0 var(--tc, var(--tier-1)); }
 .lo-dhead__art--t1 { --tc: var(--tier-1); } .lo-dhead__art--t2 { --tc: var(--tier-2); } .lo-dhead__art--t3 { --tc: var(--tier-3); }
 .lo-dhead__art--t4 { --tc: var(--tier-4); } .lo-dhead__art--t5 { --tc: var(--tier-5); } .lo-dhead__art--t6 { --tc: var(--tier-6); }
+.lo-dhead__art--t7 { --tc: var(--tier-7); }
 .lo-dhead__art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; display: block; }
 .lo-dhead__art .uthumb { width: 100%; height: 100%; }
 .lo-dhead__info { min-width: 0; display: flex; flex-direction: column; gap: .04rem; }
@@ -426,6 +429,7 @@
 }
 .own-card--t1 { --tc: var(--tier-1); } .own-card--t2 { --tc: var(--tier-2); } .own-card--t3 { --tc: var(--tier-3); }
 .own-card--t4 { --tc: var(--tier-4); } .own-card--t5 { --tc: var(--tier-5); } .own-card--t6 { --tc: var(--tier-6); }
+.own-card--t7 { --tc: var(--tier-7); }
 .own-card:hover { background: rgba(255, 255, 255, .06); border-color: var(--line-3); }
 .own-card__op, .own-card__sub { display: flex; align-items: center; gap: .07rem; min-width: 0; }
 .own-card__ava { flex: none; display: grid; place-items: center; width: max(.46rem, 28px); height: max(.46rem, 28px); overflow: hidden; background: #0a0d0c; border: 1px solid var(--line-2); }
@@ -964,7 +968,7 @@
 /* ---- an operator card ---- */
 .lo-op { --tc: var(--tier-1); position: relative; display: flex; min-height: 0; }
 .lo-op--t2 { --tc: var(--tier-2); } .lo-op--t3 { --tc: var(--tier-3); } .lo-op--t4 { --tc: var(--tier-4); }
-.lo-op--t5 { --tc: var(--tier-5); } .lo-op--t6 { --tc: var(--tier-6); }
+.lo-op--t5 { --tc: var(--tier-5); } .lo-op--t6 { --tc: var(--tier-6); } .lo-op--t7 { --tc: var(--tier-7); }
 .lo-op__card { position: relative; width: var(--opw); min-height: 0; display: grid; grid-template-columns: var(--rail) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto auto; column-gap: max(.05rem, 3px); padding: max(.06rem, 3px) max(.06rem, 3px) max(.07rem, 4px);
   background: linear-gradient(180deg, rgba(44, 50, 48, .94), rgba(24, 28, 27, .96)); border: 1px solid rgba(255, 255, 255, .08);
@@ -1110,6 +1114,22 @@
   font-size: max(.2rem, 13px); font-weight: 900; color: #111614; background: #eef1ef; border: 0; cursor: pointer; }
 .lo-confirm .icon { width: max(.26rem, 16px); height: max(.26rem, 16px); padding: 2px; color: #eef1ef; background: #1a1f1d; }
 .lo-confirm:hover { background: #fff; }
+
+/* 重构模拟干员开关（业主 2026-10-30，右下角）：关闭时只列普通干员；打开后 5 名重构干员换成重构记录、新增干员追加。 */
+.lo-reconbtn { flex: none; display: inline-flex; align-items: center; gap: .12rem; height: max(.6rem, 38px); padding: 0 max(.22rem, 12px);
+  font: inherit; color: var(--text-md); background: rgba(255, 255, 255, .04); border: 1px solid var(--line-2); cursor: pointer; }
+.lo-reconbtn:hover { color: var(--text-hi); border-color: var(--mint-500); }
+.lo-reconbtn__sw { position: relative; flex: none; width: max(.42rem, 28px); height: max(.2rem, 13px); background: rgba(0, 0, 0, .6);
+  border: 1px solid var(--line-2); border-radius: 999px; }
+.lo-reconbtn__sw > i { position: absolute; left: 2px; top: 50%; width: max(.14rem, 9px); height: max(.14rem, 9px); transform: translateY(-50%);
+  border-radius: 50%; background: #99a19d; transition: left 140ms var(--tr-ease), background 140ms linear; }
+.lo-reconbtn__txt { display: flex; flex-direction: column; gap: 1px; text-align: left; line-height: 1.1; }
+.lo-reconbtn__txt > span { font-size: max(.18rem, 12px); font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+.lo-reconbtn__txt > small { font-family: var(--font-display); font-size: max(.1rem, 8px); letter-spacing: .14em; opacity: .65; white-space: nowrap; }
+.lo-reconbtn.is-on { color: #111614; background: var(--mint-500); border-color: var(--mint-500); }
+.lo-reconbtn.is-on .lo-reconbtn__sw { background: rgba(0, 0, 0, .3); border-color: rgba(0, 0, 0, .25); }
+.lo-reconbtn.is-on .lo-reconbtn__sw > i { left: calc(100% - max(.14rem, 9px) - 2px); background: #081a14; }
+.lo-reconbtn.is-on .lo-reconbtn__txt > small { opacity: .55; }
 
 /* ---- ⓘ 调度手册 ---- */
 .lo-help { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .1rem .2rem; margin: 0; font-size: max(.16rem, 12px); line-height: 1.6; }

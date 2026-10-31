@@ -93,8 +93,22 @@ export class PlayerEconomy {
     // the slotted 自选 pieces join the draw once the 调度中心 reaches their slot's level (player/diy.js diyRollEntries);
     // the DRAW SOURCE is the player's own pool in the 100-seat variant and the shared one today (player/rules.js
     // mainPool — the same object either way when the switch is off, docs/PS100-MIGRATION.md §10-A)
-    const id = this.mainPool().roll(this.m.rngShop, { maxTier: this.shop.level, extra: this.diyRollEntries() });
-    if (!id) return null;
+    const pool = this.mainPool();
+    const rng = this.m.rngShop;
+    // 7 阶（业主 2026-10-30）：**只有 7 级商店**会出，每一格先按 `gd.tier7Share`（缺省 5%）摇一次；
+    // 池里没有 7 阶记录（或已被抽空）时不摇这枚骰子 ⇒ 官方 / 现有对局的抽卡逐字节不变。
+    if (this.shop.level >= 7 && this.gd.maxShopLevel >= 7 && pool.hasTier(7) && rng() < this.gd.tier7Share) {
+      const id7 = pool.roll(rng, { tier: 7 });
+      if (id7) return this._chessSlotOf(id7);
+    }
+    // maxTier 夹在本模式的等级上限：官方模式就算状态被弄到 7 级，抽卡也不会越过 6 阶
+    const maxTier = Math.min(this.shop.level, this.gd.maxShopLevel);
+    const id = pool.roll(rng, { maxTier, extra: this.diyRollEntries() });
+    return id ? this._chessSlotOf(id) : null;
+  }
+
+  /** A chess slot of `id`（助战按 support 价，其余按阶级价；卖掉仍按普通 sellPrice）。 */
+  _chessSlotOf(id) {
     // 助战：自己带上场的干员在商店里按 `data/support.json` 的 prices 标价（没配就是它的阶级价），
     // 卖掉仍按普通棋子的 sellPrice —— 它就是普通棋子，只是「我的商店池里一定有它」（连本局禁用也盖过去）。
     // 阶级门照旧：六阶助战仍要商店等级 6 才摇得到。

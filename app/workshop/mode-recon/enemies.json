@@ -4454,6 +4454,7 @@
   },
   "enemy_ws_recon_csdoll": {
     "key": "enemy_ws_recon_csdoll",
+    "stillBoss": true,
     "name": "伤心的大锁·重构",
     "level": 0,
     "rank": "BOSS",
@@ -5272,6 +5273,7 @@
   },
   "enemy_ws_recon_suisho": {
     "key": "enemy_ws_recon_suisho",
+    "stillBoss": true,
     "name": "岁·重构",
     "level": 0,
     "rank": "BOSS",
@@ -5440,6 +5442,7 @@
   },
   "enemy_ws_recon_suizzh": {
     "key": "enemy_ws_recon_suizzh",
+    "stillBoss": true,
     "name": "岁·左爪·重构",
     "level": 0,
     "rank": "BOSS",
@@ -5583,6 +5586,7 @@
   },
   "enemy_ws_recon_suiyzh": {
     "key": "enemy_ws_recon_suiyzh",
+    "stillBoss": true,
     "name": "岁·右爪·重构",
     "level": 0,
     "rank": "BOSS",
@@ -5726,6 +5730,7 @@
   },
   "enemy_ws_recon_suiwei": {
     "key": "enemy_ws_recon_suiwei",
+    "stillBoss": true,
     "name": "岁·尾·重构",
     "level": 0,
     "rank": "BOSS",
@@ -5870,6 +5875,7 @@
   },
   "enemy_ws_recon_shophm": {
     "key": "enemy_ws_recon_shophm",
+    "stillBoss": true,
     "name": "洛伦茨，扰动之谬·重构",
     "level": 0,
     "rank": "BOSS",
@@ -5979,6 +5985,7 @@
   },
   "enemy_ws_recon_shorbb": {
     "key": "enemy_ws_recon_shorbb",
+    "stillBoss": true,
     "name": "源阶方·重构",
     "level": 0,
     "rank": "BOSS",

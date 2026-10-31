@@ -81,8 +81,10 @@ export class PlayerViews {
     const free = this.shop.freeRefreshes > 0;
     const board = [];
     for (const { r, c, piece } of boardOrder(this.board)) board.push(this.pieceView(piece, [r, c]));
-    // a boss round's prep: the partner's board on its half of the boss field (Match.bossMateView, item 51)
+    // a boss round's prep: the partner's board on its half of the boss field (Match.bossMateView, item 51); a normal
+    // round's prep on a two-half map: the pair partner's board on the other half (Match.normalMateView, 业主 2026-10-31)
     const bossMate = typeof this.m.bossMateView === 'function' ? this.m.bossMateView(this) : null;
+    const normalMate = typeof this.m.normalMateView === 'function' ? this.m.normalMateView(this) : null;
     return {
       t: 'm.private',
       playerId: this.playerId,
@@ -155,6 +157,8 @@ export class PlayerViews {
       // board pieces as UnitInfo on its half of the boss field (mirrored on the right half, as the battle places them);
       // the own prep view draws them beside the own half, read-only. Absent otherwise.
       ...(bossMate ? { bossMate } : {}),
+      // 普通回合的配对队友（左右两半普通带的图）：同上，画在它那一半上，只读；否则不出现这个键
+      ...(normalMate ? { normalMate } : {}),
       stats: {
         dmgDealt: Math.round(this.stats.dmgDealt), kills: this.stats.kills, leaks: this.stats.leaks, gold: this.stats.gold,
         refreshes: this.stats.refreshes, merges: this.stats.merges,

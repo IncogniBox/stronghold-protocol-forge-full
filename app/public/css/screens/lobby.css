@@ -1230,7 +1230,7 @@ button.sw-recon-toggle.is-on b { color: var(--ice-400, #8fdcff); }
 .sw-op { --tc: var(--tier-1); position: relative; aspect-ratio: 1; padding: 0; overflow: hidden; cursor: pointer;
   background: linear-gradient(180deg, #d7dcda, #a9b1ae); border: 1px solid rgba(255, 255, 255, .5); }
 .sw-op--t2 { --tc: var(--tier-2); } .sw-op--t3 { --tc: var(--tier-3); } .sw-op--t4 { --tc: var(--tier-4); }
-.sw-op--t5 { --tc: var(--tier-5); } .sw-op--t6 { --tc: var(--tier-6); }
+.sw-op--t5 { --tc: var(--tier-5); } .sw-op--t6 { --tc: var(--tier-6); } .sw-op--t7 { --tc: var(--tier-7); }
 .sw-op:hover { border-color: var(--mint-400); }
 .sw-op img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sw-op__txt { display: grid; place-items: center; height: 100%; font-weight: 900; color: rgba(17, 22, 20, .5); }

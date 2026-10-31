@@ -19,7 +19,7 @@ import { ownershipRoster, rosterByTier, isOwned, standInSummary } from '../ui/ow
 import { t, tParts } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
-const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
 /** The roster of the tab (data.list('chess'), memoised on the data being ready). */
 export function useOwnershipRoster(ready) {

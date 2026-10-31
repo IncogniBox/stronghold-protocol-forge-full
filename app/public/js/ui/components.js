@@ -14,7 +14,7 @@
 import { h, Fragment } from '../../vendor/preact.module.js';
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from '../../vendor/hooks.module.js';
 import htm from '../../vendor/htm.module.js';
-import { DIFFICULTY_NAMES, DIFFICULTY_COLORS } from '../../../shared/constants.js';
+import { DIFFICULTY_NAMES, DIFFICULTY_COLORS, difficultyLabel } from '../../../shared/constants.js';
 import { t } from '../../../shared/i18n.js';
 import { serverNow } from '../store.js';
 import { data, useData, localAsset } from '../data.js';
@@ -186,19 +186,21 @@ export const roman = (n) => ROMAN[n | 0] || '';
 /**
  * Official tier chip sprite URL (web manifest `shopCard/img_chess_level_N`, else the local-client
  * `ui/battle/img_chess_level_N`), or null (CSS fallback).
- * @param {number} t 1..6
+ * **官方精灵只有 1–6**；7 阶（业主 2026-10-30）没有精灵 ⇒ 直接回落 CSS 八边形（红色数字）。
+ * @param {number} t 1..7
  */
 export function tierChipUrl(t) {
+  if (!(t >= 1 && t <= 6)) return null;
   return uiUrl(data.get('assets'), `shopCard/img_chess_level_${t}`) || localAsset('ui/battle', `img_chess_level_${t}`);
 }
 
 /**
- * Roman tier chip (I–VI): the official octagon sprite, or a CSS octagon in the official tier colours.
- * Golden = elite (精锐) variant (gold glow).
+ * Roman tier chip (I–VII): the official octagon sprite, or a CSS octagon in the official tier colours.
+ * Golden = elite (精锐) variant (gold glow); tier 7 has no sprite and draws the numeral in red.
  * @param {{ tier: number, golden?: boolean, size?: 'sm'|'md'|'lg', class?: string }} props
  */
 export function TierChip({ tier, golden = false, size = 'md', class: cls }) {
-  const n = Math.max(1, Math.min(6, Number(tier) | 0 || 1));
+  const n = Math.max(1, Math.min(7, Number(tier) | 0 || 1));
   const src = tierChipUrl(n);
   const [bad, setBad] = useState(null);
   const img = !!src && bad !== src;
@@ -211,11 +213,12 @@ export function TierChip({ tier, golden = false, size = 'md', class: cls }) {
  * Bond disc: round glyph disc with segmented tier ring, stack count and name.
  * @param {{ name?: string, icon?: string, count?: number, layers?: number, tier?: number, maxTier?: number,
  *   active?: boolean, disabled?: boolean, layersDisabled?: boolean, size?: 'sm'|'md'|'lg', showName?: boolean,
- *   onClick?: Function, class?: string, title?: string }} props
+ *   onClick?: Function, class?: string, title?: string, board?: string|null }} props — `board`: the official
+ *   bond_board art drawn behind the disc (official-pages §21; the SVG ring is hidden by .has-board)
  */
 export function BondDisc({
   name = '', icon, count, layers, tier = 0, maxTier = 3, active = false, disabled = false, layersDisabled = false,
-  size = 'md', showName = true, onClick, class: cls, title,
+  size = 'md', showName = true, onClick, class: cls, title, board = null,
 }) {
   // Remember which URL failed (a per-URL flag can't race a reset effect).
   const [badSrc, setBadSrc] = useState(null);
@@ -230,9 +233,10 @@ export function BondDisc({
   const glyph = (name || '?').trim().charAt(0) || '?';
   const Tag = onClick ? 'button' : 'div';
   return html`<${Tag} type=${onClick ? 'button' : undefined}
-      class=${cx('bond', `bond--${size}`, active && 'is-active', disabled && 'is-disabled', layersDisabled && 'is-frozen', onClick && 'is-clickable', cls)}
+      class=${cx('bond', `bond--${size}`, active && 'is-active', disabled && 'is-disabled', layersDisabled && 'is-frozen', onClick && 'is-clickable', board && 'has-board', cls)}
       onClick=${onClick} title=${title || name}>
     <span class="bond__disc">
+      ${board ? html`<img class="bond__board" src=${board} alt="" draggable=${false} aria-hidden="true" />` : null}
       <svg class="bond__ring" viewBox="-50 -50 100 100" aria-hidden="true">
         ${Array.from({ length: n }, (_, i) => html`<circle key=${i} r=${R}
           class=${i < filled ? 'on' : 'off'} stroke-dasharray=${`${seg} ${C - seg}`}
@@ -292,6 +296,21 @@ function SegChar({ ch }) {
     <g transform="skewX(-7) translate(6 0)">
       ${SEG_ORDER.map((s) => html`<polygon key=${s} points=${SEG_POLYS[s]} class=${on.includes(s) ? 'on' : 'off'} />`)}
     </g></svg>`;
+}
+
+/**
+ * The match countdown's own digits: the official bitmap font auto_chess_num_font (one white 32 × 68 cell a digit,
+ * advance 32 — /assets/official/hub/ac/battle/numfont/), tinted by CSS mask (css/screens/official-pages.css §26).
+ * Anything but 0–9 falls back to plain text.
+ * @param {{ text: string|number, tone?: 'mint'|'orange', class?: string, flicker?: boolean }} props
+ */
+export function NumFont({ text, tone = 'mint', class: cls, flicker = false }) {
+  const s = String(text ?? '');
+  return html`<span class=${cx('numfont', `numfont--${tone}`, flicker && 'is-flicker', cls)} role="img" aria-label=${s}>
+    ${[...s].map((ch, i) => (/[0-9]/.test(ch)
+      ? html`<i key=${i} class=${`numfont__d numfont__d--${ch}`} aria-hidden="true"></i>`
+      : html`<i key=${i} class="numfont__x" aria-hidden="true">${ch}</i>`))}
+  </span>`;
 }
 
 /**
@@ -379,7 +398,7 @@ export function Countdown({ deadline, seconds, total, warnAt = 10, label = 'COUN
   if (remain == null) return null;
   return html`<div class=${cx('countdown', `countdown--${size}`, warn && 'is-warn', cls)} role="timer" aria-label=${remain == null ? t('无倒计时') : t('剩余{remain}秒', { remain })}>
     <div class="countdown__main">
-      <${SevenSeg} text=${text} tone=${warn ? 'orange' : 'mint'} flicker=${warn && remain > 0} />
+      <${NumFont} text=${text} tone=${warn ? 'orange' : 'mint'} flicker=${warn && remain > 0} />
       ${label ? html`<span class="countdown__label">${label}</span>` : null}
     </div>
     ${gauge ? html`<div class="countdown__gauge" aria-hidden="true">
@@ -862,11 +881,13 @@ export function DifficultyIcon({ difficulty, class: cls }) {
 }
 
 /**
- * Difficulty tag: coloured glyph + name (标准/险境/绝境/终极模拟).
- * @param {{ difficulty: string, size?: 'sm'|'md'|'lg', class?: string, code?: string }} props
+ * Difficulty tag: coloured glyph + name (标准/险境/绝境/终极模拟; a recon room's ABYSS reads 重构模拟·终极).
+ * @param {{ difficulty: string, size?: 'sm'|'md'|'lg', class?: string, code?: string, mode?: string }} props
+ *   `mode`: room.mode ('recon') or a modeId ('mode_recon_abyss') — omitted keeps the official name.
  */
-export function DifficultyTag({ difficulty, size = 'md', class: cls, code }) {
-  const name = DIFFICULTY_NAMES[difficulty] ? t(DIFFICULTY_NAMES[difficulty]) : difficulty || '—';
+export function DifficultyTag({ difficulty, size = 'md', class: cls, code, mode }) {
+  const label = difficultyLabel(mode, difficulty);
+  const name = label ? t(label) : difficulty || '—';
   const color = DIFFICULTY_COLORS[difficulty] || 'var(--text-lo)';
   return html`<span class=${cx('dtag', `dtag--${size}`, cls)} style=${`--d-color:${color}`}>
     <${DifficultyIcon} difficulty=${difficulty} class="dtag__icon" />

@@ -23,6 +23,10 @@ import { SkinSection } from '../ui/skinPicker.js';
 // The third tab, 自选编队 (0.2.0 DIY, screens/diy.js): the operators of the four DIY slots (room.diy; ui/diyModel.js) —
 // with its own 导出 / 导入 / 全部清空.
 // Keyboard: Esc closes, ←/→ move through the (filtered) roster when focus is not in the search field (干员调配 tab).
+// 重构模拟干员（业主 2026-10-30）：物资调配处右下角的开关（RECON_PREF）关闭时隐藏一切 `recon_*` 记录；打开后
+// 有重构版的干员换成重构记录（阶级 / 特质 / 数值）、没有官方记录的新增干员追加进来（ui/loadoutModel.js
+// rosterWithRecon）—— 技能 / 模组 / 潜能 / 练度照常修改，条目以 `recon_<id>` 保存，重构对局由
+// PlayerState.setLoadout 按 Match.reconLoadoutAlias 落到正式棋子 id。
 // Motion (2026-10-13, the owner's request, as the hub's screens): the overlay darkens what is below, then comes up from
 // black — the top bar, the tier groups one by one, the bottom bar; a tab's content comes up when opened; closing fades
 // it and lifts the black (LoadoutHost keeps it mounted meanwhile: ui/transitions.js usePresence). css/screens/loadout.css.
@@ -40,7 +44,7 @@ import { PHASE } from '../../../shared/constants.js';
 import {
   MODULE_NONE, PROF_ORDER, PROF_NAME, profName, rosterOf, filterRoster, recordsOf, chessOptions, effectiveChoice, setChoice, resetChoice,
   changedCount, skillLabel, moduleBadge, attrRows, skillTags, quickSkillTags, traitLines, serializeExport, parseImport, LOADOUT_IMPORT_MAX_BYTES, mergeSkins,
-  opsOf, setOps, resetOps, moduleRecord,
+  opsOf, setOps, resetOps, moduleRecord, rosterWithRecon, isReconChess,
 } from '../ui/loadoutModel.js';
 import { loadoutStore, openLoadout, closeLoadout, setEntries, setOpsMap, applyLoadoutEntries, setNotOwned, applyOwnershipImport, setDiyPicks, applyDiyImport, currentLoadoutLockPhases, setConflictPick, loadConflicts } from '../ui/loadoutSync.js';
 import { conflictCandidates, effectiveConflictor } from '../ui/conflictModel.js';
@@ -61,7 +65,7 @@ import { toast } from '../ui/toasts.js';
 export { openLoadout, closeLoadout };
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
-const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
 // ---- export / import (干员调配 presets) -----------------------------------------------------------------------------
 //
@@ -433,7 +437,7 @@ function Filters({ m, filters, onFilters, bonds }) {
     <div class="lo-frow">
       <div class="lo-chips" role="group" aria-label=${t('阶级')}>
         <button type="button" class=${cx('lo-chip', !filters.tier && 'is-on')} onClick=${() => set({ tier: null })}>${t('全部')}</button>
-        ${[1, 2, 3, 4, 5, 6].map((tier) => html`<button key=${tier} type="button" class=${cx('lo-chip', 'lo-chip--tier', `lo-chip--t${tier}`, filters.tier === tier && 'is-on')}
+        ${[1, 2, 3, 4, 5, 6, 7].map((tier) => html`<button key=${tier} type="button" class=${cx('lo-chip', 'lo-chip--tier', `lo-chip--t${tier}`, filters.tier === tier && 'is-on')}
           aria-pressed=${filters.tier === tier ? 'true' : 'false'} title=${t('{tier}阶', { tier })} onClick=${() => set({ tier: filters.tier === tier ? null : tier })}><span class="num">${ROMAN[tier]}</span></button>`)}
       </div>
       <${TextField} size="sm" icon="search" value=${filters.query} placeholder=${t('搜索干员 / 职业 / 盟约')} class="lo-search"
@@ -469,6 +473,10 @@ function Filters({ m, filters, onFilters, bonds }) {
 const VIEW_PREF = 'loadout.view';
 /** 'deck' (cards by tier, the default) or 'list' (the aligned rows of 0.2.2). */
 export const loadoutViewPref = () => (loadPref(VIEW_PREF, 'deck') === 'list' ? 'list' : 'deck');
+/** 重构模拟干员开关（业主 2026-10-30）：'1' = 列表换成重构版 / 新增干员。 */
+const RECON_PREF = 'loadout.recon';
+/** 这一页的开关读到的那一份（缺省关）。 */
+export const loadoutReconPref = () => loadPref(RECON_PREF, '0') === '1';
 const TIERS = [1, 2, 3, 4, 5, 6];
 
 /** 潜能 as six pips (the card's star row). */
@@ -587,8 +595,8 @@ function useDragScroll() {
  * The deck: one group per tier present in `list` (a tall marker, then the cards flowing in two rows), the 甄选 card closing
  * tiers 5 / 6. A vertical wheel scrolls it sideways; `onTier` reports the tier group at the left edge (the bottom bar).
  */
-function DeckView({ m, list, getChess, st, selId, quick, onPick, onChange, onOps, onDiy, diySlots, diyPicks, deckRef, drawer, onTier, filtered }) {
-  const groups = TIERS.map((tier) => ({ tier, items: list.filter((c) => c.tier === tier) }))
+function DeckView({ m, list, getChess, st, selId, quick, onPick, onChange, onOps, onDiy, diySlots, diyPicks, deckRef, drawer, onTier, filtered, tiers = TIERS }) {
+  const groups = tiers.map((tier) => ({ tier, items: list.filter((c) => c.tier === tier) }))
     .filter((g) => g.items.length || (!filtered && diySlots.some((s) => s.tier === g.tier)));
   const raf = useRef(0);
   const dragScroll = useDragScroll();
@@ -705,7 +713,7 @@ function ItemDetail({ m, items, index, all, onIndex, onClose }) {
 }
 
 /** The deck's bottom bar: 干员 / 道具, jump to a tier (the 自选 slots still open above 5 / 6), 确认配置 in 快速配置. */
-function DeckBar({ deckTab, onDeckTab, counts, active, onJump, diyOpen, quick, onConfirm }) {
+function DeckBar({ deckTab, onDeckTab, counts, active, onJump, diyOpen, quick, onConfirm, tiers = TIERS, hasRecon = false, recon = false, onRecon }) {
   return html`<nav class="lo-bbar" aria-label=${t('物资调配')}>
     <div class="lo-bbar__seg" role="tablist">
       <button type="button" role="tab" aria-selected=${deckTab === 'ops' ? 'true' : 'false'} class=${cx(deckTab === 'ops' && 'is-on')} onClick=${() => onDeckTab('ops')}>
@@ -714,12 +722,17 @@ function DeckBar({ deckTab, onDeckTab, counts, active, onJump, diyOpen, quick, o
         <${Icon} name="box" />${t('道具')}</button>
     </div>
     <div class="lo-bbar__tiers">
-      ${TIERS.map((tier) => html`<button key=${tier} type="button" class=${cx('lo-bbar__tier', active === tier && 'is-on')} disabled=${!counts[tier]}
+      ${tiers.map((tier) => html`<button key=${tier} type="button" class=${cx('lo-bbar__tier', active === tier && 'is-on')} disabled=${!counts[tier]}
           onClick=${() => onJump(tier)} title=${t('{tier}阶', { tier })}>
         ${deckTab === 'ops' && diyOpen[tier] ? html`<span class="lo-bbar__diy" title=${t('{tier}阶 还有 {n} 个自选名额', { tier, n: diyOpen[tier] })}><${Icon} name="user" /><b class="num">${diyOpen[tier]}</b></span>` : null}
         <span class="lo-bbar__roman num">${ROMAN[tier]}</span><span>${t('{tier}阶', { tier })}</span>
       </button>`)}
     </div>
+    ${hasRecon ? html`<button type="button" class=${cx('lo-reconbtn', recon && 'is-on')} aria-pressed=${recon ? 'true' : 'false'}
+        data-testid="loadout-recon" onClick=${onRecon} title=${t('切换重构模拟的干员信息（重构版与新增干员）')}>
+      <i class="lo-reconbtn__sw" aria-hidden="true"><i></i></i>
+      <span class="lo-reconbtn__txt"><span>${t('重构模拟干员')}</span><small>RECON OPERATORS</small></span>
+    </button>` : null}
     ${quick ? html`<button type="button" class="lo-confirm" onClick=${onConfirm}><${Icon} name="check" />${t('确认配置')}</button>` : null}
   </nav>`;
 }
@@ -733,6 +746,7 @@ function DeckHelp({ onClose }) {
     [t('甄选干员'), t('5阶、6阶末尾的卡片即自选编队：持有的 6★ 干员或原型干员，只出现在你自己的商店。')],
     [t('道具'), t('本游戏商店出售的全部装备，点开查看基础 / 进阶效果；两件同名装备合成进阶。')],
     [t('筛选与导入导出'), t('「筛选」按职业、盟约、名字查找，或切换为列表视图；「更多」里导出 / 导入调配、全部恢复默认。')],
+    [t('重构模拟干员'), t('右下角的开关：把有重构版的干员换成重构记录（阶级、特质、数值），并补上没有官方记录的干员；技能、模组、潜能与练度照常修改。')],
   ];
   return html`<${Modal} open=${true} onClose=${onClose} title=${t('调度手册')} micro="DISPATCH MANUAL"
       actions=${html`<${Button} variant="primary" onClick=${onClose}>${t('知道了')}<//>`}>
@@ -819,7 +833,13 @@ function LoadoutScreen({ st, leaving = false }) {
   const m = data.get('assets');
   const getChess = (id) => data.lookup('chess', id);
   const getBond = (id) => data.lookup('bonds', id);
-  const roster = useMemo(() => rosterOf(data.list('chess')), [ready, data.locale()]); // (names follow a language switch)
+  const rawList = useMemo(() => data.list('chess') || [], [ready, data.locale()]); // (names follow a language switch)
+  // 重构模拟干员（业主 2026-10-30）：开关关着时 recon_* 记录整体隐藏；打开后有重构版的干员换成重构记录、
+  // 没有官方记录的新增干员追加进来（ui/loadoutModel.js 的 rosterWithRecon）。
+  const hasRecon = useMemo(() => rawList.some(isReconChess), [rawList]);
+  const [reconInfo, setReconInfoState] = useState(loadoutReconPref);
+  const setReconInfo = (v) => { setReconInfoState(v); savePref(RECON_PREF, v ? '1' : '0'); };
+  const roster = useMemo(() => rosterWithRecon(rawList, reconInfo && hasRecon), [rawList, reconInfo, hasRecon]);
   const bonds = useMemo(() => {
     const used = new Set(roster.flatMap((c) => c.bonds || []));
     return (data.list('bonds') || []).filter((b) => b && used.has(b.bondId))
@@ -1070,10 +1090,15 @@ function LoadoutScreen({ st, leaving = false }) {
     if (deckRef.current) deckRef.current.scrollLeft = 0;
   };
   const nFilters = ['tier', 'prof', 'bond', 'changedOnly'].filter((k) => !!st.filters?.[k]).length + (String(st.filters?.query || '').trim() ? 1 : 0);
+  // 分组 / 跳阶的阶级表：普通名单最高 6 阶；打开重构模拟干员后有 7 阶（赤刃明霄陈）就多一格。
+  const tiers = useMemo(() => {
+    const max = roster.reduce((n, c) => Math.max(n, Number(c.tier) || 0), 6);
+    return Array.from({ length: Math.max(6, max) }, (_, i) => i + 1);
+  }, [roster]);
   const tierCounts = deckTab === 'items'
-    ? Object.fromEntries(TIERS.map((tier) => [tier, codex.filter((x) => x.tier === tier).length]))
-    : Object.fromEntries(TIERS.map((tier) => [tier, list.filter((c) => c.tier === tier).length + (nFilters ? 0 : diySlots.filter((s) => s.tier === tier).length)]));
-  const diyOpen = Object.fromEntries(TIERS.map((tier) => [tier, diySlots.filter((s) => s.tier === tier && !diyLegal[s.slotId]).length]));
+    ? Object.fromEntries(tiers.map((tier) => [tier, codex.filter((x) => x.tier === tier).length]))
+    : Object.fromEntries(tiers.map((tier) => [tier, list.filter((c) => c.tier === tier).length + (nFilters ? 0 : diySlots.filter((s) => s.tier === tier).length)]));
+  const diyOpen = Object.fromEntries(tiers.map((tier) => [tier, diySlots.filter((s) => s.tier === tier && !diyLegal[s.slotId]).length]));
 
   const [syncText, syncCls] = tab === 'ownership' ? OWN_SYNC_TEXT[st.ownSync] || OWN_SYNC_TEXT.idle
     : tab === 'diy' ? DIY_SYNC_TEXT[st.diySync] || DIY_SYNC_TEXT.idle : SYNC_TEXT[st.sync] || SYNC_TEXT.idle;
@@ -1204,13 +1229,14 @@ function LoadoutScreen({ st, leaving = false }) {
           ? html`<${ItemCodex} m=${m} items=${codex} deckRef=${deckRef} onOpen=${setItemIdx} onTier=${setActiveTier} />
             ${itemIdx != null ? html`<${ItemDetail} m=${m} items=${codex} index=${itemIdx} all=${data.get('items')} onIndex=${setItemIdx} onClose=${() => setItemIdx(null)} />` : null}`
           : html`<${DeckView} m=${m} list=${list} getChess=${getChess} st=${st} selId=${selId} quick=${quick} onPick=${pick} onChange=${quickChange} onOps=${setOpsOf}
-              onDiy=${() => setTab('diy')} diySlots=${diySlots} diyPicks=${diyLegal} deckRef=${deckRef} drawer=${drawer && !!base} onTier=${setActiveTier} filtered=${nFilters > 0} />
+              onDiy=${() => setTab('diy')} diySlots=${diySlots} diyPicks=${diyLegal} deckRef=${deckRef} drawer=${drawer && !!base} onTier=${setActiveTier} filtered=${nFilters > 0} tiers=${tiers} />
             ${drawer && base ? html`<div class="lo-drawer" data-testid="loadout-drawer">
               <button type="button" class="lo-drawer__close" onClick=${() => setDrawer(false)} title=${t('收起 (Esc)')}><${Icon} name="chevronLeft" />${t('收起')}</button>
               ${loadoutDetail}
             </div>` : null}`}
       </main>
-      <${DeckBar} deckTab=${deckTab} onDeckTab=${switchDeckTab} counts=${tierCounts} active=${activeTier} onJump=${jumpTier} diyOpen=${diyOpen} quick=${quick} onConfirm=${() => setQuick(null)} />`
+      <${DeckBar} deckTab=${deckTab} onDeckTab=${switchDeckTab} counts=${tierCounts} active=${activeTier} onJump=${jumpTier} diyOpen=${diyOpen} quick=${quick} onConfirm=${() => setQuick(null)}
+        tiers=${tiers} hasRecon=${hasRecon} recon=${reconInfo && hasRecon} onRecon=${() => setReconInfo(!reconInfo)} />`
       : html`<main class=${cx('lo-body', narrowDetail && 'is-detail')}>
       <section class="lo-roster">
         <${Filters} m=${m} filters=${st.filters} bonds=${bonds} onFilters=${(filters) => loadoutStore.set({ filters })} />

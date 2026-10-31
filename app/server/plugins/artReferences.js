@@ -15,18 +15,28 @@ const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 export const ART_REFERENCE_LIMIT = 256;
 
 /** Optional extracted art belongs to the installation's base, before cosmetic layers.
- * [ASSUMED] Existing base slots win; absent slots use local art. No author-facing fields are added. */
+ * [ASSUMED] Existing base slots win; absent slots use local art. No author-facing fields are added. `skills` /
+ * `skillsById` fill the icon ids the generated plan does not carry (a workshop chess operator's official skills,
+ * data/local-assets.json written by extract.py --skill-icons) — base entries still win. */
 export function mergeLocalChars(base, local) {
-  if (!isObj(base) || !isObj(local?.chars)) return base;
-  const entries = Object.entries(local.chars).filter(([id, art]) => /^char_[0-9]+_[a-z0-9]+$/.test(id) && isObj(art));
-  if (!entries.length) return base;
-  const chars = { ...base.chars };
-  for (const [id, art] of entries) {
-    const existing = chars[id] || {};
-    chars[id] = { ...art, ...existing };
-    if (art.spine || existing.spine) chars[id].spine = { ...art.spine, ...existing.spine };
+  if (!isObj(base) || !isObj(local)) return base;
+  const entries = isObj(local.chars) ? Object.entries(local.chars).filter(([id, art]) => /^char_[0-9]+_[a-z0-9]+$/.test(id) && isObj(art)) : [];
+  const skills = isObj(local.skills) ? local.skills : {};
+  const byId = isObj(local.skillsById) ? local.skillsById : {};
+  if (!entries.length && !Object.keys(skills).length) return base;
+  let out = base;
+  if (entries.length) {
+    const chars = { ...base.chars };
+    for (const [id, art] of entries) {
+      const existing = chars[id] || {};
+      chars[id] = { ...art, ...existing };
+      if (art.spine || existing.spine) chars[id].spine = { ...art.spine, ...existing.spine };
+    }
+    out = { ...out, chars };
   }
-  return { ...base, chars };
+  if (Object.keys(skills).length) out = { ...out, skills: { ...skills, ...(isObj(base.skills) ? base.skills : {}) } };
+  if (Object.keys(byId).length) out = { ...out, skillsById: { ...byId, ...(isObj(base.skillsById) ? base.skillsById : {}) } };
+  return out;
 }
 
 /** Validate references against merged art, permissions against the original data/assets.json.

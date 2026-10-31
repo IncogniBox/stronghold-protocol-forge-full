@@ -13,6 +13,7 @@ import { PHASE } from '../../shared/constants.js';
 import {
   parseStored, toStored, chessOptions, effectiveChoice, setChoice, resetChoice, sanitizeEntries, rosterOf, filterRoster,
   changedCount, moduleBadge, attrRows, skillTags, skillLabel, selectedSkill, selectedModule, recordsOf,
+  rosterWithRecon, isReconChess,
   exportPayload, serializeExport, parseImport, LOADOUT_EXPORT_KIND, LOADOUT_VERSION, LOADOUT_IMPORT_MAX_BYTES,
 } from '../../public/js/ui/loadoutModel.js';
 import { installLoadoutSync, SYNC_DEBOUNCE_MS, RETRY_MS, applyLoadoutEntries, setEntries, loadoutStore } from '../../public/js/ui/loadoutSync.js';
@@ -195,6 +196,29 @@ test('roster and filters: 112 visible chess in shop order; tier / class / bond /
   const bondName = getBond(bond).name;
   assert.ok(filterRoster(roster, { query: bondName }, {}, get, getBond).some((c) => c.chessId === INSIDE), 'search matches bond names');
   assert.deepEqual(filterRoster(roster, { changedOnly: true }, { [INSIDE]: { skill: 0 }, [SWIRE]: { skill: SB.skill.index } }, get, getBond).map((c) => c.chessId), [INSIDE]);
+});
+
+test('重构模拟干员开关：关闭时隐藏 recon_*，打开后替换有重构版的干员并追加新增干员', () => {
+  const base = CHESS['chess_char_5_23_a'];
+  assert.ok(base, '官方有一条被重构的干员记录');
+  const reconA = { ...base, chessId: 'recon_chess_char_5_23_a', baseId: 'recon_chess_char_5_23_a', goldenId: 'recon_chess_char_5_23_b', isGolden: false, tier: 4 };
+  const reconB = { ...CHESS[base.goldenId], chessId: 'recon_chess_char_5_23_b', baseId: 'recon_chess_char_5_23_a', goldenId: 'recon_chess_char_5_23_b', isGolden: true, tier: 4 };
+  const added = { ...base, chessId: 'recon_chess_ws_recon_zuole_a', baseId: 'recon_chess_ws_recon_zuole_a', goldenId: 'recon_chess_ws_recon_zuole_b', isGolden: false, tier: 6, name: '左乐' };
+  const list = [...Object.values(CHESS), reconA, reconB, added];
+
+  assert.equal(isReconChess(reconA), true);
+  assert.equal(isReconChess(base), false);
+
+  const off = rosterWithRecon(list, false);
+  assert.equal(off.length, 112, '关闭时与普通名单逐条相同');
+  assert.equal(off.some(isReconChess), false, 'recon_* 全部隐藏');
+
+  const on = rosterWithRecon(list, true);
+  assert.equal(on.length, 113, '替换 1 名 + 追加 1 名新增干员');
+  assert.equal(on.some((c) => c.chessId === 'chess_char_5_23_a'), false, '有重构版的干员不再列官方记录');
+  const wu = on.find((c) => c.chessId === 'recon_chess_char_5_23_a');
+  assert.ok(wu && wu.tier === 4, '卡片读的是重构记录（阶级 4）');
+  assert.ok(on.some((c) => c.chessId === 'recon_chess_ws_recon_zuole_a'), '没有官方记录的新增干员追加进来');
 });
 
 test('display helpers: module badge, stat rows, skill tags', () => {

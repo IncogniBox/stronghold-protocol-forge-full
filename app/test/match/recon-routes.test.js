@@ -7,10 +7,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { makeMatch } from './harness.js';
+import { makeMatch, give, legalTileFor, chessOfTier } from './harness.js';
 import { makeBattle } from '../helpers/battleHarness.js';
 import { createRng } from '../../server/sim/rng.js';
-import { routeGroup, routeIndexIn, routeSpawn, stageRoutesOf, stageBossRoutesOf, buildBossWave, setupMatchWaves } from '../../server/match/waves.js';
+import { routeGroup, routeIndexIn, routeSpawn, stageRoutesOf, stageBossRoutesOf, buildBossWave, setupMatchWaves, bossStandsStill, mirrorMovingLeaders } from '../../server/match/waves.js';
+import { SharedBossPool } from '../../server/match/finalAssault.js';
 
 const STAGE = JSON.parse(fs.readFileSync(new URL('../../workshop/mode-recon/stages.json', import.meta.url), 'utf8')).my_map;
 const ALL_ROUTES = STAGE.routes;
@@ -90,6 +91,49 @@ describe('重构战场 my_map：8 条作者路线（左 4 / 右 4，各 2 地面
     }
   });
 
+  // 业主 2026-10-31「怪物等待区的怪物按照从场地上方还是下方的出生点出场，分为上下两批」：从前 `gateOf` 的
+  // start + 6 / + 13 只适配官方 19×21 的等待区锚点（my_map 的起点行 35/37 会全判成 upper）。现在地图自己画了路线时
+  // 按**这条场地自己的纵向中线**分（普通带 rows 34–38，中线 36）。
+  test('等待区的上下两批按场地自己的上下出生点分（my_map 起点 35 = lower / 37 = upper）', () => {
+    const h = reconPrep();
+    const m = h.m;
+    for (const ps of m.order) {
+      const list = ps.privateView().nextEnemies;
+      const gates = new Set(list.map((e) => e.gate));
+      assert.ok(gates.has('upper') && gates.has('lower'), `${ps.playerId}: 上下两批都有（${[...gates]}）`);
+      for (const e of list) {
+        if (!Array.isArray(e.start)) continue;
+        assert.equal(e.gate, e.start[0] >= 36 ? 'upper' : 'lower', `${e.enemyKey} 起点 ${e.start}`);
+      }
+    }
+  });
+
+  // 业主 2026-10-31「同场地的玩家在休整期看不到对方场地的情况」：m.private 的 `normalMate` 把队友的棋子在它那一半
+  // 带下来（右半场镜像），自己的休整期视图画在旁边。
+  test('普通回合配对：m.private 带 normalMate，队友的棋子落在它那一半', () => {
+    const h = reconPrep();
+    const m = h.m;
+    const pair = m.normalGroups().find((g) => g.length === 2);
+    assert.ok(pair, '左右两半的普通带把两位棋手配成一组');
+    const [a, b] = pair.map((x) => x.ps);
+    const id = chessOfTier(1)[0];
+    const pa = give(m, a, id, 'board', legalTileFor(m, a, id));
+    const pb = give(m, b, id, 'board', legalTileFor(m, b, id));
+    m.flush(true);
+    const va = a.privateView(), vb = b.privateView();
+    assert.deepEqual([va.normalMate.playerId, va.normalMate.side], [b.playerId, 'R']);
+    assert.deepEqual([vb.normalMate.playerId, vb.normalMate.side], [a.playerId, 'L']);
+    const onR = va.normalMate.units.find((u) => u.uid === pb.uid);
+    const onL = vb.normalMate.units.find((u) => u.uid === pa.uid);
+    assert.ok(onR && onR.x >= 31, `右半场：x=${onR && onR.x}`);
+    assert.ok(onL && onL.x <= 30, `左半场：x=${onL && onL.x}`);
+    assert.equal(va.normalMate.units.length, 1, '只带队友的棋盘（它的整备区仍归它自己）');
+    // 侦察队友的阵地时，m.field 也带这位棋手自己那一半（客户端笔架按它摆）
+    const scout = m.prepFieldMeta(b);
+    assert.equal(scout.side, 'R');
+    m.dispose();
+  });
+
   test('sim：左右两半的敌人各自走到自己那半的门，漏怪记在那位玩家头上', () => {
     const stage = STAGE;
     const h = makeBattle({
@@ -164,6 +208,70 @@ describe('重构战场 my_map：8 条作者路线（左 4 / 右 4，各 2 地面
     const alive = h.battle.enemies.filter((e) => e.alive);
     assert.equal(alive.length, 1, '巡逻中的首领一直留在场上（不是走一圈就消失）');
     assert.equal(alive[0].route.loop, true, '闭环路线被认成巡逻');
+  });
+
+  test('站定判定：自缚巨型首领 / 记录 stillBoss / 移速 0 都算站定，其余会移动', () => {
+    const h = reconPrep();
+    const gd = h.m.gd;
+    for (const key of ['enemy_9033_acdeer', 'enemy_9032_aclionk', 'enemy_1521_dslily', 'enemy_9013_acstmk', 'enemy_9021_acduml']) {
+      assert.equal(bossStandsStill(gd, key), true, `${key}: 自缚巨型首领不走路`);
+    }
+    for (const key of ['enemy_ws_recon_shorbb', 'enemy_ws_recon_shophm', 'enemy_ws_recon_csdoll',
+      'enemy_ws_recon_suisho', 'enemy_ws_recon_suizzh', 'enemy_ws_recon_suiyzh', 'enemy_ws_recon_suiwei']) {
+      assert.equal(bossStandsStill(gd, key), true, `${key}: 记录里写了 stillBoss`);
+    }
+    assert.equal(bossStandsStill(gd, 'enemy_ws_recon_musnake'), true, '终始移速 0');
+    for (const key of ['enemy_1515_bsnake', 'enemy_ws_recon_bsnake', 'enemy_ws_recon_skzamy', 'enemy_1007_slime']) {
+      assert.equal(bossStandsStill(gd, key), false, `${key}: 会移动`);
+    }
+  });
+
+  test('双人 boss 场地：会移动的首领每位玩家各一只（各走一条巡逻线），站定首领仍一只', () => {
+    const h = reconPrep();
+    const gd = h.m.gd;
+    const arena = stageBossRoutesOf(gd, 'my_map', 0);
+    assert.equal(arena.length, 2, '区域1 两条巡逻线');
+    const boss = (key) => ({ key, enemyKey: key, tag: 'boss', count: 1, route: arena[0], preview: { boss: true } });
+    const moving = mirrorMovingLeaders(gd, [boss('enemy_ws_recon_bsnake')], arena);
+    assert.equal(moving.length, 1, '第二位玩家也要一只');
+    assert.equal(moving[0].tag, 'boss', '第二只同样是首领（共用一条队伍血池）');
+    assert.equal(moving[0].enemyKey, 'enemy_ws_recon_bsnake');
+    assert.deepEqual(moving[0].route, arena[1], '第二只走另一条巡逻线');
+    assert.equal(moving[0].preview.boss, true, '预览按首领画');
+    assert.equal(mirrorMovingLeaders(gd, [boss('enemy_ws_recon_csdoll')], arena).length, 0, '伤心的大锁站定 ⇒ 只一只');
+    assert.equal(mirrorMovingLeaders(gd, [boss('enemy_9033_acdeer')], arena).length, 0, '萨米的意志站定 ⇒ 只一只');
+    // 一块场地只有一条巡逻线（或没有）时不复制：第二只没有自己的路可走
+    assert.equal(mirrorMovingLeaders(gd, [boss('enemy_ws_recon_bsnake')], arena.slice(0, 1)).length, 0);
+  });
+
+  test('sim：双人场地的两只巡逻首领各走一条线，共用一条队伍池（池空两只一起退场）', () => {
+    const arena = ALL_ROUTES.filter((r) => r.start[0] >= BOSS_RECTS[0].r0 && r.start[0] <= BOSS_RECTS[0].r1
+      && r.start[1] >= BOSS_RECTS[0].c0 && r.start[1] <= BOSS_RECTS[0].c1);
+    assert.equal(arena.length, 2);
+    const pool = new SharedBossPool(1000);
+    const h = makeBattle({
+      stage: STAGE, kind: 'boss', rect: BOSS_RECTS[0], routes: arena, timeLimit: Infinity,
+      players: [
+        { playerId: 'pL', seat: 0, side: 'L', colOffset: 0, units: [] },
+        { playerId: 'pR', seat: 1, side: 'R', colOffset: 0, units: [] },
+      ],
+      enemies: [
+        { key: 'enemy_1007_slime', route: arena[0], tag: 'boss' },
+        { key: 'enemy_1007_slime', route: arena[1], tag: 'boss' },
+      ],
+      sharedBoss: pool, content: 'none',
+    });
+    h.run(8);
+    const alive = h.enemies().filter((e) => e.tag === 'boss');
+    assert.equal(alive.length, 2, '两只首领都在场上巡逻');
+    assert.notEqual(alive[0].x.toFixed(2), alive[1].x.toFixed(2), '两只沿不同方向巡场（各走自己那条线）');
+    assert.deepEqual([alive[0].hp, alive[1].hp], [pool.hp, pool.hp], '两只显示同一条池的值');
+    pool.damage('pL', 400);
+    h.step(1);
+    assert.deepEqual(h.enemies().filter((e) => e.tag === 'boss').map((e) => e.hp), [600, 600], '打一只，两只见到的血量一致');
+    pool.damage('pR', 1000);
+    h.step(1);
+    assert.equal(h.enemies().filter((e) => e.tag === 'boss').length, 0, '池打空 ⇒ 两只同时退场');
   });
 
   test('官方图没有自己的路线表：不换表、不按半场复制出怪', () => {

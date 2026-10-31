@@ -74,8 +74,20 @@ test('render/app.js: the leader leaves the pen for the boss field, red hit tiles
   assert.equal(leaderShown('prep'), false);
   assert.equal(leaderShown('pen', 'bossPrep'), true, 'a flight from the boss-field prep');
   const app = read('public/js/render/app.js');
-  assert.match(app, /const pen = layoutPen\(stand \? list\.filter\(\(e\) => e !== stand\.entry\) : list, \{ stage: stageRec, side: prepSideNow\(\) \}\);/);
+  // the side is resolved once in setPenList (`at`): the pen camera ('pen') keeps the previous camera's half (业主
+  // 2026-10-31), and a scouted board passes its own half explicitly — so the layout call takes the local, not prepSideNow()
+  assert.match(app, /const pen = layoutPen\(stand \? list\.filter\(\(e\) => e !== stand\.entry\) : list, \{ stage: stageRec, side: at \}\);/);
   assert.match(app, /\[\.\.\.hlReq\.keys\(\)\]\.some\(\(g\) => RANGE_GROUPS\.has\(g\)\)/);
+});
+
+test('render/app.js: the pen sits on the camera\'s own half even while looking at it, and a scout passes its own half (业主 2026-10-31)', () => {
+  const app = read('public/js/render/app.js');
+  // 从前只在 camKind === 'prep' 时读 side：点开笔架（'pen'）后任何一次重排都把右半场的人摆回左半场
+  assert.match(app, /const prepSideNow = \(\) => \(camOpts\.side === 'R' \? 'R' : 'L'\);/);
+  assert.match(app, /function setPenList\(list, side = null\) \{/);
+  assert.match(app, /const sig = listSig \? `\$\{at\}:\$\{listSig\}` : '';/);
+  // 侦察的阵地：进 enterBattle 时相机还没切过来，笔架用服务器带在 m.field 上的半场
+  assert.match(app, /if \(battleMeta\.prep\) setPenList\(Array\.isArray\(meta\.nextEnemies\)[\s\S]{0,200}meta\.side === 'R' \|\| meta\.side === 'L' \? meta\.side : null\);/);
 });
 
 test('the leader\'s view (render/app.js setLeader: a boss, not a prep view) shows its full HP bar, like the official prep image', async () => {

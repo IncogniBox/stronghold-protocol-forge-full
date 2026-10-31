@@ -1,7 +1,7 @@
 // public/js/render/app/view.js — which field a camera shows, and the board box that follows it.
 
 import { AREAS, areaFor, unionAreas } from '../board3d/layout.js';
-import { OFFICIAL_LAYOUT, layoutOf, mapSize } from '../layout.js';
+import { OFFICIAL_LAYOUT, layoutOf, mapSize, isDualLayout } from '../layout.js';
 import { normRect } from '../projection.js';
 
 const VIEW_KINDS = new Set(['prep', 'normal', 'unite', 'boss', 'bossPrep', 'pen']);
@@ -35,6 +35,31 @@ export function viewKind(kind, opts, layout = null) {
   const [R, C] = mapSize(layout || null);
   if (k === 'prep' && opts && opts.rect && normRect(opts.rect, R, C).r1 <= (layout || OFFICIAL_LAYOUT).battle.boss.r1) k = 'bossPrep';
   return k;
+}
+
+/**
+ * The deploy field the own prep board shows — `render/drag.js` `boardGeo`'s `field`, so the pointer layer (hand / 临时
+ * 整备区 rows, the board rect) reads the same tiles the pieces are drawn on and the server deploys on
+ * (`ui/gameLogic/camera.js` `deployFieldOf`): the player's own half of the boss field in a boss round's prep
+ * (`'bossL'` / `'bossR'`; a 2nd… boss area owns its own layout — every area reads `'bossL'`, shared/layout.js `benchKeyOf`),
+ * the own half of a two-half ordinary band (`'normalL'` / `'normalR'`) in an ordinary prep, else the ordinary band `'normal'`.
+ * A boss prep MUST NOT fall back to `'normal'`: on a map whose ordinary band is bigger than its boss half (45×60 重构战场:
+ * 5×11 vs 4×9, 16/8 bench vs the implicit 10/5) that put the bench and the board window in the ordinary ones — pieces
+ * beyond the visible 10+5 slots disappeared and drops landed on the wrong tiles (业主 2026-10-29).
+ * @param {string} kind the requested camera kind (`app.setCamera`)
+ * @param {{ side?: 'L'|'R', area?: number }} [opts] the camera request's framing
+ * @param {object|null} [layout] the map's own layout (`layoutOf(stage)`)
+ * @returns {'normal'|'normalL'|'normalR'|'bossL'|'bossR'}
+ */
+export function prepFieldOf(kind, opts = {}, layout = null) {
+  const vk = viewKind(kind, opts, layout);
+  if (vk === 'bossPrep') {
+    if (Number.isInteger(opts.area) && opts.area > 0) return 'bossL';
+    return opts.side === 'R' ? 'bossR' : 'bossL';
+  }
+  if (vk !== 'prep') return 'normal';
+  if (!isDualLayout(layout || null)) return 'normal';
+  return opts.side === 'R' ? 'normalR' : 'normalL';
 }
 
 /** 3D areas without the enemy preview pen block (the own field / both normal halves); see `boardArea`. */

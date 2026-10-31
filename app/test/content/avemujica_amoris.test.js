@@ -222,3 +222,23 @@ test('「持续攻击」：攻击范围内没有敌人，也按自身攻击间�
   assert.ok(u.skill.sp > sp0, `无目标那一路补了攻击技力（sp ${sp0} → ${u.skill.sp}）`);
   h.invariants();
 });
+
+// 业主 2026-10-31「颂乐人偶策略：描述是…给一个等于当前调度中心等级的干员，但实际上当前实现是小于等于」：
+// `ctx.rollChess({ maxTier })` 是「不超过」；描述与数据（bands.json 的 desc）都是「等于」⇒ 改成 `{ tier }`。
+test('无忧梦呓（策略）：每回合首次获得颂乐人偶干员时，随机干员的阶级 = 调度中心等级', () => {
+  const handler = LAYER.registry.get('band:band_wuyouyoumeng');
+  assert.ok(handler && typeof handler.onGain === 'function', '本包注册了 band_wuyouyoumeng');
+  const rolls = [], grants = [];
+  const ctx = {
+    round: 5,
+    counter: () => 0, setCounter() {},
+    shopLevel: () => 4,
+    gd: { chess: () => ({ bonds: ['aveMujica'] }) },
+    band: { buffs: [{ key: 'band_wuyouyoumeng_first_gain_bond_gain_random_char', bb: { count: 1 } }] },
+    rollChess: (o) => { rolls.push(o); return 'chess_char_x'; },
+    grantChess: (id, o) => grants.push([id, o]),
+  };
+  handler.onGain(ctx, { piece: { kind: 'chess', id: AMORIS } });
+  assert.deepEqual(rolls, [{ tier: 4 }], '阶级是「等于调度中心等级」（不是 maxTier 的「不超过」）');
+  assert.deepEqual(grants, [['chess_char_x', { source: 'band' }]]);
+});

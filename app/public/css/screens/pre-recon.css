@@ -115,6 +115,8 @@
 
 .prc-opts__group + .prc-opts__group { margin-top: .12rem; }
 .prc-opts__ghead { display: flex; align-items: baseline; gap: .1rem; margin-bottom: .08rem; color: var(--text-md); }
+/* 熔芯负载那一组的选择 = 排除（业主 2026-10-30）：组头右侧的小注 */
+.prc-opts__hint { margin-left: auto; font-size: calc(.13 * var(--t)); color: var(--text-lo); letter-spacing: .02em; }
 .prc-opts__list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .1rem; }
 .prc-opt {
   display: flex;

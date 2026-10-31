@@ -8,7 +8,7 @@
 import { PHASE, GEO } from '../../../shared/constants.js';
 import { createRng, deriveSeed } from '../../sim/rng.js';
 import { creditedKillsOf } from '../../sim/spec.js';
-import { buildBossWave, bountySpawns } from '../waves.js';
+import { buildBossWave, bountySpawns, mirrorMovingLeaders, stageBossRoutesOf } from '../waves.js';
 import { pairPlayers, bossPoolHp, SharedBossPool, CreditPool, hiddenEligible, BOSS_HIT_STEPS } from '../finalAssault.js';
 import { FieldRunner, HeadlessPacer, syntheticResult, BOSS_SILENCE_MS, CATCHUP_TICKS_PER_INTERVAL } from '../fields.js';
 import { FLOW_TICKER_PRIORITY, BOSS_CLOCK_MS, DELAYS } from './common.js';
@@ -169,6 +169,12 @@ export class MatchBoss {
       );
       // one spawn list per field, shared by the field's players' onBattleStart handlers (edit it in place)
       const spawns = wave.spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
+      // 业主 2026-10-30：双人 boss 场地里**会移动**的首领每位玩家各一只（各走地图给自己那半场画的那条巡逻线，
+      // 参考原版卢西恩）；站定不动的首领（萨米的意志 / 源阶方 / 洛伦茨 / 岁四部位 / 伤心的大锁 …）仍是一只，
+      // 两位玩家同时对抗。血量仍是整队共用那一条池（两只同步显示同一根条，池空同时退场）。
+      if (g.length > 1) {
+        for (const extra of mirrorMovingLeaders(this.gd, spawns, stageBossRoutesOf(this.gd, this.stageId, i))) spawns.push(extra);
+      }
       // bounties with battles left (a multi-round card lasts MULTI_ROUND_BOUNTY_BATTLES) follow their player into the
       // boss field, on the player's half
       // 这块 boss 场地自己的战斗矩形与中列：第 1 块 = 地图自己的 boss 带（从前那条），第 2… 块 = `bossAreas[i]` 的

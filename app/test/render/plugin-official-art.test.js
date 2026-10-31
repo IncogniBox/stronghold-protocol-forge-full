@@ -36,6 +36,18 @@ test('local art reaches the normal shop/detail/DIY and board helpers; original m
   for (const empty of [null, {}, { chars: {} }]) assert.equal(mergeLocalChars(base, empty), base);
 });
 
+test('local skill icons fill the ids the official plan misses; official entries still win', () => {
+  const base = { chars: {}, skills: { skchr_official_1: '/assets/skill/skchr_official_1.png' }, skillsById: { skchr_official_1: 'skchr_official_1' } };
+  const l = { skills: { skchr_highmo_2: '/assets/local/skill/skchr_highmo_2.png', skchr_official_1: '/local-dupe.png' },
+    skillsById: { skchr_highmo_2: 'skchr_highmo_2' } };
+  const merged = mergeLocalChars(base, l);
+  assert.equal(merged.skills.skchr_highmo_2, l.skills.skchr_highmo_2);
+  assert.equal(merged.skills.skchr_official_1, base.skills.skchr_official_1);
+  assert.equal(merged.skillsById.skchr_highmo_2, 'skchr_highmo_2');
+  assert.equal(mergeLocalChars(base, { skills: {} }), base);
+  assert.deepEqual(mergeLocalChars({}, l).skills, l.skills);
+});
+
 test('room and personal plugin art override local art; failure and removal restore the extracted art', async () => {
   await loadVisual();
   const layers = createCosmeticLayers(), base = mergeLocalChars({ chars: {} }, local());

@@ -150,7 +150,7 @@ Top level: `{ season, seasonName, modes, economy, lpCapPerRound, bossOvertimeAft
 | Field | Example | Meaning |
 |---|---|---|
 | `chessId`, `baseId`, `goldenId`, `isGolden` | `"chess_char_1_01_b"`, `"chess_char_1_01_a"`, `"chess_char_1_01_b"`, `true` | normal/golden pair |
-| `tier` | `1` | 阶 I–VI (shop tier) |
+| `tier` | `1` | 阶 I–VII（shop tier）。官方数据只有 I–VI；VII 是业主 2026-10-30 给重构模拟加的（只在 7 级调度中心抽到，`shared/chessAuthoring.js` 的 `TIER7` 是它的练度口径） |
 | `identifier`, `shopSortId` | `133`, `1` | official ordering |
 | `isHidden`, `isDiy`, `visible` | | `visible = !isHidden && !isDiy` (only visible chess enter the shop pool) |
 | `chessType` | `"PRESET"` | `PRESET` / `NORMAL` / `DIY` |
@@ -408,8 +408,8 @@ blackboards (transitively). Level = `randomEnemyAttributeDict[key].level` (0 for
 | Key | Example | Meaning |
 |---|---|---|
 | `templateSlots` | `{"N":"enemy_1422_lrsldr","E":"enemy_1427_lrnazg","S":"enemy_1425_lrcmra","NF":"enemy_1005_yokai","EF":"enemy_1042_frostd","SF":"enemy_1040_bombd","T":"enemy_1000_gopro_2","TF":"enemy_1041_lazerd"}` | placeholder keys in wave templates |
-| `types[type]` | `{"type":"FLY","name":"特训敌人·飞行","desc":"…","icon":"fly_icon","sortId":2,"typeIdentifier":2,"involveRandom":true,"count":3,"weight":3,"pool":[…],"entries":[…]}` | 7 types |
-| `entries[key]` | `{"key":"enemy_1041_lazerd","type":"FLY","weight":10,"firstHalf":true,"fly":true,"N":[{"key":"enemy_10083_hlbird"}],"E":[{"key":"enemy_1005_yokai_2"}],"inactiveIn":[]}` | 67 entries (`specialEnemyInfoDict`); `fly` = the movement class shared by the special, normal and elite keys; `inactiveIn` = modes whose `inactiveEnemyKey` bans the SPECIAL key (attached keys are never filtered) |
+| `types[type]` | `{"type":"FLY","name":"特训敌人·飞行","desc":"…","icon":"fly_icon","sortId":2,"typeIdentifier":2,"involveRandom":true,"count":3,"weight":3,"pool":[…],"entries":[…]}` | 8 types: the official 7 + the workshop 涤墨 `DIMO` (`involveRandom: false`, `reconOnly: true` — 只出现在重构模拟，不进官方随机池；`reconOnly` 由 `server/match/waves.js` 的必选过滤读取，见 `shared/reconModes.js` `factionSetup.forceTypes`) |
+| `entries[key]` | `{"key":"enemy_1041_lazerd","type":"FLY","weight":10,"firstHalf":true,"fly":true,"N":[{"key":"enemy_10083_hlbird"}],"E":[{"key":"enemy_1005_yokai_2"}],"inactiveIn":[]}` | 85 entries (`specialEnemyInfoDict` + 涤墨的 18 条；包缺席时涤墨记录查无，`typeUsable` 判为不可用); `fly` = the movement class shared by the special, normal and elite keys; `inactiveIn` = modes whose `inactiveEnemyKey` bans the SPECIAL key (attached keys are never filtered) |
 | `generation` | `{"specialEnemyNum":3,"maxLevelCnt":15,"fillType":"SPECIAL","typeSlots":{"FLY":3,…},"firstHalfMaxRound":7,"minReplacedEnemyCount":1,"maxReplacedEnemyCount":5,"minActionIntervalRatio":0.05,"beFactors":{…},"placeholders":{"enemy_1422_lrsldr":{"slot":"N","cls":"normal","fly":false},…},"powerFormula":"…","countFormula":"…","timingFormula":"…","notes":[…]}` | parameters of the **official** generator (client `RandomEnemyGenerater`, research 08 §2 — normative) |
 
 The official generator (implemented by `server/match/waves.js`):

@@ -38,6 +38,22 @@ let inflight = 0;
 const busyListeners = new Set();
 const emitBusy = () => { for (const fn of [...busyListeners]) { try { fn(inflight); } catch { /* ignore */ } } };
 
+/** 落点类意图（拖拽落子 / 配装 / 战术道具）：被服务器判非法时，客户端的部署场可能已经和服务器漂了（见下）。 */
+const PLACEMENT_INTENTS = new Set(['g.move', 'g.equip', 'g.art']);
+// 客户端的部署场是**从 m.public 推出来的**（`deployFieldOf` / `deployLayoutOf`：boss 分场、配对、地图布局），服务器用的是
+// 它自己那一份。两边一漂（重配对、换分场、增量帧漏一帧），客户端就会把一次「看起来合法」的落点发上去，回来是
+// 「无法部署在该位置」（BAD_TILE / BAD_TARGET，业主 2026-10-29 反馈里 8 次的那一条），相机也可能停在旧场地上。
+// 这时向服务器要一帧完整 m.public（DESIGN §8.2 的自愈问法）：它回来会重算 prepCamera 与 placementContext，
+// 下一次落点、以及休整期的取景就都按服务器那一份。
+const PUBLIC_FULL_ASK_MS = 2000;
+let publicFullAskedAt = 0;
+function askPublicFull() {
+  const now = Date.now();
+  if (now - publicFullAskedAt < PUBLIC_FULL_ASK_MS) return;
+  publicFullAskedAt = now;
+  try { net.send('g.publicFull'); } catch { /* offline: the reconnect's full frame answers it */ }
+}
+
 /** Subscribe to the number of in-flight intents (for subtle busy indicators). */
 export function onBusy(fn) { busyListeners.add(fn); return () => busyListeners.delete(fn); }
 
@@ -73,6 +89,8 @@ export async function act(t, fields = {}, opts = {}) {
     if (s) audio.sfx(s);
     return true;
   } catch (err) {
+    // 落点被拒 ⇒ 部署场可能漂了：要一帧完整 m.public 自愈（见 askPublicFull）
+    if (PLACEMENT_INTENTS.has(t) && (err?.code === 'BAD_TILE' || err?.code === 'BAD_TARGET')) askPublicFull();
     if (!opts.quiet) {
       toastError(err);
       audio.sfx('error', { volume: 0.6 });

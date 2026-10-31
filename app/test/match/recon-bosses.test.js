@@ -270,6 +270,22 @@ test('第 8 回合新首领冒烟：梅菲斯特 / 浮士德 / 霜星都能入�
   assert.equal(h.invariants(), true);
 });
 
+// 业主 2026-10-31「boss浮士德在梅菲斯特阵亡之后隐匿结束」：重构文本的「梅菲斯特阵亡后攻击间隔 −2s」那一拍
+// 同时结束隐匿（从前只给了攻速，隐匿要等 150 s 自己到期）。
+test('浮士德·重构：梅菲斯特阵亡 ⇒ 隐匿立刻结束，并同时拿到 +攻速', async () => {
+  const h = await scene(['t_wall']);
+  const mephi = h.spawn(MEPHI, { pos: [10, 8], routeIndex: 0, mods: { speedMul: 0 } });
+  const faust = h.spawn(FAUST, { pos: [10, 10], routeIndex: 0, mods: { speedMul: 0 } });
+  h.step();
+  assert.ok(faust.findBuff('recon:faust_stealth'), '登场隐匿');
+  h.b.kill(mephi, null);
+  assert.ok(!faust.findBuff('recon:faust_stealth'), '梅菲斯特阵亡 ⇒ 隐匿结束');
+  assert.ok(faust.findBuff('recon:faust_haste'), '+攻速同时给了');
+  // 已经自然到期的隐匿再删一次也无害（梅菲斯特晚死时同样走到这一行）
+  h.b.kill(mephi, null);
+  assert.equal(h.invariants(), true);
+});
+
 test('自在·重构：纬地经天额外选择第二近目标（每次释放补一次十字）', async () => {
   const h = await scene(['t_wall', 't_wall2', 't_wall3']);
   const xi = h.spawn(XI, { pos: [10, 6], routeIndex: 0, mods: { speedMul: 0 } });

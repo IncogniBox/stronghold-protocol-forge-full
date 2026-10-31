@@ -13,6 +13,19 @@ CHAR = re.compile(r'^char_[0-9]+_[a-z0-9]+$')
 MAX_OPERATORS = 256
 PICTURES = {'avatar': ('spritepack/ui_char_avatar_*.ab', ''),
             'portrait': ('spritepack/char_portrait_*.ab', '_1')}
+# skill icons: spritepack/skill_icons_N.ab holds one Sprite per skill, named `skill_icon_<skillId>` (the id is the
+# skill's own, e.g. skchr_blackd_2 — the same key data/assets.json's `skills` map uses)
+SKILL_ICON_GLOB = 'spritepack/skill_icons_*.ab'
+SKILL_ICON_PREFIX = 'skill_icon_'
+
+
+def skill_icon_names(skill_id):
+    """Sprite names an id can live under: its own, and the LINKAGE collab form where the table keeps `skchr_am_`
+    (颂乐人偶's `skchr_am_amoris_1` → `skill_icon_skchr_amoris_1`, the name data/assets.json's skillsById maps)."""
+    names = [skill_id]
+    if skill_id.startswith('skchr_am_'):
+        names.append('skchr_' + skill_id[len('skchr_am_'):])
+    return names
 
 
 def references(root):
@@ -115,3 +128,59 @@ def export(ab_root, out_root, groups, log, ids):
         except Exception as err:
             log(f'warn {cid}: {err}')
     return chars, count
+
+
+def export_skill_icons(ab_root, out_root, groups, log, skill_ids):
+    """Skill icons of the ids the game data names (skills[].iconId / skillId): one Sprite per id out of
+    spritepack/skill_icons_*.ab → skill/<id>.png, manifest group `skill`, and the manifest's `skills` map
+    (iconId → URL) plus `skillsById` (skillId → iconId), the two sections data/assets.json already uses.
+    Returns ({'skills': …, 'skillsById': …}, file count) — the caller merges them into data/local-assets.json, and
+    the served /data/assets.json picks them up through mergeLocalChars, so an id the official plan never listed still
+    has its icon."""
+    import aklz4  # noqa: F401 (the existing local-client decoder)
+    import UnityPy
+
+    wanted = {}
+    for sid in skill_ids:
+        if isinstance(sid, str) and sid:
+            for name in skill_icon_names(sid):
+                wanted.setdefault(SKILL_ICON_PREFIX + name, (sid, name))
+    out = {'skills': {}, 'skillsById': {}}
+    count = 0
+    if not wanted:
+        return out, count
+    for bundle in sorted(Path(ab_root).glob(SKILL_ICON_GLOB)):
+        if not wanted:
+            break
+        try:
+            env = UnityPy.load(str(bundle))
+        except Exception as err:
+            log(f'warn {bundle.name}: {err}')
+            continue
+        for obj in env.objects:
+            try:
+                if obj.type.name != 'Sprite':
+                    continue
+                sprite = obj.read()
+                sid = wanted.get(sprite.m_Name)
+                if sid is None:
+                    continue
+                icon_id = sid[1]
+                img = sprite.image
+                sub, name = 'skill', icon_id
+                target = Path(out_root) / sub / (name + '.png')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                img.save(target)
+                url = f'/assets/local/{sub}/{name}.png'
+                groups.setdefault(sub, {})[name] = {'path': url, 'w': img.width, 'h': img.height, 'kind': 'Sprite'}
+                out['skills'][icon_id] = url
+                out['skillsById'][sid[0]] = icon_id
+                del wanted[sprite.m_Name]
+                count += 1
+                log(f'{bundle.name}: {name} -> {sub}/{name}.png')
+            except Exception as err:
+                # One unreadable sprite must not hide later valid sprites in this bundle.
+                log(f'warn {bundle.name} sprite: {err}')
+    for sid in sorted({v[0] for v in wanted.values()} - set(out['skillsById'])):
+        log(f'skip (not found) skill icon {sid}')
+    return out, count

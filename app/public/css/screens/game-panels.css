@@ -22,6 +22,7 @@
 .uthumb--xs { --ut: .34rem; } .uthumb--sm { --ut: .54rem; } .uthumb--lg { --ut: 1.1rem; }
 .uthumb--t1 { --tc: var(--tier-1); } .uthumb--t2 { --tc: var(--tier-2); } .uthumb--t3 { --tc: var(--tier-3); }
 .uthumb--t4 { --tc: var(--tier-4); } .uthumb--t5 { --tc: var(--tier-5); } .uthumb--t6 { --tc: var(--tier-6); }
+.uthumb--t7 { --tc: var(--tier-7); }
 .uthumb__art {
   position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center;
   background: linear-gradient(160deg, #1a201d, #111513); background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 30%, #1a201d), #111513);

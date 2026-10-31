@@ -1,0 +1,107 @@
+{
+  "recon_boss_r20_bsnake": {
+    "bossId": "recon_boss_r20_bsnake",
+    "enemyKey": "enemy_ws_recon_bsnake",
+    "name": "“不死的黑蛇”·重构",
+    "sortId": 11,
+    "hidden": false,
+    "escortsByTemplate": {},
+    "parts": []
+  },
+  "recon_boss_r20_skzjkl": {
+    "bossId": "recon_boss_r20_skzjkl",
+    "enemyKey": "enemy_ws_recon_skzjkl",
+    "name": "奎隆，摩诃萨埵权化·重构",
+    "sortId": 12,
+    "hidden": false,
+    "escortsByTemplate": {},
+    "parts": []
+  },
+  "recon_boss_r20_syskad": {
+    "bossId": "recon_boss_r20_syskad",
+    "enemyKey": "enemy_ws_recon_syskad",
+    "name": "伊莎玛拉，腐化之心·重构",
+    "sortId": 13,
+    "hidden": false,
+    "escortsByTemplate": {},
+    "parts": []
+  },
+  "recon_boss_r20_shchmr": {
+    "bossId": "recon_boss_r20_shchmr",
+    "enemyKey": "enemy_ws_recon_shchmr",
+    "name": "玻利瓦尔，症结之核·重构",
+    "sortId": 14,
+    "hidden": false,
+    "escortsByTemplate": {},
+    "parts": []
+  },
+  "recon_boss_r20_dycyue": {
+    "bossId": "recon_boss_r20_dycyue",
+    "enemyKey": "enemy_ws_recon_dycyue",
+    "name": "朔壳·重构",
+    "sortId": 15,
+    "hidden": false,
+    "escortsByTemplate": {},
+    "parts": []
+  },
+  "recon_boss_r21_csdoll": {
+    "bossId": "recon_boss_r21_csdoll",
+    "enemyKey": "enemy_ws_recon_csdoll",
+    "name": "伤心的大锁·重构",
+    "sortId": 16,
+    "hidden": false,
+    "escortsByTemplate": {},
+    "parts": []
+  },
+  "recon_boss_r21_skzamy": {
+    "bossId": "recon_boss_r21_skzamy",
+    "enemyKey": "enemy_ws_recon_skzamy",
+    "name": "“阿米娅”，炉芯终曲·重构",
+    "sortId": 17,
+    "hidden": false,
+    "escortsByTemplate": {},
+    "parts": []
+  },
+  "recon_boss_r21_ama_group": {
+    "bossId": "recon_boss_r21_ama_group",
+    "enemyKey": "enemy_ws_recon_muama",
+    "name": "AMa-10·重构",
+    "sortId": 18,
+    "hidden": false,
+    "escortsByTemplate": {
+      "recon_r21": [
+        { "key": "enemy_ws_recon_mutwin", "slot": null, "count": 1 },
+        { "key": "enemy_ws_recon_musnake", "slot": null, "count": 1 }
+      ]
+    },
+    "parts": ["enemy_ws_recon_mutwin", "enemy_ws_recon_musnake"]
+  },
+  "recon_boss_r21_sui_group": {
+    "bossId": "recon_boss_r21_sui_group",
+    "enemyKey": "enemy_ws_recon_suisho",
+    "name": "岁·重构",
+    "sortId": 19,
+    "hidden": false,
+    "escortsByTemplate": {
+      "recon_r21": [
+        { "key": "enemy_ws_recon_suizzh", "slot": null, "count": 1 },
+        { "key": "enemy_ws_recon_suiyzh", "slot": null, "count": 1 },
+        { "key": "enemy_ws_recon_suiwei", "slot": null, "count": 1 }
+      ]
+    },
+    "parts": ["enemy_ws_recon_suizzh", "enemy_ws_recon_suiyzh", "enemy_ws_recon_suiwei"]
+  },
+  "recon_boss_r21_shp_group": {
+    "bossId": "recon_boss_r21_shp_group",
+    "enemyKey": "enemy_ws_recon_shophm",
+    "name": "洛伦茨，扰动之谬·重构",
+    "sortId": 20,
+    "hidden": false,
+    "escortsByTemplate": {
+      "recon_r21": [
+        { "key": "enemy_ws_recon_shorbb", "slot": null, "count": 1 }
+      ]
+    },
+    "parts": ["enemy_ws_recon_shorbb"]
+  }
+}

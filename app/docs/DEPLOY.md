@@ -65,6 +65,26 @@ set "SP_MAX_SEATS=40" && npm start         # cmd
 * 常驻服务要在各自的环境里加这一条：NSSM 的服务加进 `AppEnvironmentExtra`（第 2 节），systemd 加一行
   `Environment=SP_MAX_SEATS=40`（第 4 节）；Docker 用 `-e SP_MAX_SEATS=40`。
 
+#### 把重构模拟对公网开放：`SP_RECON_PUBLIC=1`
+
+「重构模拟」（`room.create { mode:'recon' }`）本来是本地实验模式：只有回环 / 私网会话（`session.local`）能建房，
+`welcome.devAllowed` 也只发给这种会话，所以公网玩家的界面上根本没有那个入口。要在线上开放、收玩家反馈，就给
+这台服务器加一条环境变量 ——
+
+```ini
+# systemd（与 SP_MAX_SEATS 同一条写法）
+Environment=SP_RECON_PUBLIC=1
+```
+
+```powershell
+$env:SP_RECON_PUBLIC = '1'; npm start      # 本机试玩
+```
+
+* 效果：任何会话都能 `room.create { mode:'recon', difficulty:'ABYSS' }`，`welcome` 多一格 `reconAllowed: true`，
+  客户端据此画出大厅入口。**不设 / 写错 ⇒ 关闭**，`welcome` 字段集合一个字都不多。
+* 「全量模拟」（`room.create.dev`）**不受它影响**：那一条仍只认本地端会话。
+* 改完要重启服务端；玩家侧需要刷新一次页面才拿到新的 `welcome`。
+
 #### 国内镜像下载
 
 Setup 默认使用「GitHub 原始源 → jsDelivr」，不查询公网 IP，也不请求 gh-proxy.com。GitHub 下载失败时会提示如何手动开启镜像；仅添加提示，不自动切换到第三方代理。

@@ -878,7 +878,13 @@ export class UnitView {
     // `owner`（换装 / 皮肤层那一步）：**这一枚棋子是谁的**。对局里的单位只带 `ownerId`，而按单位的模型要查
     // 「他选过哪套时装」得先认出他是谁 —— `assets.js` 的 `spineEntry` 把这份选择接在清单之前（`opts.owner`）。
     // 敌人 / 中立单位是 `null`（归属未知 ⇒ **不套用任何人的时装**），绝不能传 `undefined`（那个值的意思是「我自己」）。
-    return a && a.spineEntry && id ? a.spineEntry(id, { back, owner: this.info.ownerId ?? null }) || null : null;
+    // `skin`（docs/SKINS.md：`room.skins` → `UnitInfo.skin`）：服务端**已经**按归属算好「这位玩家给这个干员选的那套」
+    // （`skinOf` 还会按「显示其他玩家的皮肤」把它清掉）并随每个单位下发 —— 不传给清单解析器的话，模型永远只有
+    // `appearanceSpineFor`（`room.appearance` 那套）会被看，而 `room.skins` 选中的时装只在头像上生效：换装之后
+    // 其他人（以及自己的对局单位）看起来还是默认模型（业主 2026-10-31）。
+    return a && a.spineEntry && id
+      ? a.spineEntry(id, { back, owner: this.info.ownerId ?? null, ...(this.info.skin ? { skin: this.info.skin } : {}) }) || null
+      : null;
   }
 
   /** @param {boolean} [retry] load again even after a remembered failure (assets.js acquire `{ retry }`) */
@@ -1312,7 +1318,7 @@ export class UnitView {
     // an appearance may ship its own Front/Back pair, so both questions are asked of the skin, not the operator
     // (docs/SKINS.md): hasBackSpine falls back to the operator's own Back when the skin has none
     if (this.isEnemy || this.dir !== 'UP' || !id || !a || typeof a.hasBack !== 'function' || !a.hasBack(id, this.info.skin)) return false;
-    return this.alive || dieClipDur(typeof a.spineEntry === 'function' ? a.spineEntry(id, { back: true, owner: this.info.ownerId ?? null }) : null) > 0;
+    return this.alive || dieClipDur(typeof a.spineEntry === 'function' ? a.spineEntry(id, { back: true, owner: this.info.ownerId ?? null, ...(this.info.skin ? { skin: this.info.skin } : {}) }) : null) > 0;
   }
 
   /**
@@ -1545,7 +1551,7 @@ export class UnitView {
   _fallDur() {
     const a = this.ctx.assets;
     const id = this.info.spine || this.info.defId;
-    return a && typeof a.spineEntry === 'function' && id ? dieClipDur(a.spineEntry(id, { back: this._wantsBack(), owner: this.info.ownerId ?? null })) : 0;
+    return a && typeof a.spineEntry === 'function' && id ? dieClipDur(a.spineEntry(id, { back: this._wantsBack(), owner: this.info.ownerId ?? null, ...(this.info.skin ? { skin: this.info.skin } : {}) })) : 0;
   }
 
   /** Standing again (a redeploy, a revive): an operator facing UP gets its Back model back (this frame's update). */

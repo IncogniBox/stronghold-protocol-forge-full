@@ -256,7 +256,20 @@ describe('game.js wiring', () => {
   });
 });
 
-// ---- the zoom itself: the deploy fold gets the same bigger board as a hand-made 收起 (phone viewport) ----------------
+// ---- the setting is reachable in the 设置界面 (业主 2026-10-31「在设置中增加一个选项」) -----------------------------
+
+describe('the 设置界面 exposes 部署时收起商店', () => {
+  const row = /<\$\{Toggle\} label=\$\{t\('部署时收起商店'\)\} micro="FOLD SHOP ON DEPLOY" value=\$\{s\.prepDeployFold !== false\} onChange=\$\{\(v\) => updateSettings\(\{ prepDeployFold: v \}\)\} \/>/;
+  test('设置界面 renders a Toggle bound to prepDeployFold (default on, same row style as the other switches)', () => {
+    assert.match(read('public/js/ui/settings.js'), row);
+  });
+
+  test('the default and the sanitizer keep the key (a profile without it stays folded)', () => {
+    const s = read('public/js/ui/gameLogic/settings.js');
+    assert.match(s, /prepDeployFold: true/);
+    assert.match(s, /prepDeployFold: typeof r\.prepDeployFold === 'boolean' \? r\.prepDeployFold : DEFAULT_SETTINGS\.prepDeployFold/);
+  });
+});
 
 function withDom({ rem }, fn) {
   const g = globalThis;

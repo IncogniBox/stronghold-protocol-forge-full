@@ -51,7 +51,8 @@ const ASSIST_OPTS = Object.freeze([
   { id: 'recon_assist_data', name: N_('数据重构'), desc: N_('场上干员的基础攻击力、基础防御力、基础生命上限提升各+25%，法术抗性+25点。') },
 ]);
 /**
- * 熔芯负载的选项表（全局减益，单选一项）：与 ASSIST_OPTS 同一条纪律 —— id 即接口，文案逐字照抄业主给的数值。
+ * 熔芯负载的选项表（全局减益）。**业主 2026-10-30 改规则**：交上去的是「要**排除**的那一条」，另外两条同时生效
+ * （从前是单选一条生效）。id 即接口，文案逐字照抄业主给的数值（三条的说明就是它们生效时的效果）。
  */
 const LOAD_OPTS = Object.freeze([
   { id: 'recon_load_bond', name: N_('盟约负载'), desc: N_('已激活层数最高的核心盟约、附加盟约、故事集盟约每层使敌人的生命上限提高0.1%。') },
@@ -59,13 +60,20 @@ const LOAD_OPTS = Object.freeze([
   { id: 'recon_load_data', name: N_('数据负载'), desc: N_('敌人的基础攻击力、基础防御力、基础生命上限各+25%，法术抗性+25点。') },
 ]);
 
+/** 三条负载里**没有被排除**的那两条（`load` 不是三条之一时返回空 —— 那等于「不指定」，一条都不生效）。 */
+function activeLoadOpts(load) {
+  if (!load || !LOAD_OPTS.some((o) => o.id === load)) return [];
+  return LOAD_OPTS.filter((o) => o.id !== load);
+}
+
 const MAJOR_MAX = 2;
 const MINOR_MAX = 3;
 const STORY_MAX = 1;
 
 /**
- * 局内「策略效果」（screens/game.js 的 EFFECTS 列）读的行：这名玩家本局选定的**重构协助 / 熔芯负载**。
+ * 局内「策略效果」（screens/game.js 的 EFFECTS 列）读的行：这名玩家本局选定的**重构协助**与**生效中的熔芯负载**。
  * 名称与说明直接取自上面两张表（与预重构屏同一份 i18n），这里只按 id 反查，不复制文案。
+ * 熔芯负载交上去的是「要排除的那一条」，所以这一列给出的是另外**两条**（业主 2026-10-30）。
  * @param {Record<string, { assist?: string|null, load?: string|null }>|null} choices `pub.recon.choices`
  * @param {string|null} selfId 自己
  * @returns {{ id: string, key: 'assist'|'load', kind: string, name: string, desc: string }[]}
@@ -75,9 +83,8 @@ export function reconProtocolRows(choices, selfId) {
   if (!c) return [];
   const rows = [];
   const assist = ASSIST_OPTS.find((o) => o.id === c.assist);
-  const load = LOAD_OPTS.find((o) => o.id === c.load);
   if (assist) rows.push({ id: assist.id, key: 'assist', kind: t('重构协助'), name: t(assist.name), desc: t(assist.desc) });
-  if (load) rows.push({ id: load.id, key: 'load', kind: t('熔芯负载'), name: t(load.name), desc: t(load.desc) });
+  for (const o of activeLoadOpts(c.load)) rows.push({ id: o.id, key: 'load', kind: t('熔芯负载'), name: t(o.name), desc: t(o.desc) });
   return rows;
 }
 
@@ -132,14 +139,20 @@ function BondGroup({ assets, title, kind, micro, max, pool, picks, onToggle, tak
   </div>`;
 }
 
-/** 单选卡的一组（重构协助 / 熔芯负载）：选中的卡带一枚 ✓。 */
-function OptGroup({ title, micro, opts, pick, onPick }) {
+/**
+ * 单选卡的一组（重构协助 / 熔芯负载）。选中的卡打一枚标记：重构协助是 ✓（它生效），
+ * 熔芯负载是 ✕（选中 = 排除它，另外两条生效，业主 2026-10-30）。
+ * @param {{ title: string, micro: string, opts: any[], pick: string|null, onPick: (id: string) => void,
+ *   hint?: string|null, mark?: string }} props
+ */
+function OptGroup({ title, micro, opts, pick, onPick, hint = null, mark = 'check' }) {
   return html`<div class="prc-opts__group">
-    <div class="prc-opts__ghead"><${MicroLabel} tone="ice">${micro}<//><span>${title}</span></div>
+    <div class="prc-opts__ghead"><${MicroLabel} tone="ice">${micro}<//><span>${title}</span>
+      ${hint ? html`<span class="prc-opts__hint">${hint}</span>` : null}</div>
     <div class="prc-opts__list" role="radiogroup" aria-label=${title}>
       ${opts.map((o) => html`<button key=${o.id} type="button" role="radio" aria-checked=${pick === o.id ? 'true' : 'false'}
         class=${cx('prc-opt', pick === o.id && 'is-on')} onClick=${() => onPick(o.id)}>
-        <b class="prc-opt__name">${pick === o.id ? html`<${Icon} name="check" class="prc-opt__tick" />` : null}${t(o.name)}</b>
+        <b class="prc-opt__name">${pick === o.id ? html`<${Icon} name=${mark} class="prc-opt__tick" />` : null}${t(o.name)}</b>
         <span class="prc-opt__desc">${t(o.desc)}</span>
       </button>`)}
     </div>
@@ -204,6 +217,7 @@ function summaryRows(c, gd, storyVisible) {
   const optOf = (opts, id) => (id ? opts.find((x) => x.id === id) || null : null);
   const assistOpt = optOf(ASSIST_OPTS, o.assist);
   const loadOpt = optOf(LOAD_OPTS, o.load);
+  const activeLoads = activeLoadOpts(o.load).map((x) => t(x.name)).join(t('、'));
   const trials = RECON_TRIAL_ROUNDS
     .filter((r) => typeof o.bosses[r] === 'string' && o.bosses[r])
     .map((r) => choiceNames(RECON_TRIAL_BOSSES[r], o.bosses[r], gd.enemy));
@@ -215,7 +229,12 @@ function summaryRows(c, gd, storyVisible) {
   rows.push(
     { k: t('试炼首领'), v: trials.length ? trials.join(t('、')) : t('默认随机') },
     { k: t('重构协助'), v: assistOpt ? t(assistOpt.name) : t('未选择'), desc: assistOpt ? t(assistOpt.desc) : null },
-    { k: t('熔芯负载'), v: loadOpt ? t(loadOpt.name) : t('未选择'), desc: loadOpt ? t(loadOpt.desc) : null },
+    {
+      // 熔芯负载交上去的是「被排除的那一条」：值写排除的是谁，说明写另外两条都生效（业主 2026-10-30）
+      k: t('熔芯负载'),
+      v: loadOpt ? t('排除 {name}', { name: t(loadOpt.name) }) : t('未选择'),
+      desc: loadOpt ? t('生效：{names}', { names: activeLoads }) : null,
+    },
     {
       k: t('自主禁用'),
       v: o.ban ? (gd.bond(o.ban)?.name || o.ban) : t('无'),
@@ -232,11 +251,13 @@ function Summary({ rows }) {
   </dl>`;
 }
 
-/** 左侧队友行的一行速览：`协助 数据重构 · 负载 装备负载 · 禁用 炎`（没选的写「不指定」）。 */
+/** 左侧队友行的一行速览：`协助 数据重构 · 负载 排除装备负载 · 禁用 炎`（没选的写「不指定」）。 */
 function briefOf(c, gd) {
   const o = normalizeChoice(c);
   const nameOf = (opts, id) => t((id && opts.find((x) => x.id === id)?.name) || '不指定');
-  const head = `${t('协助')} ${nameOf(ASSIST_OPTS, o.assist)} · ${t('负载')} ${nameOf(LOAD_OPTS, o.load)}`;
+  const loadOpt = o.load ? LOAD_OPTS.find((x) => x.id === o.load) || null : null;
+  const loadName = loadOpt ? t('排除 {name}', { name: t(loadOpt.name) }) : t('不指定');
+  const head = `${t('协助')} ${nameOf(ASSIST_OPTS, o.assist)} · ${t('负载')} ${loadName}`;
   return o.ban ? `${head} · ${t('禁用')} ${gd?.bond(o.ban)?.name || o.ban}` : head;
 }
 
@@ -265,6 +286,7 @@ function OverviewColumn({ p, choice, gd, self, storyVisible, continued, index })
   ];
   const assist = ASSIST_OPTS.find((o) => o.id === c.assist) || null;
   const load = LOAD_OPTS.find((o) => o.id === c.load) || null;
+  const activeLoads = activeLoadOpts(c.load).map((x) => t(x.name)).join(t('、'));
   return html`<article class=${cx('prc-ov', self && 'is-self')} style=${`--i:${index}`} data-player=${p.playerId}>
     <header class="prc-ov__head">
       <b class="prc-ov__name">${p.name || t('博士')}${p.isBot ? html`<span class="prc-p__ai">AI</span>` : null}</b>
@@ -307,10 +329,12 @@ function OverviewColumn({ p, choice, gd, self, storyVisible, continued, index })
     <div class="prc-ov__sec">
       <h4>${t('重构走向')}</h4>
       <div class="prc-ov__picks">
-        ${[[t('协助'), assist], [t('负载'), load]].map(([label, opt]) => html`<div key=${label} class=${cx('prc-ov__pick', !opt && 'is-empty')}>
+        ${[[t('协助'), assist && { name: t(assist.name), desc: t(assist.desc) }],
+          [t('负载'), load && { name: t('排除 {name}', { name: t(load.name) }), desc: t('生效：{names}', { names: activeLoads }) }]]
+          .map(([label, pick]) => html`<div key=${label} class=${cx('prc-ov__pick', !pick && 'is-empty')}>
           <span class="prc-ov__plabel">${label}</span>
-          <b class="prc-ov__pname">${opt ? t(opt.name) : t('未选择')}</b>
-          ${opt ? html`<span class="prc-ov__pdesc">${t(opt.desc)}</span>` : null}
+          <b class="prc-ov__pname">${pick ? pick.name : t('未选择')}</b>
+          ${pick ? html`<span class="prc-ov__pdesc">${pick.desc}</span>` : null}
         </div>`)}
       </div>
     </div>`}
@@ -483,9 +507,10 @@ export function PreReconScreen() {
 
         <div class="prc-block brackets">
           <h3 class="brief-h"><span>${t('重构走向')}</span><${MicroLabel} tone="ice">RECON PROTOCOL<//></h3>
-          <p class="prc-block__note">${t('重构协助（全局增益）与熔芯负载（全局减益）各选一项，提交后本局生效。')}</p>
+          <p class="prc-block__note">${t('重构协助（全局增益）三选一，选中的一项生效；熔芯负载（全局减益）三选一，选中的一项被排除，其余两项同时生效。提交后本局生效。')}</p>
           <${OptGroup} title=${t('重构协助')} micro="ASSIST" opts=${ASSIST_OPTS} pick=${assist} onPick=${setAssist} />
-          <${OptGroup} title=${t('熔芯负载')} micro="LOAD" opts=${LOAD_OPTS} pick=${load} onPick=${setLoad} />
+          <${OptGroup} title=${t('熔芯负载')} micro="LOAD" opts=${LOAD_OPTS} pick=${load} onPick=${setLoad}
+            hint=${t('选中的一项排除')} mark="close" />
         </div>
       </section>
 

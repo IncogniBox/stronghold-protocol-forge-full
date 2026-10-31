@@ -301,6 +301,9 @@
 .tier--lg { --tier-h: .38rem; }
 .tier--golden { --tc: var(--gold); }
 .tier--golden::before { background: #3b2e05; }
+/* 7 阶（业主 2026-10-30）：官方没有这张精灵，阶级数字固定红色（写在 golden 之后，7 阶的精锐版也是红字） */
+.tier--7 { --tc: var(--tier-7); }
+.tier--7::before { background: #2d1212; }
 .tier--img { background: none; clip-path: none; }
 .tier--img::before { content: none; }
 .tier--img img { width: 100%; height: 100%; display: block; object-fit: contain; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .8)); }

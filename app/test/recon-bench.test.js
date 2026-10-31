@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { GEO } from '../shared/constants.js';
 import { layoutOf, benchOf, benchTileOf, benchBottomRow, bossAreaLayout, OFFICIAL_LAYOUT } from '../shared/layout.js';
+import { boardGeo } from '../public/js/render/drag.js';
+import { prepFieldOf } from '../public/js/render/app/view.js';
 
 const STAGE = JSON.parse(fs.readFileSync(new URL('../workshop/mode-recon/stage-specs/my_map.json', import.meta.url), 'utf8'));
 const L = layoutOf(STAGE);
@@ -92,5 +94,47 @@ describe('重构战场 my_map：整备区 16 + 临时 8（按地图格子）', (
       hand: { rows: [GEO.HAND_ROW], c0: 0, cols: GEO.HAND_SIZE, size: GEO.HAND_SIZE },
       temp: { row: GEO.TEMP_ROW, c0: GEO.TEMP_C0, size: GEO.TEMP_SIZE },
     });
+  });
+});
+
+describe('boss 回合的休整期读 boss 半场的整备区（不是普通带 / 隐式 10+5）', () => {
+  const geoShape = (g) => ({
+    hand: { rows: g.HAND_ROWS, c0: g.HAND_C0, cols: g.HAND_COLS, size: g.HAND_SIZE },
+    temp: { row: g.TEMP_ROW, c0: g.TEMP_C0, size: g.TEMP_SIZE },
+    field: g.FIELD,
+  });
+
+  test('第 1 块 boss 场地（左右两半）：两人的棋盘几何都是 boss 半场，16 + 8 格', () => {
+    const board = { r0: GEO.FIELD.r1 - 3, r1: GEO.FIELD.r1, c0: GEO.FIELD.c0, c1: GEO.FIELD.c0 + 8 };
+    for (const [side, seat, field] of [['L', 0, 'bossL'], ['R', 1, 'bossR']]) {
+      assert.equal(prepFieldOf('bossPrep', { side }, L), field, side);
+      assert.deepEqual(geoShape(boardGeo(L, prepFieldOf('bossPrep', { side }, L), 0, seat)), {
+        hand: { rows: [5, 6], c0: 2, cols: 8, size: 16 },
+        temp: { row: 4, c0: 2, size: 8 },
+        field: board,
+      }, side);
+    }
+  });
+
+  test('第 2… 块 boss 场地：相机带的是这位棋手自己的布局，整备区挂在它的 bossL', () => {
+    for (const [area, seat, rows] of [[1, 0, [1, 2]], [1, 1, [5, 6]], [3, 0, [3, 4]]]) {
+      const lay = bossAreaLayout(L, area, seat);
+      const g = boardGeo(lay, prepFieldOf('bossPrep', { side: 'L', area, seat }, lay), area, seat);
+      assert.deepEqual(g.HAND_ROWS, rows, `area ${area + 1} seat ${seat}`);
+      assert.deepEqual(shape(benchOf(lay, 'bossL')), shape({
+        hand: { rows: g.HAND_ROWS, c0: g.HAND_C0, cols: g.HAND_COLS, size: g.HAND_SIZE },
+        temp: { row: g.TEMP_ROW, c0: g.TEMP_C0, size: g.TEMP_SIZE },
+      }), '同一个棋手的整备区（画出来的格子就是他自己的那 16 + 8 格）');
+    }
+  });
+
+  test('普通休整期仍是普通带（左右两半各看自己那半），官方图的 boss 休整期仍是 10 / 5', () => {
+    assert.equal(prepFieldOf('prep', { side: 'L' }, L), 'normalL');
+    assert.equal(prepFieldOf('prep', { side: 'R' }, L), 'normalR');
+    assert.deepEqual(geoShape(boardGeo(OFFICIAL_LAYOUT, prepFieldOf('bossPrep', { side: 'L' }), 0, 0)), {
+      hand: { rows: [GEO.HAND_ROW], c0: 0, cols: GEO.HAND_SIZE, size: GEO.HAND_SIZE },
+      temp: { row: GEO.TEMP_ROW, c0: GEO.TEMP_C0, size: GEO.TEMP_SIZE },
+      field: { r0: GEO.FIELD.r1 - 3, r1: GEO.FIELD.r1, c0: GEO.FIELD.c0, c1: GEO.FIELD.c0 + 8 },
+    }, '官方 19×21 逐格不变');
   });
 });

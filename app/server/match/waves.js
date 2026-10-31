@@ -38,6 +38,8 @@
 import { createRng, deriveSeed } from '../sim/rng.js';
 import { PLUGIN_ACTION_UNITS } from '../../shared/plugins/limits.js';
 import { OFFICIAL_LAYOUT, layoutOf, bossAreaBattleRect } from '../../shared/layout.js';
+// 「自缚不走路」的巨型首领（萨米的意志 / 阿利斯泰尔 / 昆图斯 / 胄 / 管）：引擎内容层声明的那一份（见 bossStandsStill）
+import { SELF_BOUND } from '../sim/content/bosses.js';
 
 const ACLOON = 'enemy_9012_acloon';
 const DEFAULT_PLACEHOLDERS = Object.freeze({
@@ -274,9 +276,10 @@ export function setupMatchWaves(gd, rng) {
   const types = gd.factions.types && typeof gd.factions.types === 'object' ? gd.factions.types : {};
   const n = Number.isInteger(gen(gd).specialEnemyNum) ? gen(gd).specialEnemyNum : 3;
   const random = Object.values(types).filter((t) => t && t.involveRandom).map((t) => t.type).sort();
-  // 模式级必选类型（重构模拟的 DIMO）：只有「在随机池里、且本局数据里真的可用」才强制。
+  // 模式级必选类型（重构模拟的 DIMO）：本局数据里真的可用，且「在随机池里、或标了 reconOnly（只出现在重构模拟）」才强制。
+  // DIMO 的 involveRandom 是 false（reconOnly），所以它不在 random 里，官方模式也永远不会抽到它。
   const fs = factionSetup(gd);
-  const forced = (Array.isArray(fs && fs.forceTypes) ? fs.forceTypes : []).filter((t) => random.includes(t) && typeUsable(gd, t));
+  const forced = (Array.isArray(fs && fs.forceTypes) ? fs.forceTypes : []).filter((t) => typeUsable(gd, t) && (random.includes(t) || types[t]?.reconOnly === true));
   const shuffled = random.filter((t) => !forced.includes(t));
   rng.shuffle(shuffled);
   const chosen = [...forced, ...shuffled].slice(0, Math.min(n, random.length));
@@ -290,7 +293,7 @@ export function setupMatchWaves(gd, rng) {
   // the caller draws next from `rng` are unchanged)
   const srng = scheduleRng(rng);
   const typeSlots = makeTypeSchedule(gd, srng, chosen);
-  // 涤墨：只有重构模拟（带 factionSetup）才用 dimoPick；官方模式里 DIMO 只是一个普通随机类型，逐字节不变。
+  // 涤墨：只有重构模拟（带 factionSetup）才用 dimoPick；官方模式里 DIMO 是 reconOnly（involveRandom false），不进随机池。
   const reconDimo = !!factionSetup(gd);
   const picks = [null];
   for (let r = 1; r <= typeSlots.length; r++) {
@@ -718,6 +721,54 @@ export function stageBossRoutesOf(gd, stageId, areaIndex = 0) {
 }
 
 /**
+ * 这只首领是不是「站定不动」的 —— 不沿巡逻线走、站在场地中心，两位玩家同时打它这一只（业主 2026-10-30）。
+ * 三个来源：引擎内容层声明的自缚巨型首领（`SELF_BOUND`：萨米的意志 / 阿利斯泰尔 / 昆图斯 / 胄 ×2 / 管 ×2，
+ * 它们的「自缚」天赋本来就永不移动）、工坊记录里写了 `stillBoss: true` 的（源阶方 / 洛伦茨 / 岁四部位 /
+ * 伤心的大锁）、以及移速 0 的记录（终始）。
+ * @param {any} gd @param {string} key 首领的 enemyKey
+ */
+export function bossStandsStill(gd, key) {
+  if (typeof key !== 'string' || !key) return false;
+  if (SELF_BOUND.includes(key)) return true;
+  const e = gd && typeof gd.enemy === 'function' ? gd.enemy(key) : null;
+  if (!e) return false;
+  if (e.stillBoss === true) return true;
+  const speed = e.stats && Number(e.stats.moveSpeed);
+  return Number.isFinite(speed) ? speed <= 0 : false;
+}
+
+/**
+ * 双人 boss 场地上的第二只**会移动**的首领（业主 2026-10-30，参考原版的卢西恩）：地图给这块场地画了两条巡逻线
+ * ⇒ 每位玩家的半场各一只，各自沿自己那条线巡场。站定不动的首领（`bossStandsStill`）仍然只有一只。
+ * 已有出怪（含部位）占用的路线优先，第二只拿没人用的那条；没有空线就不补（仍是原来的一只）。
+ * @param {any} gd @param {object[]} spawns 一块场地的出怪表（引擎已经在 tag: 'boss' / 'part' 上写好 `route`）
+ * @param {object[]} arena `stageBossRoutesOf` 给出的这块场地的巡逻线
+ * @returns {object[]} 要追加的出怪（可能为空）
+ */
+export function mirrorMovingLeaders(gd, spawns, arena) {
+  if (!Array.isArray(spawns) || !Array.isArray(arena) || arena.length < 2) return [];
+  const used = new Set();
+  for (const s of spawns) {
+    const i = s && s.route ? arena.indexOf(s.route) : -1;
+    if (i >= 0) used.add(i);
+  }
+  const out = [];
+  for (const s of spawns) {
+    if (!s || s.tag !== 'boss') continue;
+    const key = s.enemyKey ?? s.key;
+    if (bossStandsStill(gd, key)) continue;
+    for (let i = 0; i < arena.length; i++) {
+      if (used.has(i)) continue;
+      used.add(i);
+      const route = arena[i];
+      // 两条巡逻线的起点是同一个站位（终点 = 起点），所以预览的坑位 / 起点不变，只有沿途的方向不同
+      out.push({ ...s, route, preview: previewInfo(gd, key, route, true, undefined) });
+    }
+  }
+  return out;
+}
+
+/**
  * 把模板里的一条路线**按比例**缩放进一块场地的矩形（`from` → `to`）：给自绘地图的 boss 场地的护送小怪用。
  * 模板路线是官方 19×21 板上画的，直接用在 45×60 图上会落在场地外；sim 的 `compileRoute` 会把越界坐标夹回边缘，
  * 敌人于是贴着边界蹭。缩放后起点 / 终点 / 检查点（含 steps 的 `p` / `pos`）都落在 `to` 里。
@@ -958,25 +1009,35 @@ export function withBounties(gd, round, wave, bounties, playerId, { side = null,
  * The client places the models in the gate's pen zone (≤ 50 shown, elites and bosses always) — except a leader: its
  * entry carries its spawn tile `start` ([row, col] on the boss field) and the Final Assault / Hidden Core prep shows it
  * standing there (render/app.js, community report #12; display only).
+ * @param {Array<object>} spawns
+ * @param {{ r0?: number, r1?: number } | null} [rect] 这张图自己的战斗矩形（只有**地图自己画了路线**时才传）：当
+ *   `start` 落在这块场地里时，按它在这块场地的**上半 / 下半**（纵向中线）分上下两批 —— 官方那条 `start + 6 / + 13`
+ *   的偏移只适配 19×21 的等待区锚点，在大战场上会把两批全判成 upper（业主 2026-10-31「怪物等待区分错了」）。
+ *   官方地图不传它，`gateOf` 的结果逐条不变。
  */
-export function previewOf(spawns) {
+export function previewOf(spawns, rect = null) {
   const out = [];
   let seq = 0;
+  const r0 = rect && Number.isFinite(rect.r0) ? rect.r0 : null;
+  const r1 = rect && Number.isFinite(rect.r1) ? rect.r1 : null;
+  const mid = r0 != null && r1 != null ? (r0 + r1) / 2 : null;
   for (const s of spawns || []) {
     if (!s || typeof s.enemyKey !== 'string' || s.tag === 'part') continue;
     const tag = s.tag === 'boss' ? 'boss' : s.tag === 'bounty' ? 'bounty' : null;
     const pv = s.preview && typeof s.preview === 'object' ? s.preview : {};
+    const start = Array.isArray(pv.start) && pv.start.length >= 2 ? pv.start : null;
+    const inRect = start && r0 != null && start[0] >= r0 && start[0] <= r1;
     out.push({
       enemyKey: s.enemyKey,
       count: Math.max(1, Math.trunc(Number(s.count) || 1)),
-      gate: pv.gate === 'upper' ? 'upper' : 'lower',
+      gate: inRect && mid != null ? (start[0] >= mid ? 'upper' : 'lower') : pv.gate === 'upper' ? 'upper' : 'lower',
       t: Math.max(0, Number(s.time) || 0),
       fly: !!pv.fly,
       elite: !!pv.elite || tag === 'boss',
       boss: tag === 'boss',
       source: tag === 'bounty' ? 'bounty' : 'wave',
       tag,
-      ...(tag === 'boss' && Array.isArray(pv.start) && pv.start.length >= 2 && pv.start.every(Number.isFinite) ? { start: [pv.start[0], pv.start[1]] } : {}),
+      ...(tag === 'boss' && start && start.every(Number.isFinite) ? { start: [start[0], start[1]] } : {}),
       _seq: seq++,
     });
   }

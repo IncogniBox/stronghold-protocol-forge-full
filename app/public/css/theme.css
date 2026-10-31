@@ -61,13 +61,15 @@
   --diff-hard: #e73118;
   --diff-abyss: #ff0024;
 
-  /* chess tier accents (I–VI), sampled from the official tier chips (img_chess_level_1..6) */
+  /* chess tier accents (I–VII), 1–6 sampled from the official tier chips (img_chess_level_1..6);
+     7 阶是业主 2026-10-30 新增的一档，官方没有对应精灵 ⇒ 自定红色（阶级数字用红色显示） */
   --tier-1: #a8a8a8;
   --tier-2: #f2f2f2;
   --tier-3: #34e6b2;
   --tier-4: #34b8d8;
   --tier-5: #f8bf00;
   --tier-6: #f88000;
+  --tier-7: #ff3b30;
 
   /* shop level tag colours (shopLevelDisplayDataDict) */
   --lv-1: #434343;

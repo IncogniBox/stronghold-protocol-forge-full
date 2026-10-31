@@ -126,11 +126,12 @@ describe('8: the detail card never covers the selected unit\'s underframe', () =
     const uf = { left: 47 + R * 7.1, right: 47 + R * 9, top: 150, bottom: 260 };
     assert.equal(panelSide(uf, z), 'left', 'viewport frame: looks clear');
     assert.equal(panelSide(uf, s), 'right', 'HUD frame: the card would cover it');
-    // bond popup candidates shift the same way
+    // bond popup candidates shift the same way; with no card it opens the official centred plate first (§15)
     const ufB = { left: 47 + R * 2.4, right: 47 + R * 3.4, top: 150, bottom: 260 };
-    assert.equal(bondPopupPlace(ufB, { width: hud.width, height: hud.height }, R, null), 'right');
-    assert.equal(bondPopupPlace(ufB, hud, R, null), 'right');
-    assert.equal(bondPopupPlace({ left: R * 2.35, right: R * 2.5, top: 150, bottom: 260 }, hud, R, null), 'left', 'left of the inset-shifted popup');
+    assert.equal(bondPopupPlace(ufB, { width: hud.width, height: hud.height }, R, null), 'center');
+    assert.equal(bondPopupPlace(ufB, hud, R, null), 'center');
+    // the centred plate covered as well: the next free side, its rect still measured in the HUD frame
+    assert.equal(bondPopupPlace({ left: 47 + R * 2.3, right: 47 + R * 9, top: 100, bottom: 300 }, hud, R, null), 'right', 'centre and left covered: right');
   });
 
   test('css: only the bond discs take the pointer over the board; the underframe undoes the HUD safe-area offset', async () => {
@@ -192,13 +193,17 @@ describe('8: the detail card never covers the selected unit\'s underframe', () =
 describe('8 / 9: the bond popup opened from the card keeps clear of the underframe (and of the card if it can)', () => {
   const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
   const rectOf = (place, W, H, R) => {
+    if (place === 'center') {
+      const left = (W - R * BPOP.centerWidth) / 2;
+      return { left, right: left + R * BPOP.centerWidth, top: R * BPOP.centerTop, bottom: R * BPOP.centerTop + R * BPOP.centerHeight };
+    }
     const left = place === 'left' ? R * BPOP.left : place === 'beside' ? R * BPOP.beside
       : place === 'besideR' ? W - R * (BPOP.besideR + BPOP.width) : W - R * (BPOP.right + BPOP.width);
     return { left, right: left + R * BPOP.width, top: R * BPOP.top, bottom: H - R * BPOP.bottomGap };
   };
-  test('next to the card first, then the free side, then over the card; no card → left', () => {
+  test('next to the card first, then the free side, then over the card; no card → the centred plate', () => {
     const vp = { width: 1920, height: 1080 };
-    assert.equal(bondPopupPlace(null, vp, 100, null), 'left');
+    assert.equal(bondPopupPlace(null, vp, 100, null), 'center');
     assert.equal(bondPopupPlace(null, vp, 100, 'left'), 'beside');
     assert.equal(bondPopupPlace(null, vp, 100, 'right'), 'besideR');
     // the playtest screenshot: a bench unit on the left, card docked right, underframe at x 560–840 — both the place
@@ -214,7 +219,7 @@ describe('8 / 9: the bond popup opened from the card keeps clear of the underfra
       const R = Math.max(40, Math.min(W / 19.2, H / 10.8, 240));
       const slots = panelSlots({ width: W, height: H }, R, { shopOpen: true });
       for (const card of ['left', 'right', null]) {
-        const all = card === 'left' ? ['beside', 'right', 'left'] : card === 'right' ? ['besideR', 'left', 'right'] : ['left', 'right'];
+        const all = card === 'left' ? ['beside', 'right', 'left'] : card === 'right' ? ['besideR', 'left', 'right'] : ['center', 'left', 'right'];
         for (let x = 0; x < W; x += 40) {
           const uf = { left: x, right: x + R * 2.2, top: H * 0.4, bottom: H * 0.6 };
           const place = bondPopupPlace(uf, { width: W, height: H }, R, card);

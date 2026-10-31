@@ -88,7 +88,8 @@ export function setOwned(notOwned, chessId, owned = !isOwned(notOwned, chessId))
  */
 export function ownershipRoster(list) {
   return (Array.isArray(list) ? list : [])
-    .filter((c) => isDroppableChess(c) && c.visible !== false && !c.isHidden)
+    // 重构模拟的 `recon_*` 记录不是普通商店干员（它们只在重构对局里出场，见 ui/loadoutModel.js rosterWithRecon）
+    .filter((c) => isDroppableChess(c) && c.visible !== false && !c.isHidden && !String(c.chessId).startsWith('recon_'))
     .sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0) || (a.shopSortId ?? 0) - (b.shopSortId ?? 0) || String(a.chessId).localeCompare(String(b.chessId)));
 }
 

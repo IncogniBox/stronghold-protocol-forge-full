@@ -87,13 +87,16 @@ export class PlayerBasics {
       }
     }
     const entries = {};
+    // 重构对局（业主 2026-10-30）：干员调配页存的是 `recon_<正式 id>`（服务端在合并数据里认得它），而这一局的棋子
+    // 用的是去掉前缀的正式 id —— 检查前按 `Match.reconLoadoutAlias` 换键；其它模式原样。
+    const reconAlias = this.m && this.m.reconLoadoutAlias;
     if (loadout && typeof loadout === 'object' && !Array.isArray(loadout)) {
       for (const [id, e] of Object.entries(loadout)) {
         if (!e || typeof e !== 'object') continue;
         const x = {};
         if (Number.isInteger(e.skill)) x.skill = e.skill;
         if (typeof e.module === 'string') x.module = e.module;
-        if (Object.keys(x).length) entries[id] = x;
+        if (Object.keys(x).length) entries[reconAlias && Object.hasOwn(reconAlias, id) ? reconAlias[id] : id] = x;
       }
     }
     const res = checkLoadout(entries, (id) => this.gd.chess(id));

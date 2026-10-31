@@ -1,0 +1,1326 @@
+/* Official page skins, ported from the UI package (2026-10-29 snapshot) — the sections not already shipped in
+   official-hud.css (which carries 8/10/11/16/19/20/24/25/28/29). Image URLs point at our /assets/official/ mirror of the
+   package's img/official tree; the package's 1280-video pixel (--p) is kept per section. Loaded last: it only overrides. */
+
+
+/* ===== official-pages.css lines 8-391 — 1/4/6/7 房间·确认本局信息·选择策略·协议启动 ===== */
+/* ---- 1. 独立模拟's room (room.js, .rs--solo) --------------------------------------------------------------------
+   The card itself is the four-seat room's (hub-official.css, round 4/5, now `.rs:not(.rs--big)`): bg_top_* strip,
+   host_top_tag, the ready fill, player_card_ready, card_deco_self, select_deco_down1/2. The recording never shows a solo
+   room, so the layout here is OURS, inferred: the card as tall as the four-seat room's (87–581), the briefing panel
+   beside it on info_bg (484 × 184, 1:1 at its top, its own dark below) between two info_frame brackets (10 × 108, 1:1,
+   at mid height) — info_bg / info_frame are candidates (the pack could not tie them to a page). */
+/* The room root carries the package's 1280-video pixel: §1 (the solo card) and §5 (the big 开始 / 开始搜寻 buttons) below
+   are all `calc(var(--p) * …)` measured on a 1280 × 720 frame. Without it on `.rs` every one of those declarations was
+   invalid, so the start button fell back to its text size and shrank to a sliver in the bottom-right corner. */
+.rs { --p: min(calc(100vw / 1280), calc(100vh / 720)); }
+/* 494 is the package's card (87–581 at 1280 × 720); a shorter window (the owner's 1272 × 705) leaves ~470 under the top
+   bar and the footer, so the height also caps at the column's own 100% instead of being clipped by `.rs-seats`. */
+.rs--solo .rseat { height: min(calc(var(--p) * 494), 100%); align-self: flex-start; }
+.rs--solo .rs-seats { align-items: flex-start; justify-content: center; }
+.rs--solo .solo-brief { position: relative; flex: none; max-width: none; align-self: flex-start; width: calc(var(--p) * 484); height: min(calc(var(--p) * 494), 100%);
+  padding: calc(var(--p) * 34) calc(var(--p) * 40); gap: calc(var(--p) * 12); border: 0; animation: none;
+  background: url("/assets/official/hub/ac/outer/info_bg.png") 0 0 / 100% calc(var(--p) * 184) no-repeat,
+    linear-gradient(rgba(9, 9, 9, .69), rgba(9, 9, 9, .69)) 0 calc(var(--p) * 184) / 100% 100% no-repeat; }
+.rs--solo .solo-brief::before, .rs--solo .solo-brief::after { content: ''; position: absolute; top: calc(50% - var(--p) * 54); width: calc(var(--p) * 10); height: calc(var(--p) * 108);
+  border: 0; background: url("/assets/official/hub/ac/outer/info_frame.png") 0 0 / 100% 100% no-repeat; pointer-events: none; inset-inline: auto; }
+.rs--solo .solo-brief::before { left: calc(var(--p) * -14); }
+.rs--solo .solo-brief::after { right: calc(var(--p) * -14); transform: scaleX(-1); }
+.rs--solo .solo-brief h2 { font-size: calc(var(--p) * 34); }
+.rs--solo .solo-brief p { font-size: calc(var(--p) * 18); }
+.rs--solo .solo-brief ul { gap: calc(var(--p) * 10); font-size: calc(var(--p) * 16); }
+
+/* ---- 4/6 确认本局信息 · 选择策略: the package's layout was measured off its own DOM (a 213 px leader column, bonds
+   from x 178 every 113, a fixed-width order list); our screens (briefing.js / bandDraft.js) keep the 0.3.x layout built
+   by different components, so these overrides could only break them (unscaled art, overlapping rows). The official
+   skin for these two pages stays OFF until they are rebuilt on the package's own structure. */
+
+/* ---- 7. 协议启动！ (ui/protocolBoot.js, styled by protocol-boot.css; the recording 7:43.6–7:47.0 at 0.2 s, 7:46 settled).
+   Round 6: the ground is the room's own dark backdrop (img_bkg_main's panels — PERSONEL CHECKED sits at the same place —
+   over img_screen_line_repeat), not the green radial; the teal wash only flashes at +1.2 s as before. Above the ship
+   bg_deco3 (the 4-square mark + STRONGHOLD PROTOCOL) and, on the right, bg_deco2 + bg_deco1; the cards carry
+   rhodes_island_mask as their faint landship and card_tick as ✓; under the title title_deco (its words are in the
+   sprite); 正在连接… larger at the bottom right. Positions read off 7:46 (one --px = one px of a 1920-wide frame). ---- */
+.pboot { --p: min(calc(100vw / 1280), calc(100vh / 720)); background: #040505; }
+/* the backdrop stays black under the ship (7:43.6–7:44.2) and comes up as it shrinks (7:44.4–7:44.8) */
+.pboot::before { content: ''; position: absolute; inset: 0; pointer-events: none; animation: pboot-in 400ms 800ms ease-out both; background:
+  url("/assets/official/hub/mc/img_bkg_main.png") calc(var(--p) * -114.2) calc(var(--p) * 34.5) / calc(var(--p) * 1501.7) calc(var(--p) * 668) no-repeat,
+  url("/assets/official/hub/mc/img_screen_line_repeat.png") 0 0 / calc(var(--p) * 128) repeat; }
+.pboot__stage { z-index: 1; }
+.pboot__mtn { opacity: .7; filter: saturate(.2) brightness(.8); }
+.pboot__logo { left: calc(700 * var(--px)); top: calc(282 * var(--px)); width: calc(200 * var(--px)); height: calc(64 * var(--px)); background: none; -webkit-mask: none; mask: none; opacity: .75; }
+.pboot__logo2 { left: calc(1298 * var(--px)); top: calc(282 * var(--px)); width: calc(26 * var(--px)); height: calc(26 * var(--px)); opacity: .7; }
+.pboot__logo2txt { left: calc(1330 * var(--px)); top: calc(289 * var(--px)); width: calc(160 * var(--px)); height: calc(16 * var(--px)); opacity: .7; }
+.pboot__ship { animation-name: pboot-ship6; }
+/* timing off the 0.2 s frames: huge and bright +0.2–0.8 s, ×1.4 at +1.0 s, home by +1.1 s; the panel is all there at
+   +1.2 s (7:44.8, cards still white; the wash from +1.1 s) — 100 ms earlier than round 5's estimate */
+@keyframes pboot-ship6 {
+  0% { transform: rotate(53deg) scale(4.4); opacity: 0; }
+  8% { opacity: 1; }
+  70% { transform: rotate(53deg) scale(3); }
+  90% { transform: rotate(53deg) scale(1.4); }
+  100% { transform: rotate(53deg) scale(1); opacity: .85; }
+}
+.pboot__ship { animation-duration: 1000ms; }
+.pboot__shipimg--hot { filter: brightness(1.7) saturate(1.3); animation-duration: 800ms, 320ms; }
+.pboot__scene { animation-delay: 1100ms; }
+.pboot::after { animation-delay: 1100ms; }
+.pboot__lines line { animation-delay: calc(1050ms + var(--i) * 60ms); }
+.pboot__node, .pboot__anchor { animation-delay: calc(1150ms + var(--i) * 60ms); }
+.pboot__card { animation-delay: calc(1100ms + var(--i) * 40ms); }
+.pboot__title { animation-delay: 1100ms; }
+.pboot__sub { animation-delay: 1100ms; }
+.pboot__conn { animation-delay: 1700ms; }
+.pboot__card { overflow: hidden; background: #33cfa8; }
+.pboot__card--r { background: #33cfa8; }
+.pboot__cardart { position: absolute; left: calc(40 * var(--px)); top: calc(-6 * var(--px)); width: calc(300 * var(--px)); height: calc(233 * var(--px)); background: #1f9a7d; opacity: .45;
+  -webkit-mask: none; mask: var(--src) center / 100% 100% no-repeat luminance; pointer-events: none; }
+.pboot__card--r .pboot__cardart { left: auto; right: calc(40 * var(--px)); }
+.pboot__txt, .pboot__face { position: relative; }
+.pboot__check { display: block; width: calc(26 * var(--px)); height: calc(26 * var(--px)); margin-top: calc(10 * var(--px)); background: none; }
+.pboot__title { font-size: calc(76 * var(--px)); top: calc(695 * var(--px)); color: #52eec4; }
+.pboot__sub { left: calc(784 * var(--px)); top: calc(832 * var(--px)); width: calc(352 * var(--px)); height: calc(40 * var(--px)); background: none; }
+.pboot__subimg { display: block; width: 100%; height: 100%; }
+.pboot__conn { right: calc(75 * var(--px)); top: calc(1000 * var(--px)); font-size: calc(30 * var(--px)); color: rgba(82, 238, 196, .85); }
+/* the ring: 520 across round (663, 287) in 7:46 (1280-wide) — smaller than round 5's 870 */
+.pboot__ring { left: calc(605 * var(--px)); top: calc(40 * var(--px)); width: calc(780 * var(--px)); height: calc(780 * var(--px)); opacity: .7; }
+.pboot__title { left: calc(24 * var(--px)); }
+/* the way out: the recording cuts the screen to black (7:47.0 / 7:51.5) rather than fading it over the board — the panel
+   and the backdrop go in 200 ms and the dark ground stays until screens/game.js unmounts it (BOOT_LEAVE_MS) */
+.pboot.is-leaving { animation: none; }
+.pboot.is-leaving .pboot__stage, .pboot.is-leaving::before, .pboot.is-leaving::after { animation: pboot-out 200ms ease-in forwards; }
+/* the contour map reads stronger in 7:46 / 7:50; a solo run's card sits on a line from cross to cross (7:50 — CSS line) */
+.pboot__terrain { opacity: .45; }
+.pboot--solo .pboot__stage::before { content: ''; position: absolute; left: calc(200 * var(--px)); right: calc(160 * var(--px)); top: calc(709 * var(--px)); height: calc(3 * var(--px));
+  background: rgba(63, 214, 180, .45); animation: pboot-in 200ms 1100ms both; }
+
+/* ===== official-pages.css lines 577-675 — 2/5 匹配搜寻·房间按钮 ===== */
+/* ---- 2. 匹配 / 搜寻 (ui/matchFlow.js SearchPanel / FoundPanel; screens/room.js, screens/lobby.js), the recording 6:05 搜寻中,
+   6:10 搜寻成功 (1280-wide px): banner_matching_doc 1:1 for the brand line, 搜寻中 on banner_matching_title_bg, the tags on
+   banner_matching_type_bg tinted by their colour, the scene 130 tall: the cactus strip (banner_matching_loading_scene_tile
+   ×0.7) and the wave (banner_matching_loading_line_tile 1:1) scrolling left at OUR speeds (6 s / 2.4 s a tile — the
+   recording's 0.5 s frames show the drift, not its rate), the little robot banner_matching_loading_head ×1.5 over
+   banner_matching_loading_text, banner_matching_loading_doc crosses; 停止搜寻 on btn_stop_bg 220 × 64 (its ✕ is in the
+   sprite). 搜寻成功: autochess_matching_success as the panel, line.png's strands tinted teal (mask), the face from
+   robo_head / robo_eyes / robo_hand (masks, tinted); `is-fail` (搜寻已停止 — OUR state, no such frame in the recording) on
+   autochess_matching_fail in grey. ---- */
+.mf-brand--art { display: block; height: auto; padding: 0; background: none; }
+.mf-brand__img { display: block; width: calc(312 * var(--p, .667px)); height: calc(33 * var(--p, .667px)); }
+.mf-search .mf-search__title { min-height: calc(82 * var(--p, .667px)); display: flex; align-items: center; justify-content: center;
+  background: url(/assets/official/hub/ac/outer/banner_matching_title_bg.png) center / calc(469 * var(--p, .667px)) calc(82 * var(--p, .667px)) no-repeat; }
+.mf-search .mf-tag { position: relative; isolation: isolate; background: none; border: 0; }
+.mf-search .mf-tag::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--tag, #5d6264);
+  -webkit-mask: url(/assets/official/hub/ac/outer/banner_matching_type_bg.png) 0 0 / 100% 100% no-repeat; mask: url(/assets/official/hub/ac/outer/banner_matching_type_bg.png) 0 0 / 100% 100% no-repeat; }
+.mf-scene { position: relative; width: 100%; height: calc(130 * var(--p, .667px)); overflow: hidden; }
+.mf-scene__land, .mf-scene__line { position: absolute; left: 0; right: 0; pointer-events: none;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); mask: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); }
+.mf-scene__line { top: calc(30 * var(--p, .667px)); height: calc(67 * var(--p, .667px)); opacity: .75;
+  background: url(/assets/official/hub/ac/outer/banner_matching_loading_line_tile.png) 0 0 / calc(191 * var(--p, .667px)) 100% repeat-x; animation: mf-tile-191 2.4s linear infinite; }
+.mf-scene__land { top: calc(26 * var(--p, .667px)); height: calc(70 * var(--p, .667px));
+  background: url(/assets/official/hub/ac/outer/banner_matching_loading_scene_tile.png) 0 0 / calc(350 * var(--p, .667px)) 100% repeat-x; animation: mf-tile-350 6s linear infinite; }
+@keyframes mf-tile-191 { to { background-position-x: calc(-191 * var(--p, .667px)); } }
+@keyframes mf-tile-350 { to { background-position-x: calc(-350 * var(--p, .667px)); } }
+.mf-scene__bot { position: absolute; left: 50%; top: calc(44 * var(--p, .667px)); display: flex; flex-direction: column; align-items: center; gap: calc(2 * var(--p, .667px)); transform: translateX(-50%); }
+.mf-scene__head { width: calc(60 * var(--p, .667px)); height: calc(48 * var(--p, .667px)); animation: mf-bot-hop 600ms steps(2, end) infinite; }
+@keyframes mf-bot-hop { 50% { transform: translateY(calc(-3 * var(--p, .667px))); } }
+.mf-scene__text { width: calc(112 * var(--p, .667px)); height: calc(36 * var(--p, .667px)); margin-top: calc(-10 * var(--p, .667px)); }
+.mf-scene__cross { position: absolute; width: calc(28 * var(--p, .667px)); height: calc(28 * var(--p, .667px)); background: url(/assets/official/hub/ac/outer/banner_matching_loading_doc.png) 0 0 / 100% 100% no-repeat; }
+.mf-scene__cross--tl { left: 8%; top: 0; } .mf-scene__cross--tr { right: 8%; top: 0; }
+.mf-scene__cross--bl { left: 8%; bottom: 0; } .mf-scene__cross--br { right: 8%; bottom: 0; }
+.mf-search .mf-stop { width: calc(220 * var(--p, .667px)); height: calc(64 * var(--p, .667px)); padding: 0 0 0 calc(56 * var(--p, .667px)); justify-content: flex-start; border: 0; border-radius: 0; box-shadow: none; clip-path: none;
+  background: url(/assets/official/hub/ac/outer/btn_stop_bg.png) 0 0 / 100% 100% no-repeat; font-size: calc(21 * var(--p, .667px)); color: #ffe1dc; }
+.mf-search .mf-stop__x { visibility: hidden; width: 0; margin: 0; }
+
+.mf-found--art { background: url(/assets/official/hub/ac/outer/autochess_matching_success.png) center top / 100% 100% no-repeat; }
+.mf-found--art.is-fail { background-image: url(/assets/official/hub/ac/outer/autochess_matching_fail.png); }
+.mf-found__strands { position: relative; width: calc(324 * var(--p, .667px)); height: calc(376 * var(--p, .667px)); margin: 0 auto; }
+.mf-found__line { position: absolute; inset: 0; background: #3be6ba;
+  -webkit-mask: url(/assets/official/hub/ac/outer/line.png) 0 0 / 100% 100% no-repeat; mask: url(/assets/official/hub/ac/outer/line.png) 0 0 / 100% 100% no-repeat;
+  animation: mf-strands 500ms ease-out backwards; }
+@keyframes mf-strands { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
+.mf-found__nodes { position: absolute; left: 12%; right: 12%; bottom: calc(-8 * var(--p, .667px)); display: flex; justify-content: space-around; }
+.mf-found__node { width: calc(10 * var(--p, .667px)); height: calc(10 * var(--p, .667px)); background: #3be6ba; box-shadow: 0 0 calc(6 * var(--p, .667px)) #3be6ba; }
+.mf-found--art .mf-found__face { position: relative; width: calc(75 * var(--p, .667px)); height: calc(76 * var(--p, .667px)); margin: calc(26 * var(--p, .667px)) auto 0; background: none; border: 0; }
+.mf-found__face > i { position: absolute; display: block; }
+.mf-found__head { inset: 0; background: #3be6ba; -webkit-mask: url(/assets/official/hub/ac/outer/robo_head.png) 0 0 / 100% 100% no-repeat; mask: url(/assets/official/hub/ac/outer/robo_head.png) 0 0 / 100% 100% no-repeat; }
+.mf-found__eye { left: calc(18 * var(--p, .667px)); top: calc(24 * var(--p, .667px)); width: calc(18 * var(--p, .667px)); height: calc(18 * var(--p, .667px)); background: #0b2a22;
+  -webkit-mask: url(/assets/official/hub/ac/outer/robo_eyes.png) 0 0 / 100% 100% no-repeat; mask: url(/assets/official/hub/ac/outer/robo_eyes.png) 0 0 / 100% 100% no-repeat; }
+.mf-found__wink { left: calc(44 * var(--p, .667px)); top: calc(32 * var(--p, .667px)); width: calc(14 * var(--p, .667px)); height: calc(4 * var(--p, .667px)); background: #0b2a22; }
+.mf-found__hand { right: calc(-14 * var(--p, .667px)); bottom: calc(-4 * var(--p, .667px)); width: calc(32 * var(--p, .667px)); height: calc(36 * var(--p, .667px)); background: #3be6ba;
+  -webkit-mask: url(/assets/official/hub/ac/outer/robo_hand.png) 0 0 / 100% 100% no-repeat; mask: url(/assets/official/hub/ac/outer/robo_hand.png) 0 0 / 100% 100% no-repeat; }
+.mf-found--art.is-fail .mf-found__line, .mf-found--art.is-fail .mf-found__node, .mf-found--art.is-fail .mf-found__head, .mf-found--art.is-fail .mf-found__hand { background: #9aa0a2; box-shadow: none; }
+.mf-found--art.is-fail .mf-found__title { color: #c9cdcf; }
+@media (prefers-reduced-motion: reduce) { .mf-scene__line, .mf-scene__land, .mf-scene__head, .mf-found__line { animation: none; } }
+.mf-search .mf-brand--art, .mf-found .mf-brand--art { opacity: .6; }
+.mf-search .mf-tag::before { background: var(--tag, #8a9093); opacity: .32; }
+.mf-search .mf-tag { color: color-mix(in srgb, var(--tag, #f0f2f2) 70%, #fff); }
+.mf-scene__head { width: calc(40 * var(--p, .667px)); height: calc(32 * var(--p, .667px)); }
+
+/* ---- 5 (+1). 多人房 / 单人房 右下角按钮 (screens/room.js .rs-foot__right; lobby.css .proto-start / .rs-go / .rs-search), the
+   recording 5:31 / 5:40 准备就绪, 5:45 / 5:55 / 6:00 开始搜寻, 6:20 停止搜寻, 6:25 取消准备 (1280-wide px): the big button is
+   btn_match_normal 320 × 72 1:1 with its right edge at 1282 and its top at 620; its icon left of the words —
+   btn_match_guest_certain (☑, 准备就绪), btn_match_host_normal (the 4-square mark, 开始搜寻); a ready guest's button is
+   btn_match_cancel (its ✕ is in the sprite); while searching 停止搜寻 sits on btn_stop_bg (ui/matchFlow.js, section 2).
+   OUR inferences (not in the recording): 开始模拟 takes the big slot with confirm_btn_icon_start — the recording's host
+   never starts with seats empty, this client lets the host start with AI at any time — and 开始搜寻 moves beside it as a
+   170 × 56 cut of the same sprite (its right end: the teal and the machinery, not stretched); a disabled button is
+   btn_match_grey with btn_match_host_grey. The drawn stripes (.proto-start__deco) are gone. ---- */
+.rs .rs-foot { padding-right: 0; }
+.rs .rs-foot__right { gap: calc(10 * var(--p)); margin-right: calc(-2 * var(--p)); align-items: flex-end; }
+.rs .rs-go.proto-start, .rs .rs-search { position: relative; flex: none; display: flex; align-items: center; border: 0; border-radius: 0; clip-path: none; box-shadow: none; overflow: visible;
+  background: url(/assets/official/hub/ac/outer/btn_match_normal.png) 0 0 / 100% 100% no-repeat; color: #0e2a22; font-weight: 900; filter: none; }
+.rs .rs-go.proto-start { width: calc(320 * var(--p)); height: calc(72 * var(--p)); margin-bottom: calc(14 * var(--p)); padding: 0 0 0 calc(56 * var(--p)); gap: calc(12 * var(--p)); }
+.rs .rs-go .proto-start__deco { display: none; }
+.rs .rs-go .proto-start__mark { flex: none; width: calc(48 * var(--p)); height: calc(40 * var(--p)); background: url(/assets/official/hub/ac/outer/confirm_btn_icon_start.png) center / contain no-repeat; }
+.rs .rs-go .proto-start__mark > * { display: none; }
+.rs .rs-go .proto-start__label { font-size: calc(30 * var(--p)); letter-spacing: .04em; color: #0e2a22; }
+.rs .rs-go__box { flex: none; width: calc(33 * var(--p)); height: calc(42 * var(--p)); border: 0; border-radius: 0; background: url(/assets/official/hub/ac/outer/btn_match_guest_certain.png) center / contain no-repeat; }
+.rs .rs-go__box .icon { display: none; }
+.rs .rs-go.is-ready { background-image: url(/assets/official/hub/ac/outer/btn_match_cancel.png); background-size: calc(317 * var(--p)) calc(70 * var(--p)); background-position: calc(1 * var(--p)) calc(1 * var(--p)); }
+.rs .rs-go.is-ready .rs-go__box { visibility: hidden; }
+.rs .rs-go.is-ready .proto-start__label { color: #1b1e1f; }
+.rs .rs-go:disabled, .rs .rs-search:disabled { background-image: url(/assets/official/hub/ac/outer/btn_match_grey.png); filter: none; opacity: 1; cursor: default; }
+.rs .rs-go:disabled .proto-start__label, .rs .rs-search:disabled { color: #3a3d3e; }
+.rs .rs-go:disabled .proto-start__mark { filter: grayscale(1) brightness(.5); }
+.rs .rs-go:hover:not(:disabled), .rs .rs-search:hover:not(:disabled) { filter: brightness(1.06); background-color: transparent; }
+.rs .rs-search { width: calc(170 * var(--p)); height: calc(56 * var(--p)); margin-bottom: calc(22 * var(--p)); padding: 0 0 0 calc(14 * var(--p)); gap: calc(8 * var(--p));
+  background-size: auto 100%; background-position: 100% 0; font-size: calc(22 * var(--p)); }
+.rs .rs-search::before { content: ''; flex: none; width: calc(37 * var(--p)); height: calc(33 * var(--p)); background: url(/assets/official/hub/ac/outer/btn_match_host_normal.png) center / contain no-repeat; }
+.rs .rs-search:disabled::before { background-image: url(/assets/official/hub/ac/outer/btn_match_host_grey.png); }
+.rs .rs-search > .icon { display: none; }
+/* room for the compact 开始搜寻: the centre block (hint + pill) moves 60 left of centre while it is shown */
+.rs .rs-foot:has(.rs-search) .rs-foot__center { transform: translateX(calc(-60 * var(--p))); }
+/* 1 + 5. the card's 已就绪 / 待命中 mark: the same ☑ sprite as the 准备就绪 button (btn_match_guest_certain 33 × 42, scaled to
+   the line — the recording 5:45 shows ☑ 已就绪 on the cards; 待命中 on the solo card is OUR use of it) */
+.rs:not(.rs--big) .rseat__box { width: calc(28 * var(--p)); height: calc(36 * var(--p)); border: 0; border-radius: 0; box-shadow: none; background: url(/assets/official/hub/ac/outer/btn_match_guest_certain.png) center / contain no-repeat; }
+.rs:not(.rs--big) .rseat__box .icon { display: none; }
+
+/* ===== official-pages.css lines 677-834 — 9 选择同盟方式 ===== */
+/* ---- 9. 选择同盟方式 (screens/lobby.js AllianceSelect, ui/matchFlow.js RadarScene / CreateArt / JoinArt), the recording 5:26
+   (1280-wide px; one --p = one px of that frame), the radar's motion off 5:22.5–5:30 at 0.25 s. Every sprite is from
+   [uc]autochessouter (img/official/hub/ac/ally/, 1:1 unless said) at the place found by correlating it with the recording
+   (the static layer from the median of eight frames, so the sweep drops out): bg_desc_left at 27, 89; img_desc_grid 28, 83;
+   img_center_circle 292, 259 (the radar's centre 418, 385); img_desc_line_01 / _02 at 33, 330 / 143, 264 and their mirrors
+   about x 416; bg_desc_02 at 85, 205 and 85, 419; img_desc_count_bg 541, 343; bg_desc_01 591, 468; img_desc_cross 117, 557;
+   img_desc_text_lower 357, 581. The sweep: img_pointer (its thick end outward, 324 long), img_pointer_desc on it,
+   img_scan_circle_light (white: an alpha mask over the teal, as the game tints it) trailing the pointer, the wake —
+   img_scan_circle_mask_2 as a luminance mask over teal, ×1.72 (440 across: the recording's wake reaches r 220 — OUR
+   scale), highlight_point blips over highlight_point_back_grid (white, masked in orange). The radar is anchored to the
+   cards' column (its centre 300 px left of them, as at 5:26) and clipped there.
+   The cards: 497 × 228 at 718, 128 and 497 × 267 at 718, 405, a 2 px grey frame on black; the buttons
+   room_select_create_btn_bg_down / room_select_join_btn_bg_down 537 wide 1:1 (their glow outside), squeezed to 0.81 / 0.91
+   of their height (the recording's bars are 52 / 58 tall, the sprites' body 64 — OUR fit, not slice data). Inside: see
+   ui/matchFlow.js. 模拟邀约 on btn_invite (its squares are in the sprite); 选择同盟方式 with room_select_title_icon after it.
+   Our extras kept off the cards: 搜寻队友 beside 入门协议, the recent keys under the join card, the difficulty note under
+   the create card; the title's 同盟模拟 line (not in the recording) is hidden. ---- */
+.lobby-hub--official .ally .proto-title { margin-right: calc(14 * var(--p)); }
+.lobby-hub--official .ally .proto-title h2 { display: flex; align-items: center; gap: calc(10 * var(--p)); font-size: calc(27 * var(--p)); font-weight: 500; letter-spacing: .04em; }
+.lobby-hub--official .ally .proto-title h2::after { content: ''; flex: none; width: calc(38 * var(--p)); height: calc(33 * var(--p));
+  background: url(/assets/official/hub/ac/ally/room_select_title_icon.png) 0 0 / 100% 100% no-repeat; }
+.lobby-hub--official .ally .ally__mode { display: none; }
+
+/* the darker right half: room_select_right_bg (transparent → black → dark grey 31 at its right end) stretched over the
+   right of the screen — 960 wide from x 330 to the right edge, full height (its alpha is the same down every column).
+   That width and place are a least-squares fit to the median frame's top rows (x 480–1280, mean error 0.7 of 255): the fade
+   from 560 to 760, black from 840 to 1100, the grey right edge (22 in the recording). Anchored right like the cards. */
+.lobby-hub--official .ally__bg::after { content: ''; position: absolute; top: 0; bottom: 0; right: calc(-10 * var(--p)); width: calc(960 * var(--p)); pointer-events: none;
+  background: url(/assets/official/hub/ac/ally/room_select_right_bg.png) 0 0 / 100% 100% no-repeat; }
+/* the radar */
+.ally-radar { position: absolute; z-index: 0; right: 0; top: calc(-70 * var(--p)); width: calc(718 * var(--p)); height: calc(720 * var(--p)); overflow: hidden; pointer-events: none; }
+.ally-radar > *, .ally-radar__sweep > *, .ally-radar__blip > * { position: absolute; display: block; }
+.ally-radar__map { left: calc(27 * var(--p)); top: calc(89 * var(--p)); width: calc(756 * var(--p)); height: calc(612 * var(--p)); opacity: .45; } /* the recording's land sits +7 over the black, the PNG at full strength +15 — OUR level */
+.ally-radar__grid { left: calc(28 * var(--p)); top: calc(83 * var(--p)); width: calc(756 * var(--p)); height: calc(616 * var(--p));
+  background: #3ad6b4; opacity: .065; /* white in the pack, tinted in game: the recording's lines sit ~+9 over the black */
+  -webkit-mask: url(/assets/official/hub/ac/ally/img_desc_grid.png) 0 0 / 100% 100% no-repeat; mask: url(/assets/official/hub/ac/ally/img_desc_grid.png) 0 0 / 100% 100% no-repeat; }
+.ally-radar__line { top: calc(330 * var(--p)); width: calc(152 * var(--p)); height: calc(47 * var(--p)); }
+.ally-radar__line--l { left: calc(33 * var(--p)); }
+.ally-radar__line--r { left: calc(647 * var(--p)); transform: scaleX(-1); }
+.ally-radar__brk { top: calc(264 * var(--p)); width: calc(47 * var(--p)); height: calc(179 * var(--p)); }
+.ally-radar__brk--l { left: calc(143 * var(--p)); }
+.ally-radar__brk--r { left: calc(642 * var(--p)); transform: scaleX(-1); }
+.ally-radar__tag { left: calc(85 * var(--p)); width: calc(84 * var(--p)); height: calc(84 * var(--p)); }
+.ally-radar__tag--a { top: calc(205 * var(--p)); } .ally-radar__tag--b { top: calc(419 * var(--p)); }
+.ally-radar__level { left: calc(591 * var(--p)); top: calc(468 * var(--p)); width: calc(69 * var(--p)); height: calc(110 * var(--p)); }
+.ally-radar__x { left: calc(117 * var(--p)); top: calc(557 * var(--p)); width: calc(29 * var(--p)); height: calc(29 * var(--p)); }
+.ally-radar__lower { left: calc(357 * var(--p)); top: calc(581 * var(--p)); width: calc(128 * var(--p)); height: calc(12 * var(--p)); }
+.ally-radar__ring { left: calc(292 * var(--p)); top: calc(259 * var(--p)); width: calc(252 * var(--p)); height: calc(252 * var(--p)); opacity: .85; }
+.ally-radar__sweep { left: calc(418 * var(--p)); top: calc(385 * var(--p)); width: 0; height: 0; transform: rotate(var(--a, 228deg)); }
+.ally-radar__wake { left: calc(-220 * var(--p)); top: calc(-220 * var(--p)); width: calc(440 * var(--p)); height: calc(440 * var(--p)); transform: rotate(-90deg);
+  background: #1fa585; opacity: calc(var(--wake, 0) * .45);
+  -webkit-mask: url(/assets/official/hub/ac/ally/img_scan_circle_mask_2.png) 0 0 / 100% 100% no-repeat luminance;
+  mask: url(/assets/official/hub/ac/ally/img_scan_circle_mask_2.png) 0 0 / 100% 100% no-repeat luminance; }
+.ally-radar__fan { left: 0; top: calc(-220 * var(--p)); width: calc(220 * var(--p)); height: calc(220 * var(--p)); transform-origin: 0 100%; transform: rotate(-90deg);
+  background: #2fd6a8; opacity: .8;
+  -webkit-mask: url(/assets/official/hub/ac/ally/img_scan_circle_light.png) 0 0 / 100% 100% no-repeat;
+  mask: url(/assets/official/hub/ac/ally/img_scan_circle_light.png) 0 0 / 100% 100% no-repeat; }
+.ally-radar__pointer { left: calc(-324 * var(--p)); top: calc(-11.5 * var(--p)); width: calc(324 * var(--p)); height: calc(23 * var(--p)); transform-origin: 100% 50%; transform: rotate(90deg);
+  background: url(/assets/official/hub/ac/ally/img_pointer.png) 0 0 / 100% 100% no-repeat; }
+.ally-radar__pdesc { position: absolute; left: calc(183 * var(--p)); top: calc(6 * var(--p)); width: calc(46 * var(--p)); height: calc(11 * var(--p)); }
+.ally-radar__centre { left: calc(408 * var(--p)); top: calc(375 * var(--p)); width: calc(20 * var(--p)); height: calc(20 * var(--p));
+  background: linear-gradient(#45f0c2, #45f0c2) center / 100% calc(4 * var(--p)) no-repeat, linear-gradient(#45f0c2, #45f0c2) center / calc(4 * var(--p)) 100% no-repeat; }
+.ally-radar__blip { left: calc((418 + var(--bx, 0)) * var(--p)); top: calc((385 + var(--by, 0)) * var(--p)); width: 0; height: 0; opacity: 0; }
+.ally-radar__blipgrid { left: calc(-73 * var(--p)); top: calc(-73 * var(--p)); width: calc(146 * var(--p)); height: calc(146 * var(--p)); background: #ff9a2a; opacity: .45;
+  -webkit-mask: url(/assets/official/hub/ac/ally/highlight_point_back_grid.png) 0 0 / 100% 100% no-repeat;
+  mask: url(/assets/official/hub/ac/ally/highlight_point_back_grid.png) 0 0 / 100% 100% no-repeat; }
+.ally-radar__blipdot { left: calc(-40 * var(--p)); top: calc(-40 * var(--p)); width: calc(80 * var(--p)); height: calc(80 * var(--p)); }
+.ally-radar__count { left: calc(541 * var(--p)); top: calc(343 * var(--p)); width: calc(88 * var(--p)); height: calc(100 * var(--p)); }
+.ally-radar__countbg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ally-radar__num { position: absolute; left: 0; right: 0; display: flex; justify-content: center; align-items: flex-start; height: calc(26 * var(--p));
+  font: 700 calc(19 * var(--p)) / calc(26 * var(--p)) var(--font-num, monospace); letter-spacing: .04em; color: #4fd9b2; opacity: .55; }
+.ally-radar__num--deg { top: calc(18 * var(--p)); } .ally-radar__num--range { top: calc(58 * var(--p)); }
+.ally-radar__degree { width: calc(12 * var(--p)); height: calc(20 * var(--p)); margin-left: calc(1 * var(--p)); }
+.lobby-hub--official .ally-stage > .mf-radar { display: none; }
+.lobby-hub--official .ally-stage .ally-guide, .lobby-hub--official .ally-stage .ally-pill--search { z-index: 2; }
+.lobby-hub--official .ally-stage .ally-pill--search { position: absolute; left: calc(229 * var(--p)); bottom: calc(7.5 * var(--p)); height: calc(50 * var(--p));
+  padding: 0 calc(22 * var(--p)) 0 calc(18 * var(--p)); gap: calc(10 * var(--p)); font-size: calc(20 * var(--p)); border-radius: calc(25 * var(--p)); }
+.lobby-hub--official .ally-stage .ally-pill--search .icon { width: calc(20 * var(--p)); height: calc(20 * var(--p)); }
+
+/* the two cards */
+.lobby-hub--official .ally-card { overflow: visible; background: #020303; border: calc(2 * var(--p)) solid #1d2021; border-radius: calc(6 * var(--p)) 0 0 0; box-shadow: none; }
+.lobby-hub--official .ally-card--create { height: calc(228 * var(--p)); min-height: 0; }
+.lobby-hub--official .ally-card--join { height: calc(267 * var(--p)); min-height: 0; }
+.lobby-hub--official button.ally-card:hover:not(:disabled) { border-color: #2c3132; filter: brightness(1.06); }
+.lobby-hub--official .ally-card__art { position: absolute; inset: 0; padding: 0; display: block; pointer-events: none; z-index: 0; }
+.ally-art { position: absolute; inset: 0; display: block; }
+.ally-art img, .ally-art i { position: absolute; display: block; }
+.ally-art--create .ally-art__logo { left: calc(10 * var(--p)); top: calc(9 * var(--p)); width: calc(86 * var(--p)); height: calc(15 * var(--p)); }
+.ally-art__curve { top: calc(5 * var(--p)); width: calc(141 * var(--p)); height: calc(175 * var(--p)); }
+.ally-art__curve--l { left: calc(36 * var(--p)); } .ally-art__curve--r { left: calc(308 * var(--p)); transform: scaleX(-1); }
+.ally-art__start { left: calc(211 * var(--p)); top: calc(26 * var(--p)); width: calc(64 * var(--p)); height: calc(8 * var(--p)); }
+.ally-art__dot { width: calc(13 * var(--p)); height: calc(13 * var(--p)); }
+.ally-art__dot--tl { left: calc(185 * var(--p)); top: calc(30 * var(--p)); } .ally-art__dot--tr { left: calc(287 * var(--p)); top: calc(30 * var(--p)); }
+.ally-art__dot--bl { left: calc(185 * var(--p)); top: calc(131 * var(--p)); } .ally-art__dot--br { left: calc(285 * var(--p)); top: calc(131 * var(--p)); }
+.ally-art__brk { top: calc(60 * var(--p)); width: calc(12 * var(--p)); height: calc(40 * var(--p)); }
+.ally-art__brk--l { left: calc(196 * var(--p)); } .ally-art__brk--r { left: calc(278 * var(--p)); transform: scaleX(-1); }
+.ally-art__mid { left: calc(211 * var(--p)); top: calc(48 * var(--p)); width: calc(63 * var(--p)); height: calc(62 * var(--p)); }
+.ally-art__t1 { left: calc(212.5 * var(--p)); top: calc(115.5 * var(--p)); width: calc(63 * var(--p)); height: calc(9 * var(--p)); } /* the __tex plates: the atlas copies without their bleed */
+.ally-art__t2 { left: calc(220 * var(--p)); top: calc(125.5 * var(--p)); width: calc(46 * var(--p)); height: calc(5 * var(--p)); }
+
+.ally-art__blocks { position: absolute; inset: 0; display: block; }
+.ally-art__blk--l { left: calc(15 * var(--p)); top: calc(70 * var(--p)); width: calc(104 * var(--p)); height: calc(76 * var(--p)); z-index: 0; }
+.ally-art__blk--m { left: calc((95 + var(--k) * 60) * var(--p)); top: calc(72 * var(--p)); width: calc(86 * var(--p)); height: calc(71 * var(--p)); z-index: calc(10 - var(--k)); }
+.ally-art__blk--r { left: calc(404 * var(--p)); top: calc(84 * var(--p)); width: calc(97 * var(--p)); height: calc(71 * var(--p)); z-index: 1; }
+.ally-art__fade { left: 0; top: calc(68 * var(--p)); width: 100%; height: calc(142 * var(--p)); z-index: 20; }
+.ally-art__hair { z-index: 21; background: rgba(255, 138, 36, .42); }
+.ally-art__hair--h { left: 0; right: 0; top: calc(67 * var(--p)); height: 1px; }
+.ally-art__hair--v { left: calc(242 * var(--p)); top: 0; width: 1px; height: calc(140 * var(--p)); }
+.ally-art__hair--t1, .ally-art__hair--t2 { left: calc(220 * var(--p)); width: calc(45 * var(--p)); height: 1px; }
+.ally-art__hair--t1 { top: calc(23 * var(--p)); } .ally-art__hair--t2 { top: calc(112 * var(--p)); }
+.ally-art__hair--s1, .ally-art__hair--s2 { top: calc(58 * var(--p)); width: 1px; height: calc(23 * var(--p)); }
+.ally-art__hair--s1 { left: calc(198 * var(--p)); } .ally-art__hair--s2 { left: calc(293 * var(--p)); }
+.ally-art__jlogo { left: calc(54 * var(--p)); top: calc(40.5 * var(--p)); width: calc(86 * var(--p)); height: calc(15 * var(--p)); z-index: 22; }
+.ally-art__jt1 { left: calc(270 * var(--p)); top: calc(35 * var(--p)); width: calc(47 * var(--p)); height: calc(6 * var(--p)); z-index: 22; }
+.ally-art__jt2 { left: calc(365 * var(--p)); top: calc(40 * var(--p)); width: calc(66 * var(--p)); height: calc(8 * var(--p)); z-index: 22; }
+.ally-art__tri { left: calc(231 * var(--p)); top: calc(30 * var(--p)); width: calc(24 * var(--p)); height: calc(12 * var(--p)); z-index: 22; }
+.ally-art__target { position: absolute; z-index: 22; left: calc(221 * var(--p)); top: calc(47 * var(--p)); width: calc(43 * var(--p)); height: calc(43 * var(--p)); display: block; }
+.ally-art__blank { inset: 0; width: 100%; height: 100%; }
+.ally-art__ban { width: calc(12 * var(--p)); height: calc(11 * var(--p)); }
+.ally-art__ban--0 { left: calc(7 * var(--p)); top: calc(9.5 * var(--p)); } .ally-art__ban--1 { left: calc(23 * var(--p)); top: calc(9.5 * var(--p)); }
+.ally-art__ban--2 { left: calc(7 * var(--p)); top: calc(22.5 * var(--p)); } .ally-art__ban--3 { left: calc(23 * var(--p)); top: calc(22.5 * var(--p)); }
+
+/* the buttons */
+.lobby-hub--official .ally-card .ally-card__bar { position: absolute; left: calc(-2 * var(--p)); width: calc(497 * var(--p)); padding: 0 0 0 calc(22 * var(--p)); gap: calc(15 * var(--p));
+  isolation: isolate; background: none; font-size: calc(28 * var(--p)); font-weight: 900; letter-spacing: .04em; overflow: visible; }
+.lobby-hub--official .ally-card .ally-card__bar::before { content: ''; position: absolute; z-index: -1; left: calc(-19.5 * var(--p)); pointer-events: none; width: calc(537 * var(--p)); }
+.lobby-hub--official .ally-card--create .ally-card__bar { top: calc(171 * var(--p)); height: calc(52 * var(--p)); color: #0b2a21; }
+.lobby-hub--official .ally-card--create .ally-card__bar::before { top: calc(-6.5 * var(--p)); height: calc(85.3 * var(--p));
+  background: url(/assets/official/hub/ac/ally/room_select_create_btn_bg_down.png) 0 0 / 100% 100% no-repeat; }
+.lobby-hub--official .ally-card--join .ally-card__bar--join { top: calc(206 * var(--p)); height: calc(58 * var(--p)); padding-left: calc(20 * var(--p)); gap: calc(8 * var(--p)); color: #1e1307; }
+.lobby-hub--official .ally-card--join .ally-card__bar--join::before { top: calc(-7.25 * var(--p)); height: calc(95.2 * var(--p));
+  background: url(/assets/official/hub/ac/ally/room_select_join_btn_bg_down.png) 0 0 / 100% 100% no-repeat; }
+.lobby-hub--official .ally-card--create .ally-card__icon { width: calc(30 * var(--p)); height: calc(30 * var(--p)); border: 0; border-radius: calc(5 * var(--p)); background: #13221e; color: #34e3b3; }
+.lobby-hub--official .ally-card--create .ally-card__icon .icon { width: 70%; height: 70%; stroke-width: 3.2; }
+.lobby-hub--official .ally-card--join .ally-card__icon { width: calc(36 * var(--p)); height: calc(41 * var(--p)); border: 0; border-radius: 0;
+  background: url(/assets/official/hub/ac/ally/join_icon.png) 0 0 / 100% 100% no-repeat; }
+.lobby-hub--official .ally-card--join .ally-card__icon .icon { display: none; }
+.lobby-hub--official .ally-card--create .ally-card__bar small { position: absolute; left: calc(2 * var(--p)); top: calc(100% + calc(10 * var(--p))); margin: 0; overflow: visible;
+  font-size: calc(13 * var(--p)); font-weight: 500; letter-spacing: 0; color: #868c8a; }
+
+/* 加入同盟 stays full colour while the key is empty (5:26: no key typed, the bar at its sprite's colour); it is still disabled */
+.lobby-hub--official .ally-card--join .ally-card__bar--join:disabled { filter: none; cursor: default; }
+/* the key field, the recent keys, 模拟邀约 */
+.lobby-hub--official .ally-card--join .ally-key { position: absolute; z-index: 3; left: calc(71 * var(--p)); top: calc(145 * var(--p)); width: calc(347 * var(--p)); height: calc(45 * var(--p));
+  margin: 0; padding: 0; border: 0; border-radius: 0; background: url(/assets/official/hub/ac/ally/room_select_join_text_bg.png) 0 0 / 100% 100% no-repeat; }
+.lobby-hub--official .ally-card--join .ally-key > .icon { display: none; }
+.lobby-hub--official .ally-card--join .ally-key input { position: absolute; inset: 0; width: 100%; padding: 0 calc(48 * var(--p)); font-size: calc(19 * var(--p)); color: #f2f4f3; }
+.lobby-hub--official .ally-card--join .ally-key input::placeholder { color: #e4e7e6; font-weight: 500; }
+.lobby-hub--official .ally-card--join .ally-key__spec { position: absolute; right: calc(6 * var(--p)); top: calc(7 * var(--p)); height: calc(31 * var(--p)); }
+.lobby-hub--official .ally-card--join .ally-recent { position: absolute; right: 0; top: calc(100% + calc(8 * var(--p))); margin: 0; justify-content: flex-end; }
+.lobby-hub--official .ally-pill--invite { position: relative; isolation: isolate; width: calc(203 * var(--p)); height: calc(49 * var(--p)); justify-content: flex-start; padding: 0 0 0 calc(36 * var(--p));
+  border: 0; background: none; color: #eef0ef; }
+.lobby-hub--official .ally-pill--invite::before { content: ''; position: absolute; z-index: -1; left: calc(-15 * var(--p)); top: calc(-8 * var(--p)); width: calc(233 * var(--p)); height: calc(80 * var(--p));
+  pointer-events: none; background: url(/assets/official/hub/ac/ally/btn_invite.png) 0 0 / 100% 100% no-repeat; }
+.lobby-hub--official .ally-pill--invite:hover { filter: brightness(1.08); }
+.lobby-hub--official .ally-pill--invite .ally-pill__mark { display: none; }
+.lobby-hub--official .ally-pill--invite b { position: absolute; right: calc(70 * var(--p)); top: calc(-6 * var(--p)); }
+@media (prefers-reduced-motion: reduce) { .ally-radar__sweep { transition: none; } }
+
+/* ===== official-pages.css lines 984-1121 — 13/14/15 房间卡·成就·盟约详情 ===== */
+/* ---- 13. 房间卡 未准备 (五项·4, 2026-10-28; screens/room.js RoomSeat, hub-official.css's room cards), the user's original
+   not-ready card: an occupied seat that is not ready keeps the grey bg_top_normal bar, the grey frame and its portrait in
+   full colour (no filter — only a lost connection greys it, .is-offline), and shows no state line (the original draws no
+   ☐ 准备中: the words stay for screen readers); its plate is card_matte's black-to-grey over a dark ground. A ready seat
+   keeps bg_top_ready, the green fill and glow, player_card_ready and 已就绪 (section above). The host of this client is
+   ready from the start (待命中): only a guest goes ready → not ready. Not placed: btn_card_detail (this card has no ⋯ menu;
+   its 加好友 stays) and id_info_bg_single (its binding to this card is unknown). ---- */
+.rs:not(.rs--big) .rseat:not(.is-ready):not(.rseat--empty) .rseat__state { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.rs:not(.rs--big) .rseat:not(.is-ready):not(.is-offline) .rseat__art img { filter: none; }
+.rs:not(.rs--big) .rseat:not(.is-me) .rseat__plate:not(.has-nc):not(.rseat__plate--empty) {
+  background: url("/assets/official/hub/room/card_matte.png") 0 0 / 100% 100% no-repeat, #1c1d1f; }
+
+/* ---- 14. 成就统计 (五项·5, 2026-10-28; ui/achievements.js, its layout in hub-official.css), the event's achievement folder
+   (img/official/hub/ac/ach/, 47 sprites) against the user's original screenshot: the panel (1156 × 604 at 1280 — page_bg's
+   1736 × 907 at the same 2/3 scale) on page_bg 1:1, whose world map and vertical scan lines are in the sprite (the panel's
+   own scan-line layer goes: no doubled texture); the header on header.png (its hills, STRONGHOLD PROTOCOL, the orange
+   band, the dot triangle and ALLIANCE are in the sprite — the drawn copies hide), 卫戍协议:盟约 stays text, right-aligned
+   24 from the edge; a card without a namecard on nc_rhodes_default; the like badge like.png; 独立 / 同盟模拟 with
+   mode_single / mode_team; the mode table on squad_bg under the screenshot's teal (OUR tint); the radar's ruler
+   radar_dash and its caption radar_logo, its six sectors still drawn from the account's title counts (screens/stats.js
+   TitleHexagon); the section bars on section_title_bg with section_icon in section_icon_frame. ---- */
+.ach .ach__box { background: url("/assets/official/hub/ac/ach/page_bg.png") 0 0 / 100% 100% no-repeat, #0b0d0d; }
+.ach .ach__box::after { display: none; }
+.ach .ach__head { height: calc(var(--p) * 83); background: url("/assets/official/hub/ac/ach/header.png") 0 0 / 100% 100% no-repeat; }
+.ach .ach__head::before, .ach .ach__band::before { display: none; }
+.ach .ach__band { position: static; background: none; }
+.ach .ach__logo, .ach .ach__emblem, .ach .ach__titles .ach__en { visibility: hidden; }
+.ach .ach__titles { position: absolute; right: calc(var(--p) * 24); bottom: calc(var(--p) * 10); }
+.ach .ach__titles b { font-size: calc(var(--p) * 32); }
+
+/* nc_rhodes_default: its opaque card is x 19–621, y 0–187 of 640 × 224 (a shadow round it) — that part on the card */
+.ach .ach-card:not(.has-nc) { background: url("/assets/official/hub/ac/ach/nc_rhodes_default.png") calc(var(--p) * -13) 0 / calc(var(--p) * 436) calc(var(--p) * 153) no-repeat, #1b1d1f; }
+.ach .ach-card:not(.has-nc) .ach-card__brand { display: none; } /* the default card carries its own RHODES ISLAND */
+.ach .ach-counts__badge.is-like { background: url("/assets/official/hub/ac/ach/like.png") center / calc(var(--p) * 38) calc(var(--p) * 38) no-repeat; }
+.ach .ach-counts__badge.is-like svg { visibility: hidden; }
+
+.ach .ach-modes { background: linear-gradient(rgba(10, 32, 28, .8), rgba(10, 32, 28, .8)), url("/assets/official/hub/ac/ach/squad_bg.png") 0 0 / 100% 100% no-repeat; }
+.ach .ach-modes__mode .icon { width: calc(var(--p) * 10); height: calc(var(--p) * 23); background: url("/assets/official/hub/ac/ach/mode_single.png") center / contain no-repeat; }
+.ach .ach-modes__row + .ach-modes__row .ach-modes__mode .icon { width: calc(var(--p) * 40); background-image: url("/assets/official/hub/ac/ach/mode_team.png"); }
+.ach .ach-modes__mode .icon > * { display: none; }
+
+.ach .st-titlehex__decoration { content: url("/assets/official/hub/ac/ach/radar_dash.png"); }
+.ach .ach-hex__cap { width: calc(var(--p) * 147); height: calc(var(--p) * 53); font-size: 0; color: transparent;
+  background: url("/assets/official/hub/ac/ach/radar_logo.png") 0 0 / 100% 100% no-repeat; }
+.ach .ach-hex__cap > * { display: none; }
+
+.ach .ach-bar { background: url("/assets/official/hub/ac/ach/section_title_bg.png") 0 0 / 100% 100% no-repeat; }
+.ach .ach-bar__icon { width: calc(var(--p) * 67); height: calc(var(--p) * 71); top: calc(var(--p) * -15);
+  background: url("/assets/official/hub/ac/ach/section_icon.png") 50% 38% / calc(var(--p) * 43) calc(var(--p) * 51) no-repeat,
+    url("/assets/official/hub/ac/ach/section_icon_frame.png") 0 0 / 100% 100% no-repeat; }
+.ach .ach-bar__icon svg, .ach .ach-bar__icon::after { display: none; }
+
+/* ---- 15. 盟约详情 centred (round 9, 2026-10-28; gameLogic/panel.js bondPopupPlace 'center', ui/bondStrip.js BondPopup onStep),
+   the user's original screenshot at 1280: the popup centred under the bond row, 584 × 380 from y 131 — the size of the
+   event's detail_bg.png, drawn 1:1 — with arrow.png's round ‹ › (68 px on screen, centred 57 px outside the panel at y 309)
+   stepping to the strip's previous / next bond. It opens there whenever no detail card is open and the centre leaves the
+   selected unit's underframe free; else the older places (beside the card / left / right, user playtest #2) stay. ---- */
+.bpop.bpop--center { left: 50%; margin-left: -4.38rem; top: 1.965rem; width: 8.76rem; height: 5.7rem; max-height: none; z-index: 10;
+  padding: .24rem .3rem .2rem; border: 1px solid rgba(255, 255, 255, .1);
+  background: url(/assets/official/hub/ac/battle/detail_bg.png) 0 0 / 100% 100% no-repeat, rgb(34, 38, 40); }
+.bpop-nav { position: absolute; z-index: 10; top: 3.98rem; width: 1.3rem; height: 1.29rem; padding: 0; border: 0; cursor: pointer;
+  background: url(/assets/official/hub/ac/battle/arrow.png) center / 100% 100% no-repeat; animation: pop-in var(--t-med) var(--ease-out); }
+.bpop-nav:hover { filter: brightness(1.25); }
+.bpop-nav--prev { left: calc(50% - 5.88rem); }
+.bpop-nav--next { left: calc(50% + 4.58rem); transform: scaleX(-1); }
+/* its members as the original's 82 px portraits, five a row every 113 px, names under them */
+.bpop--center .bpop__members { grid-template-columns: repeat(5, 1.23rem); justify-content: space-between; gap: .14rem 0; padding: 0 .12rem; }
+.bpop--center .bpop__member .uthumb { --ut: 1.23rem; }
+.bpop--center .bpop__member .uthumb__tier { transform: none; }
+.bpop--center .bpop__mname { font-size: .21rem; color: var(--text-md); }
+
+/* the top bar's countdown against the user's original at 1280 (a timed phase, proto/r9/cmp-timer.png): the digits
+   upright (SevenSeg's -7° skew off), hollow — a mint outline round a dark segment, as the original's — about 48 tall; the
+   gauge three wide bars beside the digits' lower half (hud.js passes bars=3); COUNTDOWN in grey. The glyph shapes stay
+   SevenSeg's polygons: the original's own font (auto_chess_num_font, Godot fontdata only) is NOT restored. */
+.gtop__right .countdown { --cd-h: .72rem; gap: .08rem; }
+.gtop__right .seg__char g { transform: translate(6px, 0); }
+.gtop__right .seg .on { fill: rgba(6, 34, 28, .7); stroke: var(--seg-on); stroke-width: 9; stroke-linejoin: miter; }
+.gtop__right .seg .off { opacity: .04; }
+.gtop__right .countdown__gauge { align-self: flex-end; width: .33rem; height: .36rem; margin-bottom: .2rem; }
+.gtop__right .countdown__gauge i { height: 24%; }
+.gtop__right .countdown__label { color: rgba(196, 202, 202, .55); }
+
+/* ===== official-pages.css lines 1246-1268 — 21 顶栏盟约圆盘 ===== */
+/* ---- 21. 顶栏盟约圆盘 (round 11; ui/bondStrip.js bondBoardKey, ui/components.js BondDisc `board`) against the recording's
+   08:28 frame at 1280: the disc is the event's bond_board/<N>_<k>.png (its ring 53 px across in the 77 px art; the frame's
+   ring 50 → the art at 72.6 px), the glyph icon_<bond>.png (132, its glyph ~100: drawn 40 → the frame's ~30), black on an
+   active disc and grey on a grey one; the scan lines over the disc from bond_icon_bg (the frame's discs carry them), its
+   opacity fitted to the frame's inner colour. Pitch 80 and the row's place as before (section 11). The SVG ring and the
+   drawn gradients go. ---- */
+.gm__bonds .bond.has-board .bond__ring { display: none; }
+.gm__bonds .bond.has-board .bond__core, .gm__bonds .bond.has-board.is-active .bond__core,
+.gm__bonds .bond.has-board:not(.is-active) .bond__core, .gm__bonds .bslot.is-open .bond.has-board .bond__core {
+  position: relative; z-index: 1; background: none; box-shadow: none; transform: none; }
+.gm__bonds .bond__board { position: absolute; z-index: 0; left: 50%; top: 50%; width: calc(var(--disc) * 1.345); height: calc(var(--disc) * 1.345);
+  max-width: none; max-height: none; transform: translate(-50%, -50%); pointer-events: none; }
+.gm__bonds .bond.has-board .bond__disc::after { content: ''; position: absolute; z-index: 0; left: 50%; top: 50%; width: calc(var(--disc) * .86); height: calc(var(--disc) * .86);
+  transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; opacity: var(--scan, .55);
+  background: url(/assets/official/hub/ac/battle/bond_icon_bg.png) center / 116% 116% no-repeat; }
+.gm__bonds .bond.has-board .bond__icon { width: 74%; height: 74%; filter: brightness(0) invert(.62); }
+.gm__bonds .bond.has-board.is-active .bond__icon { filter: brightness(0); opacity: .82; }
+.gm__bonds .bond.has-board .bond__count { z-index: 2; }
+/* second fit against the frame: its rings 52 across (the art 1:1: 77 px), centres every 80 (the strip's .1rem gap went on
+   top of the 80 px slot: 86.7), centre y 85 (ours 89) */
+.gm__bonds .bond__board { width: calc(var(--disc) * 1.426); height: calc(var(--disc) * 1.426); }
+.gm__bonds .bstrip { gap: 0; }
+.gm .gm__bonds { top: .87rem; }
+
+/* ===== official-pages.css lines 1415-1560 — 26/27 倒计时数字·联防阶段 ===== */
+/* ---- 26. Countdown digits (round 16): the official bitmap font auto_chess_num_font (unpacked from the client: one white
+   32 × 68 cell a digit, advance 32, ink x 4–29 / y 5–52, a faint reflection under it to y 62) — components.js NumFont,
+   tinted through CSS mask. At 1280 the video's 05 (09:05, v01 f0030) sits ink x 1156–1212 / y 19–65: 1 : 1 with the
+   cells (47 of 48 rows), advance 32. --nf-h is the ink height; the cell hangs 5/48 above and 15/48 below it. Colours:
+   mint #07ffc6 (the user's in-game shot, proto/r9/cmp-timer2) and orange #f05a26 under 10 s (user image 07's 08 and the
+   video's 05: 232, 88, 37), crossfading in 0.2 s as the video's 43 → 06 does — and no flicker: the video holds the
+   orange steady for 5 s. Behind each digit the same font's 8, darkened — the unlit segments the video shows (OUR tone). */
+.numfont { --nf-h: .72rem; --nf-c: #07ffc6; --nf-glow: rgba(7, 255, 198, .45); display: inline-flex; align-items: flex-start; height: var(--nf-h);
+  filter: drop-shadow(0 0 calc(var(--nf-h) * .06) var(--nf-glow)); }
+.numfont--orange { --nf-c: #f05a26; --nf-glow: rgba(240, 90, 38, .45); }
+.numfont__d { position: relative; flex: none; width: calc(var(--nf-h) * 32 / 48); height: calc(var(--nf-h) * 68 / 48);
+  margin: calc(var(--nf-h) * -5 / 48) 0 calc(var(--nf-h) * -15 / 48); }
+.numfont__d::before, .numfont__d::after { content: ''; position: absolute; inset: 0; -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+.numfont__d::before { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_8.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_8.png); background: rgba(0, 0, 0, .32); }
+.numfont__d::after { background: var(--nf-c); transition: background-color .2s linear; }
+.numfont__d--0::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_0.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_0.png); }
+.numfont__d--1::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_1.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_1.png); }
+.numfont__d--2::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_2.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_2.png); }
+.numfont__d--3::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_3.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_3.png); }
+.numfont__d--4::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_4.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_4.png); }
+.numfont__d--5::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_5.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_5.png); }
+.numfont__d--6::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_6.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_6.png); }
+.numfont__d--7::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_7.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_7.png); }
+.numfont__d--8::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_8.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_8.png); }
+.numfont__d--9::after { -webkit-mask-image: url(/assets/official/hub/ac/battle/numfont/digit_9.png); mask-image: url(/assets/official/hub/ac/battle/numfont/digit_9.png); }
+.numfont__x { font-style: normal; font-family: var(--font-num); font-size: calc(var(--nf-h) * .9); line-height: 1; color: var(--nf-c); }
+.countdown .numfont { --nf-h: var(--cd-h); }
+/* the top bar at 1280: the digits' ink box x 1152–1216 (cells) / y 19–65, COUNTDOWN under them (ink x 1151–1206, y 70–76,
+   grey), the gauge 7 bars of 23 × 5 every 8 px at x 1221–1243 / y 21–74 — lit in the digits' colour, the rest faint
+   (hud.js bars=7; the lit count rounds: 43 of 60 s → 5 lit, 5 s → 1, 2 s → none, as the video) */
+.gtop__right .countdown { --cd-h: .705rem; align-items: flex-start; gap: .075rem; }
+.gtop__right .countdown__gauge { align-self: flex-start; width: .345rem; height: .795rem; margin: .03rem 0 0; }
+.gtop__right .countdown__gauge i { height: .075rem; background: rgba(7, 255, 198, .13); box-shadow: none; }
+.gtop__right .countdown__gauge i.on { background: #07ffc6; box-shadow: 0 0 .05rem rgba(7, 255, 198, .5); }
+.gtop__right .countdown.is-warn .countdown__gauge i { background: rgba(240, 90, 38, .16); }
+.gtop__right .countdown.is-warn .countdown__gauge i.on { background: #f05a26; box-shadow: 0 0 .05rem rgba(240, 90, 38, .5); }
+.gtop__right .countdown__label { align-self: flex-start; margin: .075rem 0 0; font-family: 'ArkBender', var(--font-num); font-weight: 700;
+  font-size: .12rem; letter-spacing: .06em; line-height: 1; color: rgba(186, 190, 190, .62); }
+/* 27. 联防阶段 plate (round 16, video 10:35.30–10:38.07; js/ui/matchPopups.js PhasePopup `faces`, class .mpop--unite).
+   Measured off the footage at 1280×720 (1 px = .015rem): the panel is round_bg_line's own 496×168 at 1:1, centred; the
+   box 170×124 at (26, 23) with round_cross corners and round_frame brackets; assist_emoji_01 / 02 at 1:1 (68×76) at box
+   (14, 17) and (84, 17), their own alpha squared (they go through a mask of themselves: the 30 % band on top of each
+   is all but gone in the footage); round_text_01 / 02 at ×.62 under them. round_text_01·02, round_cross and round_bg_line are single
+   colour sprites with the pattern in alpha (the client tints them), so they are masks here, tinted as the video shows.
+   Title: ArkCN Heavy (Source Han Sans Heavy, glyph match .95 against the frame), 38.8 px, #f0aa3c.
+   Timing (t = 0 at the first frame the plate shows, 10:35.30): the panel (words and all) fades in, .6 → 1 by 100 ms;
+   the words slide 65 px right, fast then slower, until 367 ms (ink x 553 → 618 over f40–f51); faces unfold sideways from the gap between them 33–267 ms, then bob in turn every 500 ms
+   (yellow stretches 1 px, orange squats 2 px; feet fixed); chevrons (dark, orange, dark) race in, crawl, race out by
+   867 ms, under the words. Leaving (10:37.97): faces fold back, the panel goes, the words fade with it, .94 / .82 / .48 / .3 / .2 at
+   67 / 117 / 183 / 233 / 267 ms (measured on f121–f127; their pixel dissolve is approximated by opacity — [REBUILT]).
+   The sprites come as blob: URLs (--unite-*, js/ui/matchPopups.js holdBlob) so a plate never waits on the server.
+   [REBUILT] — no sprite for them in either pack: the orange square, the 3×2 cells, SIGNAL and the bar on the right, and
+   the chevron shape (drawn as clip-path in the colours the frames show).
+   The panel, box, crosses, brackets and the words' place are shared with 作战结束 (section 30). */
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__panel { display: block; width: 7.44rem; height: 2.52rem; min-width: 0; min-height: 0; padding: 0;
+  top: -.045rem; background: rgba(30, 29, 26, .9); box-shadow: none; animation: mpop-uin 100ms linear backwards; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__lines { left: 0; top: 0; width: 7.44rem; height: 2.52rem; transform: none; opacity: .18; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__art { position: absolute; z-index: 1; left: .39rem; top: .345rem; width: 2.55rem; height: 1.86rem; margin: 0; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__x { width: .21rem; height: .21rem; color: #f5c070; animation: none; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__x--tl { left: -.105rem; top: -.105rem; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__x--tr { left: auto; right: -.105rem; top: -.105rem; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__x--bl { left: -.105rem; top: auto; bottom: -.105rem; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__x--br { left: auto; right: -.105rem; top: auto; bottom: -.105rem; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__brk { top: .32rem; width: .09rem; height: 1.155rem; margin-top: 0; color: #d9a35a; --brk-a: .55; animation: none; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__brk--l { left: -.09rem; }
+:is(.mpop--unite, .mpop--end, .mpop--round) .mpop__brk--r { left: auto; right: -.075rem; }
+.mpop__fw { position: absolute; top: .255rem; width: 1.02rem; height: 1.14rem; animation: mpop-uunfold 234ms 33ms linear backwards; }
+.mpop__fw--1 { left: .21rem; transform-origin: 100% 50%; }
+.mpop__fw--2 { left: 1.26rem; transform-origin: 0 50%; }
+.mpop__aface { position: absolute; inset: 0; transform-origin: 50% 100%; background: 0 0 / 100% 100% no-repeat;
+  -webkit-mask: var(--face) 0 0 / 100% 100% no-repeat; mask: var(--face) 0 0 / 100% 100% no-repeat; }
+.mpop__aface--1 { --face: var(--unite-face-1, url("/assets/official/hub/ac/battle/assist_emoji_01.png")); background-image: var(--face);
+  animation: mpop-ubob1 1000ms 267ms step-end infinite; }
+.mpop__aface--2 { --face: var(--unite-face-2, url("/assets/official/hub/ac/battle/assist_emoji_02.png")); background-image: var(--face);
+  animation: mpop-ubob2 1000ms 267ms step-end infinite; }
+/* the faint vertical lines on the faces (img_screen_line, 1:1; ±3 % in the footage) — the parent's mask keeps them on the face */
+.mpop__aface::after { content: ''; position: absolute; inset: 0; opacity: .06;
+  background: var(--unite-lines, url("/assets/official/hub/ac/end/img_screen_line.png")) 0 0 / 1.92rem 1.92rem repeat; }
+.mpop__utag { position: absolute; background: #f2b14a; }
+.mpop__utag--1 { left: .7575rem; top: 1.77rem; width: .825rem; height: .15rem;
+  -webkit-mask: var(--unite-tag-1, url("/assets/official/hub/ac/battle/round_text_01.png")) 0 0 / 100% 100% no-repeat;
+  mask: var(--unite-tag-1, url("/assets/official/hub/ac/battle/round_text_01.png")) 0 0 / 100% 100% no-repeat; }
+.mpop__utag--2 { left: .855rem; top: 1.935rem; width: .615rem; height: .075rem;
+  -webkit-mask: var(--unite-tag-2, url("/assets/official/hub/ac/battle/round_text_02.png")) 0 0 / 100% 100% no-repeat;
+  mask: var(--unite-tag-2, url("/assets/official/hub/ac/battle/round_text_02.png")) 0 0 / 100% 100% no-repeat; }
+:is(.mpop--unite, .mpop--end) .mpop__text { position: absolute; z-index: 1; left: 3.375rem; top: .965rem; display: block; padding: 0;
+  animation: mpop-uslide 367ms linear backwards; }
+:is(.mpop--unite, .mpop--end) .mpop__title { display: block; font-family: 'ArkCN', var(--font-display); font-weight: 900; font-size: calc(.582 * var(--t));
+  line-height: 1; letter-spacing: .015rem; color: #f0aa3c; text-shadow: none; animation: none; }
+.mpop--unite .mpop__chevs { left: 0; right: 0; width: auto; z-index: 0; }
+.mpop--unite .mpop__chevs i { left: 0; width: 1.158rem; opacity: 1; background: rgba(160, 82, 42, .55);
+  clip-path: polygon(0 0, 38.9% 0, 100% 50%, 38.9% 100%, 0 100%, 61.1% 50%); animation: mpop-uchev 867ms linear both; }
+.mpop--unite .mpop__chevs i:nth-child(1) { --o: -.72rem; }
+.mpop--unite .mpop__chevs i:nth-child(2) { --o: 0rem; z-index: 1; background: #e0622d; }
+.mpop--unite .mpop__chevs i:nth-child(3) { --o: .735rem; }
+.mpop__udeco { position: absolute; inset: 0; pointer-events: none; }
+.mpop__usq { position: absolute; left: 7.065rem; top: .21rem; width: .12rem; height: .12rem; background: #d0643a; }
+.mpop__ugrid { position: absolute; left: 6.84rem; top: 1.635rem; display: grid; grid-template-columns: repeat(3, .105rem); grid-auto-rows: .12rem; gap: .03rem; }
+.mpop__ugrid i { background: #c9a25a; }
+.mpop__ugrid i:nth-child(1), .mpop__ugrid i:nth-child(4) { opacity: .45; }
+.mpop__ugrid i:nth-child(2) { opacity: .8; }
+.mpop__ugrid i:nth-child(3) { opacity: .12; }
+.mpop__ugrid i:nth-child(5) { opacity: .55; }
+.mpop__usig { position: absolute; right: .225rem; top: 2.055rem; font-family: 'ArkBender', var(--font-num); font-weight: 400; font-size: .13rem;
+  line-height: 1; color: rgba(205, 175, 115, .42); }
+/* a dim track (801–823 in the frame) and the lit part (824–873), static through the hold */
+.mpop__ubar { position: absolute; left: 6.135rem; top: 2.25rem; width: 1.08rem; height: .06rem;
+  background: linear-gradient(90deg, rgba(205, 180, 125, .1) 31.9%, rgb(118, 96, 58) 31.9%); }
+.mpop--unite.is-leaving .mpop__panel { animation: mpop-ubgout 70ms 30ms linear forwards; }
+.mpop--unite.is-leaving .mpop__fw { animation: mpop-ufold 40ms linear forwards; }
+.mpop--unite.is-leaving .mpop__lines, .mpop--unite.is-leaving .mpop__x, .mpop--unite.is-leaving .mpop__brk,
+.mpop--unite.is-leaving .mpop__utag, .mpop--unite.is-leaving .mpop__udeco { animation: mpop-uout 70ms 30ms linear forwards; }
+.mpop--unite.is-leaving .mpop__text { animation: mpop-utout 280ms linear forwards; }
+@keyframes mpop-uunfold { 0% { scale: 0 .6; } 14.5% { scale: .2 .85; } 28.6% { scale: .57 .96; } 42.7% { scale: .82 1; } 57.3% { scale: .9 1; } 71.4% { scale: .95 1; } 100% { scale: 1 1; } }
+@keyframes mpop-ubob1 { 0% { scale: 1 1.013; } 50% { scale: 1 1; } }
+@keyframes mpop-ubob2 { 0% { scale: 1 .974; } 50% { scale: 1 1; } }
+@keyframes mpop-uin { 0% { opacity: .6; } 33% { opacity: .85; } 67% { opacity: .97; } 100% { opacity: 1; } }
+/* the words' left edge per video frame (33 ms): -65, -50, -32, -17, -10, -7, -6, -4, -2, -1, -1, 0 px */
+@keyframes mpop-uslide { 0% { translate: -.975rem 0; } 9.1% { translate: -.75rem 0; } 18.2% { translate: -.48rem 0; } 27.2% { translate: -.255rem 0; }
+  36.3% { translate: -.15rem 0; } 45.5% { translate: -.105rem 0; } 54.5% { translate: -.09rem 0; } 63.6% { translate: -.06rem 0; }
+  72.7% { translate: -.03rem 0; } 81.7% { translate: -.015rem 0; } 100% { translate: 0 0; } }
+@keyframes mpop-uchev {
+  0% { opacity: 0; transform: translateX(calc(2.7rem + var(--o))); }
+  3.8% { opacity: 1; transform: translateX(calc(3.75rem + var(--o))); }
+  7.7% { transform: translateX(calc(4.56rem + var(--o))); }
+  11.5% { transform: translateX(calc(4.815rem + var(--o))); }
+  15.3% { transform: translateX(calc(5.04rem + var(--o))); }
+  19.3% { transform: translateX(calc(5.115rem + var(--o))); }
+  26.9% { transform: translateX(calc(5.205rem + var(--o))); }
+  38.4% { transform: translateX(calc(5.31rem + var(--o))); }
+  57.7% { transform: translateX(calc(5.34rem + var(--o))); }
+  76.9% { transform: translateX(calc(5.475rem + var(--o))); }
+  84.5% { transform: translateX(calc(5.73rem + var(--o))); }
+  88.5% { transform: translateX(calc(6.12rem + var(--o))); }
+  92.3% { transform: translateX(calc(6.435rem + var(--o))); }
+  96.1% { opacity: 1; transform: translateX(calc(6.9rem + var(--o))); }
+  100% { opacity: 0; transform: translateX(calc(7.5rem + var(--o))); } }
+@keyframes mpop-ubgout { to { background-color: transparent; } }
+@keyframes mpop-ufold { to { scale: 0 1; } }
+@keyframes mpop-uout { to { opacity: 0; } }
+@keyframes mpop-utout { 23.9% { opacity: .94; } 41.8% { opacity: .82; } 65.4% { opacity: .48; } 83.2% { opacity: .3; } 95.4% { opacity: .2; } 100% { opacity: .1; } }
+@media (prefers-reduced-motion: reduce) {
+  .mpop--unite .mpop__panel, .mpop--unite .mpop__text, .mpop__fw, .mpop__aface--1, .mpop__aface--2 { animation: none; }
+  .mpop--unite .mpop__chevs { display: none; }
+}
+
+/* ===== official-pages.css lines 1662-2302 — 30-34 作战结束·作战开始·回合获得·协议已失效·悬赏决策 ===== */
+/* ---- 30. 作战结束 plate (round 16, the footage: 完美作战! video 8:43.98–8:46.75, 生命值减少 10 video 10:53.10–10:55.90;
+   js/ui/matchPopups.js BattleOverPopup, class .mpop--end, .mpop--end-perfect / -loss / -plain). Measured at 1280×720 frame
+   by frame (rec-20261028/r16/tr e30 / d30, 30 fps): the 联防 plate's panel, box, crosses, brackets, round_text_01 / 02 and
+   right-hand marks in the same places (section 27), in teal.
+   Art (box-relative px): perfect — all_emoji_head 62 px at (29, 28), sword ×.92 at (95, 30), three sparks 5×14 at (91, 15),
+   16×4 at −45° round (104, 25), 14×4 at (101, 35); loss — miss_emoji_head 67×51 at (57, 16) over emoji_body 28×30 at
+   (76, 59), a 14×7 bar at (108, 74), the sword ×.9 mirrored and turned 22° with its middle at (48.5, 54). One teal each
+   (perfect (70, 222, 163), loss (40, 186, 134), as the frames read), the faint vertical lines of img_screen_line on the faces.
+   Words: title ArkCN Heavy 38.8 px (209, 209, 208); 完美作战! ArkCN Heavy 21 px (76, 239, 183); 生命值减少 ArkCN Medium 18 px,
+   blood_icon 13×21 8 px after it, the number (Novecento Wide) 7 px after that, all (216, 51, 78).
+   Border: perfect — a 3 px teal line round the panel (x 393–395 / 888–890, y 270–272 / 442–444 against the panel's
+   392–887 × 273–440), a dark-teal band ≈ 7 px wide outside it ((34, 140, 100) at the line → (46, 87, 57) at 6 px, the field by
+   9 px); the line steady (G 160), near white (100, 247, 213) at 333 ms, fading to G 148 by 1.3 s, up to G 195 by 2.07 s
+   (mpop-eline, 14 points); loss — no line, no band. Both: the panel is near opaque (31, 31, 29)
+   — the field under it moves by 1–7 % of its own change — with its contour lines faint (contrast 6 of 255), and the field
+   round it is shaded ≈ .7 at the edge, gone ≈ 22 px out.
+   The field: everything under the HUD goes to ×.73 for as long as the plate is up (top bar, team list, the bottom prompt
+   and the right-hand count stay as they were) — .gm__edim, js/screens/game.js. It lands ≈ 100 ms before the plate and
+   leaves ≈ 50 ms after it in the footage; ours comes and goes with the plate ([APPROX], 3 frames / 2 frames).
+   Timing (t = 0 the first frame it shows): the panel fades in .45 → .72 → .9 → 1 by 100 ms; the art builds 33–100 ms in blocks;
+   brackets, tags and the marks from 67 ms, the crosses at 167 ms, the 3×2 cells from 233 ms; at 300 ms the title jumps
+   16 px up with the line under it half open, all of it by 333 ms; at 366 ms the panel flushes (perfect teal (28, 50, 37),
+   loss red (45, 30, 32) over (31, 31, 29)) and clears by 870 ms. Leaving (2.53 s = e30 / d30 f081, the same in both; L = 0
+   there): the brackets jump ≈ 30 px in and are gone at 33 ms; the art stands to 67, is a jagged block at 67, one 12 px
+   square at 100 and 133, nothing at 167; the crosses start in at 67 and close on the square (its middle) by 133–167,
+   fading; the tags go at 100; the panel and its line hold to 67, then .84 / .33 / .05 / 0 at 100 / 133 / 167 / 200; the
+   words hold to 133, then .75 / .4 / 0 at 167 / 200 / 233.
+   [REBUILT] the sparks and the bar (no sprite), the art's block build-up and collapse (stepped clip-path: the frames'
+   blocks are the sprite's own pixels breaking up), the flush.
+   [ASSUMED] -plain (a 联防 that leaked without charging the viewer): the perfect art, the title alone, no line, no flush. */
+.mpop--end { --end-ui: rgb(46, 106, 85); --end-art: rgb(70, 222, 163); }
+.mpop--end-loss { --end-art: rgb(40, 186, 134); }
+.mpop--end .mpop__panel { background: rgba(31, 31, 29, .95); box-shadow: 0 0 .33rem rgba(0, 0, 0, .58); animation: mpop-ein 100ms linear backwards; }
+.mpop--end .mpop__lines { opacity: .1; }
+.mpop--end .mpop__panel::before { content: ''; position: absolute; inset: 0; pointer-events: none; }
+.mpop--end-perfect .mpop__panel::before { inset: 0 0 -.015rem .06rem; box-shadow: 0 0 0 .045rem rgb(63, 184, 141), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95);
+  animation: mpop-eline 2610ms linear both; }
+.mpop__eflush { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.mpop--end-perfect .mpop__eflush { --flush: .24; background: rgb(20, 110, 60); animation: mpop-eflush 870ms linear; }
+.mpop--end-loss .mpop__eflush { --flush: .18; background: rgb(110, 20, 40); animation: mpop-eflush 870ms linear; }
+.mpop--end .mpop__x { color: rgb(80, 156, 128); animation: mpop-elate 167ms step-end backwards; }
+.mpop--end .mpop__brk { color: rgb(78, 156, 128); --brk-a: .5; animation: mpop-elate 60ms step-end backwards; }
+.mpop--end .mpop__utag { background: var(--end-ui); animation: mpop-elate 60ms step-end backwards; }
+.mpop--end .mpop__udeco { animation: mpop-elate 60ms step-end backwards; }
+.mpop--end .mpop__usq, .mpop--end .mpop__ugrid i { background: var(--end-ui); }
+.mpop--end .mpop__ugrid { animation: mpop-elate 233ms step-end backwards; }
+.mpop--end .mpop__usig { color: rgba(80, 170, 135, .42); }
+.mpop--end .mpop__ubar { background: linear-gradient(90deg, rgba(80, 170, 135, .1) 31.9%, var(--end-ui) 31.9%); }
+.mpop__ebot { position: absolute; inset: 0; animation: mpop-ebuild 100ms step-end backwards; }
+.mpop__ebot i { position: absolute; background: var(--end-art); }
+.mpop__ehead, .mpop__ebody, .mpop__esword { -webkit-mask: var(--m) 0 0 / 100% 100% no-repeat; mask: var(--m) 0 0 / 100% 100% no-repeat; }
+.mpop__ehead--all { --m: var(--end-face, url("/assets/official/hub/ac/battle/all_emoji_head.png")); left: .435rem; top: .42rem; width: .93rem; height: .93rem; }
+.mpop__ehead--miss { --m: var(--end-miss, url("/assets/official/hub/ac/battle/miss_emoji_head.png")); left: .855rem; top: .24rem; width: 1.005rem; height: .765rem; }
+.mpop__ebody { --m: var(--end-body, url("/assets/official/hub/ac/battle/emoji_body.png")); left: 1.14rem; top: .885rem; width: .42rem; height: .45rem; }
+.mpop__esword { --m: var(--end-sword, url("/assets/official/hub/ac/battle/sword.png")); left: 1.425rem; top: .45rem; width: .814rem; height: .897rem; }
+.mpop__esword--hurt { left: .33rem; top: .371rem; width: .795rem; height: .8775rem; transform: rotate(22deg) scaleX(-1); }
+/* the faces' faint vertical lines (img_screen_line, as on the 联防 faces): the parent's mask keeps them on the face */
+.mpop__ehead::after, .mpop__ebody::after { content: ''; position: absolute; inset: 0; opacity: .1;
+  background: var(--unite-lines, url("/assets/official/hub/ac/end/img_screen_line.png")) 0 0 / 1.92rem 1.92rem repeat; }
+.mpop__espark--1 { left: 1.365rem; top: .225rem; width: .075rem; height: .21rem; }
+.mpop__espark--2 { left: 1.44rem; top: .345rem; width: .24rem; height: .06rem; transform: rotate(-45deg); }
+.mpop__espark--3 { left: 1.515rem; top: .525rem; width: .21rem; height: .06rem; }
+.mpop__edash { left: 1.62rem; top: 1.11rem; width: .21rem; height: .105rem; }
+.mpop--end .mpop__text { animation: none; }
+.mpop--end .mpop__text.has-sub { top: .725rem; animation: mpop-ejump 290ms step-end backwards; }
+.mpop--end .mpop__title { color: rgb(209, 209, 208); }
+.mpop__esub { position: absolute; left: .06rem; top: .711rem; white-space: nowrap; font-family: 'ArkCN', var(--font-display); font-weight: 900;
+  font-size: calc(.315 * var(--t)); line-height: 1; letter-spacing: 0; color: rgb(76, 239, 183); animation: mpop-esub 63ms 270ms linear backwards; }
+.mpop__esub--loss { display: flex; align-items: center; top: .729rem; height: .315rem; font-weight: 500; font-size: calc(.27 * var(--t));
+  color: rgb(216, 51, 78); }
+.mpop__lp { flex: none; width: .195rem; height: .315rem; margin: 0 .09rem 0 .105rem; background: currentColor;
+  -webkit-mask: var(--end-lp, url("/assets/official/hub/ac/battle/blood_icon.png")) 0 0 / 100% 100% no-repeat;
+  mask: var(--end-lp, url("/assets/official/hub/ac/battle/blood_icon.png")) 0 0 / 100% 100% no-repeat; }
+.mpop__esub--loss .num { font-family: 'ArkWide', var(--font-num); font-weight: 500; font-size: calc(.37 * var(--t)); line-height: 1;
+  font-variant-numeric: normal; letter-spacing: 0; translate: 0 -.03rem; }
+.mpop--end .mpop__x--tl { --dx: 1; --dy: 1; }
+.mpop--end .mpop__x--tr { --dx: -1; --dy: 1; }
+.mpop--end .mpop__x--bl { --dx: 1; --dy: -1; }
+.mpop--end .mpop__x--br { --dx: -1; --dy: -1; }
+.mpop--end .mpop__brk--l { --bx: .45rem; }
+.mpop--end .mpop__brk--r { --bx: -.405rem; }
+.mpop--end.is-leaving .mpop__panel { animation: mpop-ebgout 233ms linear forwards; }
+/* filter: opacity() so the contour lines keep their own .1 under it */
+.mpop--end.is-leaving .mpop__panel::before, .mpop--end.is-leaving .mpop__lines,
+.mpop--end.is-leaving .mpop__udeco { animation: mpop-efade 233ms linear forwards; }
+.mpop--end.is-leaving .mpop__eflush { animation: none; opacity: 0; }
+.mpop--end.is-leaving .mpop__brk { animation: mpop-ebrk 33ms step-end forwards; }
+.mpop--end.is-leaving .mpop__utag { animation: mpop-eoff 100ms step-end forwards; }
+.mpop--end.is-leaving .mpop__ebot { animation: mpop-ecollapse 167ms step-end forwards; }
+.mpop--end.is-leaving .mpop__x { animation: mpop-eclose 167ms linear forwards; }
+.mpop--end.is-leaving .mpop__text { animation: mpop-etout 233ms linear forwards; }
+@keyframes mpop-ein { 0% { opacity: .45; } 33% { opacity: .72; } 67% { opacity: .9; } 100% { opacity: 1; } }
+@keyframes mpop-elate { 0% { opacity: 0; } }
+/* the line's colour as the frames read it: steady, near white at 333 ms (with the flush and the line under the title),
+   fading to its dimmest by 1.3 s, up again from 1.5 s to 2.07 s */
+@keyframes mpop-eline {
+  0% { box-shadow: 0 0 0 .045rem rgb(68, 160, 124), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  11.5% { box-shadow: 0 0 0 .045rem rgb(68, 160, 124), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  12.8% { box-shadow: 0 0 0 .045rem rgb(100, 247, 213), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  24.3% { box-shadow: 0 0 0 .045rem rgb(100, 247, 213), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  29.4% { box-shadow: 0 0 0 .045rem rgb(85, 210, 173), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  37% { box-shadow: 0 0 0 .045rem rgb(71, 176, 136), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  44.7% { box-shadow: 0 0 0 .045rem rgb(70, 165, 133), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  49.8% { box-shadow: 0 0 0 .045rem rgb(50, 148, 110), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  57.5% { box-shadow: 0 0 0 .045rem rgb(50, 148, 110), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  63.9% { box-shadow: 0 0 0 .045rem rgb(62, 157, 124), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  72.8% { box-shadow: 0 0 0 .045rem rgb(62, 183, 140), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  79.2% { box-shadow: 0 0 0 .045rem rgb(66, 195, 148), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  95.8% { box-shadow: 0 0 0 .045rem rgb(66, 195, 148), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); }
+  100% { box-shadow: 0 0 0 .045rem rgb(63, 184, 141), 0 0 .06rem .075rem rgba(30, 165, 118, .9), 0 0 .045rem .15rem rgba(42, 92, 64, .95); } }
+@keyframes mpop-eflush { 0%, 42% { opacity: 0; } 42.1%, 69% { opacity: var(--flush); } 100% { opacity: 0; } }
+/* nothing, one block, most of it, then all (stepped) */
+@keyframes mpop-ebuild { 0% { clip-path: inset(50%); } 33% { clip-path: inset(18% 38% 50% 34%); } 67% { clip-path: inset(10% 8% 12% 26%); } }
+@keyframes mpop-ejump { 0% { translate: 0 .24rem; } }
+@keyframes mpop-esub { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
+@keyframes mpop-ebgout { 0%, 28.6% { background-color: rgba(31, 31, 29, 0.95); box-shadow: 0 0 .33rem rgba(0, 0, 0, 0.58); } 42.9% { background-color: rgba(31, 31, 29, 0.84); box-shadow: 0 0 .33rem rgba(0, 0, 0, 0.51); }
+  57.1% { background-color: rgba(31, 31, 29, 0.33); box-shadow: 0 0 .33rem rgba(0, 0, 0, 0.2); } 71.4% { background-color: rgba(31, 31, 29, 0.05); box-shadow: 0 0 .33rem rgba(0, 0, 0, 0.03); }
+  85.7%, 100% { background-color: rgba(31, 31, 29, 0); box-shadow: 0 0 .33rem rgba(0, 0, 0, 0); } }
+@keyframes mpop-efade { 0%, 28.6% { filter: opacity(1); } 42.9% { filter: opacity(.9); } 57.1% { filter: opacity(.4); } 71.4% { filter: opacity(.1); }
+  85.7%, 100% { filter: opacity(0); } }
+@keyframes mpop-ebrk { 0% { translate: var(--bx) 0; } 100% { translate: var(--bx) 0; opacity: 0; } }
+@keyframes mpop-eoff { 100% { opacity: 0; } }
+/* whole to 67 ms, a jagged block, one square (twice), nothing */
+@keyframes mpop-ecollapse { 0% { clip-path: none; } 38% { clip-path: polygon(36% 30%, 58% 30%, 58% 40%, 66% 40%, 66% 62%, 52% 62%, 52% 72%, 36% 72%); }
+  58%, 79% { clip-path: inset(42% 47% 48% 46%); } 100% { clip-path: inset(50%); } }
+@keyframes mpop-eclose { 0%, 20% { translate: 0 0; } 40% { translate: calc(var(--dx) * .3rem) calc(var(--dy) * .15rem); }
+  60% { translate: calc(var(--dx) * .83rem) calc(var(--dy) * .62rem); opacity: 1; }
+  80% { translate: calc(var(--dx) * 1.15rem) calc(var(--dy) * .85rem); opacity: .5; }
+  100% { translate: calc(var(--dx) * 1.25rem) calc(var(--dy) * .9rem); opacity: 0; } }
+.gm__edim { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: rgba(0, 0, 0, .27); }
+@keyframes mpop-etout { 0%, 57.1% { opacity: 1; } 71.4% { opacity: .75; } 85.7% { opacity: .4; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mpop--end .mpop__panel, .mpop--end .mpop__panel::before, .mpop__eflush, .mpop--end .mpop__x, .mpop--end .mpop__brk, .mpop--end .mpop__utag,
+  .mpop--end .mpop__udeco, .mpop--end .mpop__ugrid, .mpop__ebot, .mpop--end .mpop__text.has-sub, .mpop__esub { animation: none; }
+}
+
+/* ---- 31. 作战开始 (round 16, video 8:31.0–8:35.4 = tr/start f001–f045, 0.1 s apart, measured at 1280 × 720; T = ms from
+   the phase change, f013 ≈ T 50). No banner — the footage has none (ui/gameLogic/phases.js phaseBanner; the owner,
+   2026-10-29) —, the top bar carries the change:
+   · the two 🔍 buttons and their brackets leave with the phase change and stay away through the battle and its
+     settlement (ui/hud.js TopBar .is-nochk; the "+" marks stay);
+   · the capsule takes bg_battle 1:1 (155 × 43, 3.5 px under bg_rest's top, the same footprint): icon_battle 1:1 at the
+     left (19 px in, 3 px down), the count centred 94 px in — the kills red, "/ total" cream, at the face's own weight;
+   · the scene at the sprites' own size (a sprite px .015rem) inside the plate's lines: trans_batte1 lands with
+     trans_batte2 at its left (T 0–120), trans_worm1 hops in from the right edge (T 0–650); from T 720 both dim out,
+     icon_sword_yellow comes in 44 px right at .8 and settles 1:1 by T 1250 while 开始作战 (SourceHanSans Heavy) slides in
+     from 25 px left (T 800–1250); from T 1570 the two rise and fade, the count rises into place from 13 px under (T 1700–1850);
+   · the clock: the countdown gives way to four countdown_arrow chevrons (2/3 size, 16 px apart, their right end on the
+     countdown's): all lit, dimmed from the left at T 550–650, lit again, gone by T 950; then nothing until T 2480, when
+     the countdown fades back in.
+   The capsule and its frame sit 4 px higher (the plate's middle at y 29.5 in the footage, 33.5 before).
+   [ASSUMED] the hops' heights between the 100 ms samples; the chevrons when the rest timer runs out (in the footage
+   everyone is ready). ---- */
+.gtop__center.is-nochk .gtop__frame { visibility: hidden; }
+/* our one-bar TopBar has no .gtop__frame (official-hud.css §11): the 🔍 buttons are its direct children, so they stand
+   in for the package's frames here */
+.gtop__center.is-nochk :is(.gtop__iconbtn, .enemybtn) { visibility: hidden; }
+.gtop__cap { top: -.06rem; }
+
+/* the battle plate and its count */
+.gtop .capsule--combat:not(.capsule--unite) { width: 2.325rem; min-width: 2.325rem; height: .645rem; margin: .0525rem .0375rem .0225rem;
+  justify-content: flex-start; align-items: flex-start; gap: 0; padding: .045rem 0 0 .285rem; }
+.gtop .capsule--combat:not(.capsule--unite) .capsule__kills { position: absolute; left: 1.41rem; top: 0; bottom: 0; display: flex; align-items: center;
+  translate: -50% 0; font-size: .3rem; line-height: 1; letter-spacing: 0; white-space: nowrap; color: #e9ddcd; }
+.gtop .capsule--combat:not(.capsule--unite) .capsule__kills b { font-size: inherit; font-weight: inherit; color: #e85a45; }
+
+/* the scene: its box is the plate's inside (4 px in from the plate's edges) */
+.gtop__cap > .capfx--clash { inset: .1725rem .2175rem .1425rem; display: block; border-radius: 0; }
+.gtop__cap > .capfx--clash .capfx__meet { display: block; padding: 0; animation: capfx-dim2 150ms 720ms linear forwards; }
+.gtop__cap > .capfx--clash .capfx__us { position: absolute; left: .6rem; top: 0; display: block; }
+.gtop__cap > .capfx--clash .capfx__bot { width: .465rem; height: .495rem; animation: capfx-land 120ms ease-out both; transform-origin: 50% 100%; }
+.gtop__cap > .capfx--clash .capfx__body { width: .465rem; height: .495rem; }
+.gtop__cap > .capfx--clash .capfx__sword { left: -.06rem; top: -.075rem; width: .36rem; height: .54rem; }
+.gtop__cap > .capfx--clash .capfx__foe { position: absolute; left: 1.215rem; top: .015rem; animation: capfx-hop2 650ms linear both; }
+.gtop__cap > .capfx--clash .capfx__foe .sprite { width: .69rem; height: .465rem; }
+.gtop__cap > .capfx--clash .capfx__clash { display: block; animation: capfx-out2 150ms 1570ms linear forwards; }
+.gtop__cap > .capfx--clash .capfx__swords { position: absolute; left: .165rem; top: -.09rem; width: .66rem; height: .66rem; margin: 0; filter: none;
+  opacity: 0; animation: capfx-x 600ms 700ms linear forwards; }
+.gtop__cap > .capfx--clash .capfx__x { left: 0; top: 0; width: .66rem; height: .66rem; transform: none; }
+.gtop__cap > .capfx--clash .capfx__word { position: absolute; left: .795rem; top: calc(50% - .03rem); translate: 0 -50%; line-height: 1;
+  font-family: var(--font-cjk); font-size: .285rem; font-weight: 900; letter-spacing: 0; color: #ffd23c;
+  text-shadow: 0 0 .05rem rgba(255, 170, 40, .6); animation: capfx-word2 450ms 800ms linear forwards; }
+.gtop .gtop__cap.is-fx-clash .capsule > * { animation: capfx-up-in 150ms 1700ms linear both, capfx-unhide 1ms 1700ms both; }
+@keyframes capfx-land { from { transform: translateY(-.3rem) scaleY(1.35); opacity: 0; } 40% { opacity: 1; } }
+@keyframes capfx-hop2 {
+  0% { transform: translate(1.125rem, 0); } 7.7% { transform: translate(.87rem, -.03rem); } 15.4% { transform: translate(.7rem, -.045rem); }
+  23.1% { transform: translate(.54rem, 0); } 30.8% { transform: translate(.48rem, -.03rem); } 38.5% { transform: translate(.42rem, 0); }
+  46.2% { transform: translate(.36rem, -.03rem); } 53.8%, 69.2% { transform: translate(.3rem, 0); } 76.9% { transform: translate(.21rem, -.045rem); }
+  84.6% { transform: translate(.12rem, 0); } 92.3% { transform: translate(.06rem, -.03rem); } 100% { transform: none; }
+}
+@keyframes capfx-dim2 { 0% { opacity: 1; } 20% { opacity: .5; } 100% { opacity: 0; } }
+@keyframes capfx-x {
+  0% { opacity: 0; transform: translateX(.66rem) scale(.8); } 8.3% { opacity: 1; transform: translateX(.63rem) scale(.8); }
+  25% { opacity: 1; transform: translateX(.4875rem) scale(.82); } 41.7% { opacity: 1; transform: translateX(.1425rem) scale(.82); }
+  58.3% { opacity: 1; transform: translateX(.0375rem) scale(.84); } 75% { opacity: 1; transform: translateX(.0075rem) scale(.9); }
+  91.7%, 100% { opacity: 1; transform: none; }
+}
+@keyframes capfx-word2 {
+  0% { opacity: 0; transform: translateX(-.42rem); filter: blur(1px) brightness(1.6); }
+  11% { opacity: .6; transform: translateX(-.375rem); filter: blur(.5px) brightness(1.4);
+    text-shadow: -.09rem 0 0 rgba(255, 210, 60, .45), 0 0 .06rem rgba(255, 170, 40, .75); }
+  33% { opacity: 1; transform: translateX(-.12rem); filter: none; }
+  56% { opacity: 1; transform: translateX(-.075rem); } 78% { opacity: 1; transform: translateX(-.03rem); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+@keyframes capfx-out2 { to { transform: translateY(-.2rem); opacity: 0; } }
+@keyframes capfx-up-in { from { transform: translateY(.2rem); } }
+@keyframes capfx-unhide { from { visibility: hidden; } to { visibility: visible; } }
+
+/* the clock's chevrons (ui/hud.js ClockChevrons) over the countdown's place, and the countdown's way back */
+.gtop__clock { position: relative; }
+.gclock-chev { position: absolute; left: .24rem; top: -.055rem; width: 1.3rem; height: .8rem; pointer-events: none;
+  animation: gclock-chev-out 1ms 990ms linear forwards; }
+.gclock-chev__a { position: absolute; left: calc(var(--i) * .24rem); top: 0; width: .58rem; height: .8rem;
+  animation: gclock-blink 950ms calc(var(--i) * 40ms) linear both; }
+.gclock-chev__a .sprite { width: 100%; height: 100%; }
+.gtop__clock.is-fx-clash .countdown { animation: gclock-in 120ms 2480ms linear both; }
+@keyframes gclock-blink { 0%, 48% { opacity: 1; } 58% { opacity: .45; } 68% { opacity: .3; } 78%, 90% { opacity: .9; } 100% { opacity: 0; } }
+@keyframes gclock-chev-out { to { opacity: 0; visibility: hidden; } }
+@keyframes gclock-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .gclock-chev { display: none; }
+  .gtop__clock.is-fx-clash .countdown { animation: none; }
+}
+
+/* ---- 32. 回合 / 获得 plate (round 16, the footage at video 8:49 = rec-20261028/r16/tr/round30 f001–f078, 30 fps, measured
+   at 1280 × 720; T = ms from the plate's first frame; js/ui/matchPopups.js RoundPopup / RoundArt, class .mpop--round).
+   The 联防 plate's panel, box, crosses and brackets (section 27's shared lines), no round_bg. In the box the robot from its
+   own sprites at their 2/3 (a png px .01rem), each a mask in one teal (44, 191, 140) with img_screen_line's faint lines:
+   head 104×81 at (.815, .3075) rem, body 48×56 at (1.1025, .9225), book 48×64 turned −9° at (.5625, .7975) and hand 32×24
+   at (1.57, 1.095) in front with a 3 px rim of the panel's colour, five 6 px dots; round_text_01 / 02 in teal.
+   The cells (panel x 3.465 / 5.415 rem, y .465, 111 × 107 px, white 4.5 %): 回合 (155, 154, 154) and 获得 (208, 173, 61)
+   in ArkCN Medium 21 px between round_frame brackets, the round in ArkWide Medium (ink 28 px high), the funds:
+   round_sources_icon alone in the middle, then +N (round_plus as the "+") beside it.
+   Timing: T 0–133 the panel .27 → .95, the cells' white .56 → 1, the tags .38 → 1; the robot grows from one square — a
+   6×5 px square at T 0, the robot's size at 33, gone at 66 as the robot shows at .815 × .76 (from its middle, 1.77 /
+   1.125 rem), .93 × .92 at 99, 1 at 133; the brackets come in from 22 px inside (T 33–300, most of the way by 133), the
+   dots at 120, the crosses at 183. The old round squashes down into its baseline
+   (T 300–500), the new one drops in from 9 px up at .71 (T 333–533). The funds: the icon flashes (T 717–867, yellow
+   to pale and back) under a short glow (box T 717–750, streak 750–816), at T 750 it moves 19 px left for +N, which
+   shows at half from 833 and whole from 866, eight pale sparks drifting off it (766–1250).
+   Leaving (L = 0 at 1720 ms, ≈ tr/round30 f066; the footage holds ≈ 2.05 s, ours 1.72 s so the plate and its fold stay
+   inside ROUND_START's 2 s): the brackets jump in and go at 40 ms, the robot is the square again from 65 ms (≈ .94,
+   .45, .18 of it), gone by 163; the crosses close on the box's middle 48–148 ms; the panel .9 / .6 / .35 / .11 / 0 at
+   15 / 48 / 81 / 114 / 148 ms, the tags with it; the cells' words hold to 114 ms and are gone by 214, their white trailing.
+   [REBUILT] the glow, the sparks, the seed square and the rims (no sprite: drawn from the frames). [ASSUMED] a watcher's
+   plate (no 获得: the 回合 cell in the middle of the two cells' place), the 剩余 N 回合 strip (match-popups.css). ---- */
+.mpop--round { --rbot: rgb(44, 191, 140); --rrim: rgb(31, 31, 29); }
+.mpop--round .mpop__panel { background: rgba(30, 29, 26, .95); animation: mpop-rbgin 133ms linear backwards; }
+.mpop--round .mpop__lines { animation: mpop-rlin 133ms linear backwards; }
+.mpop--round .mpop__x { color: rgb(41, 199, 159); animation: mpop-elate 183ms step-end backwards; }
+.mpop--round .mpop__x--tl { --dx: 1; --dy: 1; }
+.mpop--round .mpop__x--tr { --dx: -1; --dy: 1; }
+.mpop--round .mpop__x--bl { --dx: 1; --dy: -1; }
+.mpop--round .mpop__x--br { --dx: -1; --dy: -1; }
+.mpop--round .mpop__brk { color: rgb(95, 150, 124); --brk-a: .5; animation: mpop-rbrk 300ms linear backwards; }
+.mpop--round .mpop__brk--l { --rb: 1; --bx: .525rem; }
+.mpop--round .mpop__brk--r { --rb: -1; --bx: -.45rem; }
+.mpop--round .mpop__utag { background: rgb(40, 200, 160); animation: mpop-rtag 67ms linear backwards; }
+.mpop--round .mpop__utag--2 { background: rgb(55, 126, 100); }
+
+/* the robot */
+.mpop__rbot { position: absolute; inset: 0; transform-origin: 1.77rem 1.125rem; animation: mpop-rbotin 133ms linear backwards; }
+.mpop__rpart { position: absolute; background: var(--rbot); -webkit-mask: var(--m) 0 0 / 100% 100% no-repeat; mask: var(--m) 0 0 / 100% 100% no-repeat; }
+.mpop__rpart::after { content: ''; position: absolute; inset: 0; opacity: .08;
+  background: var(--unite-lines, url("/assets/official/hub/ac/end/img_screen_line.png")) 0 0 / 1.92rem 1.92rem repeat; }
+.mpop__rpart--head { --m: var(--round-head, url("/assets/official/hub/ac/battle/round_emoji_head.png")); left: .815rem; top: .3075rem; width: 1.04rem; height: .81rem; }
+.mpop__rpart--body { --m: var(--round-body, url("/assets/official/hub/ac/battle/round_emoji_body.png")); left: 1.1025rem; top: .9225rem; width: .48rem; height: .56rem; }
+/* book and hand: a rim of the panel's colour round them (the wrapper is not masked, so its drop-shadows follow the part) */
+.mpop__rrim { position: absolute; filter: drop-shadow(.045rem 0 0 var(--rrim)) drop-shadow(-.045rem 0 0 var(--rrim))
+  drop-shadow(0 .045rem 0 var(--rrim)) drop-shadow(0 -.045rem 0 var(--rrim)); }
+.mpop__rrim .mpop__rpart { inset: 0; }
+.mpop__rrim--book { left: .5625rem; top: .7975rem; width: .48rem; height: .64rem; transform: rotate(-9deg); }
+.mpop__rpart--book { --m: var(--round-book, url("/assets/official/hub/ac/battle/round_emoji_book.png")); }
+.mpop__rrim--hand { left: 1.57rem; top: 1.095rem; width: .32rem; height: .24rem; }
+.mpop__rpart--hand { --m: var(--round-hand, url("/assets/official/hub/ac/battle/round_emoji_hand.png")); }
+/* The robot keeps moving while the plate holds (video 7:57–7:59, measured at 30 fps):
+   two poses, ~467 ms each. Head rises 1 px as the book drops 2 px; the body/hand stay put.
+   Animate translate independently of the book's -9deg rotation and the parent's entry/exit scale. */
+.mpop--round .mpop__rpart--head { animation: mpop-rhead-idle 934ms 133ms steps(1, end) infinite; }
+.mpop--round .mpop__rrim--book { animation: mpop-rbook-idle 934ms 133ms steps(1, end) infinite; }
+.mpop__rdot { position: absolute; width: .09rem; height: .09rem; background: var(--rbot); animation: mpop-elate 120ms step-end backwards; }
+.mpop--round .mpop__rdot { animation: mpop-elate 120ms step-end backwards, mpop-rdot-idle 934ms 133ms steps(1, end) infinite; }
+.mpop__rdot--0 { left: .78rem; top: .165rem; }
+.mpop__rdot--1 { left: .51rem; top: .3rem; }
+.mpop__rdot--2 { left: .66rem; top: .54rem; }
+.mpop__rdot--3 { left: 1.92rem; top: .285rem; }
+.mpop__rdot--4 { left: 2.04rem; top: .48rem; }
+/* the square the robot grows from and goes back into */
+.mpop__rseed { position: absolute; left: 1.035rem; top: .705rem; width: .495rem; height: .435rem; background: var(--rbot); opacity: 0;
+  animation: mpop-rseed 66ms step-end; }
+@keyframes mpop-rhead-idle { 0% { translate: 0 0; } 50% { translate: 0 -.015rem; } }
+@keyframes mpop-rbook-idle { 0% { translate: 0 0; } 50% { translate: 0 .03rem; } }
+@keyframes mpop-rdot-idle { 0% { translate: 0 0; } 50% { translate: 0 .015rem; } }
+@media (prefers-reduced-motion: reduce) {
+  .mpop--round .mpop__rpart--head, .mpop--round .mpop__rrim--book, .mpop--round .mpop__rdot { animation: none; translate: none; }
+}
+
+/* the cells */
+.mpop--round .mpop__cell { position: absolute; z-index: 1; top: .465rem; display: block; width: 1.665rem; height: 1.605rem; min-width: 0; min-height: 0;
+  padding: 0; background: none; }
+.mpop--round .mpop__cell::before { content: ''; position: absolute; inset: 0; background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 0 0 .015rem rgba(255, 255, 255, .03); animation: mpop-rcbg 100ms linear backwards; }
+.mpop--round .mpop__cell--round { left: 3.465rem; }
+.mpop--round .mpop__cell--gold { left: 5.415rem; }
+.mpop--round.is-watching .mpop__cell--round { left: 4.44rem; }
+.mpop--round .mpop__k, .mpop--round .mpop__roll, .mpop--round .mpop__gain { animation: mpop-rcin 33ms linear backwards; }
+.mpop--round .mpop__k { position: absolute; left: .255rem; top: .3rem; padding: 0 .2475rem 0 .2625rem; font-family: 'ArkCN', var(--font-display); font-weight: 500;
+  font-size: calc(.315 * var(--t)); line-height: 1; letter-spacing: 0; white-space: nowrap; color: rgb(155, 154, 154); }
+.mpop--round .mpop__k::before, .mpop--round .mpop__k::after { top: 50%; bottom: auto; width: .06rem; height: .36rem; margin-top: -.18rem; }
+.mpop--round .mpop__cell--round .mpop__k::before, .mpop--round .mpop__cell--round .mpop__k::after { color: rgb(95, 95, 95); }
+.mpop--round .mpop__cell--gold .mpop__k { padding: 0 .24rem 0 .255rem; color: rgb(208, 173, 61); }
+.mpop--round .mpop__cell--gold .mpop__k::before, .mpop--round .mpop__cell--gold .mpop__k::after { color: rgb(125, 108, 90); }
+.mpop--round .mpop__roll { position: absolute; left: 0; right: 0; top: .69rem; display: grid; justify-items: center; height: .6rem; overflow: visible;
+  font-family: 'ArkWide', var(--font-num); font-size: calc(.58 * var(--t)); line-height: .6rem; letter-spacing: 0; color: rgb(205, 203, 204); }
+.mpop--round .mpop__roll b { font-weight: 500; }
+.mpop--round .mpop__old { opacity: 0; transform-origin: 50% 80%; animation: mpop-rold 200ms 300ms linear backwards; }
+.mpop--round .mpop__new { transform-origin: 50% 50%; animation: mpop-rnew 200ms 333ms linear backwards; }
+/* the funds */
+.mpop--round .mpop__gain { position: absolute; left: 0; right: 0; top: .835rem; display: flex; justify-content: center; align-items: center; gap: 0;
+  height: .4rem; translate: .015rem 0; font-size: inherit; color: rgb(228, 188, 53); }
+.mpop__rcoin { flex: none; width: .52rem; height: .4rem; background: rgb(222, 182, 28);
+  -webkit-mask: var(--round-coin, url("/assets/official/hub/ac/battle/round_sources_icon.png")) 0 0 / 100% 100% no-repeat;
+  mask: var(--round-coin, url("/assets/official/hub/ac/battle/round_sources_icon.png")) 0 0 / 100% 100% no-repeat;
+  animation: mpop-rcoin 150ms 717ms step-end; }
+.mpop__rplusc { display: flex; max-width: 3rem; overflow: hidden; animation: mpop-rgrow 750ms step-end backwards; }
+.mpop--round .mpop__plus { display: flex; align-items: center; padding-left: .03rem; translate: 0 -.015rem; font-family: 'ArkWide', var(--font-num); font-weight: 500;
+  font-size: calc(.385 * var(--t)); line-height: 1; letter-spacing: 0; white-space: nowrap; color: rgb(211, 174, 49);
+  animation: mpop-rplus 117ms 750ms step-end backwards; }
+.mpop__rplus { flex: none; width: .235rem; height: .243rem; overflow: hidden; translate: 0 .035rem; font-style: normal; font-size: .1rem;
+  line-height: .243rem; color: transparent; background: rgb(224, 185, 52);
+  -webkit-mask: var(--round-plus, url("/assets/official/hub/ac/battle/round_plus.png")) 0 0 / 100% 100% no-repeat;
+  mask: var(--round-plus, url("/assets/official/hub/ac/battle/round_plus.png")) 0 0 / 100% 100% no-repeat; }
+.mpop__rflare { position: absolute; inset: 0; pointer-events: none; }
+.mpop__rflare::before, .mpop__rflare::after { content: ''; position: absolute; top: .78rem; height: .51rem; opacity: 0; }
+.mpop__rflare::before { left: .45rem; width: .735rem; animation: mpop-rshow 33ms 717ms step-end;
+  background: linear-gradient(90deg, rgba(255, 215, 70, 0), rgba(255, 215, 70, .3) 14%, rgba(255, 215, 70, .3) 75%, rgba(255, 215, 70, 0)); }
+.mpop__rflare::after { left: .045rem; width: 1.56rem; animation: mpop-rshow 66ms 750ms step-end;
+  background: linear-gradient(90deg, rgba(255, 215, 70, 0), rgba(255, 215, 70, .12) 25%, rgba(255, 215, 70, .3) 42%, rgba(255, 215, 70, .3) 73%,
+    rgba(255, 215, 70, .14) 87%, rgba(255, 215, 70, 0)); }
+.mpop__rsparks { position: absolute; inset: 0; pointer-events: none; }
+.mpop__rsparks i { position: absolute; left: var(--l); top: var(--tp); width: .075rem; height: .075rem; background: rgb(236, 232, 140); opacity: 0;
+  animation: mpop-rspark var(--du) var(--d) linear; }
+.mpop__rsparks i:nth-child(1) { --l: .465rem; --tp: .81rem; --dx: -.18rem; --dy: -.105rem; --d: 766ms; --du: 360ms; }
+.mpop__rsparks i:nth-child(2) { --l: 1.215rem; --tp: 1.245rem; --dx: .06rem; --dy: .15rem; --d: 766ms; --du: 400ms; }
+.mpop__rsparks i:nth-child(3) { --l: .75rem; --tp: .765rem; --dx: -.09rem; --dy: -.09rem; --d: 820ms; --du: 330ms; width: .06rem; height: .06rem; }
+.mpop__rsparks i:nth-child(4) { --l: 1.23rem; --tp: .9rem; --dx: .18rem; --dy: -.06rem; --d: 820ms; --du: 430ms; }
+.mpop__rsparks i:nth-child(5) { --l: 1.56rem; --tp: 1.08rem; --dx: .09rem; --dy: 0rem; --d: 880ms; --du: 250ms; width: .06rem; height: .06rem; }
+.mpop__rsparks i:nth-child(6) { --l: .33rem; --tp: 1.185rem; --dx: -.27rem; --dy: .03rem; --d: 850ms; --du: 400ms; }
+.mpop__rsparks i:nth-child(7) { --l: .525rem; --tp: 1.26rem; --dx: -.21rem; --dy: .15rem; --d: 850ms; --du: 400ms; }
+.mpop__rsparks i:nth-child(8) { --l: 1.155rem; --tp: .825rem; --dx: .03rem; --dy: -.03rem; --d: 850ms; --du: 170ms; width: .06rem; height: .06rem; }
+
+/* leaving (ROUND_LEAVE_MS 220) */
+.mpop--round.is-leaving .mpop__panel { animation: mpop-rbgout 220ms linear forwards; }
+.mpop--round.is-leaving .mpop__lines { animation: mpop-rlout 220ms linear forwards; }
+.mpop--round.is-leaving .mpop__brk { animation: mpop-ebrk 40ms step-end forwards; }
+.mpop--round.is-leaving .mpop__x { animation: mpop-rclose 220ms linear forwards; }
+.mpop--round.is-leaving .mpop__utag { animation: mpop-rtagout 220ms linear forwards; }
+.mpop--round.is-leaving .mpop__rbot { animation: mpop-rhide 220ms step-end forwards; }
+.mpop--round.is-leaving .mpop__rseed { animation: mpop-rseedout 220ms step-end forwards; }
+.mpop--round.is-leaving .mpop__cell::before { animation: mpop-rcbgout 220ms linear forwards; }
+.mpop--round.is-leaving .mpop__k, .mpop--round.is-leaving .mpop__roll, .mpop--round.is-leaving .mpop__gain,
+.mpop--round.is-leaving .mpop__head, .mpop--round.is-leaving .mpop__line { animation: mpop-rtout 220ms linear forwards; }
+
+@keyframes mpop-rbgin { 0% { background-color: rgba(30, 29, 26, .266); } 24.8% { background-color: rgba(30, 29, 26, .665); }
+  50.4% { background-color: rgba(30, 29, 26, .874); } 75.2% { background-color: rgba(30, 29, 26, .92); } 100% { background-color: rgba(30, 29, 26, .95); } }
+@keyframes mpop-rlin { 0% { filter: opacity(.28); } 24.8% { filter: opacity(.7); } 50.4% { filter: opacity(.92); } 75.2% { filter: opacity(.97); } 100% { filter: opacity(1); } }
+@keyframes mpop-rbrk { 0%, 10.9% { opacity: 0; translate: calc(var(--rb) * .33rem) 0; } 11% { opacity: calc(var(--brk-a) * .4); translate: calc(var(--rb) * .33rem) 0; }
+  22.3% { opacity: var(--brk-a); translate: calc(var(--rb) * .2625rem) 0; } 33.3% { translate: calc(var(--rb) * .21rem) 0; }
+  44.3% { translate: calc(var(--rb) * .0825rem) 0; } 55.7% { translate: calc(var(--rb) * .0675rem) 0; } 66.7% { translate: calc(var(--rb) * .0375rem) 0; }
+  77.7% { translate: calc(var(--rb) * .0225rem) 0; } 89% { translate: calc(var(--rb) * .0075rem) 0; } 100% { translate: 0 0; } }
+@keyframes mpop-rtag { 0% { opacity: .38; } 49.3% { opacity: .76; } 100% { opacity: 1; } }
+/* hidden to 66 ms, then .815 × .76 → .93 × .92 → 1 */
+@keyframes mpop-rbotin { 0%, 49.6% { opacity: 0; scale: .815 .76; } 49.7% { opacity: 1; scale: .815 .76; } 74.4% { scale: .93 .92; } 100% { scale: 1; } }
+/* a 6×5 px square, the robot's size, gone (step-end: each value holds a video frame) */
+@keyframes mpop-rseed { 0% { opacity: 1; scale: .18 .17; } 50% { opacity: 1; scale: 1; } }
+@keyframes mpop-rcbg { 0% { opacity: .56; } 33% { opacity: .86; } 67% { opacity: .98; } 100% { opacity: 1; } }
+@keyframes mpop-rcin { 0% { opacity: .82; } }
+/* the old number squashed into its baseline, the new one dropping in, per video frame */
+@keyframes mpop-rold { 0% { opacity: 1; transform: none; } 16.5% { opacity: 1; transform: translateY(.045rem) scale(.97, .83); }
+  33% { opacity: 1; transform: translateY(.09rem) scale(.88, .48); } 50% { opacity: .9; transform: translateY(.12rem) scale(.7, .2); }
+  66.5% { opacity: .7; transform: translateY(.135rem) scale(.68, .1); } 83% { opacity: .4; transform: translateY(.135rem) scale(.68, .05); }
+  100% { opacity: 0; transform: translateY(.135rem) scale(.68, .05); } }
+@keyframes mpop-rnew { 0% { opacity: 0; transform: translateY(-.135rem) scale(.71); } 16.5% { opacity: .35; transform: translateY(-.135rem) scale(.71); }
+  33% { opacity: .6; transform: translateY(-.0525rem) scale(.89); } 50% { opacity: .75; transform: translateY(-.06rem) scale(.86); }
+  66.5% { opacity: .95; transform: translateY(-.0225rem) scale(.96); } 83% { opacity: 1; transform: translateY(-.015rem) scale(1); } 100% { opacity: 1; transform: none; } }
+@keyframes mpop-rcoin { 0% { background-color: rgb(255, 240, 70); } 22% { background-color: rgb(255, 250, 90); } 55% { background-color: rgb(255, 238, 75); }
+  78% { background-color: rgb(242, 215, 45); } }
+@keyframes mpop-rgrow { 0% { max-width: 0; } }
+@keyframes mpop-rplus { 0% { opacity: 0; } 70% { opacity: .5; } }
+@keyframes mpop-rshow { 0% { opacity: 1; } }
+@keyframes mpop-rspark { 0% { opacity: 0; translate: 0 0; } 12% { opacity: 1; } 40% { opacity: .55; } 65% { opacity: .9; }
+  100% { opacity: 0; translate: var(--dx) var(--dy); } }
+@keyframes mpop-rbgout { 0% { background-color: rgba(30, 29, 26, .95); } 6.8% { background-color: rgba(30, 29, 26, .9); }
+  21.8% { background-color: rgba(30, 29, 26, .6); } 36.8% { background-color: rgba(30, 29, 26, .35); } 51.8% { background-color: rgba(30, 29, 26, .114); }
+  67.3%, 100% { background-color: rgba(30, 29, 26, 0); } }
+@keyframes mpop-rlout { 0% { filter: opacity(1); } 6.8% { filter: opacity(.95); } 21.8% { filter: opacity(.63); } 36.8% { filter: opacity(.37); }
+  51.8% { filter: opacity(.12); } 67.3%, 100% { filter: opacity(0); } }
+@keyframes mpop-rclose { 0%, 22% { translate: 0 0; } 37% { translate: calc(var(--dx) * .3rem) calc(var(--dy) * .225rem); opacity: .6; }
+  52% { translate: calc(var(--dx) * .855rem) calc(var(--dy) * .555rem); opacity: .5; }
+  67%, 100% { translate: calc(var(--dx) * 1.2rem) calc(var(--dy) * .85rem); opacity: 0; } }
+@keyframes mpop-rtagout { 0% { opacity: 1; } 21.8% { opacity: .86; } 36.8% { opacity: .69; } 51.8% { opacity: .14; } 67.3%, 100% { opacity: 0; } }
+@keyframes mpop-rhide { 0% { opacity: 1; } 29.5%, 100% { opacity: 0; } }
+@keyframes mpop-rseedout { 0% { opacity: 0; } 29.5% { opacity: 1; scale: .94; } 44% { opacity: 1; scale: .45 .41; } 59% { opacity: 1; scale: .18 .14; }
+  74%, 100% { opacity: 0; } }
+@keyframes mpop-rcbgout { 0% { opacity: 1; } 21.8% { opacity: .93; } 36.8% { opacity: .87; } 51.8% { opacity: .65; } 67.3% { opacity: .41; }
+  82.3% { opacity: .32; } 97.3%, 100% { opacity: 0; } }
+@keyframes mpop-rtout { 0%, 51.8% { opacity: 1; } 67.3% { opacity: .7; } 82.3% { opacity: .28; } 97.3%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mpop--round .mpop__panel, .mpop--round .mpop__lines, .mpop--round .mpop__x, .mpop--round .mpop__brk, .mpop--round .mpop__utag, .mpop__rbot,
+  .mpop__rdot, .mpop__rseed, .mpop--round .mpop__cell::before, .mpop--round .mpop__k, .mpop--round .mpop__roll, .mpop--round .mpop__gain,
+  .mpop--round .mpop__old, .mpop--round .mpop__new, .mpop__rcoin, .mpop__rplusc, .mpop--round .mpop__plus, .mpop__rflare::before,
+  .mpop__rflare::after, .mpop__rsparks i, .mpop--round.is-leaving .mpop__cell::before,
+  .mpop--round.is-leaving :is(.mpop__panel, .mpop__lines, .mpop__brk, .mpop__x, .mpop__utag, .mpop__rbot, .mpop__rseed, .mpop__k, .mpop__roll,
+    .mpop__gain, .mpop__head, .mpop__line) { animation: none; }
+}
+
+/* ---- 33. 协议已失效 (ui/downedPlate.js; round 16, video 10:56.1–10:59.0 = r16/set/down30 f010–f097, 30 fps, measured at
+   1280 × 720; T = ms from the dimming, f010). The project's Modal as the event's plate: the panel 945 × 225 with its top
+   120 px above the middle (the box pushed down 104 px so panel and buttons sit where the footage has them); the map the
+   panel's width (946 px, 290 px over its top), toned by #downm-tone; a 56.4 px teal grid [REBUILT]; the sprites at 1:1
+   (a sprite px .015rem) but icon_dead (× 1.86, its 39 px face 72 px) and left_frame (stretched to 138 px).
+   · T 0–50 the field dims to 27 % (the footage: the board at .27 of its brightness);
+   · T 33 the plate in a squashed band (the frame bits at .72 × .35), tinted crimson, 协议已失效 170 px left of its place,
+     split and blurred; T 67 the calm face, the red lines near the middle; T 100 the frame at full height, the lines
+     out at the edges; T 133 the tint gone, grid / axis lines / brackets in, everything in place by T 167–200;
+   · the face: calm (robo_head, CSS eyes and mouth [REBUILT]) T 67–230, dimmed from T 165, with face_lower_dec under it;
+     icon_dead with a dark inside T 233–350, red at T 333, white from T 367; icon_text under it at T 133 and from T 233;
+   · btn_continue / btn_end from T 500 (wide and blurred) to T 667; 继续观战: the panel goes at once (f092–f093), the face and
+     title in .27 s, the buttons in .3 s, the dimming in .4 s (f092–f104).
+   [ASSUMED] the f017 glitch frame (shown as the dark-filled face); the tones of the thin lines, matched by eye. ---- */
+.modal.downm-veil { background: rgba(0, 0, 0, .73); -webkit-backdrop-filter: none; backdrop-filter: none; animation: downm-fade 40ms -10ms linear both; }
+.modal.downm-veil.is-leaving { animation: downm-veil-out 400ms linear forwards; pointer-events: none; }
+.downm.is-leaving .downm__panel { animation: downm-panel-out 40ms 30ms linear forwards; }
+.downm.is-leaving :is(.downm__bg, .downm__lines, .downm__deco) { animation: downm-out 40ms 30ms linear forwards; }
+.downm.is-leaving .downm__lead { animation: downm-out 270ms linear forwards; }
+.downm.is-leaving .downm__btns { animation: downm-out 300ms linear forwards; }
+.modal__box.downm { --bk-c: transparent; width: 14.175rem; max-width: none; max-height: none; margin-top: 1.56rem; background: none; border: 0;
+  box-shadow: none; overflow: visible; animation: none; }
+.modal__box.downm::before, .modal__box.downm::after { display: none; }
+.downm .modal__stripe { display: none; }
+.downm .modal__body { padding: 0; overflow: visible; }
+.downm__defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* the panel */
+.downm__panel { position: relative; width: 14.175rem; height: 3.375rem; overflow: hidden; background: #101012;
+  box-shadow: 0 0 .25rem .1rem rgba(0, 0, 0, .55); }
+.downm__bg { position: absolute; inset: 0; animation: downm-band 170ms linear both; }
+.downm__map { position: absolute; left: -.0825rem; top: -4.35rem; width: 14.19rem; max-width: none; height: auto; filter: url(#downm-tone); }
+.downm__grid { position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(64, 176, 150, .13) 1px, transparent 1px) .67rem 0 / .846rem 100%,
+    linear-gradient(rgba(64, 176, 150, .13) 1px, transparent 1px) 0 .369rem / 100% .846rem;
+  animation: downm-wait 1ms 125ms backwards; }
+.downm__tint { position: absolute; inset: 0; background: rgba(140, 40, 50, .27); opacity: 0; animation: downm-tint 135ms linear both; }
+/* the teal axis lines (y 352) and the red dec_line_side over them, the side brackets (not in the squashed band: the footage
+   has the lines and brackets at their own places) */
+.downm__lines { position: absolute; inset: 0; }
+.downm__lines > i { position: absolute; display: block; }
+.downm__axis { top: 1.68rem; height: 1px; background: rgba(62, 176, 152, .6); box-shadow: 0 0 .045rem rgba(62, 176, 152, .45);
+  animation: downm-wait 1ms 125ms backwards; }
+.downm__axis--l { left: 0; width: 2.8125rem; }
+.downm__axis--r { left: 11.115rem; right: 0; }
+.downm__side { top: 1.515rem; width: 3.42rem; height: .42rem; background: rgba(176, 44, 44, .62);
+  -webkit-mask: var(--down-side, url("/assets/official/hub/ac/battle/dec_line_side.png")) 0 0 / 100% 100% no-repeat;
+  mask: var(--down-side, url("/assets/official/hub/ac/battle/dec_line_side.png")) 0 0 / 100% 100% no-repeat; }
+.downm__side--l { left: -.9825rem; scale: -1 1; animation: downm-side-l 135ms linear both; }
+.downm__side--r { left: 11.6625rem; animation: downm-side-r 135ms linear both; }
+.downm__brk { top: .63rem; width: .135rem; height: 2.07rem; background: rgba(62, 176, 152, .7);
+  -webkit-mask: var(--down-brk, url("/assets/official/hub/ac/battle/left_frame.png")) 0 0 / 100% 100% no-repeat;
+  mask: var(--down-brk, url("/assets/official/hub/ac/battle/left_frame.png")) 0 0 / 100% 100% no-repeat;
+  animation: downm-wait 1ms 125ms backwards; }
+.downm__brk--l { left: 2.8125rem; }
+.downm__brk--r { left: 11.0625rem; scale: -1 1; }
+
+/* the frame bits: HUD text, corners, crosses (grow from the squashed band) */
+.downm__deco { position: absolute; inset: 0; animation: downm-deco 200ms linear both; }
+.downm__deco > i { position: absolute; display: block; }
+.downm__ul1, .downm__ul2, .downm__corner { background: rgb(190, 38, 54); }
+.downm__ul1 { left: .4875rem; top: .24rem; width: 1.08rem; height: .195rem;
+  -webkit-mask: var(--down-ul1, url("/assets/official/hub/ac/battle/dec_text_upper_left_01.png")) 0 0 / 100% 100%;
+  mask: var(--down-ul1, url("/assets/official/hub/ac/battle/dec_text_upper_left_01.png")) 0 0 / 100% 100%; }
+.downm__ul2 { left: .4125rem; top: .75rem; width: 1.26rem; height: .72rem;
+  -webkit-mask: var(--down-ul2, url("/assets/official/hub/ac/battle/dec_text_upper_left_02.png")) 0 0 / 100% 100%;
+  mask: var(--down-ul2, url("/assets/official/hub/ac/battle/dec_text_upper_left_02.png")) 0 0 / 100% 100%; }
+.downm__num { left: 11.8275rem; top: 2.37rem; width: .24rem; height: 1.08rem; background: rgba(64, 176, 150, .85);
+  -webkit-mask: var(--down-num, url("/assets/official/hub/ac/battle/dec_text_side_num.png")) 0 0 / 100% 100%;
+  mask: var(--down-num, url("/assets/official/hub/ac/battle/dec_text_side_num.png")) 0 0 / 100% 100%; }
+/* dec_text_lower_corner, one sprite: its left half (the icon) lower left, its right half (squares, SIGNAL, the bar) lower right */
+.downm__corner { height: .96rem;
+  -webkit-mask: var(--down-corner, url("/assets/official/hub/ac/battle/dec_text_lower_corner.png")) 0 0 / 3.36rem .96rem no-repeat;
+  mask: var(--down-corner, url("/assets/official/hub/ac/battle/dec_text_lower_corner.png")) 0 0 / 3.36rem .96rem no-repeat; }
+.downm__corner--l { left: .3525rem; top: 2.355rem; width: 1.26rem; }
+.downm__corner--r { left: 12.5775rem; top: 2.355rem; width: 1.32rem; -webkit-mask-position: -2.04rem 0; mask-position: -2.04rem 0; }
+/* img_dec_cross's upper-left "+" (20 px at 23, 25), one per corner */
+.downm__x { width: .3rem; height: .3rem; translate: -50% -50%; background: rgb(214, 62, 48); opacity: .85;
+  -webkit-mask: var(--down-cross, url("/assets/official/hub/ac/battle/img_dec_cross.png")) -.345rem -.375rem / 1.98rem 1.98rem no-repeat;
+  mask: var(--down-cross, url("/assets/official/hub/ac/battle/img_dec_cross.png")) -.345rem -.375rem / 1.98rem 1.98rem no-repeat; }
+.downm__x--tl { left: 3.4275rem; top: .615rem; }
+.downm__x--tr { left: 10.7475rem; top: .615rem; }
+.downm__x--bl { left: 3.4275rem; top: 2.7rem; }
+.downm__x--br { left: 10.7475rem; top: 2.7rem; }
+
+/* the face, the title, the subtitle (slide in from the left) */
+.downm__lead { position: absolute; inset: 0; animation: downm-lead 170ms linear both; }
+.downm__face { position: absolute; left: 4.737rem; top: .86rem; width: 1.59rem; height: 1.59rem; }
+.downm__face > i { position: absolute; display: block; }
+.downm__calm { left: .33rem; top: .1275rem; width: .9rem; height: .915rem; opacity: 0; background: rgb(150, 141, 142);
+  -webkit-mask: var(--down-head, url("/assets/official/hub/ac/outer/robo_head.png")) 0 0 / 100% 100%;
+  mask: var(--down-head, url("/assets/official/hub/ac/outer/robo_head.png")) 0 0 / 100% 100%;
+  animation: downm-calm 240ms linear both; }
+.downm__eye { position: absolute; top: .27rem; width: .195rem; height: .195rem; border-radius: 50%; background: #1a1416; }
+.downm__eye--l { left: .14rem; }
+.downm__eye--r { left: .55rem; }
+.downm__mouth { position: absolute; left: .345rem; top: .585rem; width: .24rem; height: .06rem; background: #1a1416; }
+.downm__fill { left: .36rem; top: .165rem; width: .84rem; height: .84rem; background: #0b0b0d; opacity: 0; animation: downm-fill 370ms linear both; }
+.downm__dead { inset: 0; background: var(--down-dead, url("/assets/official/hub/ac/battle/icon_dead.png")) 0 0 / 100% 100% no-repeat;
+  filter: brightness(.72); animation: downm-dead 370ms linear both; }
+.downm__red { inset: 0; background: #e01a3c; opacity: 0;
+  -webkit-mask: var(--down-dead, url("/assets/official/hub/ac/battle/icon_dead.png")) 0 0 / 100% 100%;
+  mask: var(--down-dead, url("/assets/official/hub/ac/battle/icon_dead.png")) 0 0 / 100% 100%;
+  animation: downm-red 370ms linear both; }
+.downm__fdec { position: absolute; left: 4.8375rem; top: 2.175rem; width: 1.17rem; height: .195rem; background: #8f8f92; opacity: 0;
+  -webkit-mask: var(--down-fdec, url("/assets/official/hub/ac/battle/face_lower_dec.png")) 0 0 / 100% 100%;
+  mask: var(--down-fdec, url("/assets/official/hub/ac/battle/face_lower_dec.png")) 0 0 / 100% 100%;
+  animation: downm-fdec 240ms linear both; }
+.downm__ftext { position: absolute; left: 4.96rem; top: 2.115rem; width: 1.14rem; height: .36rem;
+  background: var(--down-text, url("/assets/official/hub/ac/battle/icon_text.png")) 0 0 / 100% 100% no-repeat;
+  animation: downm-ftext 240ms linear both; }
+.downm__dots { position: absolute; left: 6.6675rem; top: .81rem; width: 2.04rem; height: .18rem; background: rgb(214, 36, 60);
+  -webkit-mask: var(--down-dots, url("/assets/official/hub/ac/battle/dec_tiny_text_01.png")) 0 0 / 100% 100%;
+  mask: var(--down-dots, url("/assets/official/hub/ac/battle/dec_tiny_text_01.png")) 0 0 / 100% 100%;
+  animation: downm-sub 140ms linear both; }
+.downm__title { position: absolute; left: 6.42rem; top: 1.185rem; margin: 0; color: rgb(212, 20, 48); font-family: var(--font-cjk);
+  font-size: .69rem; font-weight: 900; line-height: 1; letter-spacing: 0; white-space: nowrap; animation: downm-title 110ms linear both; }
+.downm__sub { position: absolute; left: 6.4125rem; top: 2.04rem; width: 2.82rem; height: .3rem;
+  background: var(--down-sub, url("/assets/official/hub/ac/battle/dec_stronghold_protocol.png")) 0 0 / 100% 100% no-repeat;
+  animation: downm-sub 140ms linear both; }
+
+/* the buttons: btn_continue / btn_end 1:1, 122 px apart, 57 px under the panel; the words where the footage has them */
+.downm__btns { display: flex; justify-content: center; gap: 1.83rem; margin-top: .855rem; animation: downm-btns 670ms linear both; }
+.downm__btn { position: relative; flex: none; width: 3.24rem; height: .93rem; padding: 0; border: 0; border-radius: 0; cursor: pointer;
+  background: #ececec var(--down-watch, url("/assets/official/hub/ac/battle/btn_continue.png")) 0 0 / 100% 100% no-repeat;
+  background-clip: content-box; color: #2b2b2d; font-family: var(--font-cjk); font-size: .33rem; font-weight: 700; line-height: 1; }
+.downm__btn > span { position: absolute; left: 1.2rem; top: .375rem; translate: 0 -50%; white-space: nowrap; }
+.downm__btn--end { width: 3.27rem; color: #2a1014;
+  background: #d84a55 var(--down-end, url("/assets/official/hub/ac/battle/btn_end.png")) 0 0 / 100% 100% no-repeat; }
+.downm__btn--end > span { left: 1.215rem; }
+@supports (background: url("x.png") 0 0 / 1px 1px, #fff) {
+  .downm__btn { background-color: transparent; }
+}
+.downm__btn:hover { filter: brightness(1.06); }
+.downm__btn:focus-visible { outline: 1px solid rgba(255, 255, 255, .7); outline-offset: .045rem; }
+
+@keyframes downm-fade { from { opacity: 0; } }
+@keyframes downm-out { to { opacity: 0; } }
+@keyframes downm-veil-out { to { background-color: transparent; } }
+@keyframes downm-panel-out { to { background-color: transparent; box-shadow: none; } }
+@keyframes downm-wait { from, to { opacity: 0; } }
+@keyframes downm-band { 0% { opacity: 0; transform: scaleY(.3); } 19.6% { opacity: .5; transform: scaleY(.5); } 39.2% { opacity: .92; transform: none; }
+  100% { opacity: 1; transform: none; } }
+@keyframes downm-tint { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes downm-side-l { 0%, 48% { opacity: 0; } 49.6% { opacity: 1; transform: translateX(-1.275rem); background: rgb(255, 92, 128); }
+  74% { transform: translateX(.9rem); } 100% { transform: none; } }
+@keyframes downm-side-r { 0%, 48% { opacity: 0; } 49.6% { opacity: 1; transform: translateX(-1.425rem); background: rgb(255, 92, 128); }
+  74% { transform: translateX(.9rem); } 100% { transform: none; } }
+@keyframes downm-deco { 0% { opacity: 0; transform: scale(.72, .35); } 16.5% { opacity: .8; transform: scale(.72, .35); }
+  50% { opacity: 1; transform: scale(.78, 1); } 100% { opacity: 1; transform: none; } }
+@keyframes downm-lead { 0% { opacity: 0; transform: translateX(-2.55rem); } 19.6% { opacity: .75; transform: translateX(-2.61rem); }
+  39.2% { opacity: 1; transform: translateX(-.705rem); } 58.8% { transform: translateX(-.255rem); } 78.4% { transform: translateX(-.06rem); }
+  100% { opacity: 1; transform: none; } }
+@keyframes downm-title {
+  0%, 30% { opacity: .7; filter: blur(.6px); text-shadow: -.09rem 0 rgba(255, 40, 90, .6), .06rem 0 rgba(40, 255, 220, .25); }
+  60% { opacity: 1; filter: brightness(1.1); text-shadow: 0 0 .1rem rgba(255, 40, 80, .7); }
+  100% { opacity: 1; filter: none; text-shadow: none; } }
+@keyframes downm-sub { 0%, 47% { opacity: 0; } 48% { opacity: .3; } 71% { opacity: .6; } 100% { opacity: 1; } }
+@keyframes downm-calm { 0%, 26.5% { opacity: 0; } 27.5% { opacity: 1; transform: scale(.92); } 41% { transform: none; } 54% { filter: none; }
+  68.5%, 96% { opacity: 1; filter: brightness(.6); } 97%, 100% { opacity: 0; } }
+@keyframes downm-fill { 0%, 62.5% { opacity: 0; } 63%, 94% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@keyframes downm-dead { 0%, 62.5% { opacity: 0; } 63%, 89.5% { opacity: 1; } 90%, 98.5% { opacity: 0; } 99%, 100% { opacity: 1; } }
+@keyframes downm-red { 0%, 89.5% { opacity: 0; } 90%, 98.5% { opacity: 1; } 99%, 100% { opacity: 0; } }
+@keyframes downm-fdec { 0%, 40.5% { opacity: 0; } 41%, 54% { opacity: 1; transform: translateX(-.72rem); background: #f2f2f2; }
+  54.5%, 68% { opacity: 0; } 68.5%, 96.5% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+@keyframes downm-ftext { 0%, 54.5% { opacity: 0; } 55%, 68.5% { opacity: 1; transform: translateX(-.375rem); } 69%, 96.5% { opacity: 0; }
+  97%, 100% { opacity: 1; transform: none; } }
+@keyframes downm-btns { 0%, 72.5% { opacity: 0; transform: scaleX(1.12); filter: blur(2px); } 73% { opacity: .3; transform: scaleX(1.12); filter: blur(2px); }
+  85% { opacity: .85; transform: scaleX(1.03); filter: blur(.5px); } 100% { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .modal.downm-veil, .modal.downm-veil.is-leaving, .downm__bg, .downm__grid, .downm__tint, .downm__axis, .downm__side, .downm__brk, .downm__deco,
+  .downm__lead, .downm__calm, .downm__panel, .downm__lines, .downm__fill, .downm__dead, .downm__red, .downm__fdec, .downm__ftext, .downm__dots, .downm__title, .downm__sub,
+  .downm__btns { animation: none; }
+}
+
+/* ---- 34. 悬赏决策 (round 16, 用户图07 — the official shared bounty draft; measured against our cards: its card is 220 px
+   wide there and 289 here, so 1 px there = 1.32 px at 1280 × 720). Frames: the card is the original bg_normal 1:1 (the
+   grunge face, its light 1-px edge and the tilted second card behind it are all in the sprite: its face is (11, 15)–(299,
+   254) of 308 × 271, the card box 289 × 240); a taken card is bg_selected (296 × 248, the grey vertical stripes and the
+   grey edge, 3.5 / 4 px outside the box) with its words over it at .66 and its text white (the screenshot: name 213, text 205
+   on the 100 grey; the open cards: name 255, text 174 on 46). Grid 3 × 2 with 46 / 41 gaps, the title's ink 22 px under the countdown's top and the cards 100 px under the title's
+   top (the screen is wider than 16:9 there: the countdown, on the right, sits 27 px further out than ours). In a card: icon 77 px at (16, 18) in a 1-px light frame, the name 19.5 px beside it, centred on it, the
+   text 15 / 21 px from x 10 at y 118. The taker's round avatar (42 px, a light ring) centred 53 px in from the card's
+   right and 5 px under its top. Header: title (99, 223, 196) Heavy; the line beside it (138, 216, 199) Medium; the timing
+   line (167, 165, 167) 13 px; the deciding player (225, 223, 225) 19 px over 正在决策… (200, 197, 199) 17 px. */
+.spov:not(.offerov) { --p: min(calc(100vw / 1280), calc(100vh / 720)); }
+.spov:not(.offerov) .spcard { --sp-back: 0 0 0 0 transparent; isolation: isolate; border: 0; background: none; box-shadow: none; }
+.spov:not(.offerov) .spcard::before { content: ''; position: absolute; z-index: -1; left: -3.806%; top: -6.25%; width: 106.57%; height: 112.92%;
+  background: url(/assets/official/hub/ac/end/bg_normal.png) 0 0 / 100% 100% no-repeat; pointer-events: none; }
+.spov:not(.offerov) .spcard.is-taken { background: none; border: 0; }
+.spov:not(.offerov) .spcard.is-taken::before { left: -1.21%; top: -1.67%; width: 102.42%; height: 103.33%;
+  background-image: url(/assets/official/hub/ac/battle/bg_selected.png); }
+.spov:not(.offerov) .spcard.is-taken > :not(.spcard__taker) { opacity: .66; filter: none; }
+.spov:not(.offerov) .spcard.is-taken .spcard__desc { color: #fff; }
+.spov:not(.offerov) .spcard.is-mine > :not(.spcard__taker) { opacity: 1; }
+.spov:not(.offerov) .spcard.is-armed, .spov:not(.offerov) .spcard.is-armed:hover { background: none; box-shadow: 0 0 0 2px #f2f5f4, 0 .14rem .32rem rgba(0, 0, 0, .6); }
+.spov:not(.offerov) .spcard.is-pickable:hover { box-shadow: none; }
+.gm.has-spdraft .spov__grid { flex: none; grid-template-columns: repeat(3, calc(289 * var(--p))); grid-template-rows: repeat(2, calc(240 * var(--p)));
+  gap: calc(41 * var(--p)) calc(46 * var(--p)); padding: 0 0 0 .06rem; margin-top: calc(42 * var(--p)); }
+.gm.has-spdraft .spcard { --tk: calc(42 * var(--p)); gap: 0; padding: calc(18 * var(--p)) calc(36 * var(--p)) 0 calc(10 * var(--p)); }
+.gm.has-spdraft .spcard__head { gap: calc(20 * var(--p)); margin-left: calc(6 * var(--p)); height: calc(77 * var(--p)); }
+.gm.has-spdraft .spcard__icon { width: calc(77 * var(--p)); height: calc(77 * var(--p)); border: 1px solid rgba(214, 214, 214, .55); }
+.gm.has-spdraft .spcard__name { font-weight: 700; font-size: calc(19.5 * var(--p)); letter-spacing: .02em; color: #fff; }
+.gm.has-spdraft .spcard__desc { margin-top: calc(23 * var(--p)); font-size: calc(15 * var(--p)); line-height: calc(21 * var(--p)); color: #aeacaf; }
+.gm.has-spdraft .spcard__taker { right: calc(32 * var(--p)); top: calc(-16 * var(--p)); box-shadow: 0 0 0 1px rgba(8, 11, 10, .7); }
+.gm.has-spdraft .spcard__taker .pavatar { border: 2px solid #d6d8d7; }
+/* the avatar sits above the card's top edge (用户图07), so a taken card's name keeps the whole row */
+.gm.has-spdraft .spcard.is-taken .spcard__head { padding-right: 0; }
+.gm.has-spdraft .spov__head { margin-left: calc(-19 * var(--p)); margin-right: calc(-68 * var(--p)); }
+.gm.has-spdraft .spov__title { color: rgb(99, 223, 196); }
+.gm.has-spdraft .spov__desc { font-weight: 500; color: rgb(138, 216, 199); }
+.gm.has-spdraft .spov__sub { font-size: calc(13 * var(--p)); color: rgb(167, 165, 167); }
+.gm.has-spdraft .spov__tw b { font-size: calc(19 * var(--p)); color: rgb(225, 223, 225); }
+.gm.has-spdraft .spov__tw small { font-size: calc(17 * var(--p)); color: rgb(200, 197, 199); }
+.gm.has-spdraft .spov__turntxt.is-other .icon { width: calc(30 * var(--p)); height: calc(30 * var(--p)); }
+/* the countdown is the top bar's (用户图07: the same 08 / COUNTDOWN / gauge at the same place, x 1152–1243, y 19–76 —
+   section 26 / .gtop__right), the deciding player and the hourglass left of it */
+.gm.has-spdraft .spov__inner { top: calc(28 * var(--p)); }
+.gm.has-spdraft .spov__turn { align-self: flex-start; translate: 0 calc(-10 * var(--p)); }
+.gm.has-spdraft .spov__turn .countdown { --cd-h: .705rem; align-items: flex-start; gap: .075rem; padding-left: calc(26 * var(--p)); }
+.gm.has-spdraft .spov__turn .countdown__gauge { align-self: flex-start; width: .345rem; height: .795rem; margin: .03rem 0 0; }
+.gm.has-spdraft .spov__turn .countdown__gauge i { height: .075rem; background: rgba(7, 255, 198, .13); box-shadow: none; }
+.gm.has-spdraft .spov__turn .countdown__gauge i.on { background: #07ffc6; box-shadow: 0 0 .05rem rgba(7, 255, 198, .5); }
+.gm.has-spdraft .spov__turn .countdown.is-warn .countdown__gauge i { background: rgba(240, 90, 38, .16); }
+.gm.has-spdraft .spov__turn .countdown.is-warn .countdown__gauge i.on { background: #f05a26; box-shadow: 0 0 .05rem rgba(240, 90, 38, .5); }
+.gm.has-spdraft .spov__turn .countdown__label { align-self: flex-start; margin: .075rem 0 0; font-family: 'ArkBender', var(--font-num); font-weight: 700;
+  font-size: .12rem; letter-spacing: .06em; line-height: 1; color: rgba(186, 190, 190, .62); }
+
+/* ===== official-pages.css lines 2304-2317 — 35 收尾微调 (only the shop part; the 准备阶段 rules in the package were
+   measured for the package's own briefing DOM and are OFF together with its 确认本局信息 skin — see the note above §7) ===== */
+/* ---- 35. round 17 touch-ups (the owner's images 47–50): shop only — hex digits 2 px up to the hex's middle,
+   冻结 / 刷新 icons 3 px up (image 48). ---- */
+.shopbar .hex__value { translate: calc(-1 * var(--p)) calc(-5.5 * var(--p)); }
+.shopbar .toolbtn__img { translate: 0 calc(-3 * var(--p)); }
+/* 业主 2026-10-30「调度中心 UI 有点大」: the package-size bar (158 × 175 cards, a 111 × 175 LEVEL card and a 155 × 185
+   funds card at 1280) reads a little large here, so the whole bar is scaled down uniformly. `scale` instead of
+   `transform` keeps the shop-up entrance animation's translate intact, and the bottom-right origin keeps it anchored
+   where official-hud.css put it (right 15, bottom 10 in --p). */
+.shopbar { scale: .85; transform-origin: 100% 100%; }
+
+/* ===== 11b. 战斗顶栏 — 一条连续长条 (业主 2026-10-30 的参考图 1407 × 192, 2× → 703 CSS px) ===== */
+/* The reference's top bar: one dark strip 473 × 30 (CSS px at that scale) between the two 🔍 squares, its ends
+   chamfered to a point at mid-height (6 in, 30 tall); inside, 回合 + a white 1 chip (32 × 26), the 休息一下 plate
+   (bg_rest at its native 157 × 45, a bright mint ring inset 6 / 9 inside it, its figure 21 × 25), the mint tower
+   14 × 18 and the LP 30 wide; each 🔍 sits in bg_check_btn's bracket (the sprite's 20 %-white corner ticks), drawn
+   61 × 42 here. Our TopBar keeps both 🔍 inside .gtop__center; .gtop__bar (hud.js) wraps the strip's own contents. */
+.gtop__center { height: auto; padding: 0; gap: 0; translate: none; border: 0; box-shadow: none; background: none; }
+/* the old continuous thin frame, its frame_left end caps and the deco box behind 回合 are all gone */
+.gtop__center::before, .gtop__center::after { content: none; }
+.gtop__bar { position: relative; isolation: isolate; display: flex; align-items: center; height: .45rem;
+  margin: 0 .47rem 0 .55rem; padding: 0 .78rem 0 .6rem; }
+/* the strip = one clipped dark shape whose 1.5 px rim is a drop-shadow of the clip silhouette (a border or a second
+   layer would either lose the chamfers or wash the fill out). It cannot sit on .gtop__bar itself: its clip would cut
+   the 休息一下 plate that pops out above / below. */
+.gtop__bar::before { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(35, 38, 38, .95), rgba(16, 18, 18, .95));
+  clip-path: polygon(.1rem 0, calc(100% - .1rem) 0, 100% 50%, calc(100% - .1rem) 100%, .1rem 100%, 0 50%);
+  filter: drop-shadow(0 0 2px rgba(206, 215, 212, .6)); }
+.gtop__bar > * { position: relative; }
+/* the + between the left 🔍 and the strip's tip */
+.gtop__bar > .gtop__plus { position: absolute; left: -.09rem; top: 50%; translate: -50% -50%; font-style: normal;
+  font-size: .18rem; line-height: 1; color: rgba(208, 214, 212, .5); pointer-events: none; }
+
+/* 回合 + the white chip */
+.gtop__center .roundbox { padding: 0; gap: .16rem; margin-right: .6rem; }
+.gtop__center .roundbox::before { content: none; }
+.gtop__center .roundbox__label { font-size: .17rem; letter-spacing: .04em; color: #b7bcba; }
+.gtop__center .roundbox__num { min-width: .48rem; height: .39rem; padding: 0 .06rem; border-radius: .05rem;
+  font-size: .3rem; background: linear-gradient(180deg, #f5f7f6, #cfd5d3); color: #0d1112; }
+
+/* the 休息一下 plate: bg_rest at its native size (the frame_mid_normal plate behind it goes), darkened to the
+   reference's near-black, with the bright mint ring inside it */
+.gtop__center .gtop__cap { padding: 0; margin-right: .72rem; }
+.gtop__center .gtop__cap::before { content: none; }
+.gtop__center .gtop__cap .capsule { position: relative; width: auto; min-width: 2.36rem; height: .678rem;
+  padding: 0 .26rem 0 .3rem; gap: .1rem; justify-content: flex-start;
+  background: linear-gradient(rgba(13, 17, 16, .45), rgba(13, 17, 16, .45)),
+    var(--cap-plate) 0 0 / 100% 100% no-repeat; }
+.gtop__center .gtop__cap .capsule::after { content: ''; position: absolute; inset: .09rem .13rem; border-radius: 999px;
+  border: 2px solid rgba(82, 238, 196, .85); box-shadow: inset 0 0 .14rem rgba(82, 238, 196, .2); pointer-events: none; }
+.gtop__center .gtop__cap .capsule--prep .capsule__icon { align-self: center; width: .27rem; height: .39rem; margin-top: 0; clip-path: none; }
+.gtop__center .gtop__cap .capsule__label { color: #f2f6f4; }
+
+/* the LP: the mint tower ~14 × 18, its number white (the LP tone still tints it) */
+.gtop__center .lp { gap: .06rem; }
+.gtop__center .lp__icon { width: .22rem; height: .27rem; }
+.gtop__center .lp__val { font-size: .32rem; font-weight: 500; line-height: 1; color: #eef2f0; }
+.gtop__center .lp--danger .lp__val { color: var(--red-premium); }
+.gtop__center .lp--team .lp__val { color: var(--mint-glow); }
+
+/* the 🔍 brackets: bg_check_btn behind each button (81 × 44 → 61 × 42 here) */
+.gtop__center .gtop__chk { position: relative; }
+.gtop__center .gtop__chk::before { content: ''; position: absolute; inset: -.09rem -.18rem; pointer-events: none;
+  background: url(/assets/local/ui/battle/bg_check_btn.png) 0 0 / 100% 100% no-repeat; }

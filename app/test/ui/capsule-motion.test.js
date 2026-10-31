@@ -32,7 +32,7 @@ test('the scenes draw the official hudPanel/trans_* sprites, all in the asset li
   assert.deepEqual(names, ['cup', 'batte1', 'batte2', 'coop1', 'coop2', 'coop3', 'coop4', 'worm1', 'worm2']);
   for (const n of names) assert.ok(`hudPanel/trans_${n}` in ui, n);
   const scene = js.slice(js.indexOf('function CapsuleScene'), js.indexOf('export function missTip'));
-  for (const m of scene.matchAll(/trans\(([^,)]+)/g)) assert.match(m[1], /^'(cup|coop[34]|worm[12])'$|^`\$\{c\}[12]`$|^unite \? 'worm2' : 'worm1'$/, m[1]);
+  for (const m of scene.matchAll(/trans\(([^,)]+)/g)) assert.match(m[1], /^'(cup|coop[234]|worm[12])'$|^`\$\{c\}[12]`$|^unite \? 'worm2' : 'worm1'$/, m[1]);
   assert.doesNotMatch(js, /PixBot|pixbots/, 'official art, no redrawn robots');
   assert.match(js, /capsuleArt !== true \? 'enter' : kind/, 'without the loaded art every change only rises in');
 });

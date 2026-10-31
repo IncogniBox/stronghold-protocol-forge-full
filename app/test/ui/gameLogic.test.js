@@ -70,7 +70,7 @@ describe('phases', () => {
     assert.equal(phaseBanner(PHASE.UNITE, {}).title, '联防阶段');
     assert.equal(phaseBanner(PHASE.FINAL_ASSAULT, {}).title, '最终攻势');
     assert.equal(phaseBanner(PHASE.HIDDEN_CORE, {}).title, '隐秘核心');
-    assert.equal(phaseBanner(PHASE.COMBAT, {}).title, '作战开始');
+    assert.equal(phaseBanner(PHASE.COMBAT, {}), null, 'no banner at 作战开始 (official-pages §31: the top bar scene marks it)');
     assert.match(phaseBanner(PHASE.ROUND_START, { round: 7 }).title, /7/);
     assert.equal(phaseBanner(PHASE.SETTLE, {}), null);
     assert.equal(prepCapsuleLabel(PHASE.PREP), '休息一下');
@@ -133,8 +133,8 @@ describe('phases', () => {
   });
   test('round result box: the official words — 作战结束 + 全员无伤！ (mint) / 生命值减少 −N (red)', () => {
     assert.equal(RESULT_BOX_MS, 2800, 'inside SETTLE\'s 3 s (server DELAYS.SETTLE)');
-    assert.deepEqual(roundResultBox(0), { title: '作战结束', micro: 'BATTLE OVER', tone: 'mint', sub: '全员无伤！', duration: RESULT_BOX_MS });
-    assert.deepEqual(roundResultBox(4), { title: '作战结束', micro: 'BATTLE OVER', tone: 'red', sub: '生命值减少 −4', duration: RESULT_BOX_MS });
+    assert.deepEqual(roundResultBox(0), { title: '作战结束', micro: 'BATTLE OVER', tone: 'mint', sub: '全员无伤！', kind: 'perfect', loss: 0, duration: RESULT_BOX_MS });
+    assert.deepEqual(roundResultBox(4), { title: '作战结束', micro: 'BATTLE OVER', tone: 'red', sub: '生命值减少 −4', kind: 'loss', loss: 4, duration: RESULT_BOX_MS });
     assert.equal(roundResultBox(undefined).sub, '全员无伤！', 'an unknown loss reads as no loss');
     assert.equal(roundResultBox(-2).sub, '全员无伤！');
     assert.equal(roundResultBox(2.7).sub, '生命值减少 −2');
@@ -831,6 +831,19 @@ describe('prepCamera (research 09 §1.2: the Final Assault prep on the own half 
     assert.equal(prepCamera(pub(14, left), 'b').kind, 'prep', 'an eliminated player has no half');
     // solo / a lone last player: the left half
     assert.deepEqual(prepCamera(pub(14, [pl('a', 0)]), 'a'), { kind: 'bossPrep', opts: { side: 'L' } });
+  });
+  // 普通带左右两半（业主 2026-10-31「同场地的玩家在休整期看不到对方场地的情况」）：配对的两个人都还在时整条普通带
+  // 一起取景（`battle.prep` 本来就横跨两半，队友那半也看得到），此时不推近；落单 / 队友淘汰 ⇒ 回到自己那半
+  test('普通带左右两半：配对同场时整条带一起取景，落单回到自己那半', () => {
+    const layout = normalizeLayout({
+      size: [45, 60],
+      deployRects: { normalLeft: [34, 38, 20, 30], normalRight: [34, 38, 30, 40], bossLeft: [1, 5, 22, 30], bossRight: [1, 5, 30, 38] },
+      battle: { normal: { r0: 34, r1: 38, c0: 20, c1: 40 }, prep: { r0: 31, r1: 38, c0: 18, c1: 42 } },
+    }, [45, 60]);
+    const pair = [pl('a', 0), pl('b', 1)];
+    assert.deepEqual(prepCamera(pub(6, pair), 'a', layout).opts, { rect: { r0: 31, r1: 38, c0: 18, c1: 42 }, side: 'L' });
+    assert.deepEqual(prepCamera(pub(6, pair), 'b', layout).opts, { rect: { r0: 31, r1: 38, c0: 18, c1: 42 }, side: 'R' });
+    assert.deepEqual(prepCamera(pub(6, [pl('a', 0), pl('b', 1, false)]), 'a', layout).opts, { rect: { r0: 31, r1: 38, c0: 18, c1: 30 }, side: 'L', zoom: 1.2 });
   });
   // 第 2… 块 boss 场地：整备镜头取**这块场地的整备矩形**（地图声明的绿框，含战斗矩形并向整备行/整备列多出一圈）
   test('第 2… 块 boss 场地的整备镜头用那块场地的整备矩形', () => {

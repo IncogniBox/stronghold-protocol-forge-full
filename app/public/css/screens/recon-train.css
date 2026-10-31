@@ -13,8 +13,21 @@
 .toolbtn--train.is-on { background: var(--mint-400); color: #04140f; box-shadow: 0 0 .2rem rgba(89, 244, 202, .6); }
 .toolbtn--train.is-on .toolbtn__mask { filter: none; }
 
+/* 学员 / 教官图标（业主 2026-10-30 的原图，白色线稿）：与上面的 `toolbtn--train` 同一画法 —— 按蒙版取 currentColor，
+   用在特训弹窗的列头、选中角标与详情卡的「特训学员」徽标上作提示。教官金 / 学员青，与弹窗里的两列同色。 */
+.rt-ico {
+  display: inline-block; flex: none; align-self: center;
+  width: .3rem; height: .32rem; background: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain; mask-size: contain;
+}
+.rt-ico--mentor { color: #e8c96a; -webkit-mask-image: url('/icons/recon-mentor.png'); mask-image: url('/icons/recon-mentor.png'); }
+.rt-ico--trainee { color: #3fd6b4; -webkit-mask-image: url('/icons/recon-trainee.png'); mask-image: url('/icons/recon-trainee.png'); }
+
 /* 详情卡上的「特训学员」徽标（detailPanel.js ChessDetail，与 dtag-standin / dtag-diy 同一排） */
 .dtag-train {
+  display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 8px; font-size: 11px; letter-spacing: .08em; color: #3fd6b4;
   background: rgba(63, 214, 180, .12); border: 1px solid rgba(63, 214, 180, .5);
 }
@@ -25,6 +38,7 @@
 }
 .dskill.is-mentor, .dtalent.is-mentor, .dgarrison.is-mentor { border-left: 2px solid rgba(212, 175, 55, .55); padding-left: 8px; }
 .dhint--mentor { margin: 6px 0 0; font-size: 12px; color: #9dc3ba; display: flex; align-items: center; gap: 6px; }
+.dhint--mentor .rt-ico { width: .22rem; height: .24rem; }
 
 .rt-overlay {
   position: fixed; inset: 0; z-index: 58; display: grid; place-items: center; padding: 24px;
@@ -56,7 +70,10 @@
 .rt-pick__pic { width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; background: rgba(0, 0, 0, .3); }
 .rt-pick__pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .rt-pick__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 500; color: #cfe4df; }
-.rt-pick__tag { position: absolute; top: 2px; right: 4px; font-style: normal; font-size: 10px; letter-spacing: .08em; }
+.rt-pick__tag { position: absolute; top: 2px; right: 4px; font-style: normal; font-size: 10px; letter-spacing: .08em; color: inherit; }
+/* 选中角标上的图标沿用同一枚（青色 / 金色由 `.is-mentor` / `.is-trainee` 那一族决定），角落那么小，只画图标 */
+.rt-pick__tag .rt-ico { width: .22rem; height: .24rem; }
+.dtag-train .rt-ico { width: 12px; height: 13px; }
 .rt-pick.is-mentor { border-color: rgba(212, 175, 55, .85); background: rgba(212, 175, 55, .12); }
 .rt-pick.is-mentor .rt-pick__tag { color: #e8c96a; }
 .rt-pick.is-trainee { border-color: rgba(63, 214, 180, .85); background: rgba(63, 214, 180, .12); }
