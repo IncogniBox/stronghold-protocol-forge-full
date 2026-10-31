@@ -23,13 +23,16 @@
 - **CSP 同步**：`server/http/csp.js` 把 `SP_WORKSHOP_CDN` 的 origin（以及 `SP_ASSET_CDN`，`SP_CDN_BASE` 缺席时）
   并进 `img-src` / `media-src` / `font-src` / `connect-src`，`script-src` 等可执行类型一个都不加。`font-src` 是新补的：
   `/fonts/…` 同样按 `SP_ASSET_CDN` 改写，没有这一条远端字体落回 `default-src 'self'` 会被拒。
-- 部署口径（云服务器启动时设置，2026-10-31 实际值）：`SP_CDN_BASE` 与 `SP_ASSET_CDN` 指向
-  `https://raw.githubusercontent.com/IncogniBox/stronghold-assets/main/`（官方素材的 GitHub 镜像树），
-  `SP_WORKSHOP_CDN=https://raw.githubusercontent.com/IncogniBox/stronghold-protocol-forge-full/main/app/workshop/`。
-  换前缀只需改这两行环境变量再重启，不用发版。**`https://downcdn.jiangjiangze.icu` 是 CDN 的控制面**
-  （只发 `/cdn/v1/mirrors.json`、`index.json`、`pick.js`），它没有 `/assets/…` 的字节，未命中的路径回门户 HTML
-  （实测 200 `text/html` 30567 字节），所以不能直接当 `SP_ASSET_CDN`；`ghfast.top` 当天实测不稳定（同一路径时好时超时），
-  故未采用。
+- 部署口径（云服务器启动时设置，2026-10-31 实际值）：`SP_ASSET_CDN` 指向
+  `https://gh-proxy.com/https://raw.githubusercontent.com/IncogniBox/stronghold-assets/main/`（GitHub 加速前缀 +
+  官方素材镜像树），`SP_WORKSHOP_CDN=https://gh-proxy.com/https://raw.githubusercontent.com/IncogniBox/stronghold-protocol-forge-full/main/app/workshop/`；
+  `SP_CDN_BASE` 保持直连 raw（只用于服务端补大资源的回源）。换前缀只需改这几行环境变量再重启，不用发版。
+- **为什么不是那几个看起来更直接的源**（当天实测，客户端在国内网络）：直连 `raw.githubusercontent.com` 浏览器取不到
+  （连 TCP 都建不起来，整页素材全空）；`cdn.jsdelivr.net` 可用、但受「包体积上限 50 MB」限制，`assets/ui/**`、
+  `assets/enemy/icon/**` 里已有文件回 403（截图里整排空白头像就是这么来的）；`ghfast.top` 时好时坏（同一路径 2/6 超时）。
+  `gh-proxy.com` 与 `gh-proxy.org` 6/6 通过、约 1.1 s，故采用前者。
+- **`https://downcdn.jiangjiangze.icu` 是 CDN 的控制面**（只发 `/cdn/v1/mirrors.json`、`index.json`、`pick.js`），
+  它没有 `/assets/…` 的字节，未命中的路径回门户 HTML（实测 200 `text/html` 30567 字节），所以不能直接当 `SP_ASSET_CDN`。
 - 回归：新增 `test/plugins/assetCdn.test.js`（两个都没设 / 只有官方 / 只有工坊 / 两个都设 / 坏前缀五个情形）
   与 `test/plugins/csp.test.js` 的「独立前缀」一条；`docs/ASSETS.md` 的 CDN 一节同步。
 
