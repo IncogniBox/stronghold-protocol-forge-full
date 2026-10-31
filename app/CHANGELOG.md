@@ -16,7 +16,8 @@
 ### 部署：官方素材走 downcdn，工坊包素材走 GitHub 镜像（2026-10-31）
 
 - **工坊包自带素材可以单独挂到第二个源**：`server/http/static.js` 新增 `SP_WORKSHOP_CDN` —— 响应里的
-  `/workshop-assets/<pack>/<rel>` 改写成 `<前缀><pack>/<rel>`（前缀原样拼，可指向 ghfast.top 这类 GitHub 镜像），
+  `/workshop-assets/<pack>/<rel>` 改写成 `<前缀><pack>/assets/<rel>`（`rel` 是包内 `assets/` 目录里的相对路径，
+  仓库镜像正好把素材放在 `<pack>/assets/` 下；前缀其余部分原样拼，可指向 GitHub / jsDelivr / ghfast.top 这类镜像），
   官方 `/assets/…`、`/fonts/…` 仍走 `SP_ASSET_CDN`。没设它 ⇒ 沿旧契约（包素材进 `<SP_ASSET_CDN>packs/<pack>/…`）；
   两个都没设 ⇒ 清单一个字节都不改。
 - **CSP 同步**：`server/http/csp.js` 把 `SP_WORKSHOP_CDN` 的 origin（以及 `SP_ASSET_CDN`，`SP_CDN_BASE` 缺席时）

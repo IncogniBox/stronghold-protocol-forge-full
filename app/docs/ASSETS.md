@@ -256,8 +256,10 @@ SP_ASSET_CDN=https://cdn.example.com/ node server/index.js
 
 **Pack art from a second host (`SP_WORKSHOP_CDN`).** The official art and a pack's own art do not have to come from the
 same place: `SP_WORKSHOP_CDN` is an independent **prefix** for `/workshop-assets/<pack>/<rel>` only, so a deployment can
-put the official art on the asset CDN and the packs' bytes on a GitHub mirror. The prefix is concatenated verbatim —
-`/workshop-assets/<pack>/<rel>` → `<prefix><pack>/<rel>` — so it must end where the pack directories begin.
+put the official art on the asset CDN and the packs' bytes on a GitHub mirror. `rel` is the path **inside the pack's
+own `assets/` folder** (`shared/workshop.js` `workshopAssetUrl`), and a repository mirror keeps those bytes under
+`<pack>/assets/`, so the rewrite inserts that segment: `/workshop-assets/<pack>/<rel>` → `<prefix><pack>/assets/<rel>`.
+The prefix is otherwise concatenated verbatim, so it must end where the pack directories begin.
 
 ```bash
 # official art from a byte-serving mirror, pack art from the repository's own GitHub mirror (ghfast.top in front of

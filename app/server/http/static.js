@@ -132,7 +132,8 @@ const CS_FILE = /^\/cs\/([0-9a-f]{16})\/([A-Za-z0-9._\/-]{1,200})$/;
  *     （例如 rimbilliton 复用了官方干员 id，落在 `/assets/…` 就会撞上上游同名键）。
  *
  * `SP_WORKSHOP_CDN`（可选）把**工坊包素材**单独指到另一个前缀：给了它 ⇒ `/workshop-assets/<pack>/<rel>` 直接改写成
- * `<workshopBase><pack>/<rel>`（前缀原样拼，所以可以指向 GitHub 原始树 / ghfast.top 这类镜像），官方素材仍走
+ * `<workshopBase><pack>/assets/<rel>`（前缀原样拼，所以可以指向 GitHub 原始树 / ghfast.top 这类镜像；`rel` 是包内
+ * `assets/` 目录里的相对路径，仓库镜像正好把素材放在 `<pack>/assets/` 下）。官方素材仍走
  * `SP_ASSET_CDN`。两个变量都没设 ⇒ 这一段完全不执行，与从前逐字节相同。
  *
  * 三条纪律（与素材 CDN 一侧的契约一致）：
@@ -160,7 +161,15 @@ function assetCdnRewrite(value, base, workshopBase) {
     if (value.startsWith('/assets/') || value.startsWith('/fonts/')) return base ? base + value.slice(1) : value;
     if (value.startsWith(WORKSHOP_ASSET_PREFIX)) {
       const rest = value.slice(WORKSHOP_ASSET_PREFIX.length);
-      if (workshopBase) return workshopBase + rest;
+      if (workshopBase) {
+        // `<pack>/<rel>` 里的 `rel` 是**包内 `assets/` 目录里**的相对路径（`shared/workshop.js` 的 `workshopAssetUrl`），
+        // 而仓库镜像的目录是 `<pack>/assets/<rel>` —— 少这一段，GitHub / jsDelivr 上全部 404。
+        const slash = rest.indexOf('/');
+        const pack = slash < 0 ? rest : rest.slice(0, slash);
+        const rel = slash < 0 ? '' : rest.slice(slash + 1);
+        if (!rel || rel.startsWith('assets/')) return workshopBase + rest;
+        return `${workshopBase}${pack}/assets/${rel}`;
+      }
       return base ? base + WORKSHOP_ASSET_CDN_NAMESPACE + rest : value;
     }
     return value;

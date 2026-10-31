@@ -3,7 +3,7 @@
 //
 // 只在**响应层**改写 `data/assets.json`（`local-assets.json` / `emotes.json` 同一支）：磁盘上的清单一个字节都不动。
 // 三个情形逐条钉住：两个都没设 ⇒ 原样；只有官方基址 ⇒ 沿旧契约（包素材进 `packs/<pack>/…`）；工坊基址给了 ⇒
-// `/workshop-assets/<pack>/<rel>` 直接拼 `<workshopBase><pack>/<rel>`，官方素材仍走官方基址。
+// `/workshop-assets/<pack>/<rel>` 改写成 `<workshopBase><pack>/assets/<rel>`（仓库镜像的目录形状），官方素材仍走官方基址。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -72,19 +72,19 @@ test('只有 SP_ASSET_CDN ⇒ 旧契约不变：官方素材 `<base>assets/…`�
   assert.equal(json.emotes.e1, `${CDN}assets/ui/emote/e1.png`);
 });
 
-test('只有 SP_WORKSHOP_CDN ⇒ 包素材直接拼前缀，官方素材仍是站内路径', async () => {
+test('只有 SP_WORKSHOP_CDN ⇒ 包素材拼到仓库的 `<pack>/assets/` 下，官方素材仍是站内路径', async () => {
   const { json } = await fetchAssets({ workshop: WORKSHOP });
-  assert.equal(json.chars.c1.avatar, `${WORKSHOP}pack-a/art/avatar.png`);
-  assert.equal(json.chars.c1.spine.front.skel, `${WORKSHOP}pack-a/art/op.skel`);
-  assert.equal(json.bonds.b1, `${WORKSHOP}pack-a/bond/icon.png`);
+  assert.equal(json.chars.c1.avatar, `${WORKSHOP}pack-a/assets/art/avatar.png`);
+  assert.equal(json.chars.c1.spine.front.skel, `${WORKSHOP}pack-a/assets/art/op.skel`);
+  assert.equal(json.bonds.b1, `${WORKSHOP}pack-a/assets/bond/icon.png`);
   assert.equal(json.chars.c1.portrait, '/assets/char/portrait/c1.png');
   assert.deepEqual(json.fonts, ['/fonts/game.woff2']);
 });
 
-test('两个都设 ⇒ 官方素材走 downcdn，包素材走 GitHub 镜像', async () => {
+test('两个都设 ⇒ 官方素材走素材 CDN，包素材走 GitHub 镜像', async () => {
   const { json } = await fetchAssets({ asset: CDN, workshop: WORKSHOP });
   assert.equal(json.chars.c1.portrait, `${CDN}assets/char/portrait/c1.png`);
-  assert.equal(json.chars.c1.avatar, `${WORKSHOP}pack-a/art/avatar.png`);
+  assert.equal(json.chars.c1.avatar, `${WORKSHOP}pack-a/assets/art/avatar.png`);
   assert.deepEqual(json.fonts, [`${CDN}fonts/game.woff2`]);
 });
 
